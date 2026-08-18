@@ -93,7 +93,7 @@ retain the same lowest visible text glyph and bottom-edge offset through splitte
 drags in both directions, panel/sidebar toggles, window resizing, and composer
 resizing. The recorded `scrollStability` phases distinguish natural text rewrap
 during width changes from a lost scroll anchor.
-The standalone `streaming` workload submits through the real composer four times. A
+The standalone `streaming` workload submits through the real composer six times. A
 following send must remain exactly pinned while the working status and response
 stream grow, including a stable status-to-composer gap; a parked send must retain
 the same glyph while the same durable SSE path appends below it, including when
@@ -103,7 +103,16 @@ new glyph to remain fixed for the rest of the stream. A fourth slow-chunk respon
 forms a real GFM table over SSE. The prospective header must remain progressively
 visible as text before it becomes a table; its own columns may reflow as rows arrive.
 Every painted frame must nevertheless keep the completed prefix node, the transcript
-at the bottom, and the status-to-composer gap stable.
+at the bottom, and the status-to-composer gap stable. The capture continues through
+the settled `Completed in` row and requires it to retain the live status's 36px slot,
+24px composer gap, 14px/20px typography, and color without a correction frame.
+A fifth response executes a real `apply_patch` in the mounted worktree and measures
+the painted generic-running → settled-file-diff transition. The 32px activity row
+and its 20px text/stats line must stay equal while unchanged visible-row spacing
+remains rigid. A sixth response applies a trusted 4px upward wheel gesture during
+active SSE. That smallest possible escape must take ownership immediately; raw
+scrollTop, the first visible row, and every stable visible-row pair must then remain
+fixed while the transcript continues growing below the reader.
 Rig 0.2.0's JustBash gym mount is the
 actual ready managed worktree at `/workspace`; the live tool mutates that same
 worktree while clustered sessions stream and switch in the same run. The

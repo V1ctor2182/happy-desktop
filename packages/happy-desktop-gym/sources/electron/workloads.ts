@@ -199,8 +199,19 @@ interface ScrollStabilityFrame {
     readonly rowOverlapCount: number;
     readonly scrollHeight: number;
     readonly scrollTop: number;
+    readonly settledStatusColor?: string;
+    readonly settledStatusFontSize?: string;
+    readonly settledStatusGap?: number;
+    readonly settledStatusHeight?: number;
+    readonly settledStatusLineHeight?: string;
     readonly sidebarWidth?: number;
+    readonly statusColor?: string;
+    readonly statusFontSize?: string;
     readonly statusGap?: number;
+    readonly statusHeight?: number;
+    readonly statusLineHeight?: string;
+    readonly stableRowPairCount: number;
+    readonly stableRowSpacingDeltaMax: number;
     readonly trackedBodyHeight?: number;
     readonly trackedProgressiveTableParagraph?: boolean;
     readonly trackedPrefixPreserved?: boolean;
@@ -208,6 +219,14 @@ interface ScrollStabilityFrame {
     readonly trackedTableColumns?: readonly number[];
     readonly trackedTableRows?: number;
     readonly trackedTextLength?: number;
+    readonly trackedToolActivityHeight?: number;
+    readonly trackedToolFileSummaryHeight?: number;
+    readonly trackedToolHeaderHeight?: number;
+    readonly trackedToolPresentation?: string;
+    readonly trackedToolStatsHeight?: number;
+    readonly trackedToolStatus?: string;
+    readonly trackedToolTextHeight?: number;
+    readonly trackedToolVirtualRowHeight?: number;
     readonly trackedVirtualHeight?: number;
     readonly windowWidth: number;
 }
@@ -261,10 +280,40 @@ interface StreamingScrollPhase extends ScrollStabilityPhase {
 
 interface StreamingScrollMeasurement {
     readonly following: StreamingScrollPhase;
+    readonly microUnstick: StreamingMicroUnstickMeasurement;
     readonly paint: StreamingPaintMeasurement;
     readonly parked: StreamingScrollPhase;
     readonly stable: boolean;
+    readonly toolSettle: StreamingToolSettleMeasurement;
     readonly unstick: StreamingScrollPhase;
+}
+
+interface StreamingMicroUnstickMeasurement extends StreamingScrollPhase {
+    readonly escapeBottomDistance: number;
+    readonly escapeFirstRowBottomDelta: number;
+    readonly escapeFirstRowIndexStable: boolean;
+    readonly escapeFirstRowTopDelta: number;
+    readonly escapeObserved: boolean;
+    readonly escapeScrollDelta: number;
+    readonly firstRowBottomSpread: number;
+    readonly firstRowTopSpread: number;
+    readonly maxStableRowSpacingDelta: number;
+    readonly stableRowPairFrameCount: number;
+}
+
+interface StreamingToolSettleMeasurement {
+    readonly fileDiffFrameCount: number;
+    readonly fileSummaryBaselineExcessMax?: number;
+    readonly fileSummaryHeightMax?: number;
+    readonly genericFrameCount: number;
+    readonly maxBottomDistance: number;
+    readonly maxStableRowSpacingDelta: number;
+    readonly stableRowPairFrameCount: number;
+    readonly stable: boolean;
+    readonly toolActivityHeightMax?: number;
+    readonly toolActivityHeightMin?: number;
+    readonly transitionCount: number;
+    readonly frames: readonly ScrollStabilityFrame[];
 }
 
 interface StreamingPaintMeasurement {
@@ -272,13 +321,25 @@ interface StreamingPaintMeasurement {
     readonly frameCount: number;
     readonly frames: readonly ScrollStabilityFrame[];
     readonly maxBottomDistance: number;
+    readonly maxRowOverlapCount: number;
+    readonly maxStableRowSpacingDelta: number;
     readonly progressiveTableParagraphObserved: boolean;
     readonly prefixCaptureFrameCount: number;
     readonly prefixNodePreserved: boolean;
+    readonly settledStatusFrameCount: number;
+    readonly settledStatusGapMax?: number;
+    readonly settledStatusGapMin?: number;
+    readonly settledStatusHeightMax?: number;
+    readonly settledStatusHeightMin?: number;
     readonly stable: boolean;
+    readonly stableRowPairFrameCount: number;
     readonly statusGapMax?: number;
     readonly statusGapMin?: number;
     readonly statusGapSpread?: number;
+    readonly statusTransitionContinuous: boolean;
+    readonly statusTransitionScrollHeightDelta?: number;
+    readonly statusTransitionSlotDelta?: number;
+    readonly statusTypographyMatched: boolean;
     readonly tableColumnReflows: number;
     readonly tableObserved: boolean;
     readonly tableStructureTransitions: number;
@@ -1957,8 +2018,12 @@ async function scrollListToFraction(page: Page, fraction: number): Promise<void>
                         '[data-happy-desktop-ui="message-list"]',
                     );
                     if (!list) {
-                        delete browserWindow.__happyDesktopGymSettleScrollFraction;
-                        reject(new Error("The conversation message list did not mount."));
+                        if (performance.now() - started > 10_000) {
+                            delete browserWindow.__happyDesktopGymSettleScrollFraction;
+                            reject(new Error("The conversation message list did not mount."));
+                            return;
+                        }
+                        requestAnimationFrame(browserWindow.__happyDesktopGymSettleScrollFraction!);
                         return;
                     }
                     const maxScrollTop = Math.max(0, list.scrollHeight - list.clientHeight);
@@ -2008,6 +2073,12 @@ async function scrollStabilityCapture(
                 const frames: ScrollStabilityFrame[] = [];
                 const started = performance.now();
                 let trackedPrefixNode: Node | undefined;
+                let trackedToolCall: HTMLElement | undefined;
+                let trackedToolSeen = false;
+                let previousRows = new Map<
+                    number,
+                    { readonly height: number; readonly top: number }
+                >();
                 let frameHandle = 0;
                 let timerHandle = 0;
                 let stopped = false;
@@ -2085,6 +2156,9 @@ async function scrollStabilityCapture(
                         const statusLine = document.querySelector<HTMLElement>(
                             '[data-happy-desktop-ui="conversation-status-line"]',
                         );
+                        const statusState = statusLine?.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="agent-working-status-state"]',
+                        );
                         const trackedMessage =
                             tracked === undefined
                                 ? undefined
@@ -2101,7 +2175,65 @@ async function scrollStabilityCapture(
                         const trackedRow = trackedMessage?.closest<HTMLElement>(
                             ".happy2-message-list__virtual-row[data-index]",
                         );
+                        const trackedIndex = Number.parseInt(trackedRow?.dataset.index ?? "", 10);
+                        const settledStatus = Number.isFinite(trackedIndex)
+                            ? [
+                                  ...document.querySelectorAll<HTMLElement>(
+                                      '[data-happy-desktop-ui="turn-summary"]',
+                                  ),
+                              ].find((summary) => {
+                                  const row = summary.closest<HTMLElement>(
+                                      ".happy2-message-list__virtual-row[data-index]",
+                                  );
+                                  const index = Number.parseInt(row?.dataset.index ?? "", 10);
+                                  return Number.isFinite(index) && index > trackedIndex;
+                              })
+                            : undefined;
                         const trackedTable = trackedBody?.querySelector("table");
+                        if (!trackedToolCall?.isConnected) {
+                            const activityCalls = [
+                                ...document.querySelectorAll<HTMLElement>(
+                                    '[data-happy-desktop-ui="agent-activity-call"]',
+                                ),
+                            ];
+                            const runningPatch = activityCalls
+                                .filter(
+                                    (call) =>
+                                        call.dataset.status === "running" &&
+                                        call.dataset.presentation === "generic" &&
+                                        call.textContent?.includes("Apply patch") === true,
+                                )
+                                .at(-1);
+                            const settledPatch = trackedToolSeen
+                                ? activityCalls
+                                      .filter(
+                                          (call) =>
+                                              call.dataset.presentation === "fileDiff" &&
+                                              call.textContent?.includes("README.md") === true,
+                                      )
+                                      .at(-1)
+                                : undefined;
+                            trackedToolCall = runningPatch ?? settledPatch;
+                            if (trackedToolCall) trackedToolSeen = true;
+                        }
+                        const trackedToolActivity = trackedToolCall?.closest<HTMLElement>(
+                            '[data-happy-desktop-ui="agent-activity-row"]',
+                        );
+                        const trackedToolVirtualRow = trackedToolCall?.closest<HTMLElement>(
+                            ".happy2-message-list__virtual-row[data-index]",
+                        );
+                        const trackedToolHeader = trackedToolCall?.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="agent-activity-header"]',
+                        );
+                        const trackedToolFileSummary = trackedToolCall?.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="agent-activity-file-summary"]',
+                        );
+                        const trackedToolText = trackedToolCall?.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="agent-activity-text"]',
+                        );
+                        const trackedToolStats = trackedToolCall?.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="agent-activity-stats"]',
+                        );
                         if (trackedBody && trackedPrefixNode === undefined) {
                             const walker = document.createTreeWalker(
                                 trackedBody,
@@ -2121,6 +2253,15 @@ async function scrollStabilityCapture(
                         if (list) {
                             const listRect = list.getBoundingClientRect();
                             const statusRect = statusLine?.getBoundingClientRect();
+                            const statusStyle =
+                                statusRect && statusRect.height > 0 && statusState
+                                    ? getComputedStyle(statusState)
+                                    : undefined;
+                            const settledStatusRect = settledStatus?.getBoundingClientRect();
+                            const settledStatusStyle =
+                                settledStatus && settledStatusRect && settledStatusRect.height > 0
+                                    ? getComputedStyle(settledStatus)
+                                    : undefined;
                             const rows = virtual
                                 ? [
                                       ...virtual.querySelectorAll<HTMLElement>(
@@ -2131,6 +2272,7 @@ async function scrollStabilityCapture(
                                           const rect = row.getBoundingClientRect();
                                           return {
                                               bottom: rect.bottom,
+                                              height: rect.height,
                                               index: Number.parseInt(row.dataset.index ?? "", 10),
                                               top: rect.top,
                                           };
@@ -2143,6 +2285,49 @@ async function scrollStabilityCapture(
                                       )
                                       .sort((left, right) => left.top - right.top)
                                 : [];
+                            const stableRows = rows.filter((row) => {
+                                const previous = previousRows.get(row.index);
+                                return previous && Math.abs(previous.height - row.height) <= 1;
+                            });
+                            const changedRowIndices = rows
+                                .filter((row) => {
+                                    const previous = previousRows.get(row.index);
+                                    return (
+                                        previous !== undefined &&
+                                        Math.abs(previous.height - row.height) > 1
+                                    );
+                                })
+                                .map((row) => row.index);
+                            let stableRowPairCount = 0;
+                            let stableRowSpacingDeltaMax = 0;
+                            for (let left = 0; left < stableRows.length; left += 1) {
+                                for (let right = left + 1; right < stableRows.length; right += 1) {
+                                    const leftRow = stableRows[left]!;
+                                    const rightRow = stableRows[right]!;
+                                    if (
+                                        changedRowIndices.some(
+                                            (index) =>
+                                                index > leftRow.index && index < rightRow.index,
+                                        )
+                                    )
+                                        continue;
+                                    const previousLeft = previousRows.get(leftRow.index)!;
+                                    const previousRight = previousRows.get(rightRow.index)!;
+                                    const previousSpacing = previousRight.top - previousLeft.top;
+                                    const spacing = rightRow.top - leftRow.top;
+                                    stableRowSpacingDeltaMax = Math.max(
+                                        stableRowSpacingDeltaMax,
+                                        Math.abs(spacing - previousSpacing),
+                                    );
+                                    stableRowPairCount += 1;
+                                }
+                            }
+                            previousRows = new Map(
+                                rows.map((row) => [
+                                    row.index,
+                                    { height: row.height, top: row.top },
+                                ]),
+                            );
                             let rowOverlapCount = 0;
                             for (let index = 1; index < rows.length; index += 1) {
                                 if (rows[index - 1]!.bottom > rows[index]!.top + 1)
@@ -2193,11 +2378,31 @@ async function scrollStabilityCapture(
                                 rowOverlapCount,
                                 scrollHeight: list.scrollHeight,
                                 scrollTop: list.scrollTop,
+                                settledStatusColor: settledStatusStyle?.color,
+                                settledStatusFontSize: settledStatusStyle?.fontSize,
+                                settledStatusGap:
+                                    settledStatusRect && settledStatusRect.height > 0
+                                        ? listRect.bottom - settledStatusRect.bottom
+                                        : undefined,
+                                settledStatusHeight:
+                                    settledStatusRect && settledStatusRect.height > 0
+                                        ? settledStatusRect.height
+                                        : undefined,
+                                settledStatusLineHeight: settledStatusStyle?.lineHeight,
                                 sidebarWidth: sidebar?.getBoundingClientRect().width ?? 0,
+                                statusColor: statusStyle?.color,
+                                statusFontSize: statusStyle?.fontSize,
                                 statusGap:
                                     statusRect && statusRect.height > 0
                                         ? listRect.bottom - statusRect.bottom
                                         : undefined,
+                                statusHeight:
+                                    statusRect && statusRect.height > 0
+                                        ? statusRect.height
+                                        : undefined,
+                                statusLineHeight: statusStyle?.lineHeight,
+                                stableRowPairCount,
+                                stableRowSpacingDeltaMax,
                                 trackedBodyHeight: trackedBody?.getBoundingClientRect().height,
                                 trackedProgressiveTableParagraph: trackedBody
                                     ? [...trackedBody.querySelectorAll("p")].some((paragraph) =>
@@ -2220,6 +2425,20 @@ async function scrollStabilityCapture(
                                           ].map((cell) => cell.getBoundingClientRect().width),
                                 trackedTableRows: trackedTable?.querySelectorAll("tbody tr").length,
                                 trackedTextLength: trackedBody?.textContent?.length,
+                                trackedToolActivityHeight:
+                                    trackedToolActivity?.getBoundingClientRect().height,
+                                trackedToolFileSummaryHeight:
+                                    trackedToolFileSummary?.getBoundingClientRect().height,
+                                trackedToolHeaderHeight:
+                                    trackedToolHeader?.getBoundingClientRect().height,
+                                trackedToolPresentation: trackedToolCall?.dataset.presentation,
+                                trackedToolStatsHeight:
+                                    trackedToolStats?.getBoundingClientRect().height,
+                                trackedToolStatus: trackedToolCall?.dataset.status,
+                                trackedToolTextHeight:
+                                    trackedToolText?.getBoundingClientRect().height,
+                                trackedToolVirtualRowHeight:
+                                    trackedToolVirtualRow?.getBoundingClientRect().height,
                                 trackedVirtualHeight: virtual?.getBoundingClientRect().height,
                                 windowWidth: window.innerWidth,
                             });
@@ -2638,6 +2857,15 @@ function streamingPaintMeasurementBuild(
         (maximum, frame) => Math.max(maximum, frame.bottomDistance),
         0,
     );
+    const maxRowOverlapCount = frames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.rowOverlapCount),
+        0,
+    );
+    const maxStableRowSpacingDelta = frames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.stableRowSpacingDeltaMax),
+        0,
+    );
+    const stableRowPairFrameCount = frames.filter((frame) => frame.stableRowPairCount > 0).length;
     const tableObserved = frames.some((frame) => (frame.trackedTableRows ?? 0) >= 3);
     const progressiveTableParagraphObserved = frames.some(
         (frame) => frame.trackedProgressiveTableParagraph === true,
@@ -2656,18 +2884,82 @@ function streamingPaintMeasurementBuild(
         statusGapMin === undefined || statusGapMax === undefined
             ? undefined
             : statusGapMax - statusGapMin;
+    const settledStatusFrames = frames.filter(
+        (frame) =>
+            frame.settledStatusGap !== undefined &&
+            frame.settledStatusHeight !== undefined &&
+            frame.settledStatusColor !== undefined &&
+            frame.settledStatusFontSize !== undefined &&
+            frame.settledStatusLineHeight !== undefined,
+    );
+    const settledStatusGaps = settledStatusFrames.map((frame) => frame.settledStatusGap!);
+    const settledStatusHeights = settledStatusFrames.map((frame) => frame.settledStatusHeight!);
+    const settledStatusGapMin =
+        settledStatusGaps.length > 0 ? Math.min(...settledStatusGaps) : undefined;
+    const settledStatusGapMax =
+        settledStatusGaps.length > 0 ? Math.max(...settledStatusGaps) : undefined;
+    const settledStatusHeightMin =
+        settledStatusHeights.length > 0 ? Math.min(...settledStatusHeights) : undefined;
+    const settledStatusHeightMax =
+        settledStatusHeights.length > 0 ? Math.max(...settledStatusHeights) : undefined;
+    const liveTypography = frames.find(
+        (frame) =>
+            frame.statusColor !== undefined &&
+            frame.statusFontSize !== undefined &&
+            frame.statusLineHeight !== undefined,
+    );
+    const statusTypographyMatched =
+        liveTypography !== undefined &&
+        settledStatusFrames.length > 0 &&
+        settledStatusFrames.every(
+            (frame) =>
+                frame.settledStatusColor === liveTypography.statusColor &&
+                frame.settledStatusFontSize === liveTypography.statusFontSize &&
+                frame.settledStatusLineHeight === liveTypography.statusLineHeight,
+        );
+    const firstSettledStatusIndex = frames.findIndex(
+        (frame) => frame.settledStatusHeight !== undefined,
+    );
+    const firstSettledStatus =
+        firstSettledStatusIndex < 0 ? undefined : frames[firstSettledStatusIndex];
+    const lastLiveStatus =
+        firstSettledStatusIndex <= 0 ? undefined : frames[firstSettledStatusIndex - 1];
+    const statusTransitionSlotDelta =
+        firstSettledStatus?.settledStatusHeight === undefined ||
+        lastLiveStatus?.statusHeight === undefined
+            ? undefined
+            : Math.abs(firstSettledStatus.settledStatusHeight - lastLiveStatus.statusHeight);
+    const statusTransitionScrollHeightDelta =
+        firstSettledStatus === undefined || lastLiveStatus === undefined
+            ? undefined
+            : Math.abs(firstSettledStatus.scrollHeight - lastLiveStatus.scrollHeight);
+    const statusTransitionContinuous =
+        statusTransitionSlotDelta !== undefined &&
+        statusTransitionSlotDelta <= 0.5 &&
+        statusTransitionScrollHeightDelta !== undefined &&
+        statusTransitionScrollHeightDelta <= 1;
     return {
         delayedRowGeometryCorrections,
         frameCount: frames.length,
         frames,
         maxBottomDistance,
+        maxRowOverlapCount,
+        maxStableRowSpacingDelta,
         progressiveTableParagraphObserved,
         prefixCaptureFrameCount,
         prefixNodePreserved,
+        settledStatusFrameCount: settledStatusFrames.length,
+        settledStatusGapMax,
+        settledStatusGapMin,
+        settledStatusHeightMax,
+        settledStatusHeightMin,
         stable:
             frames.length > 2 &&
             delayedRowGeometryCorrections === 0 &&
             maxBottomDistance <= 1 &&
+            maxRowOverlapCount === 0 &&
+            maxStableRowSpacingDelta <= 1 &&
+            stableRowPairFrameCount >= 2 &&
             progressiveTableParagraphObserved &&
             prefixCaptureFrameCount >= 2 &&
             prefixNodePreserved &&
@@ -2675,14 +2967,118 @@ function streamingPaintMeasurementBuild(
             Math.abs(statusGapMin - 24) <= 1 &&
             statusGapSpread !== undefined &&
             statusGapSpread <= 1 &&
+            settledStatusFrames.length >= 2 &&
+            settledStatusGapMin !== undefined &&
+            Math.abs(settledStatusGapMin - 24) <= 1 &&
+            settledStatusGapMax !== undefined &&
+            Math.abs(settledStatusGapMax - 24) <= 1 &&
+            settledStatusHeightMin !== undefined &&
+            Math.abs(settledStatusHeightMin - 36) <= 0.5 &&
+            settledStatusHeightMax !== undefined &&
+            Math.abs(settledStatusHeightMax - 36) <= 0.5 &&
+            statusTransitionContinuous &&
+            statusTypographyMatched &&
             tableObserved &&
             tableStructureTransitions === 1,
+        stableRowPairFrameCount,
         statusGapMax,
         statusGapMin,
         statusGapSpread,
+        statusTransitionContinuous,
+        statusTransitionScrollHeightDelta,
+        statusTransitionSlotDelta,
+        statusTypographyMatched,
         tableColumnReflows,
         tableObserved,
         tableStructureTransitions,
+    };
+}
+
+function streamingToolSettleMeasurementBuild(
+    frames: readonly ScrollStabilityFrame[],
+): StreamingToolSettleMeasurement {
+    const trackedFrames = frames.filter((frame) => frame.trackedToolPresentation !== undefined);
+    const genericFrames = trackedFrames.filter(
+        (frame) =>
+            frame.trackedToolPresentation === "generic" && frame.trackedToolStatus === "running",
+    );
+    const fileDiffFrames = trackedFrames.filter(
+        (frame) => frame.trackedToolPresentation === "fileDiff",
+    );
+    let transitionCount = 0;
+    for (let index = 1; index < trackedFrames.length; index += 1) {
+        if (
+            trackedFrames[index - 1]!.trackedToolPresentation === "generic" &&
+            trackedFrames[index]!.trackedToolPresentation === "fileDiff"
+        )
+            transitionCount += 1;
+    }
+    const toolActivityHeights = trackedFrames.flatMap((frame) =>
+        frame.trackedToolActivityHeight === undefined ? [] : [frame.trackedToolActivityHeight],
+    );
+    const fileSummaryHeights = fileDiffFrames.flatMap((frame) =>
+        frame.trackedToolFileSummaryHeight === undefined
+            ? []
+            : [frame.trackedToolFileSummaryHeight],
+    );
+    const fileSummaryBaselineExcesses = fileDiffFrames.flatMap((frame) => {
+        if (
+            frame.trackedToolFileSummaryHeight === undefined ||
+            frame.trackedToolTextHeight === undefined ||
+            frame.trackedToolStatsHeight === undefined
+        )
+            return [];
+        return [
+            frame.trackedToolFileSummaryHeight -
+                Math.max(frame.trackedToolTextHeight, frame.trackedToolStatsHeight),
+        ];
+    });
+    const fileSummaryBaselineExcessMax =
+        fileSummaryBaselineExcesses.length > 0
+            ? Math.max(...fileSummaryBaselineExcesses)
+            : undefined;
+    const fileSummaryHeightMax =
+        fileSummaryHeights.length > 0 ? Math.max(...fileSummaryHeights) : undefined;
+    const toolActivityHeightMin =
+        toolActivityHeights.length > 0 ? Math.min(...toolActivityHeights) : undefined;
+    const toolActivityHeightMax =
+        toolActivityHeights.length > 0 ? Math.max(...toolActivityHeights) : undefined;
+    const maxBottomDistance = frames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.bottomDistance),
+        0,
+    );
+    const maxStableRowSpacingDelta = frames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.stableRowSpacingDeltaMax),
+        0,
+    );
+    const stableRowPairFrameCount = frames.filter((frame) => frame.stableRowPairCount > 0).length;
+    return {
+        fileDiffFrameCount: fileDiffFrames.length,
+        fileSummaryBaselineExcessMax,
+        fileSummaryHeightMax,
+        frames,
+        genericFrameCount: genericFrames.length,
+        maxBottomDistance,
+        maxStableRowSpacingDelta,
+        stableRowPairFrameCount,
+        stable:
+            genericFrames.length >= 2 &&
+            fileDiffFrames.length >= 2 &&
+            transitionCount === 1 &&
+            toolActivityHeightMin !== undefined &&
+            Math.abs(toolActivityHeightMin - 32) <= 0.1 &&
+            toolActivityHeightMax !== undefined &&
+            Math.abs(toolActivityHeightMax - 32) <= 0.1 &&
+            fileSummaryHeightMax !== undefined &&
+            Math.abs(fileSummaryHeightMax - 20) <= 0.1 &&
+            fileSummaryBaselineExcessMax !== undefined &&
+            fileSummaryBaselineExcessMax <= 0.1 &&
+            maxBottomDistance <= 1 &&
+            maxStableRowSpacingDelta <= 1 &&
+            stableRowPairFrameCount >= 2,
+        toolActivityHeightMax,
+        toolActivityHeightMin,
+        transitionCount,
     };
 }
 
@@ -2691,11 +3087,25 @@ async function streamingScrollRun(
     composer: Locator,
     mark: (name: string) => Promise<void>,
 ): Promise<StreamingScrollMeasurement> {
+    const list = page.locator('[data-happy-desktop-ui="message-list"]').first();
+    const armFollowing = async () => {
+        await scrollListToFraction(page, 1);
+        const box = await list.boundingBox();
+        if (!box) throw new Error("The streaming transcript has no wheel target.");
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        /*
+         * Setting scrollTop is only fixture positioning. The trusted downward
+         * wheel tick is the reader intent that actually re-arms follow mode.
+         */
+        await page.mouse.wheel(0, 4);
+        await page.waitForTimeout(16);
+    };
     const run = async (
         anchorMode: ScrollStabilityPhase["anchorMode"],
         ordinal: number,
     ): Promise<StreamingScrollPhase> => {
-        await scrollListToFraction(page, anchorMode === "following" ? 1 : 0.5);
+        if (anchorMode === "following") await armFollowing();
+        else await scrollListToFraction(page, 0.5);
         /*
          * The helper writes scrollTop in page context. Let the browser deliver
          * that real scroll and TanStack's scroll-end notification before a
@@ -2733,7 +3143,7 @@ async function streamingScrollRun(
     };
     const following = await run("following", 1);
     const parked = await run("parked", 2);
-    await scrollListToFraction(page, 1);
+    await armFollowing();
     await page.waitForTimeout(200);
     const unstickMarker = `gym-mixed-replay-stream-unstick-3-${Date.now().toString(36)}`;
     await composer.fill(`Exercise real mid-stream unstick. [${unstickMarker}]`);
@@ -2742,7 +3152,6 @@ async function streamingScrollRun(
     );
     await composer.press("Enter");
     await runningStatus.waitFor({ state: "visible", timeout: 30_000 });
-    const list = page.locator('[data-happy-desktop-ui="message-list"]').first();
     const listBox = await list.boundingBox();
     if (!listBox) throw new Error("The streaming transcript has no wheel target.");
     await page.mouse.move(listBox.x + listBox.width / 2, listBox.y + listBox.height / 2);
@@ -2765,7 +3174,7 @@ async function streamingScrollRun(
     });
     const unstick = streamingScrollPhaseBuild("parked", unstickFrames);
     await mark("streaming-scroll-unstick");
-    await scrollListToFraction(page, 1);
+    await armFollowing();
     await page.waitForTimeout(200);
     const paintMarker = `gym-streaming-paint-${Date.now().toString(36)}`;
     await composer.fill(`Exercise real streaming paint stability. [${paintMarker}]`);
@@ -2775,6 +3184,38 @@ async function streamingScrollRun(
             await composer.press("Enter");
             await runningStatus.waitFor({ state: "visible", timeout: 30_000 });
             await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
+            await page.waitForFunction(
+                (marker) => {
+                    const trackedMessage = [
+                        ...document.querySelectorAll<HTMLElement>(
+                            '[data-happy-desktop-ui="message"]',
+                        ),
+                    ]
+                        .filter((message) => message.textContent?.includes(String(marker)))
+                        .at(-1);
+                    const trackedRow = trackedMessage?.closest<HTMLElement>(
+                        ".happy2-message-list__virtual-row[data-index]",
+                    );
+                    const trackedIndex = Number.parseInt(trackedRow?.dataset.index ?? "", 10);
+                    if (!Number.isFinite(trackedIndex)) return false;
+                    return [
+                        ...document.querySelectorAll<HTMLElement>(
+                            '[data-happy-desktop-ui="turn-summary"]',
+                        ),
+                    ].some((summary) => {
+                        const row = summary.closest<HTMLElement>(
+                            ".happy2-message-list__virtual-row[data-index]",
+                        );
+                        const index = Number.parseInt(row?.dataset.index ?? "", 10);
+                        return Number.isFinite(index) && index > trackedIndex;
+                    });
+                },
+                paintMarker,
+                { timeout: 10_000 },
+            );
+            // Completion is gated above. This hold is only a measurement
+            // window, retaining several painted settled frames after it.
+            await page.waitForTimeout(100);
         },
         paintMarker,
     );
@@ -2782,11 +3223,208 @@ async function streamingScrollRun(
     if (!paint.stable)
         throw new Error(`Streaming paint stability failed: ${JSON.stringify(paint)}`);
     await mark("streaming-paint");
+    await armFollowing();
+    await page.waitForTimeout(200);
+    const toolSettleMarker = `gym-tool-settle-${Date.now().toString(36)}`;
+    await composer.fill(`Exercise real apply-patch settlement. [${toolSettleMarker}]`);
+    const toolSettleFrames = await scrollStabilityCapture(
+        page,
+        async () => {
+            await composer.press("Enter");
+            await runningStatus.waitFor({ state: "visible", timeout: 30_000 });
+            await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
+            await page.waitForTimeout(100);
+        },
+        toolSettleMarker,
+    );
+    const toolSettle = streamingToolSettleMeasurementBuild(toolSettleFrames);
+    await mark("streaming-tool-settle");
+    await armFollowing();
+    await page.waitForTimeout(200);
+    const microUnstickMarker = `gym-mixed-replay-stream-unstick-micro-${Date.now().toString(36)}`;
+    await composer.fill(`Exercise a tiny real mid-stream unstick. [${microUnstickMarker}]`);
+    await composer.press("Enter");
+    await runningStatus.waitFor({ state: "visible", timeout: 30_000 });
+    await page.waitForFunction(
+        (marker) =>
+            document
+                .querySelector('[data-happy-desktop-ui="conversation-view"]')
+                ?.textContent?.includes(String(marker)) === true,
+        microUnstickMarker,
+        { timeout: 30_000 },
+    );
+    const microList = page.locator('[data-happy-desktop-ui="message-list"]').first();
+    const microListBox = await microList.boundingBox();
+    if (!microListBox) throw new Error("The tiny unstick transcript has no wheel target.");
+    await page.mouse.move(
+        microListBox.x + microListBox.width / 2,
+        microListBox.y + microListBox.height / 2,
+    );
+    await microList.evaluate((element) => {
+        const browserWindow = window as Window & {
+            __happyDesktopGymWheelBaseline?: {
+                readonly bottomDistance: number;
+                readonly firstRowBottom?: number;
+                readonly firstRowIndex?: string;
+                readonly firstRowTop?: number;
+                readonly scrollTop: number;
+            };
+        };
+        element.addEventListener(
+            "wheel",
+            () => {
+                const listRect = element.getBoundingClientRect();
+                const firstRow = [
+                    ...element.querySelectorAll<HTMLElement>(
+                        ".happy2-message-list__virtual-row[data-index]",
+                    ),
+                ]
+                    .filter((row) => {
+                        const rect = row.getBoundingClientRect();
+                        return rect.bottom > listRect.top && rect.top < listRect.bottom;
+                    })
+                    .sort(
+                        (left, right) =>
+                            left.getBoundingClientRect().top - right.getBoundingClientRect().top,
+                    )[0];
+                const firstRowRect = firstRow?.getBoundingClientRect();
+                browserWindow.__happyDesktopGymWheelBaseline = {
+                    bottomDistance: Math.max(
+                        0,
+                        element.scrollHeight - element.scrollTop - element.clientHeight,
+                    ),
+                    firstRowBottom: firstRowRect?.bottom,
+                    firstRowIndex: firstRow?.dataset.index,
+                    firstRowTop: firstRowRect?.top,
+                    scrollTop: element.scrollTop,
+                };
+            },
+            { capture: true, once: true },
+        );
+    });
+    await page.mouse.wheel(0, -4);
+    await page.evaluate(
+        () =>
+            new Promise<void>((resolve) => {
+                requestAnimationFrame(() => window.setTimeout(resolve, 0));
+            }),
+    );
+    const microBefore = await page.evaluate(() => {
+        const browserWindow = window as Window & {
+            __happyDesktopGymWheelBaseline?: {
+                readonly bottomDistance: number;
+                readonly firstRowBottom?: number;
+                readonly firstRowIndex?: string;
+                readonly firstRowTop?: number;
+                readonly scrollTop: number;
+            };
+        };
+        const snapshot = browserWindow.__happyDesktopGymWheelBaseline;
+        delete browserWindow.__happyDesktopGymWheelBaseline;
+        if (!snapshot) throw new Error("The tiny unstick wheel event was not observed.");
+        return snapshot;
+    });
+    const microEscape = await microList.evaluate((element, baselineIndex) => {
+        const firstRow = [
+            ...element.querySelectorAll<HTMLElement>(
+                ".happy2-message-list__virtual-row[data-index]",
+            ),
+        ].find((row) => row.dataset.index === baselineIndex);
+        const firstRowRect = firstRow?.getBoundingClientRect();
+        return {
+            bottomDistance: Math.max(
+                0,
+                element.scrollHeight - element.scrollTop - element.clientHeight,
+            ),
+            firstRowBottom: firstRowRect?.bottom,
+            firstRowIndex: firstRow?.dataset.index,
+            firstRowTop: firstRowRect?.top,
+            scrollTop: element.scrollTop,
+        };
+    }, microBefore.firstRowIndex);
+    const microFrames = await scrollStabilityCapture(page, async () => {
+        await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
+    });
+    const microBase = streamingScrollPhaseBuild("parked", microFrames);
+    const escapeScrollDelta = microBefore.scrollTop - microEscape.scrollTop;
+    const escapeFirstRowTopDelta =
+        microBefore.firstRowTop === undefined || microEscape.firstRowTop === undefined
+            ? Number.NaN
+            : microEscape.firstRowTop - microBefore.firstRowTop;
+    const escapeFirstRowBottomDelta =
+        microBefore.firstRowBottom === undefined || microEscape.firstRowBottom === undefined
+            ? Number.NaN
+            : microEscape.firstRowBottom - microBefore.firstRowBottom;
+    const escapeFirstRowIndexStable =
+        microBefore.firstRowIndex !== undefined &&
+        microBefore.firstRowIndex === microEscape.firstRowIndex;
+    const escapeObserved =
+        microEscape.bottomDistance >= 0.5 &&
+        escapeScrollDelta >= 0.5 &&
+        escapeScrollDelta <= 8 &&
+        escapeFirstRowIndexStable &&
+        escapeFirstRowTopDelta >= 0.5 &&
+        escapeFirstRowTopDelta <= 8 &&
+        Math.abs(escapeFirstRowBottomDelta - escapeFirstRowTopDelta) <= 1;
+    const firstRowTops = microFrames.flatMap((frame) =>
+        frame.firstRowTop === undefined ? [] : [frame.firstRowTop],
+    );
+    const firstRowBottoms = microFrames.flatMap((frame) =>
+        frame.firstRowBottom === undefined ? [] : [frame.firstRowBottom],
+    );
+    const firstRowTopSpread =
+        firstRowTops.length === 0
+            ? Number.POSITIVE_INFINITY
+            : Math.max(...firstRowTops) - Math.min(...firstRowTops);
+    const firstRowBottomSpread =
+        firstRowBottoms.length === 0
+            ? Number.POSITIVE_INFINITY
+            : Math.max(...firstRowBottoms) - Math.min(...firstRowBottoms);
+    const maxStableRowSpacingDelta = microFrames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.stableRowSpacingDeltaMax),
+        0,
+    );
+    const stableRowPairFrameCount = microFrames.filter(
+        (frame) => frame.stableRowPairCount > 0,
+    ).length;
+    const microUnstick: StreamingMicroUnstickMeasurement = {
+        ...microBase,
+        escapeBottomDistance: microEscape.bottomDistance,
+        escapeFirstRowBottomDelta,
+        escapeFirstRowIndexStable,
+        escapeFirstRowTopDelta,
+        escapeObserved,
+        escapeScrollDelta,
+        firstRowBottomSpread,
+        firstRowTopSpread,
+        maxStableRowSpacingDelta,
+        stableRowPairFrameCount,
+        stable:
+            microFrames.length >= 2 &&
+            microBase.layoutChangeObserved &&
+            microBase.maxRowOverlapCount === 0 &&
+            escapeObserved &&
+            microBase.scrollTopSpread !== undefined &&
+            microBase.scrollTopSpread <= 1 &&
+            firstRowTopSpread <= 1 &&
+            firstRowBottomSpread <= 1 &&
+            maxStableRowSpacingDelta <= 1 &&
+            stableRowPairFrameCount >= 2,
+    };
+    await mark("streaming-micro-unstick");
     return {
         following,
+        microUnstick,
         paint,
         parked,
-        stable: following.stable && paint.stable && parked.stable && unstick.stable,
+        stable:
+            following.stable &&
+            microUnstick.stable &&
+            paint.stable &&
+            parked.stable &&
+            toolSettle.stable &&
+            unstick.stable,
+        toolSettle,
         unstick,
     };
 }

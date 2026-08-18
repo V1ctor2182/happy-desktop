@@ -240,6 +240,52 @@ class DeterministicInferenceServer implements GymInferenceServer {
                 completionDelayMs: 20,
             };
         }
+        if (scriptKey.includes("gym-tool-settle")) {
+            if (!this.#toolCallEmittedScriptKeys.has(scriptKey)) {
+                this.#toolCallEmittedScriptKeys.add(scriptKey);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Preparing the deterministic edit. script=${scriptKey}`,
+                        },
+                        {
+                            type: "toolCall",
+                            name: "apply_patch",
+                            arguments: {
+                                patch: [
+                                    "*** Begin Patch",
+                                    "*** Update File: README.md",
+                                    "@@",
+                                    "-export const renderer = 'pierre';",
+                                    "+export const renderer = 'pierre-gym';",
+                                    "*** End Patch",
+                                ].join("\n"),
+                                workdir: "/workspace",
+                            },
+                        },
+                    ],
+                    textDeltaChunkSize: 16,
+                    textDeltaDelayMs: 24,
+                    // Keep the generic running row painted long enough for the
+                    // frame probe to establish its real geometry before Rig
+                    // replaces it with the file-diff presentation.
+                    toolCallDeltaDelayMs: 600,
+                    completionDelayMs: 20,
+                };
+            }
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `The deterministic edit is complete. script=${scriptKey}`,
+                    },
+                ],
+                textDeltaChunkSize: 16,
+                textDeltaDelayMs: 24,
+                completionDelayMs: 20,
+            };
+        }
         if (
             sessionId !== undefined &&
             this.#liveToolRequestedSessionIds.has(sessionId) &&
