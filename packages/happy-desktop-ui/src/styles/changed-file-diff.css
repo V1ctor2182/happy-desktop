@@ -108,6 +108,17 @@
     --diffs-deletion-color: var(--diff-removed-border);
 }
 
+.happy2-changed-file-diff__highlighting {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
 /* The same code editor the file tab uses: editing a change should not look like
    a different application from editing the file it is a change to. */
 .happy2-changed-file-diff__editor {
