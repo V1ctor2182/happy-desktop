@@ -132,14 +132,37 @@ const PANEL_MIN_WIDTH = 280;
  */
 const PANEL_MAX_FRACTION = 0.7;
 const PANEL_MAX_WIDTH = 560;
-function panelMaxWidthOf(): number {
+function panelShareOf(): number {
     const viewport = typeof window === "undefined" ? 0 : window.innerWidth;
     if (!(viewport > 0)) return PANEL_MAX_WIDTH;
     return Math.max(PANEL_MIN_WIDTH, Math.round(viewport * PANEL_MAX_FRACTION));
 }
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
 const REVEAL_WIDTH = 48;
-const WORKSPACE_MIN_WIDTH = 140;
+const RAIL_WIDTH = 64;
+/**
+ * The floor the workspace keeps: twice a side lane, because the middle is where
+ * the work is and it should be the last region squeezed rather than the first.
+ * The same number app-shell.css states; see the note there.
+ */
+const WORKSPACE_MIN_WIDTH = FIXED_SIDEBAR_MIN_WIDTH * 2;
+/**
+ * How wide one side lane may grow: never past the room left once the rail, the
+ * lane opposite, and the workspace's own floor have taken theirs.
+ *
+ * Without this bound a lane's cap answered only to the window — the panel's was
+ * a share of the viewport — and two lanes could each be within their own cap
+ * while together asking for more than the window had. Flex then took the
+ * difference out of whichever region would yield, and since the content region
+ * clips, the far lane was simply cut off by the window edge instead of the
+ * middle refusing to shrink. A lane cannot be sized against the window alone;
+ * it has to be sized against what is left of it.
+ */
+function laneMaxWidthOf(cap: number, min: number, occupied: number): number {
+    const viewport = typeof window === "undefined" ? 0 : window.innerWidth;
+    if (!(viewport > 0)) return cap;
+    return Math.max(min, Math.min(cap, viewport - occupied - WORKSPACE_MIN_WIDTH));
+}
 const SHORTCUT_HINT_DELAY_MS = 500;
 const SIDEBAR_SHORTCUT = commandShortcut("b");
 export const APP_SHELL_RESIZE_LAYOUT_EVENT = "happy2-app-shell-resize-layout";
@@ -308,23 +331,47 @@ export function AppShell(props: AppShellProps) {
         "panelResizeLabel",
     ]);
     const sidebarMin = local.sidebarMinWidth ?? SIDEBAR_MIN_WIDTH;
-    const sidebarMax = local.sidebarMaxWidth ?? SIDEBAR_MAX_WIDTH;
     const panelMin = local.panelMinWidth ?? PANEL_MIN_WIDTH;
-    const panelMax = local.panelMaxWidth ?? panelMaxWidthOf();
+    // The caps a lane answers to on its own. What is actually left for it is
+    // worked out below, once the lane opposite has a width to be measured by.
+    const sidebarCap = local.sidebarMaxWidth ?? SIDEBAR_MAX_WIDTH;
+    const panelCap = local.panelMaxWidth ?? panelShareOf();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(
         local.sidebarDefaultCollapsed ?? false,
     );
     const [sidebarWidth, setSidebarWidth] = useState(() =>
-        clamp(local.sidebarDefaultWidth ?? SIDEBAR_DEFAULT_WIDTH, sidebarMin, sidebarMax),
+        clamp(local.sidebarDefaultWidth ?? SIDEBAR_DEFAULT_WIDTH, sidebarMin, sidebarCap),
     );
     const [panelWidthState, setPanelWidthState] = useState(() =>
         clamp(
             local.panelDefaultWidth ?? local.panelWidth ?? PANEL_DEFAULT_WIDTH,
             panelMin,
-            panelMax,
+            panelCap,
         ),
     );
     const [panelDragWidth, setPanelDragWidth] = useState<number>();
+    /*
+     * What each lane may grow to, given the other. A lane's own cap is only half
+     * the answer: the two share one window with the rail and the workspace, so
+     * each is measured against the room the rest of them leave.
+     *
+     * A caller who named a maximum meant it and keeps it. A collapsed sidebar
+     * occupies its reveal lane rather than its width, and an absent lane
+     * occupies nothing, so folding one away really does hand its room to the
+     * other instead of merely appearing to.
+     */
+    const railFootprint = local.rail ? RAIL_WIDTH : 0;
+    const sidebarOccupied = !local.sidebar
+        ? 0
+        : local.sidebarCollapsible === true && sidebarCollapsed
+          ? REVEAL_WIDTH
+          : sidebarWidth;
+    const panelOccupied = local.panel === undefined || local.panel === null ? 0 : panelWidthState;
+    const sidebarMax =
+        local.sidebarMaxWidth ??
+        laneMaxWidthOf(sidebarCap, sidebarMin, railFootprint + panelOccupied);
+    const panelMax =
+        local.panelMaxWidth ?? laneMaxWidthOf(panelCap, panelMin, railFootprint + sidebarOccupied);
     const [panelMaximizedState, setPanelMaximizedState] = useState(
         local.panelDefaultMaximized ?? false,
     );
@@ -454,14 +501,17 @@ export function AppShell(props: AppShellProps) {
           ? {
                 width: `${panelWidth}px`,
                 minWidth: `${panelMin}px`,
-                // Where the bound is this component's own it is also stated as
-                // a fraction of the viewport, which the browser keeps current:
-                // a window shrunk between renders narrows the panel with it
-                // rather than waiting for the next one. A caller that named a
-                // width means that width.
+                // Where the bound is this component's own it is also stated in
+                // viewport units, which the browser keeps current: a window
+                // shrunk between renders narrows the panel with it rather than
+                // waiting for the next one. Both halves of the bound are here —
+                // the panel's share of the window, and the room left once the
+                // rail, the sidebar, and the workspace's floor have theirs — so
+                // a live resize cannot cross the second one either. A caller
+                // that named a width means that width.
                 maxWidth:
                     local.panelMaxWidth === undefined
-                        ? `min(${panelMax}px, ${String(PANEL_MAX_FRACTION * 100)}vw)`
+                        ? `min(${panelMax}px, ${String(PANEL_MAX_FRACTION * 100)}vw, calc(100vw - ${String(railFootprint + sidebarOccupied + WORKSPACE_MIN_WIDTH)}px))`
                         : `${panelMax}px`,
             }
           : local.panelWidth === undefined

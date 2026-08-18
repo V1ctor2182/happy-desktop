@@ -333,6 +333,26 @@ export function AppShellPage() {
                     </AppShell>,
                 )}
             </Specimen>
+
+            <Specimen
+                detail="Both lanes resizable in the narrowest window, which is where a lane's own cap stops being the whole answer. Drag either handle outward: it stops as soon as the workspace is down to its floor, because a lane is bounded by the room the rail, the lane opposite, and that floor leave it — not by the window alone. Two lanes each inside their own cap could otherwise ask for more than the window had between them, and since the content region clips, the far lane was cut off by the window edge rather than the middle refusing to give."
+                label="Neither lane may take the middle's floor"
+                number="11"
+                stage="chrome"
+            >
+                {windowAtMinimum(
+                    <AppShell
+                        panel={<Slot label="panel" note="resizable · capped by what is left" />}
+                        panelResizable
+                        rail={railSlot()}
+                        sidebar={<Slot label="sidebar" note="resizable · capped by what is left" />}
+                        sidebarCollapsible
+                        titleBar={titleBarSlot()}
+                    >
+                        <Slot label="children" note={`never below ${String(WORKSPACE_MIN)}px`} />
+                    </AppShell>,
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }
