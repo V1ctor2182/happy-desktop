@@ -67,6 +67,28 @@
     --happy2-panel-inset: 6px;
     --happy2-panel-row-padding: 10px;
 
+    /* The scrollbar's own geometry, stated once because it is layout a surface
+       sometimes has to do arithmetic with. The ink is the bar a reader sees; the
+       edge inset is how far it is held off the surface's outer edge; and the
+       track — the sum, and the only one of the three the layout reserves — is
+       what a scrollport gives up to have a bar at all.
+
+       The inset is small on purpose. The bar the eye in this product is trained
+       on is the message history's, which is the platform's own overlay: it takes
+       no width and rides the very edge of the column. A panel bar sitting 4px in
+       from its edge read as a different object beside it, and spent panel width
+       saying so. Two is close enough to belong to the same family while still
+       keeping the ink off the corner.
+
+       The composer is the exception and states its own, larger, in composer.css:
+       its bar lives inside a rounded card, where the corner needs the room.
+       See styles/scrollbar.css. */
+    --happy2-scrollbar-ink: 6px;
+    --happy2-scrollbar-edge-inset: 2px;
+    --happy2-scrollbar-track: calc(
+        var(--happy2-scrollbar-ink) + var(--happy2-scrollbar-edge-inset)
+    );
+
     --text: #000000;
     --text-destructive: #f44336;
     --text-secondary: #49454f;

@@ -34,12 +34,14 @@
 }
 
 /* The editor owns the scrollport: the file scrolls inside the pane it was given
-   rather than growing the pane to the height of its text. */
+   rather than growing the pane to the height of its text. Its bar is the
+   product's, not the platform's — see styles/scrollbar.css; naming a
+   `scrollbar-color` here would take this pane out of that treatment in both
+   Chromium and WebKit. */
 .happy2-code-editor .cm-scroller {
     overflow: auto;
     font-family: inherit;
     line-height: inherit;
-    scrollbar-color: var(--divider) transparent;
 }
 
 /* The first line sits against the header above it. The header already names the

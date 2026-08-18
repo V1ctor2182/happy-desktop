@@ -239,6 +239,25 @@ padding, and keeps the painted focus indicator of the first, last, widest, and
 narrowest representative interactive children visible in Chromium, Firefox,
 and WebKit.
 
+### The scrollbar
+
+There is one scrollbar, in `happy-desktop-ui/src/styles/scrollbar.css`, and a
+scrolling surface wears it: panels, cards, the command palette, code and diff
+panes. A surface does not restyle its bar — a different width or colour on one
+surface is a difference no one chose — and it must not declare `scrollbar-width`
+or `scrollbar-color`, which silently opts Chromium and WebKit out of the shared
+geometry altogether. Where Firefox needs the standard properties, state them
+inside `@supports not selector(::-webkit-scrollbar)`.
+
+The message history keeps its own bar in `message.css`. That is deliberate: the
+width it reserves is the measure every message is laid out against, so changing
+it moves the whole thread. Do not fold it into the shared treatment without
+being asked.
+
+The bar is quiet until the pointer is over the surface it belongs to, and its
+thumb's ink is held `--happy2-scrollbar-edge-inset` off that surface's outer
+edge at whatever width `--happy2-scrollbar-track` reserves.
+
 ## Nested rounded corners
 
 Nested rounded corners must be true parallel curves. When a descendant edge

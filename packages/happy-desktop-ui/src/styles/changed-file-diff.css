@@ -42,7 +42,6 @@
     min-height: 0;
     /* Preview and Edit hand scrolling to their own inner viewers. */
     overflow: hidden;
-    scrollbar-color: var(--divider) transparent;
 }
 
 .happy2-changed-file-diff[data-mode="unified"] .happy2-changed-file-diff__body,
@@ -75,12 +74,11 @@
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    /* The platform draws and sizes this scrollbar, exactly as it does for the
-       file viewer's editor: same inset, same colour, same growth under the
-       pointer. Matching it by hand produced a bar that was recognisably not
-       the system's. */
-    scrollbar-color: var(--divider) transparent;
-    --happy2-code-scrollbar-width: 12px;
+    /* The bar is the product's own (styles/scrollbar.css), the same one the
+       file viewer's editor and every panel draw: it appears while this pane is
+       hovered and is gone otherwise. The end-of-line spacer below is its track,
+       so a long line always has somewhere to scroll out from under the thumb. */
+    --happy2-code-scrollbar-width: var(--happy2-scrollbar-track);
     --diffs-font-family: var(--happy2-font-mono);
     --diffs-header-font-family: var(--happy2-font-ui);
     --diffs-font-size: 12px;

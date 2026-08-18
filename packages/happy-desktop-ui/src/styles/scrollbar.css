@@ -1,7 +1,14 @@
 /*
- * The scrollbar a scrolling surface gets unless it asks for another one. A card
- * with its own hairline vocabulary may restyle its own — the command palette
- * does — but a panel in the application chrome takes this.
+ * The scrollbar. A scrolling surface gets this one — a panel in the application
+ * chrome, a card with its own hairline vocabulary, the command palette, a code
+ * or diff pane. A surface may state where its bar sits (the composer puts its
+ * own in its padding, below) but not what it looks like.
+ *
+ * The message history is the standing exception, and it is a product decision
+ * rather than an oversight: it states its own bar in message.css, which also
+ * takes it out of these pseudo-elements entirely (see the engine note below).
+ * Leave it alone unless asked — the width it reserves is the measure every
+ * message in the thread is laid out against.
  *
  * It belongs to the design system rather than to an application, because it is
  * the other half of the panel inset contract (see --happy2-panel-inset), and
@@ -18,6 +25,13 @@
  * draws, so a panel can be reviewed with and without one instead of only ever
  * being measured against macOS's invisible overlay bar.
  *
+ * The bar is quiet until the pointer is over the surface it belongs to. A
+ * scrollport that nobody is pointing at says nothing; hovering it — anywhere in
+ * it, since hover reaches every ancestor of the element under the pointer —
+ * fades the thumb in. This is one rule for the whole product rather than a
+ * per-surface choice, so no panel can be the one that always shows its bar —
+ * including the composer's draft, which takes this bar like everything else.
+ *
  * The engine split is not decoration. Chromium and WebKit draw this bar from
  * the `::-webkit-scrollbar` pseudo-elements, and both of them ignore those
  * pseudo-elements entirely for any element that also sets `scrollbar-width` or
@@ -30,19 +44,23 @@
 
 @supports not selector(::-webkit-scrollbar) {
     * {
-        scrollbar-color: var(--scrollbar-thumb) transparent;
+        scrollbar-color: transparent transparent;
         scrollbar-width: thin;
+    }
+
+    *:hover {
+        scrollbar-color: var(--scrollbar-thumb) transparent;
     }
 }
 
 /*
- * 10px of track: a 6px thumb, and 4px of clear space holding it off the panel's
- * outer edge. The thumb is a comfortable pointer target well beyond its ink,
- * because the whole track takes the press.
+ * The track is the ink plus the clear space that holds it off the panel's outer
+ * edge; both numbers are in theme.css. The thumb is a comfortable pointer target
+ * well beyond its ink, because the whole track takes the press.
  */
 ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: var(--happy2-scrollbar-track);
+    height: var(--happy2-scrollbar-track);
 }
 
 ::-webkit-scrollbar-track,
@@ -56,25 +74,77 @@
  * scrollport's own inset and nothing else. `background-clip: padding-box` is
  * what makes a transparent border read as that inset.
  *
- * The radii are stated per corner, and they are not decorative. A background
- * clipped to the padding box is rounded by the *inner* radius — the declared
- * radius less the border on that side — so the 4px border has to be added back
- * on the side it sits, or the cap is sliced flat. A pill radius cannot do this:
- * it clamps to half the border box first, leaving 5px, and the inner radius
- * comes out at 1px on the bordered side. 3px against the content and 3+4=7px
- * against the outer edge give a 6px bar a whole 3px cap at both ends.
+ * The radii are stated per corner and per axis, and they are not decorative. A
+ * background clipped to the padding box is rounded by the *inner* radius, and
+ * that reduction happens independently on each axis: a corner's horizontal
+ * radius loses the border beside it, its vertical radius loses the border above
+ * or below it. The inset border sits on one side only, so a single number per
+ * corner cannot survive it — one number on the trailing corners came out as an
+ * ellipse, a cap that ran further along the bar than across it and read as the
+ * thumb being sliced away at both ends. The two-axis form adds the border back
+ * only on the axis that lost it: half the ink everywhere, plus the inset on the
+ * horizontal radii of the trailing corners, which leaves the bar a true round
+ * cap at each end. A pill radius cannot do this either — it clamps to half the
+ * border box first, and the inner radius comes out a pixel or so on the bordered
+ * side.
  */
 ::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
+    background-color: transparent;
     background-clip: padding-box;
+    transition: background-color 120ms ease;
+}
+
+/*
+ * The pair below is one mechanism, and neither half does anything without the
+ * other.
+ *
+ * Blink and WebKit resolve a custom scrollbar's style from the scroller, and
+ * they resolve it again only when the scroller's own computed style changes. A
+ * rule that would change nothing but the thumb's pseudo-element is therefore
+ * never noticed: measured in Chromium, `:hover::-webkit-scrollbar-thumb` alone
+ * left the thumb exactly as it had been painted before the pointer arrived —
+ * both when it was meant to appear and when it was only meant to change colour.
+ * The same rule with any real property changing on the hovered element beside
+ * it repainted at once.
+ *
+ * So the hovered element declares one, and it has to be a property the engine
+ * really repaints for. `column-rule-color` was tried first and does nothing:
+ * with no column rule to draw, Chromium drops the change before it reaches
+ * paint and the bar stayed invisible. `outline-color` reaches paint, and it
+ * draws nothing of its own here — an outline appears only where a style and a
+ * width were asked for, which every focus ring in this product states itself,
+ * later in the cascade and at its own specificity. `:not(:focus-visible)` keeps
+ * this away from the one ring that does not: the browser's default, on an
+ * element that never declared a focus style. The price is that a focused
+ * scrollport does not reveal its bar until something else restyles it.
+ *
+ * It is not decoration and it is not dead: delete it and no bar in the product
+ * appears on hover again.
+ */
+*:hover:not(:focus-visible) {
+    outline-color: var(--scrollbar-thumb);
+}
+
+:hover::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+}
+
+::-webkit-scrollbar-thumb {
+    --happy2-scrollbar-cap: calc(var(--happy2-scrollbar-ink) / 2);
+    --happy2-scrollbar-outer-cap: calc(
+        var(--happy2-scrollbar-cap) + var(--happy2-scrollbar-edge-inset)
+    );
 }
 
 ::-webkit-scrollbar-thumb:vertical {
-    border-right: 4px solid transparent;
-    border-radius: 3px 7px 7px 3px;
+    border-right: var(--happy2-scrollbar-edge-inset) solid transparent;
+    border-radius: var(--happy2-scrollbar-cap) var(--happy2-scrollbar-outer-cap)
+        var(--happy2-scrollbar-outer-cap) var(--happy2-scrollbar-cap) / var(--happy2-scrollbar-cap);
 }
 
 ::-webkit-scrollbar-thumb:horizontal {
-    border-bottom: 4px solid transparent;
-    border-radius: 3px 3px 7px 7px;
+    border-bottom: var(--happy2-scrollbar-edge-inset) solid transparent;
+    border-radius: var(--happy2-scrollbar-cap) / var(--happy2-scrollbar-cap)
+        var(--happy2-scrollbar-cap) var(--happy2-scrollbar-outer-cap)
+        var(--happy2-scrollbar-outer-cap);
 }
