@@ -6,13 +6,6 @@
     padding: 0 20px 0 30px;
 }
 
-/* The following status owns this boundary; tool rows never change because a
- * later sibling appeared or disappeared. */
-.happy2-turn-summary.happy2-turn-status--after-trace {
-    min-height: 40px;
-    padding-top: 8px;
-}
-
 /* The running footer uses the same 16px/24px type measure as message content. */
 .happy2-agent-working-status,
 .happy2-agent-working-status * {

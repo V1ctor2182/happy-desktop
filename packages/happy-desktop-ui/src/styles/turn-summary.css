@@ -19,6 +19,22 @@
     color: var(--text-secondary);
 }
 
+/* A conversation's settled status replaces the 36px live footer in place.
+ * Matching both the outer slot and its 14px/20px text run prevents completion
+ * from moving the transcript or changing typographic emphasis. */
+.happy2-turn-summary.happy2-conversation-turn-status {
+    min-height: 36px;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+/* The following status owns this boundary; tool rows never change because a
+ * later sibling appeared or disappeared. */
+.happy2-turn-summary.happy2-conversation-turn-status.happy2-turn-status--after-trace {
+    min-height: 44px;
+    padding-top: 8px;
+}
+
 .happy2-turn-summary__label {
     flex: none;
     font-variant-numeric: lining-nums tabular-nums;

@@ -334,7 +334,7 @@ export function conversationRowHeight(
                 afterActivity ? "after-activity" : "plain",
                 startsGroup ? "leading" : "continuous",
             ].join(":"),
-            () => (afterActivity ? 40 : 32) + (startsGroup ? ACTIVITY_LEAD_CHROME : 0),
+            () => (afterActivity ? 44 : 36) + (startsGroup ? ACTIVITY_LEAD_CHROME : 0),
         );
     }
     if (entry.kind === "delegation") {
