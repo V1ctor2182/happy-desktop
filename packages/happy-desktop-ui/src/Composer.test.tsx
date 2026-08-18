@@ -10,6 +10,10 @@ import "./styles/button.css";
 import "./styles/composer.css";
 import "./styles/emoji-picker.css";
 import "./styles/icon.css";
+/* The house scrollbar, exactly as the product loads it: it replaces the
+   platform's invisible overlay bar with a classic 10px one, which is what makes
+   a scrolling control's own bar cost its text real width. */
+import "./styles/scrollbar.css";
 import "./styles/text-field.css";
 import {
     Composer,
@@ -20,6 +24,17 @@ import {
 } from "./Composer";
 import type { EmojiItem } from "./EmojiPicker";
 import { createRenderer } from "./testing";
+/*
+ * `field-sizing: content` is what grows the draft, and it is asserted where it
+ * exists rather than skipped: Chromium — the engine Happy actually ships in —
+ * and WebKit grow the control to its text, and Gecko, which has not shipped the
+ * property, holds the one-line box its `rows` gives it. Happy is a desktop app
+ * before it is a web page, so the composer is not held back to the engine we do
+ * not ship on; that engine's degradation is stated here as its own contract.
+ */
+const growsDraft = () => CSS.supports("field-sizing", "content");
+/* Height of a draft `lines` tall, in the engine under test. */
+const draftHeight = (lines: number) => (growsDraft() ? 22 * lines : 22);
 const uiFont = () =>
     server.browser === "webkit"
         ? "happy2 Figtree, system-ui, sans-serif"
@@ -454,16 +469,16 @@ it("holds Composer geometry, colors, and typography", async () => {
     const multiline = view.$(
         '[data-testid="composer-multiline"] [data-happy-desktop-ui="composer-textarea"]',
     );
-    expect(multiline.bounds().height).toBe(66);
-    expect(view.$('[data-testid="composer-multiline"]').bounds().height).toBe(159);
+    expect(multiline.bounds().height).toBe(draftHeight(3));
+    expect(view.$('[data-testid="composer-multiline"]').bounds().height).toBe(93 + draftHeight(3));
     const multilineInk = await multiline.visibleMetrics();
     expect(multilineInk.pixelCount).toBeGreaterThan(0);
     const overflow = view.$(
         '[data-testid="composer-overflow"] [data-happy-desktop-ui="composer-textarea"]',
     );
-    expect(overflow.bounds().height).toBe(176);
+    expect(overflow.bounds().height).toBe(draftHeight(8));
     expect((overflow.element as HTMLTextAreaElement).scrollHeight).toBe(264);
-    expect(view.$('[data-testid="composer-overflow"]').bounds().height).toBe(269);
+    expect(view.$('[data-testid="composer-overflow"]').bounds().height).toBe(93 + draftHeight(8));
     // Context chips row: 8px top padding, 24px chips, 147px card total.
     const chipsRoot = view.$('[data-testid="composer-chips"]');
     expect(chipsRoot.bounds().height).toBe(147);
@@ -525,6 +540,122 @@ it("holds Composer geometry, colors, and typography", async () => {
     ).toBe(true);
     await view.screenshot("Composer.test");
 });
+
+/*
+ * The draft's box has to hold every line the draft has, at every column width,
+ * on the keystroke that added the line — and that is one property with two ways
+ * to fail, both of which shipped and both of which look the same on screen: a
+ * draft well short of eight lines parked scrolled with its first line sliced
+ * off, snapping straight a line or two later.
+ *
+ *  - The control reserves width the sizing never saw. A classic 10px scrollbar
+ *    lane is the one that bit: the same text then needs a line more than the box
+ *    was sized for, and the resulting overflow is itself what draws the lane, so
+ *    the state holds itself.
+ *  - The height goes stale when the column changes. The measuring twin this
+ *    replaced was a grid item, and WebKit kept its row at the height it was
+ *    first laid out at, so narrowing the window left the draft in a box still
+ *    sized for the old width until some later edit dirtied it.
+ *
+ * Sizing the control from its own content closes both at the root — there is no
+ * separate measurement to disagree with the wrap, and none to go stale — so this
+ * asserts the property those bugs violated rather than either mechanism: a width
+ * sweep resizing the column through every width, then a keystroke pass crossing
+ * a wrap seam one character at a time.
+ *
+ * There is nothing to grow in an engine without `field-sizing` (see growsDraft),
+ * where the draft is a fixed one-line box; that engine's geometry is asserted
+ * with the rest of the card instead.
+ */
+it.skipIf(!growsDraft())(
+    "keeps a growing draft unscrolled until it reaches the eight-line cap",
+    async () => {
+        const draft =
+            "show me how the state is kept and mutated when a workspace is archived — why do we land on the screen we land on, and what is the clean fix?\nwhen something is closed or archived, why is it not simply gone from the stack? explain it simply, and animate it.";
+        const view = createRenderer().render(
+            () => <Harness initial={draft} testid="composer-growth" />,
+            { width: 760, height: 320, padding: 0 },
+        );
+        await view.ready();
+        const rendered = view.$(
+            '[data-testid="composer-growth"] [data-happy-desktop-ui="composer-textarea"]',
+        );
+        const textarea = rendered.element as HTMLTextAreaElement;
+        const surface = textarea.closest<HTMLElement>("[data-gym-surface]")!;
+        const measure = () => ({
+            box: textarea.clientHeight,
+            content: textarea.scrollHeight,
+            lane: textarea.offsetWidth - textarea.clientWidth,
+            top: textarea.scrollTop,
+        });
+        const scrolledEarly: { width: number; box: number; content: number; lane: number }[] = [];
+        const laned: number[] = [];
+        const boxes = new Map<number, number>();
+        // Narrowing and widening are swept separately: a stale twin keeps the height
+        // of the column it was last laid out at, so it only shows up going one way.
+        for (const width of [
+            ...Array.from({ length: 201 }, (_, step) => 760 - step * 2),
+            ...Array.from({ length: 201 }, (_, step) => 360 + step * 2),
+        ]) {
+            surface.style.width = `${width}px`;
+            const { box, content, lane } = measure();
+            boxes.set(width, box);
+            if (lane > 0) laned.push(width);
+            if (box < 176 && content > box + 0.5) scrolledEarly.push({ width, box, content, lane });
+        }
+        expect(scrolledEarly).toEqual([]);
+        expect(laned).toEqual([]);
+        // Type at the narrowest width that still leaves three lines of headroom
+        // below the cap: the draft sits as close to the seam as it can while every
+        // line the pass adds is one the box is still allowed to grow into.
+        const seam = Math.min(
+            ...[...boxes].filter(([, box]) => box <= 110).map(([width]) => width),
+        );
+        surface.style.width = `${seam}px`;
+        await userEvent.click(textarea);
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        const growth = [measure()];
+        for (let stroke = 0; stroke < 10; stroke++) {
+            await userEvent.keyboard("word ");
+            growth.push(measure());
+        }
+        for (const [index, step] of growth.entries()) {
+            const previous = growth[index - 1] ?? step;
+            expect({ index, ...step }).toEqual({
+                index,
+                box: step.box,
+                // A draft below the cap shows every line it has, from the top, and
+                // never gives a line back to a keystroke that added text.
+                content: step.box,
+                lane: 0,
+                top: 0,
+            });
+            expect({ index, lines: step.box / 22 }).toEqual({
+                index,
+                lines: Math.max(Math.round(step.box / 22), previous.box / 22),
+            });
+        }
+        // The pass has to cross a wrap boundary, or it proved nothing about growth.
+        expect(growth.at(-1)!.box).toBeGreaterThan(growth[0]!.box);
+        // The cap is the one place the draft is meant to scroll, and the only
+        // place it may wear the shared scrollbar — whose lane is the design
+        // system's to size, not this control's, so it is not asserted here.
+        // Typing past the cap and deleting back must return the same box the
+        // same draft had before, or the composer stays large after the text
+        // that grew it is gone.
+        const beforeCap = { value: textarea.value, ...measure() };
+        while (measure().content <= 176) await userEvent.keyboard("word ");
+        const capped = measure();
+        expect({ box: capped.box, overflows: capped.content > 176 }).toEqual({
+            box: 176,
+            overflows: true,
+        });
+        while (textarea.value.length > beforeCap.value.length) {
+            await userEvent.keyboard("{Backspace}");
+        }
+        expect({ value: textarea.value, ...measure() }).toEqual(beforeCap);
+    },
+);
 
 it("focuses the draft from every unoccupied composer surface", async () => {
     let attached = false;
@@ -1270,7 +1401,7 @@ it("handles typing, sending, and mention picking", async () => {
     await userEvent.keyboard("done");
     expect(typing.value).toBe("Ship it\ndone");
     expect(sends.length).toBe(1);
-    expect(typing.getBoundingClientRect().height).toBeCloseTo(44, 1);
+    expect(typing.getBoundingClientRect().height).toBeCloseTo(draftHeight(2), 1);
     // Clicking send reports the current draft.
     await userEvent.click(typingSend);
     expect(sends).toEqual(["Ship it", "Ship it\ndone"]);

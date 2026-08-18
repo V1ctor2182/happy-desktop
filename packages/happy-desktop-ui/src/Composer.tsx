@@ -1009,29 +1009,27 @@ export function Composer(props: ComposerProps) {
                     data-happy-desktop-ui="composer-input"
                     ref={inputEl}
                 >
-                    <div className="happy2-composer__textarea-size" data-value={props.value}>
-                        <textarea
-                            className="happy2-composer__textarea"
-                            data-happy-desktop-ui="composer-textarea"
-                            disabled={props.disabled}
-                            readOnly={props.pending}
-                            onBlur={() => {
-                                rememberSelection();
-                                props.onFocusChange?.(false);
-                            }}
-                            onClick={rememberSelection}
-                            onFocus={() => props.onFocusChange?.(true)}
-                            onInput={onInput}
-                            onKeyDown={onKeyDown}
-                            onPaste={onPaste}
-                            onScroll={(event) => draftFadeSync(event.currentTarget)}
-                            onSelect={rememberSelection}
-                            placeholder={props.placeholder}
-                            ref={textareaEl}
-                            rows={MIN_LINES}
-                            value={props.value}
-                        />
-                    </div>
+                    <textarea
+                        className="happy2-composer__textarea"
+                        data-happy-desktop-ui="composer-textarea"
+                        disabled={props.disabled}
+                        readOnly={props.pending}
+                        onBlur={() => {
+                            rememberSelection();
+                            props.onFocusChange?.(false);
+                        }}
+                        onClick={rememberSelection}
+                        onFocus={() => props.onFocusChange?.(true)}
+                        onInput={onInput}
+                        onKeyDown={onKeyDown}
+                        onPaste={onPaste}
+                        onScroll={(event) => draftFadeSync(event.currentTarget)}
+                        onSelect={rememberSelection}
+                        placeholder={props.placeholder}
+                        ref={textareaEl}
+                        rows={MIN_LINES}
+                        value={props.value}
+                    />
                     {/* Decorative edge fades: the draft dissolves into the card
                         where it runs past the visible lines, so a clipped line
                         is never cut on a hard edge. */}

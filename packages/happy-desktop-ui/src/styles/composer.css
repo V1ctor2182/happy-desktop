@@ -207,13 +207,25 @@
     );
 }
 
+/*
+ * The draft grows itself. `field-sizing: content` is the platform's own answer
+ * to an auto-growing textarea: the control takes its height from the text it
+ * holds, wrapped in its own column, as ordinary layout — no measuring twin, no
+ * scrollHeight read, no height written from script, and correct on a window
+ * resize because it is the same layout pass everything else uses.
+ *
+ * Happy is a desktop app before it is a web page. It ships in Electron, so the
+ * engine is Chromium, where this is supported; WebKit has it too. Gecko has not
+ * shipped it, and we are not holding the composer's mechanism back to the worst
+ * engine we do not ship on — there it degrades to the `rows` default, a static
+ * one-line box, which is a rendering difference and not a broken product.
+ */
 .happy2-composer__textarea {
-    grid-area: 1 / 1;
     display: block;
+    field-sizing: content;
     width: 100%;
-    height: 100%;
-    min-height: 22px;
-    max-height: 176px;
+    min-block-size: 22px;
+    max-block-size: 176px;
     margin: 0;
     padding: 0;
     border: none;
@@ -232,35 +244,6 @@
     /* Engine-scoped optical correction (see the corrections block below).
      * transform keeps layout — card height and auto-grow math — untouched. */
     transform: translateY(var(--happy2-composer-textarea-y, 0px));
-}
-
-.happy2-composer__textarea-size {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- one-cell stack: the hidden sizing twin and live textarea must share a grid area so growth never collapses the committed control */
-    display: grid;
-    min-height: 22px;
-    max-height: 176px;
-}
-
-/*
- * Declarative textarea growth. The hidden twin occupies the same grid cell and
- * uses the same text metrics, so the row grows from content without first
- * collapsing the live textarea and forcing the surrounding chat to lay out at
- * a transient height.
- */
-.happy2-composer__textarea-size::after {
-    grid-area: 1 / 1;
-    min-height: 22px;
-    max-height: 176px;
-    overflow: hidden;
-    color: transparent;
-    content: attr(data-value) " ";
-    font-family: var(--happy2-font-ui);
-    font-size: 16px;
-    font-weight: 400;
-    line-height: 22px;
-    overflow-wrap: break-word;
-    white-space: pre-wrap;
-    visibility: hidden;
 }
 
 .happy2-composer__textarea::placeholder {
