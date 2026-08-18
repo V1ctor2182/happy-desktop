@@ -112,6 +112,30 @@ interface FileSequenceMeasurement {
     readonly markdownFencedCodeObserved?: boolean;
 }
 
+/**
+ * What opening a file out of the transcript actually produced.
+ *
+ * The panel and the main content are meant to be one surface, so this records
+ * the editor's presence on both sides and the behaviour that only a real editor
+ * has: typing marks the file unsaved, and Command-S writes it back.
+ */
+interface PanelFileEditMeasurement {
+    /** The editor mounted inside the panel rather than a read-only viewer. */
+    readonly panelEditorMounted: boolean;
+    /** The panel's editor exposes the same editable body the main content does. */
+    readonly panelEditorEditable: boolean;
+    /** The same file opened in a main-content tab mounts the same component. */
+    readonly mainEditorMounted: boolean;
+    /** Typing into the panel's editor marked its tab unsaved. */
+    readonly dirtyAfterType: boolean;
+    /** Command-S cleared that mark, so the write reached the checkout. */
+    readonly savedAfterCommandS: boolean;
+    /** The text the editor held after saving, proving the edit is what persisted. */
+    readonly savedTextObserved: boolean;
+    readonly reason?: string;
+    readonly status: "ok" | "skipped";
+}
+
 interface ChangedFileStatsMeasurement {
     readonly deletions: string;
     readonly insertions: string;
@@ -391,6 +415,7 @@ export async function electronWorkloadsRun(options: {
                   "file-switch-warm",
                   "highlight-warm",
                   "changed-files-warm",
+                  "panel-file-edit",
                   "streaming",
                   "mixed-replay",
                   "memory-idle",
@@ -735,6 +760,14 @@ async function workloadRun(
             ...(await performanceCapture(page, app, options.profilerActive())),
         });
     }
+    if (workload === "panel-file-edit") {
+        const details = await panelFileEditRun(page, mark);
+        await mark("panel-file-edit-complete");
+        return finish({
+            ...details,
+            ...(await performanceCapture(page, app, options.profilerActive())),
+        });
+    }
     if (workload === "streaming") {
         const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
         await composer.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
@@ -764,6 +797,140 @@ async function workloadRun(
         return finish({ before, after });
     }
     return finish({ reason: "No implementation for workload.", status: "skipped" });
+}
+
+/**
+ * Opening a file out of the transcript, editing it, and saving it.
+ *
+ * A file path in a message is a click, and the file it names opens beside the
+ * conversation. This lane proves that what opens there is the product's editor —
+ * the same component a file tab holds — rather than a read-only viewer of the
+ * same bytes: it types into the panel, watches the tab take the unsaved mark,
+ * saves with Command-S, and confirms the mark clears and the typed text is what
+ * the reopened file holds.
+ */
+async function panelFileEditRun(
+    page: Page,
+    mark: (name: string) => Promise<void>,
+): Promise<PanelFileEditMeasurement> {
+    const skipped = (reason: string): PanelFileEditMeasurement => ({
+        dirtyAfterType: false,
+        mainEditorMounted: false,
+        panelEditorEditable: false,
+        panelEditorMounted: false,
+        reason,
+        savedAfterCommandS: false,
+        savedTextObserved: false,
+        status: "skipped",
+    });
+    const showPanel = page.locator('button[aria-label="Show panel"]').first();
+    if (await showPanel.isVisible().catch(() => false)) await showPanel.click();
+    // The transcript names the file it worked on. Clicking that name is the
+    // whole entry point this lane exists to cover.
+    const fileLink = page.locator('[data-happy-desktop-ui="message-md-file"]').first();
+    await fileLink.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
+    if ((await fileLink.count()) === 0) return skipped("No file path in the transcript to open.");
+    const linkedPath = (await fileLink.getAttribute("data-path")) ?? "README.md";
+    const panel = page.locator('[data-happy-desktop-ui="app-shell-panel"]').first();
+    const panelEditor = panel.locator('[data-happy-desktop-ui="file-editor"]').first();
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+        await fileLink.click().catch(() => undefined);
+        await panelEditor.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
+        if ((await panelEditor.count()) > 0) break;
+        await page.waitForTimeout(1_000);
+    }
+    await mark("panel-file-opened");
+    // The editor, in the panel. A read-only viewer here is the regression.
+    if ((await panelEditor.count()) === 0) {
+        const seen = await panel
+            .evaluate((node) =>
+                [
+                    ...new Set(
+                        [...node.querySelectorAll("[data-happy-desktop-ui]")].map(
+                            (element) => element.getAttribute("data-happy-desktop-ui") ?? "",
+                        ),
+                    ),
+                ].join(","),
+            )
+            .catch(() => "<unreadable>");
+        return skipped(
+            `The panel did not open ${linkedPath} in the file editor. Panel held: ${seen}`,
+        );
+    }
+    // A Markdown file opens on its reading face; the text is behind Source,
+    // which is the same control the main content offers.
+    const sourceFace = panel
+        .locator('[data-happy-desktop-ui="segmented-control-segment"]')
+        .filter({ hasText: "Source" })
+        .first();
+    if (await sourceFace.isVisible().catch(() => false)) await sourceFace.click();
+    const panelSurface = panel.locator('[data-happy-desktop-ui="code-editor"]').first();
+    const panelBody = panelSurface.locator(".cm-content").first();
+    await panelBody.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
+    const panelEditorEditable =
+        (await panelBody.count()) > 0 &&
+        (await panelBody.getAttribute("contenteditable").catch(() => null)) === "true";
+    if (!panelEditorEditable)
+        return {
+            ...skipped(`The panel's ${linkedPath} is not editable.`),
+            panelEditorMounted: true,
+        };
+
+    // Typing is what makes the file unsaved, and the tab is where that is said.
+    const stamp = `gym-panel-edit-${String(Date.now())}`;
+    await panelBody.click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(`\n${stamp}`);
+    const dirtyTab = panel.locator('[data-happy-desktop-ui="tab-dirty"]').first();
+    await dirtyTab.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
+    const dirtyAfterType = (await dirtyTab.count()) > 0;
+    await mark("panel-file-dirty");
+
+    // Command-S is the save affordance; there is no button to press.
+    await panelBody.press("ControlOrMeta+s");
+    await page
+        .waitForFunction(
+            () =>
+                document
+                    .querySelector('[data-happy-desktop-ui="app-shell-panel"]')
+                    ?.querySelector('[data-happy-desktop-ui="tab-dirty"]') === null,
+            undefined,
+            { timeout: 20_000 },
+        )
+        .catch(() => undefined);
+    const savedAfterCommandS = (await dirtyTab.count()) === 0;
+    await mark("panel-file-saved");
+    // What the checkout now holds, read back through the editor rather than
+    // trusted from the keystroke: a save that did not land shows here.
+    const savedTextObserved = ((await panelBody.textContent().catch(() => "")) || "").includes(
+        stamp,
+    );
+
+    // The same file in a main-content tab is the same component. Moving it
+    // there is what the product does when the reader settles on it.
+    const panelTab = panel
+        .locator('[data-happy-desktop-ui="tab"]')
+        .filter({
+            hasText: linkedPath.split("/").at(-1) ?? linkedPath,
+        })
+        .first();
+    if ((await panelTab.count()) > 0) await panelTab.dblclick().catch(() => undefined);
+    const mainEditor = page
+        .locator('[data-happy-desktop-ui="app-shell-main"] [data-happy-desktop-ui="file-editor"]')
+        .first();
+    await mainEditor.waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined);
+    const mainEditorMounted = (await mainEditor.count()) > 0;
+    await mark("panel-file-main-checked");
+
+    return {
+        dirtyAfterType,
+        mainEditorMounted,
+        panelEditorEditable,
+        panelEditorMounted: true,
+        savedAfterCommandS,
+        savedTextObserved,
+        status: "ok",
+    };
 }
 
 async function fileSwitch(
@@ -824,11 +991,17 @@ async function fileSwitchSequence(
             status: "skipped",
         };
     await filesTab.click();
-    const scopeButton = page
-        .locator('[data-happy-desktop-ui="file-browser-scope"]')
-        .filter({ hasText: scope === "all" ? "All files" : "Changed" })
-        .first();
-    if ((await scopeButton.count()) > 0) await scopeButton.click().catch(() => undefined);
+    // The scope segment is found by the value it stands for, not by its label:
+    // a lane that reads the whole checkout must land on the whole checkout, and
+    // a rename of "All Files" must not quietly leave it reading the diff. A
+    // missing or ineffective control fails here rather than further down as a
+    // file that is simply absent from the listing.
+    const scopeSelector =
+        '[data-happy-desktop-ui="file-browser-controls"] ' +
+        `[data-happy-desktop-ui="segmented-control-segment"][data-value="${scope}"]`;
+    await page.locator(scopeSelector).waitFor({ state: "visible", timeout: 20_000 });
+    await page.locator(scopeSelector).click();
+    await page.waitForSelector(`${scopeSelector}[data-active]`, { timeout: 20_000 });
     if (scope === "changed") {
         const listFiles = page.locator('button[aria-label="List files"]').first();
         if (
@@ -896,8 +1069,13 @@ async function fileSwitchSequence(
                     const pane = tab?.closest('[data-happy-desktop-ui="tabbed-pane"]');
                     return (
                         pane !== null &&
+                        // The editor heads itself with a file path label, whose
+                        // name span is the file it is showing.
                         (pane
-                            ?.querySelector('[data-happy-desktop-ui="file-editor-name"]')
+                            ?.querySelector(
+                                '[data-happy-desktop-ui="file-editor"] ' +
+                                    '[data-happy-desktop-ui="file-path-label-name"]',
+                            )
                             ?.textContent?.includes(expected) === true ||
                             pane
                                 ?.querySelector('[data-happy-desktop-ui="changed-file-diff"]')
@@ -1479,8 +1657,10 @@ async function markdownCompletionBarrier(
                 const pane = tab?.closest('[data-happy-desktop-ui="tabbed-pane"]');
                 return {
                     activeTabs: tabs,
-                    editorName: pane?.querySelector('[data-happy-desktop-ui="file-editor-name"]')
-                        ?.textContent,
+                    editorName: pane?.querySelector(
+                        '[data-happy-desktop-ui="file-editor"] ' +
+                            '[data-happy-desktop-ui="file-path-label-name"]',
+                    )?.textContent,
                     editorText: pane
                         ?.querySelector('[data-happy-desktop-ui="file-editor"]')
                         ?.textContent?.slice(0, 500),

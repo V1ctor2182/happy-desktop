@@ -416,6 +416,13 @@ function deterministicText(
             "The same durable response is intentionally long enough to exercise transcript projection, markdown layout, and syntax/highlight caches.",
         ].join(" · ");
     });
+    // A transcript names the files it worked on, and clicking one is how a
+    // reader opens it beside the conversation. The panel-file lane needs a real
+    // link to click, so every response ends by naming a file in the fixture.
+    // It is deliberately not one of the files the warm/highlight lanes read:
+    // that lane types into what it opens, and a lane must not hand the next one
+    // a fixture it has quietly rewritten.
+    lines.push("", "Edited [scripts/build.mjs](scripts/build.mjs) in this checkout.");
     return lines.join("\n");
 }
 

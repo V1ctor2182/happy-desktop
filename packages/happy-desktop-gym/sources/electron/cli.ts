@@ -14,6 +14,7 @@ const workloads: readonly GymWorkloadName[] = [
     "file-switch-warm",
     "highlight-warm",
     "changed-files-warm",
+    "panel-file-edit",
     "streaming",
     "mixed-replay",
     "memory-idle",

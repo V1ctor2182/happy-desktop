@@ -13,9 +13,14 @@
 
 .happy2-file-editor {
     display: flex;
+    /* The editor fills whichever region it was given — a main-content tab or
+       the panel column beside a conversation — so it takes the remaining space
+       of a flex parent rather than only the height of what is in it. */
+    flex: 1 1 0%;
     flex-direction: column;
     width: 100%;
     height: 100%;
+    min-width: 0;
     min-height: 0;
     background: var(--surface);
     color: var(--text);

@@ -23,8 +23,6 @@ import type {
     RigModelSelection,
     RigNavigationOrderStore,
     RigSidebarCollapseStore,
-    RigPanelFileKind,
-    RigPanelFileSnapshot,
     RigPanelSnapshot,
     RigProjectAddSnapshot,
     RigPanelStore,
@@ -810,13 +808,6 @@ function fileHighlightCacheKey(path: string, hash: string): string {
 
 function markdownHighlightCacheKey(path: string, hash: string): string {
     return `m:${hash}:${fileHighlightLanguageKey(path)}`;
-}
-
-/** How the panel's viewer should read one file: as characters, or as bytes. */
-function panelFileKind(path: string): RigPanelFileKind {
-    const kind = filePreviewKind(path);
-    if (kind === "html") return "document";
-    return kind === "markdown" || kind === "text" ? "text" : "media";
 }
 
 /**
@@ -1791,7 +1782,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             ? workspace.list.worktreeCreateFailures.get(props.groupId as RigWorktreeId)
             : undefined;
     const groupFileTabs = openGroup
-        ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
+        ? workspace.fileTabs.filter(
+              (tab) => tab.groupId === openGroup.id && tab.placement === "main",
+          )
         : [];
     const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeMainViewId);
     const displayedFileTab = groupFileTabs.find((tab) => tab.id === workspace.displayedMainViewId);
@@ -1906,7 +1899,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         const online = rigOnline();
         const sessionIds = new Set(currentGroup.conversations.map((summary) => summary.id));
         const fileIds = new Set(
-            current.fileTabs.filter((tab) => tab.groupId === currentGroup.id).map((tab) => tab.id),
+            current.fileTabs
+                .filter((tab) => tab.groupId === currentGroup.id && tab.placement === "main")
+                .map((tab) => tab.id),
         );
         const toolIds = new Set<string>(
             panelNow.tabs.filter((tab) => tab.placement === "main").map((tab) => tab.id),
@@ -2083,7 +2078,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 onFileOpen={(path) => {
                     if (!rigOnline() || !openGroup.create) return;
                     const target = workspacePathRelative(path, openGroup.create.cwd);
-                    props.workspace.filePanelOpen(openGroup.id, target, panelFileKind(target));
+                    props.workspace.filePanelOpen(openGroup.id, target, fileTabKind(target, "all"));
                 }}
                 canAbort={conversationCanAbort}
                 readOnly={conversationReadOnly}
@@ -2176,11 +2171,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             : {})}
                         onPanelClose={() => props.workspace.panel.panelToggle()}
                         {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
+                        fileBody={mainFileBody}
                         onPanelFileClose={() => props.workspace.filePanelClose()}
-                        onPanelFileOpen={(path) => {
-                            if (!openGroup || !rigOnline()) return;
-                            props.workspace.filePanelOpen(openGroup.id, path, panelFileKind(path));
-                        }}
                         onViewClose={panelViewClose}
                         onScopeChange={(scope) => {
                             if (
@@ -2726,6 +2718,18 @@ function RigFileBody(props: {
     workspace: RigWorkspaceStore;
 }) {
     const { file, workspace } = props;
+    /**
+     * Opens a file a document links to, on the side the document is being read
+     * on. A file followed in the main content lands beside it in the tab strip;
+     * one followed in the panel stays in the panel, because the reader is
+     * reading the conversation and the panel is where they are reading.
+     */
+    const linkedFileOpen = (target: string): void => {
+        if (!props.rigOnline()) return;
+        const kind = fileTabKind(target, "all");
+        if (file.placement === "panel") workspace.filePanelOpen(file.groupId, target, kind);
+        else workspace.fileOpen(file.groupId, target, kind);
+    };
     // Typing into a document that could never be written back is worse than not
     // offering the editor at all: the reader loses what they typed and learns
     // why only when they try to save it.
@@ -2790,23 +2794,12 @@ function RigFileBody(props: {
                     ? {
                           rendered: (
                               <MarkdownDocument
-                                  /* A document opened in the main content
-                                     follows its own links there: the reader is
-                                     reading, and the file behind the link is the
-                                     next thing to read, so it lands beside this
-                                     one in the tab strip rather than in the
-                                     panel the transcript uses. Whatever it is —
-                                     another document, a picture — opens as the
-                                     file itself, never as its diff. */
-                                  onFileOpen={(href) => {
-                                      if (!props.rigOnline()) return;
-                                      const target = documentLinkResolve(file.path, href);
-                                      workspace.fileOpen(
-                                          file.groupId,
-                                          target,
-                                          fileTabKind(target, "all"),
-                                      );
-                                  }}
+                                  /* Whatever the link names — another document,
+                                     a picture — opens as the file itself, never
+                                     as its diff. */
+                                  onFileOpen={(href) =>
+                                      linkedFileOpen(documentLinkResolve(file.path, href))
+                                  }
                                   {...(markdownCacheKey === undefined
                                       ? {}
                                       : { cacheKey: markdownCacheKey })}
@@ -2883,10 +2876,9 @@ function RigFileBody(props: {
                               preview: (
                                   <RigChangedFilePreview
                                       file={file}
+                                      onFileOpen={linkedFileOpen}
                                       openDisabled={props.saveRefusal !== undefined}
-                                      rigOnline={props.rigOnline}
                                       text={current}
-                                      workspace={workspace}
                                   />
                               ),
                           })}
@@ -2953,11 +2945,11 @@ function RigFileBody(props: {
 function RigChangedFilePreview(props: {
     file: RigFileTabSnapshot;
     openDisabled: boolean;
-    rigOnline: () => boolean;
+    /** Opens a linked file on the side this one is being read on. */
+    onFileOpen: (path: string) => void;
     text: string;
-    workspace: RigWorkspaceStore;
 }) {
-    const { file, workspace } = props;
+    const { file } = props;
     // A picture, a recording, or an archive opens as itself rather than as a
     // diff, so a tab of one is not a diff tab and this is reached only by a tab
     // restored from a session that sorted the file differently. Saying the file
@@ -2978,9 +2970,8 @@ function RigChangedFilePreview(props: {
             // A document followed out of the changed list lands beside it as the
             // file itself, the same way one followed out of a file tab does.
             onFileOpen={(href) => {
-                if (props.openDisabled || !props.rigOnline()) return;
-                const target = documentLinkResolve(file.path, href);
-                workspace.fileOpen(file.groupId, target, fileTabKind(target, "all"));
+                if (props.openDisabled) return;
+                props.onFileOpen(documentLinkResolve(file.path, href));
             }}
             path={file.path}
         />
@@ -4129,10 +4120,15 @@ function RigPanelBody(props: {
     onLayoutChange: (layout: RigFileLayout) => void;
     onPanelClose: () => void;
     /** The file the viewer tab is on, read out of the transcript beside it. */
-    panelFile?: RigPanelFileSnapshot;
+    panelFile?: RigFileTabSnapshot;
+    /**
+     * Draws one open file. It is the workspace's own file body, so the file
+     * beside a conversation is the identical surface to the file in a
+     * main-content tab — same header, same Rendered / Source, same editor,
+     * same Command-S.
+     */
+    fileBody: (file: RigFileTabSnapshot) => ReactNode;
     onPanelFileClose: () => void;
-    /** Follows a link inside the viewed document to another file. */
-    onPanelFileOpen: (path: string) => void;
     onScopeChange: (scope: RigFileScope) => void;
     onToggle: (path: string, expanded: boolean) => void;
     /** Moves one view out of this panel and into the main content. */
@@ -4210,10 +4206,9 @@ function RigPanelBody(props: {
         ...(props.panel.fileViewOpen && panelFile
             ? [
                   {
+                      ...fileTabItem(panelFile),
                       closable: true,
-                      icon: panelFileIcon(panelFile.path),
                       id: RIG_PANEL_FILE_VIEW_ID,
-                      label: panelFile.path.split("/").at(-1) ?? panelFile.path,
                       // The viewer holds whatever the transcript last pointed
                       // at, so it is marked as the replaceable tab it is.
                       preview: true,
@@ -4419,14 +4414,7 @@ function RigPanelBody(props: {
                         )
                     ) : props.panel.activeViewId === RIG_PANEL_FILE_VIEW_ID ? (
                         panelFile ? (
-                            <RigPanelFileView
-                                {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
-                                {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
-                                file={panelFile}
-                                key={panelFile.path}
-                                onClose={props.onPanelFileClose}
-                                onFileOpen={props.onPanelFileOpen}
-                            />
+                            props.fileBody(panelFile)
                         ) : (
                             <EmptyState
                                 description="The file this conversation pointed at is no longer open."
@@ -4457,91 +4445,6 @@ function RigPanelBody(props: {
  */
 function mediaWindowShowable(kind: FilePreviewKind): boolean {
     return kind === "image" || kind === "video";
-}
-
-/** The glyph a viewer tab wears: what sort of file is being looked at. */
-function panelFileIcon(path: string): "image" | "play" | "doc" {
-    const kind = filePreviewKind(path);
-    if (kind === "image") return "image";
-    return kind === "video" || kind === "audio" ? "play" : "doc";
-}
-
-/**
- * The panel's file viewer: one workspace file the transcript pointed at, shown
- * beside the conversation that named it. A document arrives as text and renders
- * as Markdown or source; a picture, a video, or a PDF arrives as a URL the
- * viewer fetches, exactly as a file opened from the Files listing does.
- */
-function RigPanelFileView(props: {
-    file: RigPanelFileSnapshot;
-    htmlPreview?: HtmlPreviewRenderer;
-    mediaWindow?: MediaWindowOpener;
-    onClose: () => void;
-    onFileOpen: (path: string) => void;
-}) {
-    const { file } = props;
-    const mediaWindow = props.mediaWindow;
-    const content: FilePreviewContent =
-        file.document.type === "error"
-            ? { type: "error", message: file.document.error.message }
-            : file.document.type !== "ready"
-              ? { type: "loading" }
-              : "content" in file.document.value
-                ? { type: "text", text: file.document.value.content }
-                : file.document.value.contentType === "application/octet-stream"
-                  ? { type: "unavailable" }
-                  : { type: "url", url: file.document.value.url };
-    const cacheKey =
-        file.document.type === "ready" &&
-        "content" in file.document.value &&
-        file.document.value.hash.length > 0
-            ? fileHighlightCacheKey(file.path, file.document.value.hash)
-            : undefined;
-    return (
-        <>
-            {rigFileRevalidationBanner(file.revalidationError)}
-            <FilePreview
-                closeLabel="Close file"
-                content={content}
-                {...(cacheKey === undefined ? {} : { cacheKey })}
-                {...(file.kind === "document" && props.htmlPreview
-                    ? {
-                          rendered: (
-                              <HtmlPreviewFrame
-                                  {...(file.previewError
-                                      ? {
-                                            failure: {
-                                                kind: "address-unavailable" as const,
-                                                path: file.path,
-                                                detail: file.previewError,
-                                            },
-                                        }
-                                      : {})}
-                                  renderContent={props.htmlPreview}
-                                  source={file.previewUrl}
-                              />
-                          ),
-                      }
-                    : {})}
-                onClose={props.onClose}
-                // A link inside the document is relative to the document holding it.
-                onFileOpen={(href) => props.onFileOpen(documentLinkResolve(file.path, href))}
-                {...(mediaWindow &&
-                content.type === "url" &&
-                mediaWindowShowable(filePreviewKind(file.path))
-                    ? {
-                          onMediaWindowOpen: () =>
-                              mediaWindow({ path: file.path, url: content.url }),
-                      }
-                    : {})}
-                path={file.path}
-                updating={file.revalidating}
-                {...(file.document.type === "ready" && "size" in file.document.value
-                    ? { size: fileSizeFormat(file.document.value.size) }
-                    : {})}
-            />
-        </>
-    );
 }
 
 /**

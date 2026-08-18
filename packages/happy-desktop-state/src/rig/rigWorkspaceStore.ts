@@ -201,6 +201,14 @@ export interface RigFileTabSnapshot {
     /** `All files` opens the file itself; `Changed` opens its Git diff. */
     readonly kind: RigFileTabKind;
     /**
+     * Which of the workspace's two strips is drawing this file — the main
+     * content, or the panel beside the conversation. It is the only difference
+     * between a file opened from the Files listing and the same file opened out
+     * of a transcript: one file, one read, one editor, drawn in one of two
+     * places.
+     */
+    readonly placement: RigViewPlacement;
+    /**
      * A single-click preview may be replaced by the next file previewed in this
      * group. Opening it permanently or editing it clears this flag.
      */
@@ -258,48 +266,7 @@ export interface RigFileTabSnapshot {
     readonly revalidationError?: UserError;
 }
 
-/**
- * How the panel's file viewer reads one file: `text` for a document it shows as
- * characters, `media` for one whose bytes are fetched over a URL, `document` for
- * an HTML file, which is read as text and additionally addressed as a page. The
- * caller decides, because what a file is worth showing as is a rendering
- * question.
- */
-export type RigPanelFileKind = "text" | "media" | "document";
-
-/**
- * One workspace file opened beside a conversation rather than into a tab: the
- * file a transcript named, read on its own so following a link out of the chat
- * does not disturb the files the reader has open in the main content.
- */
-export interface RigPanelFileSnapshot {
-    readonly groupId: RigGroupId;
-    /** Path as the transcript named it, which is what the host is asked to read. */
-    readonly path: string;
-    readonly kind: RigPanelFileKind;
-    readonly document: Loadable<RigWorkspaceFileDocument | RigWorkspaceFileBytes>;
-    /** True only while no ready document is available for this panel file. */
-    readonly loading: boolean;
-    /**
-     * True while a ready document remains visible and the requested
-     * authoritative revision is being read again.
-     */
-    readonly revalidating: boolean;
-    /** Where a `document` file is served as a page, once the host has said. */
-    readonly previewUrl?: string;
-    /** Why it has none, when asking the host for one failed. */
-    readonly previewError?: string;
-    /**
-     * A background read failed while this viewer still had ready bytes. The
-     * bytes remain visible rather than being replaced by a destructive error
-     * state.
-     */
-    readonly revalidationError?: UserError;
-}
-
 type RigFileDocument = RigWorkspaceFileDocument | RigChangedFileDocument | RigWorkspaceFileBytes;
-
-type RigFileCacheKind = RigFileTabKind | RigPanelFileKind;
 
 type RigDocumentCacheIdentity = {
     readonly baseKey: string;
@@ -323,7 +290,6 @@ type RigFileLoadRequest = {
 /** Bounds decoded source text retained between preview/tab lifetimes. */
 const RIG_READY_DOCUMENT_CACHE_MAX_ENTRIES = 48;
 const RIG_READY_DOCUMENT_CACHE_MAX_WEIGHT = 16 * 1024 * 1024;
-const RIG_PANEL_FILE_LOAD_OWNER = "\u0000panel-file";
 /**
  * The renderer/UI uses the same ceiling when deciding whether to retain a
  * Pierre AST. A changed document at or above it must already carry the
@@ -331,10 +297,6 @@ const RIG_PANEL_FILE_LOAD_OWNER = "\u0000panel-file";
  * key.
  */
 const RIG_CHANGED_DOCUMENT_HASH_FALLBACK_MAX_TEXT_LENGTH = 512 * 1024;
-
-function rigFileCacheKind(kind: RigFileCacheKind): RigFileTabKind {
-    return kind === "text" ? "file" : kind;
-}
 
 /**
  * Produces a compact deterministic identity for small changed documents whose
@@ -377,10 +339,10 @@ function rigFileDocumentCanonical(document: RigFileDocument): RigFileDocument {
 function rigReadyDocumentCacheBaseKey(
     groupId: RigGroupId,
     path: string,
-    kind: RigFileCacheKind,
+    kind: RigFileTabKind,
     revision: string,
 ): string {
-    return `${groupId}\u0000${path}\u0000${rigFileCacheKind(kind)}\u0000${revision}`;
+    return `${groupId}\u0000${path}\u0000${kind}\u0000${revision}`;
 }
 
 function rigReadyDocumentCacheAddressKey(baseKey: string): string {
@@ -406,12 +368,6 @@ function rigReadyDocumentWeight(document: RigFileDocument): number {
     if ("oldContent" in document)
         return Math.max(1, (document.oldContent.length + document.newContent.length) * 2);
     return 1024;
-}
-
-function rigPanelDocumentOf(
-    document: RigFileDocument,
-): document is RigWorkspaceFileDocument | RigWorkspaceFileBytes {
-    return "content" in document || "contentType" in document;
 }
 
 /**
@@ -484,11 +440,11 @@ export interface RigWorkspaceSnapshot {
      */
     readonly displayedMainViewId?: string;
     /**
-     * The file the panel's viewer is on, if any. It is separate from `fileTabs`
-     * because it is a glance out of the transcript with the panel's lifetime,
-     * not a document the reader put in the main content.
+     * The file the panel's viewer is on, if any: the one member of `fileTabs`
+     * placed in the panel. It is the identical object, offered here so the
+     * panel does not scan the strip for it.
      */
-    readonly panelFile?: RigPanelFileSnapshot;
+    readonly panelFile?: RigFileTabSnapshot;
     /**
      * The session focusing each project or worktree should land on: the tab it
      * was left on, or the one behind that in its tab history when the reader has
@@ -614,20 +570,6 @@ export interface RigProjectCloneSnapshot {
  * file was last pointed at.
  */
 export const RIG_PANEL_FILE_VIEW_ID = "file";
-
-/** The same file, read as a main-content tab instead of in the panel's viewer. */
-function fileTabKindOfPanel(kind: RigPanelFileKind): RigFileTabKind {
-    return kind === "text" ? "file" : kind;
-}
-
-/**
- * The same file, read in the panel's viewer instead of a main-content tab —
- * undefined for a diff, which is two revisions beside each other and has no
- * form the single-file viewer could show.
- */
-function panelFileKindOfTab(kind: RigFileTabKind): RigPanelFileKind | undefined {
-    return kind === "diff" ? undefined : kind === "file" ? "text" : kind;
-}
 
 /**
  * A session being composed before it exists. Everything a first message needs —
@@ -970,8 +912,12 @@ export interface RigWorkspaceStore {
      * worked on resolve to: the file is read for showing, the panel's viewer tab
      * appears immediately with that read's loading state, and the main content
      * — the transcript the reader is following — is left exactly as it was.
+     *
+     * It is `fileOpen` with the other placement, and opens the same tab, read
+     * the same way, into the same editor. The panel holds one file at a time,
+     * so this replaces whichever file was in it.
      */
-    filePanelOpen(groupId: RigGroupId, path: string, kind: RigPanelFileKind): void;
+    filePanelOpen(groupId: RigGroupId, path: string, kind: RigFileTabKind): void;
     /** Closes the panel's file viewer and stops its pending read. */
     filePanelClose(): void;
     /**
@@ -980,11 +926,10 @@ export interface RigWorkspaceStore {
      * terminal or browser page between the two strips.
      *
      * This is a change of placement and nothing else. A file keeps its identity,
-     * so a file moved into the main content is the tab it would already have
-     * been and never a second copy of one; a terminal keeps its process and a
-     * page keeps its address. Views with only one home say so by refusing:
-     * a diff has no viewer in the panel, and the conversation belongs to the
-     * address bar rather than to a strip.
+     * its read, and anything typed into it and not yet saved, because moving it
+     * writes one field on the tab it already was; a terminal keeps its process
+     * and a page keeps its address. The conversation has only one home and says
+     * so by refusing: it belongs to the address bar rather than to a strip.
      *
      * `viewId` is a file tab id, a panel tab id, or `"file"` for the panel's
      * file viewer — the same ids the two strips are drawn from.
@@ -1438,14 +1383,6 @@ export function rigWorkspaceStoreCreate(
     let activeMainViewGroupId: RigGroupId | undefined;
     /** The addressed group's tab strip, in the order the reader arranged it. */
     let tabOrder: readonly string[] = [];
-    let panelFile: RigPanelFileSnapshot | undefined;
-    let panelFileGeneration = 0;
-    /**
-     * The working-tree revision the viewer's file was read at, so an agent
-     * editing the file the reader is looking at replaces what is on screen
-     * rather than leaving them reading a stale copy.
-     */
-    let panelFileRevision: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
     let filePresentationId = 0;
     const filePresentationIdNext = (): string =>
@@ -1457,10 +1394,6 @@ export function rigWorkspaceStoreCreate(
     const fileLoadOwnerRequests = new Map<string, RigFileLoadRequest>();
     const fileTabLoadedIdentities = new Map<string, RigDocumentCacheIdentity>();
     const fileTabRevalidations = new Map<string, { readonly revision: string }>();
-    let panelFileLoadedIdentity: RigDocumentCacheIdentity | undefined;
-    let panelFileResume:
-        | { readonly file: RigPanelFileSnapshot; readonly revision: string }
-        | undefined;
 
     const readyDocumentCacheRead = (
         baseKey: string,
@@ -1727,7 +1660,9 @@ export function rigWorkspaceStoreCreate(
         if (groupId === undefined) return [];
         const arrival = [
             ...groupConversationIdList(groupId),
-            ...fileTabs.filter((tab) => tab.groupId === groupId).map((tab) => tab.id),
+            ...fileTabs
+                .filter((tab) => tab.groupId === groupId && tab.placement === "main")
+                .map((tab) => tab.id),
             // A terminal or a page the reader moved out of the panel is in this
             // strip too, and is arranged in it like everything else. The panel
             // lists only the addressed group's tabs, so it can answer for that
@@ -1941,6 +1876,9 @@ export function rigWorkspaceStoreCreate(
         );
         if (groupAccess.writeRefusal !== panel.get().terminalRefusal)
             panel.scopeApply(addressedGroupId, openId, groupAccess.writeRefusal);
+        // The panel's file is not a second thing to keep in step: it is the one
+        // member of the strip placed there, found rather than mirrored.
+        const panelFile = fileTabs.find((tab) => tab.placement === "panel");
         if (
             snapshot.address === nextAddress &&
             snapshot.groupAccess.writeRefusal === groupAccess.writeRefusal &&
@@ -2028,7 +1966,7 @@ export function rigWorkspaceStoreCreate(
             activeMainViewId !== undefined &&
             activeMainViewGroupId !== undefined &&
             activeMainViewGroupId === addressedGroupId &&
-            !fileTabs.some((tab) => tab.id === activeMainViewId) &&
+            !fileTabs.some((tab) => tab.id === activeMainViewId && tab.placement === "main") &&
             !panel.get().tabs.some((tab) => tab.id === activeMainViewId && tab.placement === "main")
         ) {
             if (displayedMainViewId === activeMainViewId) displayedMainViewId = undefined;
@@ -2079,7 +2017,7 @@ export function rigWorkspaceStoreCreate(
         // a decision to throw the file away, and it comes back as the preview it
         // was rather than as a tab the reader never asked to keep.
         const files = fileTabs
-            .filter((tab) => tab.groupId === groupId)
+            .filter((tab) => tab.groupId === groupId && tab.placement === "main")
             .map((tab) => ({
                 path: tab.path,
                 kind: tab.kind,
@@ -2366,173 +2304,6 @@ export function rigWorkspaceStoreCreate(
     };
 
     /**
-     * Reads the file the panel's viewer is on. One file is being looked at, so
-     * one read is in flight for this owner. Reads shared with a main tab reuse
-     * the same request; opening another panel file releases this owner, and its
-     * answer is discarded by generation, which stops a slow first file from
-     * landing on top of the second.
-     */
-    const panelFileLoad = (file: RigPanelFileSnapshot): void => {
-        const generation = panelFileGeneration + 1;
-        panelFileGeneration = generation;
-        const previous = panelFile;
-        const sameAddress =
-            previous !== undefined &&
-            previous.groupId === file.groupId &&
-            previous.path === file.path &&
-            previous.kind === file.kind;
-        fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER);
-        const revision =
-            fileChangeFind(file.groupId, file.path)?.revision ?? panelFileRevision ?? "";
-        const cacheBaseKey = rigReadyDocumentCacheBaseKey(
-            file.groupId,
-            file.path,
-            file.kind,
-            revision,
-        );
-        const cachedEntry = readyDocumentCacheRead(cacheBaseKey, true);
-        const cached = cachedEntry?.document;
-        const cachedPanelDocument =
-            cached !== undefined && rigPanelDocumentOf(cached) ? cached : undefined;
-        const existingReady =
-            sameAddress && file.document.type === "ready" && rigPanelDocumentOf(file.document.value)
-                ? file.document.value
-                : undefined;
-        const visibleDocument = cachedPanelDocument ?? existingReady;
-        if (!sameAddress) panelFileLoadedIdentity = undefined;
-        if (cachedPanelDocument && cachedEntry) panelFileLoadedIdentity = cachedEntry.identity;
-        panelFile = {
-            ...file,
-            ...(cachedPanelDocument
-                ? {
-                      document: { type: "ready" as const, value: cachedPanelDocument },
-                  }
-                : {}),
-            loading: visibleDocument === undefined,
-            revalidating: visibleDocument !== undefined,
-            revalidationError: undefined,
-        };
-        recompute();
-        const read =
-            file.kind === "text" || file.kind === "document"
-                ? (signal: AbortSignal) => client.workspaceFileRead(file.groupId, file.path, signal)
-                : (signal: AbortSignal) =>
-                      client.workspaceFileBytesRead(file.groupId, file.path, signal);
-        const request = fileLoadRequestAcquire(RIG_PANEL_FILE_LOAD_OWNER, cacheBaseKey, read);
-        if (file.kind === "document")
-            void client.htmlPreviewOpen(file.groupId, file.path).then(
-                (url) => {
-                    if (disposed || panelFileGeneration !== generation || !panelFile) return;
-                    panelFile = { ...panelFile, previewUrl: url, previewError: undefined };
-                    recompute();
-                },
-                // Only the rendered face is unavailable; the source remains, and
-                // the viewer says why rather than preparing a page for ever.
-                (error: unknown) => {
-                    if (disposed || panelFileGeneration !== generation || !panelFile) return;
-                    panelFile = {
-                        ...panelFile,
-                        previewUrl: undefined,
-                        previewError: rigUserError(error).message,
-                    };
-                    recompute();
-                },
-            );
-        void request.promise.then(
-            (document) => {
-                const current = panelFile;
-                const valid =
-                    !disposed &&
-                    fileLoadRequestOwns(RIG_PANEL_FILE_LOAD_OWNER, request) &&
-                    panelFileGeneration === generation &&
-                    current !== undefined;
-                if (!valid) {
-                    fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
-                    return;
-                }
-                if (!rigPanelDocumentOf(document)) {
-                    fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
-                    return;
-                }
-                const identity = readyDocumentCacheWrite(cacheBaseKey, document);
-                if (identity) panelFileLoadedIdentity = identity;
-                else panelFileLoadedIdentity = undefined;
-                fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
-                panelFile = {
-                    ...current,
-                    document: { type: "ready", value: document },
-                    loading: false,
-                    revalidating: false,
-                    revalidationError: undefined,
-                };
-                recompute();
-            },
-            (error: unknown) => {
-                const current = panelFile;
-                const valid =
-                    !disposed &&
-                    fileLoadRequestOwns(RIG_PANEL_FILE_LOAD_OWNER, request) &&
-                    panelFileGeneration === generation &&
-                    current !== undefined;
-                if (!valid) {
-                    fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
-                    return;
-                }
-                const currentReady = current.document.type === "ready";
-                const failure = rigUserError(error);
-                const identity = panelFileLoadedIdentity;
-                if (identity?.baseKey === cacheBaseKey) panelFileLoadedIdentity = undefined;
-                fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
-                panelFile = {
-                    ...current,
-                    ...(currentReady
-                        ? {
-                              loading: false,
-                              revalidating: false,
-                              revalidationError: failure,
-                          }
-                        : {
-                              document: { type: "error" as const, error: failure },
-                              loading: false,
-                              revalidating: false,
-                              revalidationError: undefined,
-                          }),
-                };
-                recompute();
-            },
-        );
-    };
-
-    /**
-     * Stops the panel viewer's pending read and forgets the file it was on.
-     * During a store stop the private revalidation marker survives so `start`
-     * can resume a cache hit even though the visible document was ready.
-     */
-    const panelFileRelease = (preserveRevalidation = false): void => {
-        panelFileGeneration += 1;
-        if (panelFile) {
-            if (
-                panelFile.document.type === "ready" &&
-                !panelFile.revalidating &&
-                panelFile.revalidationError === undefined &&
-                panelFileLoadedIdentity !== undefined
-            )
-                readyDocumentCacheWrite(
-                    panelFileLoadedIdentity.baseKey,
-                    panelFile.document.value,
-                    panelFileLoadedIdentity.hash,
-                );
-        }
-        fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER);
-        panelFile = undefined;
-        panelFileRevision = undefined;
-        if (!preserveRevalidation) {
-            panelFileLoadedIdentity = undefined;
-            panelFileResume = undefined;
-        }
-    };
-
-    /**
      * Opens a file with preview or permanent lifetime. Each group has at most
      * one preview; permanent tabs and previews in other groups keep their place.
      */
@@ -2541,12 +2312,27 @@ export function rigWorkspaceStoreCreate(
         path: string,
         kind: RigFileTabKind,
         preview: boolean,
+        placement: RigViewPlacement = "main",
     ): void => {
         const id = fileTabIdOf(groupId, path);
         const existing = fileTabs.find((tab) => tab.id === id);
-        activeMainViewId = id;
-        activeMainViewGroupId = undefined;
+        // Only the main content selects what it is showing. A file opening in
+        // the panel is read beside the conversation, which stays on screen.
+        if (placement === "main") {
+            activeMainViewId = id;
+            activeMainViewGroupId = undefined;
+        } else if (activeMainViewId === id) {
+            // The reader asked for this file beside the transcript, and it was
+            // the main content's tab. It is one file, so it moves rather than
+            // being copied, and the main content uncovers what it was over.
+            activeMainViewId = undefined;
+            displayedMainViewId = undefined;
+        }
+        // Whatever the panel was holding steps aside: the viewer is one slot.
+        if (placement === "panel") panelFileTabClose(id);
         if (existing) {
+            if (existing.placement !== placement)
+                fileTabs = fileTabs.map((tab) => (tab.id === id ? { ...tab, placement } : tab));
             const change = fileChangeFind(groupId, path);
             const revision = change?.revision ?? "";
             if (existing.kind !== kind) {
@@ -2583,6 +2369,7 @@ export function rigWorkspaceStoreCreate(
             groupId,
             path,
             kind,
+            placement,
             preview,
             revision,
             presentationId,
@@ -2591,9 +2378,15 @@ export function rigWorkspaceStoreCreate(
             loading: cached === undefined,
             revalidating: cached !== undefined,
         };
-        const replacedIndex = preview
-            ? fileTabs.findIndex((candidate) => candidate.groupId === groupId && candidate.preview)
-            : -1;
+        const replacedIndex =
+            preview && placement === "main"
+                ? fileTabs.findIndex(
+                      (candidate) =>
+                          candidate.groupId === groupId &&
+                          candidate.preview &&
+                          candidate.placement === "main",
+                  )
+                : -1;
         if (replacedIndex >= 0) {
             const replaced = fileTabs[replacedIndex]!;
             fileTabCacheStore(replaced);
@@ -2633,6 +2426,19 @@ export function rigWorkspaceStoreCreate(
      * and the group is left reading whatever the tab was covering — the next
      * file open in it, or the conversation behind them all.
      */
+    /**
+     * Empties the panel's viewer slot, keeping `except` if that is what is
+     * already in it. The file's read stops and its parsed text goes to the
+     * shared cache, so reopening it is immediate.
+     */
+    const panelFileTabClose = (except?: string): void => {
+        const held = fileTabs.find((tab) => tab.placement === "panel" && tab.id !== except);
+        if (!held) return;
+        fileTabCacheStore(held);
+        fileTabRelease(held.id);
+        fileTabs = fileTabs.filter((tab) => tab.id !== held.id);
+    };
+
     const fileTabClose = (tabId: string): void => {
         const closing = fileTabs.find((tab) => tab.id === tabId);
         if (!closing) return;
@@ -2683,53 +2489,10 @@ export function rigWorkspaceStoreCreate(
         recompute();
     };
 
-    /** Shows one file in the panel's viewer and starts reading it. */
-    const filePanelShow = (groupId: RigGroupId, path: string, kind: RigPanelFileKind): void => {
-        if (disposed) return;
-        panelFileResume = undefined;
-        const requestedRevision = fileChangeFind(groupId, path)?.revision ?? "";
-        const previousRevision = panelFileRevision;
-        panelFileRevision = requestedRevision;
-        const requestedBaseKey = rigReadyDocumentCacheBaseKey(
-            groupId,
-            path,
-            kind,
-            requestedRevision,
-        );
-        const current =
-            panelFile &&
-            panelFile.groupId === groupId &&
-            panelFile.path === path &&
-            panelFile.kind === kind &&
-            panelFile.document.type === "ready" &&
-            (panelFileLoadedIdentity?.baseKey === requestedBaseKey ||
-                previousRevision === requestedRevision)
-                ? panelFile
-                : undefined;
-        panelFileLoad(
-            current ?? {
-                groupId,
-                path,
-                kind,
-                document: { type: "loading" },
-                loading: true,
-                revalidating: false,
-            },
-        );
-        panel.fileViewOpen();
-    };
-
     const fileTabsReconcile = (): void => {
         for (const tab of fileTabs) {
             const change = fileChangeFind(tab.groupId, tab.path);
             if (change && change.revision !== tab.revision) fileLoad(tab.id, change.revision);
-        }
-        if (panelFile && addressedGroupId !== undefined) {
-            const change = fileChangeFind(addressedGroupId, panelFile.path);
-            if (change && change.revision !== panelFileRevision) {
-                panelFileRevision = change.revision;
-                panelFileLoad({ ...panelFile, loading: true });
-            }
         }
     };
 
@@ -3109,7 +2872,7 @@ export function rigWorkspaceStoreCreate(
         panel.scopeApply(addressedGroupId, conversationId, openGroupWorkRefusal());
         // The panel's viewer showed a file out of the conversation being left,
         // named by a path that only means anything in that session's checkout.
-        if (conversationId !== openId) panelFileRelease();
+        if (conversationId !== openId) panelFileTabClose();
         if (conversationId === openId) {
             // Re-addressing the same conversation is how a failed acquisition is
             // retried, which is what a repeated navigation to it should do.
@@ -3660,14 +3423,6 @@ export function rigWorkspaceStoreCreate(
             if (tab.loading || revalidation !== undefined)
                 fileLoad(tab.id, revalidation?.revision ?? tab.revision);
         }
-        const panelResume = panelFileResume;
-        panelFileResume = undefined;
-        if (panelResume && panel.get().activeViewId === RIG_PANEL_FILE_VIEW_ID) {
-            panelFileRevision = panelResume.revision;
-            panelFileLoad({ ...panelResume.file, loading: true });
-        } else if (panelResume) {
-            panelFileLoadedIdentity = undefined;
-        }
         // Which applications exist is a property of the host, not of anything
         // being opened, so it is read once the workspace is actually on screen
         // rather than when it is constructed.
@@ -3702,15 +3457,6 @@ export function rigWorkspaceStoreCreate(
         fileTabs = fileTabs.map((tab) =>
             tab.revalidating ? { ...tab, revalidating: false } : tab,
         );
-        const panelResume =
-            panelFile === undefined
-                ? undefined
-                : {
-                      file: panelFile,
-                      revision: panelFileRevision ?? "",
-                  };
-        panelFileResume = panelResume;
-        panelFileRelease(true);
         releaseGroup();
         releaseConversation();
         conversation = { type: "unloaded" };
@@ -4254,10 +4000,14 @@ export function rigWorkspaceStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
-        filePanelOpen: (groupId, path, kind) => filePanelShow(groupId, path, kind),
+        filePanelOpen(groupId, path, kind) {
+            if (disposed) return;
+            fileTabOpen(groupId, path, kind, false, "panel");
+            panel.fileViewOpen();
+        },
         filePanelClose() {
             if (disposed) return;
-            panelFileRelease();
+            panelFileTabClose();
             panel.fileViewClose();
             recompute();
         },
@@ -4295,39 +4045,40 @@ export function rigWorkspaceStoreCreate(
                 recompute();
                 return;
             }
-            if (viewId === RIG_PANEL_FILE_VIEW_ID) {
-                // The viewer is a glance at one file; in the main content that
-                // same file is a document the reader settled on, so it arrives
-                // as a permanent tab rather than another replaceable preview.
-                if (placement !== "main" || !panelFile) return;
-                const file = panelFile;
-                compose(() => {
-                    panelFileRelease();
+            // A file moves by changing the one field that says where it is
+            // drawn. Its read, its parsed text, and anything typed into it and
+            // not yet saved come along because it is the same tab throughout.
+            const file =
+                viewId === RIG_PANEL_FILE_VIEW_ID
+                    ? fileTabs.find((tab) => tab.placement === "panel")
+                    : fileTabs.find((tab) => tab.id === viewId);
+            if (!file || file.placement === placement) return;
+            compose(() => {
+                if (placement === "panel") {
+                    // The viewer is one slot, so whatever was in it steps aside.
+                    panelFileTabClose(file.id);
+                    if (activeMainViewId === file.id) {
+                        activeMainViewId = undefined;
+                        displayedMainViewId = undefined;
+                    }
+                    panel.fileViewOpen();
+                } else {
                     panel.fileViewClose();
                     // An expanded panel covers the workspace column the file is
                     // about to arrive in, so it steps back to its docked width.
                     panel.panelRestore();
-                    fileTabOpen(file.groupId, file.path, fileTabKindOfPanel(file.kind), false);
-                });
-                return;
-            }
-            const file = fileTabs.find((tab) => tab.id === viewId);
-            if (!file || placement !== "panel") return;
-            // A diff is two revisions read side by side and the panel's viewer
-            // reads one file, so there is nowhere for it to land.
-            const kind = panelFileKindOfTab(file.kind);
-            if (!kind) return;
-            // The panel's viewer reads the file from the checkout, so a tab
-            // carrying text that has not been written back has nowhere to put
-            // it. Moving is not a reason to lose an edit, so a file with unsaved
-            // work stays where the work is.
-            if (file.draft !== undefined || file.saving) return;
-            // Opened on the far side before it is closed on this one, so the
-            // file is never off screen in between, and both steps are published
-            // together so it is never in both places either.
-            compose(() => {
-                filePanelShow(file.groupId, file.path, kind);
-                fileTabClose(file.id);
+                    // A glance the reader settled on is a document they keep,
+                    // not another replaceable preview.
+                    activeMainViewId = file.id;
+                    activeMainViewGroupId = undefined;
+                }
+                fileTabs = fileTabs.map((tab) =>
+                    tab.id === file.id
+                        ? { ...tab, placement, ...(placement === "main" ? { preview: false } : {}) }
+                        : tab,
+                );
+                if (placement === "main") groupTabRemember(file.groupId, file.id);
+                recompute();
             });
         },
         mainViewSelect(viewId) {
