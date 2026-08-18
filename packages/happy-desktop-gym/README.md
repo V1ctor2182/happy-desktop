@@ -74,8 +74,8 @@ pair for `src/changes/modified/deep/large-modified.md`, and a host-side fixture
 read are durable/event/UI barriers; the row is remounted after the real tool
 completes and must report the profile's expected insertions plus `−16`
 deletions. The lane does not use fixed sleeps as stream or file-arrival
-barriers; the selection diagnostic deliberately holds the restored range for
-two seconds after a confirmed node replacement. SSE collectors
+barriers; the selection diagnostic deliberately holds a native range for two
+seconds after the cold worker replacement has settled. SSE collectors
 attach before submissions, and each run barrier is keyed by its returned run
 ID. Every stream,
 session switch, scroll, and file interaction has an ISO timestamp and latency,
@@ -85,16 +85,13 @@ Rig 0.2.0's JustBash gym mount is the
 actual ready managed worktree at `/workspace`; the live tool mutates that same
 worktree while clustered sessions stream and switch in the same run. The
 changed-file lane also establishes a native browser text range inside a diff
-row, waits for Pierre shadow-DOM activity, and fails if the selected text is
-lost. `changedFileSelection` records its lengths and, when a cold same-mode
-async highlight actually replaces the selected anchor and focus nodes, holds the
-restored range for a two-second settle window after that replacement. The
-Gym records a fast-cache case honestly when no replacement arrives before
-selection. Both lanes exercise a real unified → split → unified mode round trip
-that restores the logical bookmark. The split step may have no live native
-selection while its unified nodes are absent; selection is asserted only after
-the round trip returns to unified. Appearance changes use Pierre's cached theme
-path and are not used as a code-node replacement trigger.
+row only after its cold worker-backed highlight has replaced the initial plain
+DOM. `changedFileSelection` then records the exact native selection at 0, 100,
+500, 1,000, and 2,000 milliseconds while the concurrent streams continue.
+Every sample must retain the same text, length, connected endpoints, and diff
+mode, and Pierre's settled shadow DOM must not mutate at all. This proves stable
+file/options identity prevents unrelated store notifications from rebuilding
+an unchanged diff; the product does not bookmark or restore native selections.
 highlight lane opens `README.md` → `src/long-transcript.md` → `README.md`
 through MarkdownDocument/Pierre, requires the fenced-code completion barrier,
 and records the Pierre Markdown A→B→A warm cycle. The mixed document lane uses

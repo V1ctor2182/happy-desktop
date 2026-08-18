@@ -31,255 +31,6 @@ const MODE_LABELS: Record<ChangedFileDiffMode, string> = {
     edit: "Edit",
 };
 
-type DiffSelectionSide = "additions" | "deletions" | "unified";
-
-interface DiffSelectionPosition {
-    readonly lineIndex: string;
-    readonly offset: number;
-    readonly side: DiffSelectionSide;
-}
-
-interface DiffSelectionBookmark {
-    readonly anchor: DiffSelectionPosition;
-    readonly focus: DiffSelectionPosition;
-}
-
-interface DiffSelectionPoint {
-    readonly node: Node;
-    readonly offset: number;
-}
-
-/**
- * Pierre replaces the code text nodes when its worker finishes highlighting.
- * That is the right rendering strategy for a diff, but Chromium drops a native
- * text selection when the selected nodes are replaced. Keep a selection in the
- * diff's line/side coordinate system and put it back after Pierre's render.
- *
- * This is deliberately not React state: a selection is browser interaction
- * state, and storing it in the component snapshot would add a render for every
- * drag update. The bridge is also stable for the lifetime of one diff so the
- * `onPostRender` option does not make Pierre reconfigure on every workspace
- * notification.
- */
-function createDiffSelectionBridge(): {
-    readonly onPostRender: (
-        node: HTMLElement,
-        instance: unknown,
-        phase: "mount" | "update" | "unmount",
-    ) => void;
-} {
-    let host: HTMLElement | undefined;
-    let bookmark: DiffSelectionBookmark | undefined;
-    let pointerSelecting = false;
-    let restoreFrame: number | undefined;
-    let selectionRoot: ShadowRoot | undefined;
-
-    const nodeInsideHost = (node: Node, candidate: HTMLElement): boolean => {
-        const shadowRoot = candidate.shadowRoot;
-        return shadowRoot !== null && shadowRoot.contains(node);
-    };
-
-    const positionRead = (
-        node: Node,
-        offset: number,
-        candidate: HTMLElement,
-    ): DiffSelectionPosition | undefined => {
-        const element =
-            node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
-        const line = element?.closest<HTMLElement>("[data-line][data-line-index]");
-        if (
-            line === null ||
-            line === undefined ||
-            !nodeInsideHost(line, candidate) ||
-            (node !== line && !line.contains(node))
-        )
-            return undefined;
-        const code = line.closest<HTMLElement>("[data-code]");
-        if (code === null || !nodeInsideHost(code, candidate)) return undefined;
-        const side: DiffSelectionSide | undefined = code.hasAttribute("data-unified")
-            ? "unified"
-            : code.hasAttribute("data-additions")
-              ? "additions"
-              : code.hasAttribute("data-deletions")
-                ? "deletions"
-                : undefined;
-        const lineIndex = line.dataset.lineIndex;
-        if (side === undefined || lineIndex === undefined || !/^\d+(?:,\d+)?$/u.test(lineIndex))
-            return undefined;
-        try {
-            const range = document.createRange();
-            range.selectNodeContents(line);
-            const maxOffset =
-                node.nodeType === Node.TEXT_NODE
-                    ? (node.textContent?.length ?? 0)
-                    : node.childNodes.length;
-            range.setEnd(node, Math.max(0, Math.min(offset, maxOffset)));
-            return {
-                lineIndex,
-                offset: range.toString().length,
-                side,
-            };
-        } catch {
-            return undefined;
-        }
-    };
-
-    const selectionRead = (candidate: HTMLElement): DiffSelectionBookmark | undefined => {
-        const selection = window.getSelection();
-        if (
-            selection === null ||
-            selection.isCollapsed ||
-            selection.anchorNode === null ||
-            selection.focusNode === null ||
-            !nodeInsideHost(selection.anchorNode, candidate) ||
-            !nodeInsideHost(selection.focusNode, candidate)
-        )
-            return undefined;
-        const anchor = positionRead(selection.anchorNode, selection.anchorOffset, candidate);
-        const focus = positionRead(selection.focusNode, selection.focusOffset, candidate);
-        return anchor === undefined || focus === undefined ? undefined : { anchor, focus };
-    };
-
-    const textPointAt = (line: HTMLElement, requestedOffset: number): DiffSelectionPoint => {
-        const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-        let remaining = Math.max(0, requestedOffset);
-        let last: Text | undefined;
-        while (walker.nextNode()) {
-            const text = walker.currentNode as Text;
-            last = text;
-            const length = text.data.length;
-            if (remaining <= length) return { node: text, offset: remaining };
-            remaining -= length;
-        }
-        return last === undefined
-            ? { node: line, offset: line.childNodes.length }
-            : { node: last, offset: last.data.length };
-    };
-
-    const positionRestore = (
-        candidate: HTMLElement,
-        position: DiffSelectionPosition,
-    ): DiffSelectionPoint | undefined => {
-        const code = candidate.shadowRoot?.querySelector<HTMLElement>(
-            `[data-code][data-${position.side}]`,
-        );
-        const line = code?.querySelector<HTMLElement>(
-            `[data-line][data-line-index="${position.lineIndex}"]`,
-        );
-        return line === null || line === undefined ? undefined : textPointAt(line, position.offset);
-    };
-
-    const selectionRestore = (candidate: HTMLElement): void => {
-        if (bookmark === undefined) return;
-        const anchor = positionRestore(candidate, bookmark.anchor);
-        const focus = positionRestore(candidate, bookmark.focus);
-        if (anchor === undefined || focus === undefined) return;
-        const selection = window.getSelection();
-        if (selection === null) return;
-        try {
-            selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
-        } catch {
-            try {
-                const range = document.createRange();
-                range.setStart(anchor.node, anchor.offset);
-                range.setEnd(focus.node, focus.offset);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            } catch {
-                // The line may have been virtualized away between renders. Keep
-                // the bookmark so a later render can restore it if it returns.
-            }
-        }
-    };
-
-    const selectionRestoreAfterBrowserSettlement = (candidate: HTMLElement): void => {
-        if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
-        restoreFrame = requestAnimationFrame(() => {
-            restoreFrame = undefined;
-            if (host === candidate && !pointerSelecting) selectionRestore(candidate);
-        });
-    };
-
-    const selectionChanged = (): void => {
-        if (host === undefined) return;
-        const next = selectionRead(host);
-        if (next !== undefined) bookmark = next;
-        else {
-            const selection = window.getSelection();
-            const connectedSelection =
-                selection?.anchorNode?.isConnected === true &&
-                selection.focusNode?.isConnected === true;
-            // Replacing the selected text nodes can briefly collapse Chromium's
-            // selection or leave a non-collapsed range whose endpoints are
-            // already detached. Keep the logical bookmark through both
-            // renderer-driven transitions. A real pointer interaction clears
-            // it at pointerdown, and a connected selection made elsewhere
-            // clears it here.
-            if (pointerSelecting || (selection?.isCollapsed === false && connectedSelection))
-                bookmark = undefined;
-        }
-    };
-
-    const pointerDown = (event: PointerEvent): void => {
-        if (host === undefined) return;
-        pointerSelecting = event.composedPath().includes(host);
-        bookmark = undefined;
-    };
-
-    const pointerUp = (): void => {
-        if (!pointerSelecting) return;
-        pointerSelecting = false;
-        selectionChanged();
-    };
-
-    const onPostRender = (
-        node: HTMLElement,
-        _instance: unknown,
-        phase: "mount" | "update" | "unmount",
-    ): void => {
-        if (phase === "unmount") {
-            if (host === node) {
-                document.removeEventListener("selectionchange", selectionChanged);
-                document.removeEventListener("pointerdown", pointerDown, true);
-                document.removeEventListener("pointerup", pointerUp, true);
-                selectionRoot?.removeEventListener("selectionchange", selectionChanged);
-                if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
-                host = undefined;
-                pointerSelecting = false;
-                restoreFrame = undefined;
-                selectionRoot = undefined;
-            }
-            return;
-        }
-        if (host !== node) {
-            if (host !== undefined) {
-                document.removeEventListener("selectionchange", selectionChanged);
-                document.removeEventListener("pointerdown", pointerDown, true);
-                document.removeEventListener("pointerup", pointerUp, true);
-                selectionRoot?.removeEventListener("selectionchange", selectionChanged);
-                if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
-                restoreFrame = undefined;
-            }
-            host = node;
-            selectionRoot = node.shadowRoot ?? undefined;
-            document.addEventListener("selectionchange", selectionChanged);
-            document.addEventListener("pointerdown", pointerDown, true);
-            document.addEventListener("pointerup", pointerUp, true);
-            selectionRoot?.addEventListener("selectionchange", selectionChanged);
-        }
-        if (bookmark !== undefined) {
-            selectionRestore(node);
-            // Chromium queues selectionchange after the DOM replacement. A
-            // synchronous restore can therefore be collapsed again after this
-            // callback returns. Restore once more on the next paint boundary,
-            // unless the user has started a new selection in the meantime.
-            selectionRestoreAfterBrowserSettlement(node);
-        }
-    };
-
-    return { onPostRender };
-}
-
 export type ChangedFileDiffProps = {
     appearance: "dark" | "light";
     className?: string;
@@ -382,14 +133,12 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
         }),
         [oldCacheKey, props.oldContent, props.oldPath, props.path],
     );
-    const selectionBridge = useMemo(() => createDiffSelectionBridge(), []);
     const diffOptions = useMemo(
         () => ({
             diffIndicators: "bars" as const,
             diffStyle: mode === "split" ? ("split" as const) : ("unified" as const),
             hunkSeparators: "line-info-basic" as const,
             lineDiffType: "word-alt" as const,
-            onPostRender: selectionBridge.onPostRender,
             overflow: "scroll" as const,
             stickyHeader: true,
             theme: {
@@ -399,7 +148,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             themeType: props.appearance,
             unsafeCSS: PIERRE_PANE_CSS,
         }),
-        [mode, props.appearance, selectionBridge],
+        [mode, props.appearance],
     );
     return (
         <section

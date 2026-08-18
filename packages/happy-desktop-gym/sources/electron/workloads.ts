@@ -121,21 +121,47 @@ interface ChangedFileStatsMeasurement {
     };
 }
 
+interface DiffSelectionSample {
+    readonly anchorConnected: boolean;
+    readonly atMs: 0 | 100 | 500 | 1_000 | 2_000;
+    readonly focusConnected: boolean;
+    readonly inside: boolean;
+    readonly length: number;
+    readonly observedAtMs: number;
+    readonly text: string;
+}
+
+interface DiffSelectionTimelineEvent {
+    readonly anchorConnected: boolean;
+    readonly focusConnected: boolean;
+    readonly kind: "mutation" | "selectionchange";
+    readonly tMs: number;
+    readonly text: string;
+}
+
+interface DiffSelectionStabilityObservation {
+    readonly finalMode?: string;
+    readonly initialMode?: string;
+    readonly selectionSamples: readonly DiffSelectionSample[];
+    readonly selectionTimeline: readonly DiffSelectionTimelineEvent[];
+    readonly stableViewMutated: boolean;
+    readonly workerReplacementObserved: boolean;
+    readonly workerSettledAtMs?: number;
+}
+
 interface DiffSelectionMeasurement {
     readonly afterLength: number;
     readonly beforeLength: number;
     readonly durationMs: number;
     readonly inputMode: "native-dom-range";
-    readonly mutationObserved: boolean;
     readonly path: string;
-    readonly roundtripRestored: boolean;
-    readonly rerenderTriggers: readonly ("async-highlight" | "diff-mode-roundtrip")[];
-    readonly sameModeAfterLength: number;
-    readonly sameModeMutationObserved: boolean;
-    readonly sameModeSelectionNodesReplaced: boolean;
-    readonly sameModeReplacementRequired: boolean;
-    readonly sameModeStable: boolean;
+    readonly selectionSamples: readonly DiffSelectionSample[];
+    readonly selectionTimeline: readonly DiffSelectionTimelineEvent[];
+    readonly stableViewMutationObserved: boolean;
+    readonly stableViewNodesPreserved: boolean;
     readonly stable: boolean;
+    readonly workerReplacementObserved: boolean;
+    readonly workerSettledAtMs: number;
 }
 
 interface ScrollInteractionMeasurement {
@@ -963,7 +989,6 @@ async function changedFileSelectionBarrier(
     page: Page,
     path: string,
     alreadyOpen = false,
-    requireSameModeReplacement = false,
 ): Promise<DiffSelectionMeasurement> {
     if (!alreadyOpen) {
         const row = await fileTreeRowEnsureMounted(page, path);
@@ -971,138 +996,39 @@ async function changedFileSelectionBarrier(
             throw new Error(`Changed-file virtual row did not mount for ${path}.`);
         await row.click();
     }
-    const fileName = path.split("/").at(-1) ?? path;
-    if (!alreadyOpen) {
-        await page.waitForFunction(
-            (expected) => {
-                const selectedTab = document.querySelector<HTMLElement>(
-                    '[data-happy-desktop-ui="tab"][aria-selected="true"]',
-                );
-                const pane = selectedTab?.closest<HTMLElement>(
-                    '[data-happy-desktop-ui="tabbed-pane"]',
-                );
-                return (
-                    pane
-                        ?.querySelector('[data-happy-desktop-ui="changed-file-diff"]')
-                        ?.getAttribute("aria-label")
-                        ?.includes(expected) === true
-                );
-            },
-            fileName,
-            { timeout: 30_000 },
-        );
-    }
-    const initialMode = await page
-        .locator('[data-happy-desktop-ui="changed-file-diff"]')
-        .getAttribute("data-mode");
-    if (initialMode === null)
-        throw new Error(`Changed-file diff mode was unavailable for ${path}.`);
-    const sameModeTriggerLabel = "async-highlight" as const;
-    const sameModeObserverKey = `__happyDesktopGymDiffSelectionSameMode_${String(Date.now())}`;
-    await diffSelectionObserverStart(page, sameModeObserverKey);
-    // Playwright's synthetic mouse does not establish a native selection
-    // across this custom element's pointer-retargeting boundary. Stage the
-    // same browser Selection/Range state a user drag creates, then verify that
-    // Pierre's asynchronous shadow-DOM replacement preserves it. The observer
-    // is armed before the range so a fast worker cannot win the race between
-    // selection and observer setup.
-    const before = await diffSelectionSelect(page, sameModeObserverKey);
-    if (before === undefined || !before.inside || before.length < 2)
-        throw new Error(`Changed-file diff selection did not start for ${path}.`);
-
     const started = performance.now();
-    let sameModeObserverActive = true;
-    let sameModeMutationObserved = false;
-    let sameModeSelectionNodesReplaced = false;
-    let sameModeAfter = before;
-    let sameModeStable = false;
-    try {
-        await page.waitForFunction(
-            ({ key }) => {
-                const state = (
-                    window as Window & {
-                        __happyDesktopGymDiffSelectionObservers?: Record<
-                            string,
-                            | {
-                                  readonly observationDeadline: number;
-                                  readonly replacementObserved: boolean;
-                                  readonly settleDeadline: number | undefined;
-                                  readonly selectedNodesReplaced: boolean;
-                              }
-                            | undefined
-                        >;
-                    }
-                ).__happyDesktopGymDiffSelectionObservers?.[key];
-                if (state === undefined) return false;
-                if (state.replacementObserved) {
-                    return (
-                        state.settleDeadline !== undefined &&
-                        performance.now() >= state.settleDeadline
-                    );
-                }
-                return performance.now() >= state.observationDeadline;
-            },
-            { key: sameModeObserverKey },
-            { timeout: 6_000, polling: 50 },
+    const observation = await diffSelectionStabilityObserve(page, path);
+    const before = observation.selectionSamples[0];
+    const after = observation.selectionSamples.at(-1);
+    if (
+        before === undefined ||
+        after === undefined ||
+        before.length < 2 ||
+        observation.workerSettledAtMs === undefined
+    )
+        throw new Error(`Changed-file diff selection did not start for ${path}.`);
+    const stableViewNodesPreserved =
+        observation.selectionSamples.length === 5 &&
+        observation.selectionSamples.every(
+            (sample) =>
+                sample.text === before.text &&
+                sample.length === before.length &&
+                sample.inside &&
+                sample.anchorConnected &&
+                sample.focusConnected,
         );
-        const sameModeObserver = await diffSelectionObserverStop(page, sameModeObserverKey);
-        sameModeObserverActive = false;
-        sameModeMutationObserved = sameModeObserver.mutated;
-        sameModeSelectionNodesReplaced = sameModeObserver.selectedNodesReplaced;
-        sameModeAfter = await diffSelectionRead(page);
-        const sameModeMode = await page
-            .locator('[data-happy-desktop-ui="changed-file-diff"]')
-            .getAttribute("data-mode");
-        sameModeStable =
-            sameModeAfter.text === before.text &&
-            sameModeAfter.length === before.length &&
-            sameModeAfter.inside;
-        if (
-            sameModeMode !== initialMode ||
-            !sameModeStable ||
-            (requireSameModeReplacement &&
-                (!sameModeMutationObserved || !sameModeSelectionNodesReplaced))
-        ) {
-            throw new Error(
-                `Changed-file diff selection was lost during same-mode rerender for ${path}: ` +
-                    `mode=${String(sameModeMode)} expectedMode=${initialMode} ` +
-                    `mutation=${String(sameModeMutationObserved)} ` +
-                    `nodesReplaced=${String(sameModeSelectionNodesReplaced)} ` +
-                    `required=${String(requireSameModeReplacement)} ` +
-                    `before=${String(before.length)} after=${String(sameModeAfter.length)}.`,
-            );
-        }
-    } finally {
-        if (sameModeObserverActive)
-            await diffSelectionObserverStop(page, sameModeObserverKey).catch(() => undefined);
-    }
-    const splitMutation = await diffSelectionModeMutation(page, "split");
-    const unifiedMutation = await diffSelectionModeMutation(page, "unified");
-    if (!splitMutation || !unifiedMutation)
-        throw new Error(`Pierre did not rerender both sides of the diff mode round trip.`);
-    await page.waitForFunction(
-        (expectedText) => {
-            const selection = window.getSelection();
-            const renderer = document.querySelector<HTMLElement>(
-                '[data-happy-desktop-ui="changed-file-diff"] diffs-container',
-            );
-            const root = renderer?.shadowRoot;
-            return (
-                selection?.toString() === expectedText &&
-                selection.anchorNode !== null &&
-                selection.focusNode !== null &&
-                root?.contains(selection.anchorNode) === true &&
-                root.contains(selection.focusNode)
-            );
-        },
-        before.text,
-        { timeout: 1_000, polling: "raf" },
-    );
-    const after = await diffSelectionRead(page);
-    const stable = before.text === after.text && after.length === before.length && after.inside;
-    if (!stable) {
+    if (
+        observation.initialMode !== observation.finalMode ||
+        !observation.workerReplacementObserved ||
+        observation.stableViewMutated ||
+        !stableViewNodesPreserved
+    ) {
         throw new Error(
-            `Changed-file diff selection was lost for ${path}: ` +
+            `Settled changed-file diff identity was unstable for ${path}: ` +
+                `mode=${String(observation.finalMode)} expectedMode=${observation.initialMode} ` +
+                `workerReplacement=${String(observation.workerReplacementObserved)} ` +
+                `stableViewMutation=${String(observation.stableViewMutated)} ` +
+                `nodesPreserved=${String(stableViewNodesPreserved)} ` +
                 `before=${String(before.length)} after=${String(after.length)}.`,
         );
     }
@@ -1111,276 +1037,181 @@ async function changedFileSelectionBarrier(
         beforeLength: before.length,
         durationMs: performance.now() - started,
         inputMode: "native-dom-range",
-        mutationObserved: sameModeMutationObserved && splitMutation && unifiedMutation,
         path,
-        rerenderTriggers: [sameModeTriggerLabel, "diff-mode-roundtrip"],
-        sameModeAfterLength: sameModeAfter.length,
-        sameModeMutationObserved,
-        sameModeSelectionNodesReplaced,
-        sameModeReplacementRequired: requireSameModeReplacement,
-        sameModeStable,
-        roundtripRestored: stable,
-        stable,
+        selectionSamples: observation.selectionSamples,
+        selectionTimeline: observation.selectionTimeline,
+        stable: stableViewNodesPreserved,
+        stableViewMutationObserved: observation.stableViewMutated,
+        stableViewNodesPreserved,
+        workerReplacementObserved: observation.workerReplacementObserved,
+        workerSettledAtMs: observation.workerSettledAtMs,
     };
 }
 
-async function diffSelectionModeMutation(page: Page, mode: "split" | "unified"): Promise<boolean> {
-    const observerKey = `__happyDesktopGymDiffSelection_${mode}_${String(Date.now())}`;
-    await diffSelectionObserverStart(page, observerKey);
-    const triggered = await page.evaluate((nextMode) => {
-        const diff = document.querySelector<HTMLElement>(
-            '[data-happy-desktop-ui="changed-file-diff"]',
-        );
-        const segment = diff?.querySelector<HTMLButtonElement>(
-            `[data-happy-desktop-ui="segmented-control-segment"][data-value="${nextMode}"]`,
-        );
-        if (segment === null || segment === undefined) return false;
-        // HTMLElement.click() invokes the real product mode action without a
-        // pointerdown elsewhere that would intentionally replace the user's
-        // selection. Split removes the unified text nodes; returning to
-        // unified proves the logical bookmark survives and restores them.
-        segment.click();
-        return true;
-    }, mode);
-    if (!triggered) {
-        await diffSelectionObserverStop(page, observerKey);
-        throw new Error(`The ${mode} diff mode control was unavailable.`);
-    }
-    await page.waitForFunction(
-        ({ key, expectedMode }) => {
-            const state = (
-                window as Window & {
-                    __happyDesktopGymDiffSelectionObservers?: Record<
-                        string,
-                        { readonly observationDeadline: number; mutated: boolean } | undefined
-                    >;
-                }
-            ).__happyDesktopGymDiffSelectionObservers?.[key];
-            const diff = document.querySelector<HTMLElement>(
-                '[data-happy-desktop-ui="changed-file-diff"]',
-            );
-            return (
-                state === undefined ||
-                (state.mutated && diff?.dataset.mode === expectedMode) ||
-                performance.now() >= state.observationDeadline
-            );
-        },
-        { key: observerKey, expectedMode: mode },
-        { timeout: 3_000, polling: 50 },
-    );
-    return (await diffSelectionObserverStop(page, observerKey)).mutated;
-}
-
-async function diffSelectionRead(
+async function diffSelectionStabilityObserve(
     page: Page,
-): Promise<{ readonly inside: boolean; readonly length: number; readonly text: string }> {
-    return page.evaluate(() => {
-        const selection = window.getSelection();
-        const text = selection?.toString() ?? "";
-        const renderer = document.querySelector<HTMLElement>(
-            '[data-happy-desktop-ui="changed-file-diff"] diffs-container',
-        );
-        const shadowRoot = renderer?.shadowRoot;
-        const anchorNode = selection?.anchorNode;
-        const focusNode = selection?.focusNode;
-        const inside =
-            anchorNode !== null &&
-            anchorNode !== undefined &&
-            focusNode !== null &&
-            focusNode !== undefined &&
-            shadowRoot !== undefined &&
-            shadowRoot !== null &&
-            shadowRoot.contains(anchorNode) &&
-            shadowRoot.contains(focusNode);
-        return { inside, length: text.length, text };
-    });
-}
+    path: string,
+): Promise<DiffSelectionStabilityObservation> {
+    const expectedFileName = path.split("/").at(-1) ?? path;
+    return page.evaluate(
+        async ({ expected }) =>
+            new Promise<DiffSelectionStabilityObservation>((resolve, reject) => {
+                const sampleTimes = [0, 100, 500, 1_000, 2_000] as const;
+                const samples: DiffSelectionSample[] = [];
+                const timeline: DiffSelectionTimelineEvent[] = [];
+                let completed = false;
+                let diff: HTMLElement | undefined;
+                let documentObserver: MutationObserver | undefined;
+                let stableObserver: MutationObserver | undefined;
+                let workerObserver: MutationObserver | undefined;
+                let selectedAt = 0;
+                let initialMode: string | undefined;
+                let stableViewMutated = false;
+                let workerReplacementObserved = false;
+                let workerSettledAtMs: number | undefined;
+                let workerWaitStarted = 0;
+                let selectionStarted = false;
+                let staged = false;
+                const selectionAbort = new AbortController();
+                let stageTimeout = 0;
 
-async function diffSelectionObserverStart(
-    page: Page,
-    key: string,
-    trackSelectionNodes = false,
-): Promise<void> {
-    await page.evaluate(
-        ({ observerKey, shouldTrackSelectionNodes }) => {
-            const renderer = document.querySelector<HTMLElement>(
-                '[data-happy-desktop-ui="changed-file-diff"] diffs-container',
-            );
-            const root = renderer?.shadowRoot;
-            if (root === undefined || root === null)
-                throw new Error("Diff renderer shadow root missing.");
-            const selection = window.getSelection();
-            const anchorNode =
-                shouldTrackSelectionNodes && selection?.anchorNode !== null
-                    ? selection?.anchorNode
-                    : undefined;
-            const focusNode =
-                shouldTrackSelectionNodes && selection?.focusNode !== null
-                    ? selection?.focusNode
-                    : undefined;
-            if (
-                shouldTrackSelectionNodes &&
-                (anchorNode === undefined ||
-                    focusNode === undefined ||
-                    !root.contains(anchorNode) ||
-                    !root.contains(focusNode))
-            ) {
-                throw new Error("Diff renderer selection endpoints were unavailable.");
-            }
-            const windowWithObservers = window as Window & {
-                __happyDesktopGymDiffSelectionObservers?: Record<
-                    string,
-                    {
-                        readonly anchorNode: Node | undefined;
-                        readonly focusNode: Node | undefined;
-                        readonly observationDeadline: number;
-                        readonly observer: MutationObserver;
-                        readonly root: ShadowRoot;
-                        replacementObserved: boolean;
-                        selectedNodesReplaced: boolean;
-                        settleDeadline: number | undefined;
-                        mutated: boolean;
+                documentObserver = new MutationObserver(() => {
+                    if (staged || completed) return;
+                    const selectedTab = document.querySelector<HTMLElement>(
+                        '[data-happy-desktop-ui="tab"][aria-selected="true"]',
+                    );
+                    const pane = selectedTab?.closest<HTMLElement>(
+                        '[data-happy-desktop-ui="tabbed-pane"]',
+                    );
+                    const candidateDiff = pane?.querySelector<HTMLElement>(
+                        '[data-happy-desktop-ui="changed-file-diff"]',
+                    );
+                    if (candidateDiff?.getAttribute("aria-label")?.includes(expected) !== true)
+                        return;
+                    const renderer = candidateDiff.querySelector<HTMLElement>("diffs-container");
+                    const candidateRoot = renderer?.shadowRoot;
+                    if (
+                        renderer === null ||
+                        renderer === undefined ||
+                        candidateRoot === null ||
+                        candidateRoot === undefined
+                    )
+                        return;
+                    let target:
+                        | {
+                              readonly end: number;
+                              readonly start: number;
+                              readonly text: Text;
+                          }
+                        | undefined;
+                    for (const line of candidateRoot.querySelectorAll<HTMLElement>(
+                        "[data-code] [data-line][data-line-index]",
+                    )) {
+                        const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+                        while (walker.nextNode()) {
+                            const text = walker.currentNode as Text;
+                            const start = text.data.search(/\S/u);
+                            if (start < 0 || text.data.length - start < 2) continue;
+                            target = {
+                                end: Math.min(text.data.length, start + 16),
+                                start,
+                                text,
+                            };
+                            break;
+                        }
+                        if (target !== undefined) break;
                     }
-                >;
-            };
-            const observers = (windowWithObservers.__happyDesktopGymDiffSelectionObservers ??= {});
-            observers[observerKey]?.observer.disconnect();
-            const state = {
-                anchorNode,
-                focusNode,
-                observationDeadline: performance.now() + 3_000,
-                mutated: false,
-                replacementObserved: false,
-                root,
-                selectedNodesReplaced: false,
-                settleDeadline: undefined as number | undefined,
-                observer: new MutationObserver(() => {
-                    state.mutated = true;
-                    const anchorDisconnected =
-                        state.anchorNode !== undefined &&
-                        (state.anchorNode.isConnected === false ||
-                            !state.root.contains(state.anchorNode));
-                    const focusDisconnected =
-                        state.focusNode !== undefined &&
-                        (state.focusNode.isConnected === false ||
-                            !state.root.contains(state.focusNode));
-                    if (!state.selectedNodesReplaced && anchorDisconnected && focusDisconnected) {
-                        state.replacementObserved = true;
-                        state.selectedNodesReplaced = true;
-                        state.settleDeadline = performance.now() + 2_000;
-                    }
-                }),
-            };
-            observers[observerKey] = state;
-            state.observer.observe(root, {
-                characterData: true,
-                childList: true,
-                subtree: true,
-            });
-        },
-        { observerKey: key, shouldTrackSelectionNodes: trackSelectionNodes },
-    );
-}
-
-async function diffSelectionSelect(
-    page: Page,
-    key: string,
-): Promise<
-    { readonly inside: boolean; readonly length: number; readonly text: string } | undefined
-> {
-    return page.evaluate(async (observerKey) => {
-        const windowWithObservers = window as Window & {
-            __happyDesktopGymDiffSelectionObservers?: Record<
-                string,
-                | {
-                      anchorNode: Node | undefined;
-                      focusNode: Node | undefined;
-                      readonly root: ShadowRoot;
-                  }
-                | undefined
-            >;
-        };
-        const state = windowWithObservers.__happyDesktopGymDiffSelectionObservers?.[observerKey];
-        const renderer = document.querySelector<HTMLElement>(
-            '[data-happy-desktop-ui="changed-file-diff"] diffs-container',
-        );
-        const root = renderer?.shadowRoot;
-        if (state === undefined || renderer === null || root === null || root === undefined)
-            return undefined;
-
-        let immediate:
-            | {
-                  readonly inside: boolean;
-                  readonly length: number;
-                  readonly text: string;
-              }
-            | undefined;
-        for (const line of root.querySelectorAll<HTMLElement>(
-            "[data-code] [data-line][data-line-index]",
-        )) {
-            const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-            while (walker.nextNode()) {
-                const text = walker.currentNode as Text;
-                const first = text.data.search(/\S/u);
-                if (first < 0 || text.data.length - first < 2) continue;
-                const last = Math.min(text.data.length, first + 16);
-                const selection = window.getSelection();
-                if (selection === null) return undefined;
-                renderer.dispatchEvent(
-                    new PointerEvent("pointerdown", {
-                        bubbles: true,
-                        button: 0,
-                        composed: true,
-                        pointerId: 1,
-                        pointerType: "mouse",
-                    }),
-                );
-                selection.setBaseAndExtent(text, first, text, last);
-                document.dispatchEvent(new Event("selectionchange"));
-                renderer.dispatchEvent(
-                    new PointerEvent("pointerup", {
-                        bubbles: true,
-                        button: 0,
-                        composed: true,
-                        pointerId: 1,
-                        pointerType: "mouse",
-                    }),
-                );
-                state.anchorNode = selection.anchorNode ?? undefined;
-                state.focusNode = selection.focusNode ?? undefined;
-                immediate = {
-                    inside:
-                        root.contains(selection.anchorNode) && root.contains(selection.focusNode),
-                    length: selection.toString().length,
-                    text: selection.toString(),
-                };
-                break;
-            }
-            if (immediate !== undefined) break;
-        }
-        if (immediate !== undefined) return immediate;
-        return new Promise((resolve) => {
-            let settled = false;
-            const observer = new MutationObserver(() => {
-                if (settled) return;
-                let selected:
-                    | {
-                          readonly inside: boolean;
-                          readonly length: number;
-                          readonly text: string;
-                      }
-                    | undefined;
-                for (const line of root.querySelectorAll<HTMLElement>(
-                    "[data-code] [data-line][data-line-index]",
-                )) {
-                    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-                    while (walker.nextNode()) {
-                        const text = walker.currentNode as Text;
-                        const first = text.data.search(/\S/u);
-                        if (first < 0 || text.data.length - first < 2) continue;
-                        const last = Math.min(text.data.length, first + 16);
+                    if (target === undefined) return;
+                    staged = true;
+                    diff = candidateDiff;
+                    initialMode = candidateDiff.dataset.mode;
+                    documentObserver?.disconnect();
+                    workerWaitStarted = performance.now();
+                    workerObserver = new MutationObserver(() => {
+                        if (target.text.isConnected && candidateRoot.contains(target.text)) return;
+                        workerReplacementObserved = true;
+                        workerSettledAtMs = Math.max(0, performance.now() - workerWaitStarted);
+                        workerObserver?.disconnect();
+                        let settledTarget:
+                            | {
+                                  readonly end: number;
+                                  readonly start: number;
+                                  readonly text: Text;
+                              }
+                            | undefined;
+                        for (const line of candidateRoot.querySelectorAll<HTMLElement>(
+                            "[data-code] [data-line][data-line-index]",
+                        )) {
+                            const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+                            while (walker.nextNode()) {
+                                const text = walker.currentNode as Text;
+                                const start = text.data.search(/\S/u);
+                                if (start < 0 || text.data.length - start < 2) continue;
+                                settledTarget = {
+                                    end: Math.min(text.data.length, start + 16),
+                                    start,
+                                    text,
+                                };
+                                break;
+                            }
+                            if (settledTarget !== undefined) break;
+                        }
                         const selection = window.getSelection();
-                        if (selection === null) return;
+                        if (settledTarget === undefined || selection === null) return;
+                        selectionStarted = true;
+                        selectedAt = performance.now();
+                        document.addEventListener(
+                            "selectionchange",
+                            () => {
+                                if (timeline.length >= 64) return;
+                                const current = window.getSelection();
+                                const anchor = current?.anchorNode;
+                                const focus = current?.focusNode;
+                                timeline.push({
+                                    anchorConnected:
+                                        anchor !== null &&
+                                        anchor !== undefined &&
+                                        anchor.isConnected &&
+                                        candidateRoot.contains(anchor),
+                                    focusConnected:
+                                        focus !== null &&
+                                        focus !== undefined &&
+                                        focus.isConnected &&
+                                        candidateRoot.contains(focus),
+                                    kind: "selectionchange",
+                                    tMs: Math.max(0, performance.now() - selectedAt),
+                                    text: current?.toString() ?? "",
+                                });
+                            },
+                            { signal: selectionAbort.signal },
+                        );
+                        stableObserver = new MutationObserver(() => {
+                            stableViewMutated = true;
+                            if (timeline.length >= 64) return;
+                            const current = window.getSelection();
+                            const anchor = current?.anchorNode;
+                            const focus = current?.focusNode;
+                            timeline.push({
+                                anchorConnected:
+                                    anchor !== null &&
+                                    anchor !== undefined &&
+                                    anchor.isConnected &&
+                                    candidateRoot.contains(anchor),
+                                focusConnected:
+                                    focus !== null &&
+                                    focus !== undefined &&
+                                    focus.isConnected &&
+                                    candidateRoot.contains(focus),
+                                kind: "mutation",
+                                tMs: Math.max(0, performance.now() - selectedAt),
+                                text: current?.toString() ?? "",
+                            });
+                        });
+                        stableObserver.observe(candidateRoot, {
+                            characterData: true,
+                            childList: true,
+                            subtree: true,
+                        });
                         renderer.dispatchEvent(
                             new PointerEvent("pointerdown", {
                                 bubbles: true,
@@ -1390,7 +1221,12 @@ async function diffSelectionSelect(
                                 pointerType: "mouse",
                             }),
                         );
-                        selection.setBaseAndExtent(text, first, text, last);
+                        selection.setBaseAndExtent(
+                            settledTarget.text,
+                            settledTarget.start,
+                            settledTarget.text,
+                            settledTarget.end,
+                        );
                         document.dispatchEvent(new Event("selectionchange"));
                         renderer.dispatchEvent(
                             new PointerEvent("pointerup", {
@@ -1401,122 +1237,112 @@ async function diffSelectionSelect(
                                 pointerType: "mouse",
                             }),
                         );
-                        state.anchorNode = selection.anchorNode ?? undefined;
-                        state.focusNode = selection.focusNode ?? undefined;
-                        selected = {
-                            inside:
-                                root.contains(selection.anchorNode) &&
-                                root.contains(selection.focusNode),
-                            length: selection.toString().length,
-                            text: selection.toString(),
-                        };
-                        break;
-                    }
-                    if (selected !== undefined) break;
-                }
-                if (selected === undefined) return;
-                settled = true;
-                window.clearTimeout(timeout);
-                observer.disconnect();
-                resolve(selected);
-            });
-            const timeout = window.setTimeout(() => {
-                if (settled) return;
-                settled = true;
-                observer.disconnect();
-                resolve(undefined);
-            }, 30_000);
-            observer.observe(root, { childList: true, subtree: true });
-            if (settled) return;
-            for (const line of root.querySelectorAll<HTMLElement>(
-                "[data-code] [data-line][data-line-index]",
-            )) {
-                const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-                while (walker.nextNode()) {
-                    const text = walker.currentNode as Text;
-                    const first = text.data.search(/\S/u);
-                    if (first < 0 || text.data.length - first < 2) continue;
-                    const last = Math.min(text.data.length, first + 16);
-                    const selection = window.getSelection();
-                    if (selection === null) return;
-                    renderer.dispatchEvent(
-                        new PointerEvent("pointerdown", {
-                            bubbles: true,
-                            button: 0,
-                            composed: true,
-                            pointerId: 1,
-                            pointerType: "mouse",
-                        }),
-                    );
-                    selection.setBaseAndExtent(text, first, text, last);
-                    document.dispatchEvent(new Event("selectionchange"));
-                    renderer.dispatchEvent(
-                        new PointerEvent("pointerup", {
-                            bubbles: true,
-                            button: 0,
-                            composed: true,
-                            pointerId: 1,
-                            pointerType: "mouse",
-                        }),
-                    );
-                    state.anchorNode = selection.anchorNode ?? undefined;
-                    state.focusNode = selection.focusNode ?? undefined;
-                    settled = true;
-                    window.clearTimeout(timeout);
-                    observer.disconnect();
-                    resolve({
-                        inside:
-                            root.contains(selection.anchorNode) &&
-                            root.contains(selection.focusNode),
-                        length: selection.toString().length,
-                        text: selection.toString(),
+                        for (const atMs of sampleTimes) {
+                            if (atMs === 0) {
+                                const current = window.getSelection();
+                                const anchor = current?.anchorNode;
+                                const focus = current?.focusNode;
+                                const anchorConnected =
+                                    anchor !== null &&
+                                    anchor !== undefined &&
+                                    anchor.isConnected &&
+                                    candidateRoot.contains(anchor);
+                                const focusConnected =
+                                    focus !== null &&
+                                    focus !== undefined &&
+                                    focus.isConnected &&
+                                    candidateRoot.contains(focus);
+                                const text = current?.toString() ?? "";
+                                samples.push({
+                                    anchorConnected,
+                                    atMs,
+                                    focusConnected,
+                                    inside: anchorConnected && focusConnected,
+                                    length: text.length,
+                                    observedAtMs: Math.max(0, performance.now() - selectedAt),
+                                    text,
+                                });
+                                continue;
+                            }
+                            window.setTimeout(() => {
+                                const current = window.getSelection();
+                                const anchor = current?.anchorNode;
+                                const focus = current?.focusNode;
+                                const anchorConnected =
+                                    anchor !== null &&
+                                    anchor !== undefined &&
+                                    anchor.isConnected &&
+                                    candidateRoot.contains(anchor);
+                                const focusConnected =
+                                    focus !== null &&
+                                    focus !== undefined &&
+                                    focus.isConnected &&
+                                    candidateRoot.contains(focus);
+                                const text = current?.toString() ?? "";
+                                samples.push({
+                                    anchorConnected,
+                                    atMs,
+                                    focusConnected,
+                                    inside: anchorConnected && focusConnected,
+                                    length: text.length,
+                                    observedAtMs: Math.max(0, performance.now() - selectedAt),
+                                    text,
+                                });
+                                if (atMs !== 2_000 || completed) return;
+                                completed = true;
+                                documentObserver?.disconnect();
+                                stableObserver?.disconnect();
+                                workerObserver?.disconnect();
+                                selectionAbort.abort();
+                                window.clearTimeout(stageTimeout);
+                                resolve({
+                                    finalMode: diff?.dataset.mode,
+                                    initialMode,
+                                    selectionSamples: samples,
+                                    selectionTimeline: timeline,
+                                    stableViewMutated,
+                                    workerReplacementObserved,
+                                    workerSettledAtMs,
+                                });
+                            }, atMs);
+                        }
                     });
-                    break;
-                }
-                if (settled) break;
-            }
-        });
-    }, key);
-}
-
-async function diffSelectionObserverStop(
-    page: Page,
-    key: string,
-): Promise<{
-    readonly mutated: boolean;
-    readonly selectedNodesReplaced: boolean;
-}> {
-    return page.evaluate((observerKey) => {
-        const windowWithObservers = window as Window & {
-            __happyDesktopGymDiffSelectionObservers?: Record<
-                string,
-                | {
-                      readonly anchorNode: Node | undefined;
-                      readonly focusNode: Node | undefined;
-                      readonly observer: MutationObserver;
-                      readonly root: ShadowRoot;
-                      selectedNodesReplaced: boolean;
-                      mutated: boolean;
-                  }
-                | undefined
-            >;
-        };
-        const state = windowWithObservers.__happyDesktopGymDiffSelectionObservers?.[observerKey];
-        if (state === undefined) return { mutated: false, selectedNodesReplaced: false };
-        state.observer.disconnect();
-        delete windowWithObservers.__happyDesktopGymDiffSelectionObservers?.[observerKey];
-        const anchorDisconnected =
-            state.anchorNode !== undefined &&
-            (state.anchorNode.isConnected === false || !state.root.contains(state.anchorNode));
-        const focusDisconnected =
-            state.focusNode !== undefined &&
-            (state.focusNode.isConnected === false || !state.root.contains(state.focusNode));
-        return {
-            mutated: state.mutated,
-            selectedNodesReplaced:
-                state.selectedNodesReplaced || (anchorDisconnected && focusDisconnected),
-        };
-    }, key);
+                    workerObserver.observe(candidateRoot, {
+                        characterData: true,
+                        childList: true,
+                        subtree: true,
+                    });
+                });
+                documentObserver.observe(document.documentElement ?? document, {
+                    attributes: true,
+                    attributeFilter: [
+                        "aria-selected",
+                        "data-happy-desktop-gym-selection-arm",
+                        "data-mode",
+                    ],
+                    childList: true,
+                    subtree: true,
+                });
+                stageTimeout = window.setTimeout(() => {
+                    if (selectionStarted || completed) return;
+                    completed = true;
+                    documentObserver?.disconnect();
+                    stableObserver?.disconnect();
+                    workerObserver?.disconnect();
+                    selectionAbort.abort();
+                    reject(
+                        new Error(
+                            staged
+                                ? `Cold Pierre worker replacement did not arrive for ${expected}.`
+                                : `Selectable cold diff text did not appear for ${expected}.`,
+                        ),
+                    );
+                }, 30_000);
+                document.documentElement?.toggleAttribute("data-happy-desktop-gym-selection-arm");
+                document.documentElement?.toggleAttribute("data-happy-desktop-gym-selection-arm");
+            }),
+        { expected: expectedFileName },
+    );
 }
 
 async function markdownCompletionBarrier(
