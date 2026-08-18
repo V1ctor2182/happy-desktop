@@ -60,7 +60,35 @@ function window1024(children: ReactNode) {
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "1024px" }}>
             <div style={{ height: "704px", width: "1024px" }}>{children}</div>
-            <DimensionRule label="1024px × 704px — minimum window contract" />
+            <DimensionRule label="1024px × 704px — a representative window" />
+        </div>
+    );
+}
+
+/*
+ * The narrowest window the shell admits, and the arithmetic behind it: a 64px
+ * rail, two 250px side lanes, and a workspace holding twice a lane between
+ * them. Written as that sum rather than as its total, so the specimen says
+ * where the number comes from — see app-shell.css, which states the same one.
+ */
+const LANE_MIN = 250;
+const WORKSPACE_MIN = LANE_MIN * 2;
+const WINDOW_MIN = 64 + LANE_MIN * 2 + WORKSPACE_MIN;
+
+function windowAtMinimum(children: ReactNode) {
+    return (
+        <div
+            style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                width: `${String(WINDOW_MIN)}px`,
+            }}
+        >
+            <div style={{ height: "480px", width: `${String(WINDOW_MIN)}px` }}>{children}</div>
+            <DimensionRule
+                label={`${String(WINDOW_MIN)}px × 480px — 64 rail + ${String(LANE_MIN)} + ${String(WORKSPACE_MIN)} + ${String(LANE_MIN)}`}
+            />
         </div>
     );
 }
@@ -273,6 +301,37 @@ export function AppShellPage() {
                 stage="chrome"
             >
                 {shortcutShell(true)}
+            </Specimen>
+
+            <Specimen
+                detail="The window at its narrowest, and the order the lanes give up room in. Nothing here is a hand-set width: the frame is the sum, and the shell's own flex does the rest — the two side lanes shrink out of their clamp until each stops at its 250px floor, and the workspace holds twice a lane, because the middle is where the work is and it should be the last thing squeezed rather than the first. Drag the blueprint narrower and the shell stops here and the page scrolls instead, which is exactly what the window's own minimum does."
+                label="Every lane at its minimum"
+                number="10"
+                stage="chrome"
+            >
+                {windowAtMinimum(
+                    <AppShell
+                        panel={
+                            <Slot
+                                label="panel"
+                                note={`shrunk to its ${String(LANE_MIN)}px floor`}
+                            />
+                        }
+                        rail={railSlot()}
+                        sidebar={
+                            <Slot
+                                label="sidebar"
+                                note={`shrunk to its ${String(LANE_MIN)}px floor`}
+                            />
+                        }
+                        titleBar={titleBarSlot()}
+                    >
+                        <Slot
+                            label="children"
+                            note={`holding ${String(WORKSPACE_MIN)}px — twice a lane`}
+                        />
+                    </AppShell>,
+                )}
             </Specimen>
         </ComponentPage>
     );
