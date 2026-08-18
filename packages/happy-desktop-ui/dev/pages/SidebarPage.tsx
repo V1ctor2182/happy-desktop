@@ -2,10 +2,17 @@ import { useState, type ReactNode } from "react";
 import { Avatar } from "../../src/Avatar";
 import { Button } from "../../src/Button";
 import { DevBuildMenu } from "../../src/DevBuildMenu";
+import { Icon } from "../../src/Icon";
 import { commandShortcut } from "../../src/keyboardShortcut";
-import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sidebar";
+import {
+    Sidebar,
+    SIDEBAR_TRAILING_GAP,
+    type SidebarItem,
+    type SidebarSection,
+} from "../../src/Sidebar";
 import { SidebarFooter } from "../../src/SidebarFooter";
 import { SidebarUpdateAction, type SidebarUpdateActionProps } from "../../src/SidebarUpdateAction";
+import { Spinner } from "../../src/Spinner";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -622,12 +629,12 @@ function Frame(props: { children: ReactNode; height: number }) {
  * run of rows long enough that the scrollbar arrives on its own rather than
  * being simulated.
  *
- * What they prove is that a workspace row's delta is in the same place whether
- * a session is running in it, whether it is the selected row, and whether the
- * pointer is on it — the same rows stated four ways, their deltas one column
- * down each frame. The project row heading them carries an always-visible + in
- * the trailing slot and a hover-only settings control immediately after its
- * name, so the settings gear cannot widen the slot the worktrees share.
+ * What they prove is that a quiet row's delta ends the row on the panel's own
+ * column, that a running row — and only a running row — moves it left by the
+ * one activity cell, and that hover changes neither: the controls are laid over
+ * the lane, so the row is the same width with the pointer on it as without. The
+ * project row heading them keeps both of its controls hover-only, so neither
+ * the + nor the settings gear can widen the lane the worktrees share.
  */
 const ALIGNMENT_WORKTREES: readonly {
     readonly added: number;
@@ -674,7 +681,11 @@ function alignmentSections(props: {
             id: "happy-desktop",
             items: [
                 {
-                    action: { icon: "plus", label: "New workspace in happy-desktop" },
+                    action: {
+                        icon: "plus",
+                        label: "New workspace in happy-desktop",
+                        reveal: "hover",
+                    },
                     id: "happy-desktop-project",
                     initials: "H",
                     kind: "project",
@@ -717,7 +728,7 @@ const ALIGNMENT_CASES: readonly {
 }[] = [
     {
         height: 300,
-        label: "No scrollbar · sessions running · 6 px both edges",
+        label: "No scrollbar · sessions running · deltas one cell in",
         sections: alignmentSections({ rows: 4, working: true }),
         testId: "alignment-short-working",
     },
@@ -729,17 +740,85 @@ const ALIGNMENT_CASES: readonly {
     },
     {
         height: 300,
-        label: "No scrollbar · nothing running · deltas unmoved",
+        label: "No scrollbar · nothing running · deltas end the row",
         sections: alignmentSections({ rows: 4, working: false }),
         testId: "alignment-short-quiet",
     },
     {
         height: 300,
-        label: "Scrollbar present · nothing running · deltas unmoved",
+        label: "Scrollbar present · nothing running · deltas end the row",
         sections: alignmentSections({ rows: 8, working: false }),
         testId: "alignment-scrolling-quiet",
     },
 ];
+
+/*
+ * An experiment, drawn only for specimen 07 and deliberately not a Sidebar
+ * variant: the shipping component has no prop for this and must not grow one
+ * until the shape is chosen. A worktree is a peer row carrying a branch glyph
+ * where the tree used to spend a lane on stems and elbows, and the spinner
+ * takes that glyph's place while work runs rather than adding a second mark at
+ * the far end of the row.
+ *
+ * It borrows the shipping row's own classes rather than restating their
+ * geometry, so what is being judged is the real row height, inset, gap, and
+ * hover — only the arrangement inside it is new.
+ */
+function BranchListSketch(props: { working: boolean }) {
+    return (
+        <div className="happy2-sidebar">
+            <div className="happy2-sidebar__body">
+                <div className="happy2-sidebar__body-content">
+                    <div className="happy2-sidebar__section">
+                        <div className="happy2-sidebar__section-head">
+                            <span className="happy2-sidebar__section-label">happy-desktop</span>
+                        </div>
+                        {ALIGNMENT_WORKTREES.map((worktree) => (
+                            <button
+                                className="happy2-sidebar__item"
+                                data-active={
+                                    worktree.id === "react-electron-plugin" ? "" : undefined
+                                }
+                                data-kind="workspace"
+                                key={worktree.id}
+                                type="button"
+                            >
+                                <span className="happy2-sidebar__item-leading">
+                                    {props.working && worktree.working ? (
+                                        <Spinner
+                                            label={`${worktree.label} is working`}
+                                            size={16}
+                                            tone="muted"
+                                        />
+                                    ) : (
+                                        <Icon name="branch" size={16} />
+                                    )}
+                                </span>
+                                <span className="happy2-sidebar__item-label">{worktree.label}</span>
+                                <span
+                                    className="happy2-sidebar__item-trailing"
+                                    style={{ columnGap: SIDEBAR_TRAILING_GAP }}
+                                >
+                                    <span className="happy2-sidebar__item-change-stats">
+                                        <span data-tone="added">+{sketchCount(worktree.added)}</span>
+                                        <span data-tone="deleted">
+                                            −{sketchCount(worktree.deleted)}
+                                        </span>
+                                    </span>
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/** The delta abbreviation the shipping row uses, restated for the sketch alone. */
+function sketchCount(lines: number): string {
+    return lines < 1000 ? String(lines) : `${(lines / 1000).toFixed(1)}k`;
+}
 
 /** The rows a machine's section holds, reused by each heading-action state. */
 const HEADING_ACTION_ITEMS: SidebarItem[] = [
@@ -1250,7 +1329,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="Within a column the delta holds one x: running or quiet, selected or not, hovered or not. Hover any row — the archive control takes the spinner's cell, and the delta neither moves nor fades. The scrolling frames show the other half of it: the list is inset by 6px on both sides and the bar's ink begins at the scrollport's edge, so a row keeps the same 6px from the panel edge and from the bar; the column narrows by the bar's width when it arrives."
+                detail="A quiet row ends on the delta, on the same column the panel gives every other row. A running row — and only a running row — moves it left by the one activity cell. Hover changes neither: the controls are laid over the lane, so what they cover is hidden where it stands and the row is the same width with the pointer on it as without. The scrolling frames show the other half of it: the list is inset by 6px on both sides and the bar's ink begins at the scrollport's edge, so a row keeps the same 6px from the panel edge and from the bar; the column narrows by the bar's width when it arrives."
                 label="Trailing lane alignment · real workspaces"
                 number="06"
                 stage="app"
@@ -1276,6 +1355,28 @@ export function SidebarPage() {
                             <DimensionRule label={alignmentCase.label} />
                         </div>
                     ))}
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Experimental, and only here: nothing in the product renders this. Every workspace is a peer marked by a branch glyph, so the reader is told what a row is by a symbol they can name rather than by an elbow they have to trace, and the panel loses a column of stems it was spending indentation on. Work replaces that glyph instead of adding a mark at the far end, which puts what is happening in the same place as what the row is — but it costs the branch mark exactly while the row is most worth picking out, and it is the second thing in this panel to claim the leading lane after the fold chevron. Compare against 06 above: same rows, same deltas."
+                label="Flat rows with branch marks · experiment"
+                number="07"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <Frame height={300}>
+                            <BranchListSketch working />
+                        </Frame>
+                        <DimensionRule label="Sessions running · spinner in the branch's lane" />
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <Frame height={300}>
+                            <BranchListSketch working={false} />
+                        </Frame>
+                        <DimensionRule label="Nothing running · every row a branch" />
+                    </div>
                 </div>
             </Specimen>
         </ComponentPage>
