@@ -1103,6 +1103,62 @@ function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): Browser
     );
 }
 
+/*
+ * One zoom step, and the report that goes with it.
+ *
+ * The factor is read back after the level is set rather than predicted from it,
+ * so a step the engine refused at its own floor or ceiling reports where the
+ * window actually ended up. The report is sent unconditionally, including when
+ * the level did not move: ⌘0 at 100% and ⌘− against the floor are exactly the
+ * two moments the reader needs telling that the command was heard.
+ */
+function zoomStep(next: (level: number) => number): void {
+    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!window) return;
+    const contents = window.webContents;
+    contents.zoomLevel = next(contents.zoomLevel);
+    contents.send(desktopIpc.zoomChanged, Math.round(contents.zoomFactor * 100));
+}
+
+/*
+ * The View menu, stated rather than taken from `role: "viewMenu"`. The roles
+ * zoom the window without telling it, and a window that cannot hear its own
+ * zoom cannot show what it is now at. The items and their accelerators are the
+ * roles' own, including the half-level step.
+ */
+const viewMenu: MenuItemConstructorOptions = {
+    label: "View",
+    submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => zoomStep(() => 0) },
+        {
+            label: "Zoom In",
+            accelerator: "CmdOrCtrl+Plus",
+            click: () => zoomStep((level) => level + 0.5),
+        },
+        /* The key actually under the finger. "Plus" is the shifted name of it,
+           and it is the one the menu prints, but nobody holds shift to zoom;
+           taking the menu on ourselves means owning both spellings, where the
+           role had the platform's own. Hidden, so the menu still reads ⌘+. */
+        {
+            label: "Zoom In",
+            accelerator: "CmdOrCtrl+=",
+            click: () => zoomStep((level) => level + 0.5),
+            visible: false,
+        },
+        {
+            label: "Zoom Out",
+            accelerator: "CmdOrCtrl+-",
+            click: () => zoomStep((level) => level - 0.5),
+        },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+    ],
+};
+
 function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): void {
     const targets = desktopInstanceMenuTargets(snapshot);
     const instances: MenuItemConstructorOptions[] = targets.map((target) => ({
@@ -1143,7 +1199,7 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
             ? []
             : [{ label: "Instances", submenu: instances } as MenuItemConstructorOptions]),
         { role: "editMenu" },
-        { role: "viewMenu" },
+        viewMenu,
         { role: "windowMenu" },
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));

@@ -36,6 +36,7 @@ import {
     SetupPage,
     ThemeScope,
     WelcomeScreen,
+    ZoomIndicator,
     type WelcomeSlide,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
@@ -585,6 +586,28 @@ const browserLocal =
     document.querySelector('meta[name="happy2-browser-local"]')?.getAttribute("content") === "1";
 const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
 const root = createRoot(document.getElementById("root")!);
+
+/* The View menu owns zooming, so `bridge` is the only thing that hears of it.
+   What is counted is how many times zoom was asked for, not what it came to:
+   the count is the React key, so pressing ⌘0 twice at 100% shows the read-out
+   twice, where keying on the percentage would remount nothing the second time
+   and leave the fade to finish silently. Zero asks is a cold start, which shows
+   nothing. The percentage is written in the same tick as the count. */
+let zoomAsks = 0;
+let zoomPercent = 100;
+const zoomSubscribe = (listener: () => void) => {
+    if (!bridge) return () => {};
+    return bridge.zoomSubscribe((percent) => {
+        zoomAsks += 1;
+        zoomPercent = percent;
+        listener();
+    });
+};
+
+function DesktopZoomIndicator(): ReactNode {
+    const asks = useSyncExternalStore(zoomSubscribe, () => zoomAsks);
+    return asks === 0 ? undefined : <ZoomIndicator key={asks} percent={zoomPercent} />;
+}
 // The preview window is this same document, launched with the reduced bridge and
 // loaded with the view it should mount. Deciding it here rather than after a
 // round trip means the first frame is already the file instead of the whole
@@ -697,6 +720,7 @@ if (mediaPreviewBridge) {
         // main thread, which is exactly where a large file must not be parsed.
         root.render(
             <DesktopAppearance appearance={appearance}>
+                <DesktopZoomIndicator />
                 <CodeHighlightWorkers>
                     <DesktopRenderer
                         appearance={appearance}

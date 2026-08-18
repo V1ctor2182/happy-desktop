@@ -451,6 +451,7 @@ export {
     type BrowserFailure,
     type BrowserPanelProps,
 } from "./BrowserPanel";
+export { ZoomIndicator } from "./ZoomIndicator";
 export {
     RigInboxPage,
     type RigInboxAnswerMap,

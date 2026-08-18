@@ -80,8 +80,6 @@
        saying so. Two is close enough to belong to the same family while still
        keeping the ink off the corner.
 
-       The composer is the exception and states its own, larger, in composer.css:
-       its bar lives inside a rounded card, where the corner needs the room.
        See styles/scrollbar.css. */
     --happy2-scrollbar-ink: 6px;
     --happy2-scrollbar-edge-inset: 2px;
@@ -281,6 +279,9 @@
        where a long name and its path sprawl away from the column beneath them. */
     --happy2-chat-heading-measure: 1120px;
     --happy2-z-overlay: 1000;
+    /* Window chrome: what the window reports about itself, which has to be
+       legible over whatever the window is showing — including a modal. */
+    --happy2-z-window-chrome: 1100;
 
     --nl-kind-color: var(--text-link);
     --nl-kind-soft: var(--surface-selected);

@@ -84,6 +84,9 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // A browser tab has no Dock icon to mark, so the count goes nowhere
         // rather than the window branching on where it is running.
         dockUnreadSet: () => undefined,
+        // The browser zooms the tab itself and draws its own read-out for it,
+        // so there is nothing here to announce and no second bubble to add.
+        zoomSubscribe: () => () => undefined,
         // A browser tab has no window of its own to open a file in, so it
         // offers none and the control is absent rather than present and broken.
         mediaPreviewOpen: async () => {

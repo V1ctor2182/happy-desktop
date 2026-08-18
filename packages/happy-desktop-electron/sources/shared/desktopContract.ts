@@ -429,6 +429,17 @@ export interface HappyDesktopBridge {
      */
     dockUnreadSet(count: number): void;
     /**
+     * Fires every time zoom is asked for, with the whole-number percentage the
+     * window is now at — including when the answer is the one it was already
+     * showing, because ⌘0 at 100% and ⌘− against the floor are exactly the
+     * moments the reader needs telling that the command landed.
+     *
+     * The View menu owns zooming, not the page, so the value is pushed from the
+     * main process rather than inferred here. There is nothing to ask for before
+     * the first one arrives: a window nobody has zoomed has nothing to report.
+     */
+    zoomSubscribe(listener: (percent: number) => void): () => void;
+    /**
      * Shows the file at one address in a window outside this one, reusing the
      * preview window if it is already open. Rejected unless the address is the
      * media route of a Rig proxy this process is currently running.
@@ -521,6 +532,8 @@ export const desktopIpc = {
     mediaPreviewOpen: "happy2:media-preview:open",
     /** Renderer → main only: the number of conversations waiting for the person. */
     dockUnreadSet: "happy2:dock:unread-set",
+    /** Main → renderer only: the window's zoom, every time the View menu is used. */
+    zoomChanged: "happy2:zoom:changed",
     desktopConfigGet: "happy2:desktop-config:get",
     desktopConfigWrite: "happy2:desktop-config:write",
     debugAllStart: "happy2:debug:all-start",

@@ -620,3 +620,10 @@
         transparent 4px 8px
     );
 }
+
+/* The zoom read-out takes itself away after a second, which is right in a window
+   and wrong in a specimen. Held at its first frame, the chip stays long enough
+   to be judged and a screenshot of it is the same one every run. */
+.blueprint-zoom-frame .happy2-zoom-indicator {
+    animation-play-state: paused;
+}
