@@ -4440,8 +4440,8 @@ function mediaWindowShowable(kind: FilePreviewKind): boolean {
 /**
  * One terminal tab. It reads the terminal's own store, which is the only thing in
  * this surface that changes on every frame of output, and hands it to the shared
- * `TerminalPanel` with no height of its own so it fills the panel column. Closing
- * is the tab strip's, so no second close control appears in its header.
+ * `TerminalPanel` with no height of its own so it fills the panel column. The tab
+ * names it and closes it, so the panel draws no chrome of its own above the grid.
  */
 /**
  * The bodies of the live tool tabs on one side of the workspace, written once

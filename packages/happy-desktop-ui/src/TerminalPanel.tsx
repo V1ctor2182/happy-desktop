@@ -37,11 +37,6 @@ export interface TerminalPanelProps {
      * nothing above or below for a divider to trade space with.
      */
     height?: number;
-    /**
-     * Closes the terminal. Omit it where the container already owns closing (a tab
-     * strip, say), so the header does not offer a second control for the same act.
-     */
-    onClose?(): void;
     onHeightChange?(height: number): void;
     onInput(data: string): void;
     /** Opens an http/https URL detected under the pointer in the terminal grid. */
@@ -347,7 +342,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
     const cursor = props.grid?.cursor;
     const scrollback = props.grid?.scrollback ?? [];
     const availability = rigAvailabilityLabel(props);
-    const terminalStatus = statusLabel(props);
+    const notice = noticeLabel(props);
     return (
         <section
             className="happy2-terminal-panel"
@@ -380,36 +375,14 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     role="separator"
                 />
             )}
-            <header className="happy2-terminal-panel__header">
-                <span
-                    className="happy2-terminal-panel__title"
-                    data-happy-desktop-ui="terminal-title"
-                >
-                    {props.grid?.title || "Terminal"}
-                </span>
-                <span
-                    aria-label={
-                        availability
-                            ? `Terminal: ${terminalStatus}. ${availability}`
-                            : `Terminal: ${terminalStatus}`
-                    }
+            {notice ? (
+                <div
                     aria-live="polite"
-                    className="happy2-terminal-panel__status"
-                    data-happy-desktop-ui="terminal-status"
+                    className="happy2-terminal-panel__notice"
+                    data-happy-desktop-ui="terminal-notice"
                     role="status"
-                    title={availability}
                 >
-                    <span>{terminalStatus}</span>
-                    {availability ? (
-                        <>
-                            <span aria-hidden> · </span>
-                            <span className="happy2-terminal-panel__availability">
-                                {availability}
-                            </span>
-                        </>
-                    ) : null}
-                </span>
-                <div className="happy2-terminal-panel__actions">
+                    <span className="happy2-terminal-panel__notice-text">{notice}</span>
                     {props.status === "disconnected" || props.status === "error" ? (
                         <Button
                             icon="play"
@@ -420,18 +393,8 @@ export function TerminalPanel(props: TerminalPanelProps) {
                             Reconnect
                         </Button>
                     ) : null}
-                    {props.onClose ? (
-                        <Button
-                            aria-label="Close terminal"
-                            icon="close"
-                            iconOnly
-                            onClick={props.onClose}
-                            size="small"
-                            variant="ghost"
-                        />
-                    ) : null}
                 </div>
-            </header>
+            ) : null}
             {collapsed ? null : (
                 <div
                     aria-label={availability ? `Terminal output. ${availability}` : undefined}
@@ -651,10 +614,22 @@ function terminalKeySequence(
     return undefined;
 }
 
-function statusLabel(props: TerminalPanelProps): string {
-    if (props.error) return props.error;
-    if (props.status === "exited") return `Exited ${props.exitCode ?? ""}`.trim();
-    return props.status[0]!.toUpperCase() + props.status.slice(1);
+/**
+ * What is worth saying about a terminal that is not simply running. A healthy
+ * session says nothing at all: the grid is the whole panel, exactly as a
+ * terminal window is. A dead or degraded one states why in one line, which is
+ * also where its Reconnect control lives.
+ */
+function noticeLabel(props: TerminalPanelProps): string | undefined {
+    const availability = rigAvailabilityLabel(props);
+    if (props.error) return availability ? `${props.error} · ${availability}` : props.error;
+    if (props.status === "exited") {
+        const exited = `Exited ${props.exitCode ?? ""}`.trim();
+        return availability ? `${exited} · ${availability}` : exited;
+    }
+    if (props.status === "disconnected")
+        return availability ? `Disconnected · ${availability}` : "Disconnected";
+    return availability;
 }
 
 function rigAvailabilityLabel(props: TerminalPanelProps): string | undefined {

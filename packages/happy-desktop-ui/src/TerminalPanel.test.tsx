@@ -57,7 +57,6 @@ const inverseGrid = gridOf([
 
 const noop = () => undefined;
 const handlers = {
-    onClose: noop,
     onHeightChange: noop,
     onInput: noop,
     onReconnect: noop,
@@ -96,7 +95,7 @@ it("holds TerminalPanel geometry, full-bleed screen, and lifecycle controls", as
     );
     await view.ready();
 
-    /* ---- Connected: a fixed-height flex column with a 36px header ------- */
+    /* ---- Connected: a fixed-height flex column, and nothing above the grid */
     const panelEl = view.$('[data-testid="connected"] [data-happy-desktop-ui="terminal-panel"]');
     expect(panelEl.element.tagName).toBe("SECTION");
     expect(panelEl.computedStyles(["display", "flex-direction", "box-sizing"])).toEqual({
@@ -107,10 +106,13 @@ it("holds TerminalPanel geometry, full-bleed screen, and lifecycle controls", as
     expect(panelEl.bounds().height).toBe(240);
     expect(panelEl.bounds().width).toBe(760);
 
-    const header = view.container.querySelector(
-        '[data-testid="connected"] .happy2-terminal-panel__header',
-    ) as HTMLElement;
-    expect(header.getBoundingClientRect().height).toBe(36);
+    // A healthy terminal is only its grid: no title line, no status line, and
+    // therefore nothing between the panel's top edge and the first row.
+    expect(
+        view.container.querySelector(
+            '[data-testid="connected"] [data-happy-desktop-ui="terminal-notice"]',
+        ),
+    ).toBeNull();
 
     /* ---- Screen scrollport is full-bleed: zero margin/padding, edge to edge */
     const screen = view.$('[data-testid="connected"] [data-happy-desktop-ui="terminal-screen"]');
@@ -136,20 +138,16 @@ it("holds TerminalPanel geometry, full-bleed screen, and lifecycle controls", as
     const cursor = view.$('[data-testid="connected"] [data-happy-desktop-ui="terminal-cursor"]');
     expect(cursor.bounds().height).toBe(18);
 
-    /* ---- Lifecycle drives the controls: connected has close only ------- */
-    expect(
-        view.container.querySelectorAll(
-            '[data-testid="connected"] .happy2-terminal-panel__actions button',
-        ),
-    ).toHaveLength(1);
-    /* ---- Disconnected adds a Reconnect control -------------------------- */
-    expect(
-        view.container.querySelectorAll(
-            '[data-testid="disconnected"] .happy2-terminal-panel__actions button',
-        ),
-    ).toHaveLength(2);
+    /* ---- Lifecycle drives the controls: connected offers none ----------- */
+    expect(view.container.querySelectorAll('[data-testid="connected"] button')).toHaveLength(0);
+    /* ---- Disconnected states why, and offers Reconnect there ------------ */
+    const disconnectedNotice = view.$(
+        '[data-testid="disconnected"] [data-happy-desktop-ui="terminal-notice"]',
+    );
+    expect(disconnectedNotice.element.textContent).toContain("Disconnected");
+    expect(view.container.querySelectorAll('[data-testid="disconnected"] button')).toHaveLength(1);
 
-    /* ---- Exited with no output collapses to just the header line -------- */
+    /* ---- Exited with no output collapses to just the notice line -------- */
     const exited = view.$('[data-testid="exited"] [data-happy-desktop-ui="terminal-panel"]');
     expect(exited.element.hasAttribute("data-collapsed")).toBe(true);
     expect(
@@ -162,9 +160,9 @@ it("holds TerminalPanel geometry, full-bleed screen, and lifecycle controls", as
             '[data-testid="exited"] [data-happy-desktop-ui="terminal-resize"]',
         ),
     ).toBeNull();
-    // A collapsed panel is exactly its 36px header plus the panel's 1px top
-    // border, not the requested 240px.
-    expect(exited.bounds().height).toBe(37);
+    // A collapsed panel is exactly its 32px notice line plus the panel's 1px
+    // top border, not the requested 240px.
+    expect(exited.bounds().height).toBe(33);
 });
 
 it("lays sparse and wide cells on their declared columns and swaps inverse colors", async () => {
@@ -218,7 +216,6 @@ it("forwards focused printable and control-key terminal input", async () => {
                 <TerminalPanel
                     grid={connectedGrid}
                     height={240}
-                    onClose={noop}
                     onHeightChange={noop}
                     onInput={(data) => input.push(data)}
                     onReconnect={noop}
@@ -269,7 +266,6 @@ it("does not steal focus from the chat composer when its resize callback changes
                 <TerminalPanel
                     grid={connectedGrid}
                     height={240}
-                    onClose={noop}
                     onHeightChange={noop}
                     onInput={noop}
                     onReconnect={noop}

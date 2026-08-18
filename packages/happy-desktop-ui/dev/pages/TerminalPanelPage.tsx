@@ -67,7 +67,6 @@ function noop(): void {
 }
 
 const handlers = {
-    onClose: noop,
     onHeightChange: noop,
     onInput: noop,
     onReconnect: noop,
@@ -82,7 +81,7 @@ export function TerminalPanelPage() {
             title="Terminal panel"
         >
             <Specimen
-                detail="connected · 80 × 24 · styled Rig grid cells with cursor"
+                detail="connected · 80 × 24 · styled Rig grid cells with cursor · no chrome above the grid"
                 label="Connected"
                 number="01"
                 stage="app"
@@ -126,7 +125,7 @@ export function TerminalPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="exited · frameless session collapses to its header line"
+                detail="exited · frameless session collapses to its notice line"
                 label="Exited (collapsed)"
                 number="04"
                 stage="app"
@@ -136,7 +135,7 @@ export function TerminalPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="no height · fills a 320 × 360 panel column · no divider, no close"
+                detail="no height · fills a 320 × 360 panel column · no divider"
                 label="Filling a panel column"
                 number="05"
                 stage="app"

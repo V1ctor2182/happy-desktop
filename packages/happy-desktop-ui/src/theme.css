@@ -205,6 +205,11 @@
     --code-caret: #000000;
     --code-selection: rgb(0 0 0 / 0.14);
     --code-active-line: rgb(0 0 0 / 0.04);
+    /* Terminal selection is opaque on purpose. A translucent highlight takes
+       the colour of whatever it lands on, so a cell carrying an ANSI background
+       — the first column of a coloured prompt, the padding beside it — came out
+       a different shade from the plain cells in the same drag. */
+    --terminal-selection: #d4d4d8;
     --diff-context-bg: #f6f8fa;
     --diff-context-text: #586069;
     --diff-line-number-bg: #f6f8fa;
@@ -395,6 +400,7 @@
         --code-caret: #ffffff;
         --code-selection: rgb(255 255 255 / 0.18);
         --code-active-line: rgb(255 255 255 / 0.05);
+        --terminal-selection: #45454b;
         --diff-context-bg: #161b22;
         --diff-context-text: #8b949e;
         --diff-line-number-bg: #161b22;
@@ -561,6 +567,7 @@
     --code-caret: #ffffff;
     --code-selection: rgb(255 255 255 / 0.18);
     --code-active-line: rgb(255 255 255 / 0.05);
+    --terminal-selection: #45454b;
     --diff-context-bg: #161b22;
     --diff-context-text: #8b949e;
     --diff-line-number-bg: #161b22;

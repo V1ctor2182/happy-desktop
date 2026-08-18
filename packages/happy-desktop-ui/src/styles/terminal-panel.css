@@ -35,7 +35,7 @@
     border-top: 1px solid var(--divider);
 }
 
-/* A collapsed (dead, frameless) panel is exactly its header row. */
+/* A collapsed (dead, frameless) panel is exactly its notice line. */
 .happy2-terminal-panel[data-collapsed] {
     min-height: 0;
     height: auto;
@@ -70,41 +70,31 @@
     box-shadow: inset 0 2px 0 0 var(--text-secondary);
 }
 
-.happy2-terminal-panel__header {
+/*
+ * A running terminal has no chrome: the tab already names it, and its own first
+ * line says where it is, so a title bar above the grid only repeated both. What
+ * remains is a line that appears when the session is dead or its Rig is
+ * degraded — the one thing the grid cannot say for itself — carrying the
+ * Reconnect control with it.
+ */
+.happy2-terminal-panel__notice {
     box-sizing: border-box;
     display: flex;
     align-items: center;
     flex: none;
     gap: 8px;
-    height: 36px;
+    min-height: 32px;
     padding: 0 8px 0 12px;
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-terminal-panel__title {
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.happy2-terminal-panel__status {
+.happy2-terminal-panel__notice-text {
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.happy2-terminal-panel__availability {
-    color: var(--warning);
-}
-
-.happy2-terminal-panel__actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-left: auto;
 }
 
 .happy2-terminal-panel__screen {
@@ -141,6 +131,20 @@
 .happy2-terminal-panel__cell {
     flex: none;
     white-space: pre;
+}
+
+/*
+ * One highlight colour for everything a drag covers. The browser's default
+ * selection colour is translucent, so it composited differently over the cell
+ * the selection is anchored in than over the cells after it: the first column
+ * of every drag came out a visibly lighter blue than the rest of the run. An
+ * opaque colour, stated for the scrollport and everything inside it, paints
+ * every selected column identically. Ink is left alone so ANSI colours survive
+ * being selected, as they do in a native terminal.
+ */
+.happy2-terminal-panel__screen::selection,
+.happy2-terminal-panel__screen ::selection {
+    background-color: var(--terminal-selection);
 }
 
 .happy2-terminal-panel__cell[data-terminal-link] {
