@@ -1,5 +1,5 @@
 import { partitionComponentProps } from "./componentProps";
-import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import {
     Children,
     isValidElement,
@@ -7,6 +7,7 @@ import {
     useRef,
     type CSSProperties,
     type HTMLAttributes,
+    type Key,
     type ReactNode,
 } from "react";
 import { Avatar, type AvatarSize, type ToneName } from "./Avatar";
@@ -758,15 +759,21 @@ export function MessageList(props: MessageListProps) {
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
     const rowWidthModel = useRef(restore.current?.rowWidth ?? 0);
     const panelResizing = useRef(false);
+    const panelResizePointerActive = useRef(false);
     const panelAnchor = useRef<
         | {
+              readonly extent: number;
+              readonly index: number;
+              readonly key: Key;
               readonly node: Node;
               readonly offset: number;
+              readonly row: HTMLElement;
               readonly viewportOffset: number;
           }
         | undefined
     >(undefined);
     const panelAnchorRestoring = useRef(false);
+    const panelAnchorExpectedScrollTop = useRef<number | undefined>(undefined);
     const entryItems = Children.toArray(props.children);
     const footerIndex = props.footer === undefined ? undefined : entryItems.length;
     const items =
@@ -783,44 +790,114 @@ export function MessageList(props: MessageListProps) {
                       {props.footer}
                   </div>,
               ];
+    const itemKeyAt = (index: number): Key => {
+        const item = items[index];
+        return isValidElement(item) && item.key !== null ? item.key : index;
+    };
     const virtualized = props.virtualize === true;
     const paddingEnd = props.paddingEnd ?? MESSAGE_LIST_PADDING_END_DEFAULT;
     const panelAnchorCapture = () => {
         const element = list.current;
+        panelAnchor.current = undefined;
         if (!element || following.current) return;
         const listRect = element.getBoundingClientRect();
         const x = listRect.left + listRect.width / 2;
         for (const inset of [8, 20, 32, 48, 72, 104]) {
             const position = document.caretPositionFromPoint?.(x, listRect.bottom - inset);
             if (!position || !element.contains(position.offsetNode)) continue;
+            const owner =
+                position.offsetNode instanceof Element
+                    ? position.offsetNode
+                    : position.offsetNode.parentElement;
+            const row = owner?.closest<HTMLElement>(
+                ".happy2-message-list__virtual-row[data-index]",
+            );
+            const index = Number.parseInt(row?.dataset.index ?? "", 10);
+            if (!row || !Number.isFinite(index)) continue;
             const range = document.createRange();
-            range.setStart(position.offsetNode, position.offset);
-            range.collapse(true);
+            const textLength =
+                position.offsetNode.nodeType === Node.TEXT_NODE
+                    ? (position.offsetNode.textContent?.length ?? 0)
+                    : 0;
+            const offset =
+                textLength > 0 ? Math.min(position.offset, textLength - 1) : position.offset;
+            const extent = textLength > 0 ? 1 : 0;
+            range.setStart(position.offsetNode, offset);
+            if (extent > 0) range.setEnd(position.offsetNode, offset + extent);
+            else range.collapse(true);
             const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
             if (!(rect.height > 0 || rect.width > 0)) continue;
+            let key: Key = itemKeyAt(index);
+            for (const [candidateKey, candidateRow] of virtualizer.elementsCache) {
+                if (candidateRow !== row) continue;
+                key = candidateKey;
+                break;
+            }
             panelAnchor.current = {
+                extent,
+                index,
+                key,
                 node: position.offsetNode,
-                offset: position.offset,
+                offset,
+                row,
                 viewportOffset: listRect.bottom - rect.top,
             };
             return;
         }
     };
-    const panelAnchorRestore = () => {
+    const panelAnchorRecapture = () => {
         const element = list.current;
         const anchor = panelAnchor.current;
+        if (!element || !anchor?.row.isConnected) return false;
+        const listRect = element.getBoundingClientRect();
+        const position = document.caretPositionFromPoint?.(
+            listRect.left + listRect.width / 2,
+            listRect.bottom - anchor.viewportOffset,
+        );
+        if (!position || !anchor.row.contains(position.offsetNode)) return false;
+        const range = document.createRange();
+        const textLength =
+            position.offsetNode.nodeType === Node.TEXT_NODE
+                ? (position.offsetNode.textContent?.length ?? 0)
+                : 0;
+        const offset = textLength > 0 ? Math.min(position.offset, textLength - 1) : position.offset;
+        const extent = textLength > 0 ? 1 : 0;
+        range.setStart(position.offsetNode, offset);
+        if (extent > 0) range.setEnd(position.offsetNode, offset + extent);
+        else range.collapse(true);
+        const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+        if (!(rect.height > 0 || rect.width > 0)) return false;
+        const rowIndex = Number.parseInt(anchor.row.dataset.index ?? "", 10);
+        panelAnchor.current = {
+            ...anchor,
+            extent,
+            index: Number.isFinite(rowIndex) ? rowIndex : anchor.index,
+            node: position.offsetNode,
+            offset,
+        };
+        return true;
+    };
+    const panelAnchorRestore = () => {
+        const element = list.current;
+        let anchor = panelAnchor.current;
         if (!element || !anchor || panelAnchorRestoring.current) return;
         if (!anchor.node.isConnected) {
-            panelAnchor.current = undefined;
-            return;
+            if (!panelAnchorRecapture()) {
+                panelAnchor.current = undefined;
+                return;
+            }
+            anchor = panelAnchor.current;
+            if (!anchor) return;
         }
         const maximumOffset =
             anchor.node.nodeType === Node.TEXT_NODE
                 ? (anchor.node.textContent?.length ?? 0)
                 : anchor.node.childNodes.length;
         const range = document.createRange();
-        range.setStart(anchor.node, Math.min(anchor.offset, maximumOffset));
-        range.collapse(true);
+        const offset = Math.min(anchor.offset, Math.max(0, maximumOffset - anchor.extent));
+        range.setStart(anchor.node, offset);
+        if (anchor.extent > 0) range.setEnd(anchor.node, offset + anchor.extent);
+        else range.collapse(true);
         const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
         if (!(rect.height > 0 || rect.width > 0)) return;
         const target = element.getBoundingClientRect().bottom - anchor.viewportOffset;
@@ -828,6 +905,7 @@ export function MessageList(props: MessageListProps) {
         if (Math.abs(delta) < 0.5) return;
         panelAnchorRestoring.current = true;
         element.scrollTop += delta;
+        panelAnchorExpectedScrollTop.current = element.scrollTop;
         panelAnchorRestoring.current = false;
     };
     const estimateItemSize = (index: number, rowWidth: number) =>
@@ -848,10 +926,6 @@ export function MessageList(props: MessageListProps) {
         for (let index = 0; index < items.length; index += 1)
             total += estimateItemSize(index, rowWidth);
         return total;
-    };
-    const itemKeyAt = (index: number) => {
-        const item = items[index];
-        return isValidElement(item) && item.key !== null ? item.key : index;
     };
     // TanStack Virtual deliberately owns mutable measurement functions; this leaf
     // remains outside compiler memoization while every rendered row stays eligible.
@@ -875,7 +949,12 @@ export function MessageList(props: MessageListProps) {
          * pointer step when any mounted row reports its new height.
          */
         estimateSize: (index) => estimateItemSize(index, rowWidthModel.current),
-        followOnAppend: true,
+        /*
+         * A React layout commit pins a true follower before paint. Letting the
+         * virtualizer also follow appends makes a parked reader jump to the tail
+         * when they send a message, so append scrolling has exactly one owner.
+         */
+        followOnAppend: false,
         getItemKey: itemKeyAt,
         getScrollElement: () => list.current,
         /* Opening a conversation lands on its newest content, which means the
@@ -898,12 +977,48 @@ export function MessageList(props: MessageListProps) {
          */
         paddingEnd,
         paddingStart: MESSAGE_LIST_PADDING_START,
-        onChange: panelAnchorRestore,
-        /* Same "still following" tolerance the scroll listener applies, so a
-           reader parked one subpixel off the bottom is treated identically by
-           the virtualizer's append-follow and by this component's reporting. */
+        onChange: (instance, sync) => {
+            if (sync) return;
+            if (following.current) {
+                panelAnchor.current = undefined;
+                instance.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+                return;
+            }
+            if (panelAnchor.current) panelAnchorRestore();
+            else panelAnchorCapture();
+            instance.shouldAdjustScrollPositionOnItemSizeChange = panelAnchor.current
+                ? (item) =>
+                      panelAnchor.current?.node.isConnected !== true &&
+                      item.end <= (list.current?.scrollTop ?? 0)
+                : undefined;
+        },
+        /*
+         * Keep the parked glyph's stable item mounted even when history
+         * prepends shift its numeric index outside TanStack's visible range.
+         */
+        rangeExtractor: (range) => {
+            const drawn = defaultRangeExtractor(range);
+            const anchor = panelAnchor.current;
+            if (!anchor) return drawn;
+            let index = itemKeyAt(anchor.index) === anchor.key ? anchor.index : undefined;
+            if (index === undefined) {
+                for (let candidate = 0; candidate < items.length; candidate += 1) {
+                    if (itemKeyAt(candidate) !== anchor.key) continue;
+                    index = candidate;
+                    break;
+                }
+            }
+            if (index === undefined || drawn.includes(index)) return drawn;
+            return [...drawn, index].sort((left, right) => left - right);
+        },
         scrollEndThreshold: FOLLOW_BOTTOM_THRESHOLD,
         useFlushSync: false,
+    });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- streaming React commits change scrollHeight before the virtual row ResizeObserver; a follower must pin in this same pre-paint commit
+    useLayoutEffect(() => {
+        const element = list.current;
+        if (element && following.current)
+            element.scrollTop = element.scrollHeight - element.clientHeight;
     });
     // eslint-disable-next-line happy2-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {
@@ -929,27 +1044,90 @@ export function MessageList(props: MessageListProps) {
             }
             panelAnchorRestore();
         };
+        let resizeEndTimer: number | undefined;
+        const resizeEndSchedule = () => {
+            if (resizeEndTimer !== undefined) window.clearTimeout(resizeEndTimer);
+            resizeEndTimer = window.setTimeout(onShellResizeEnd, 500);
+        };
+        const resizeTransactionBegin = () => {
+            if (panelResizing.current) return;
+            panelResizing.current = true;
+            virtualizer.shouldAdjustScrollPositionOnItemSizeChange = panelAnchor.current
+                ? () => false
+                : (item) => item.end <= element.scrollTop;
+        };
         const onShellResizeStart = (event: PointerEvent) => {
             const target = event.target instanceof Element ? event.target : undefined;
-            if (!target?.closest('[data-happy-desktop-ui="app-shell-resize-handle"]')) return;
-            panelResizing.current = true;
+            const handle = target?.closest('[data-happy-desktop-ui="app-shell-resize-handle"]');
+            const shell = handle?.closest('[data-happy-desktop-ui="app-shell"]');
+            if (!event.isPrimary || event.button !== 0 || !shell?.contains(element)) return;
             panelAnchorCapture();
-            virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
-                panelAnchor.current === undefined && item.end <= element.scrollTop;
+            panelResizePointerActive.current = true;
+            resizeTransactionBegin();
         };
         const onShellResizeEnd = () => {
             if (!panelResizing.current) return;
+            if (resizeEndTimer !== undefined) window.clearTimeout(resizeEndTimer);
+            resizeEndTimer = undefined;
             rowWidthCommit(messageListRowWidth(element.clientWidth, estimateRowWidth));
             panelAnchorRestore();
-            panelAnchor.current = undefined;
+            panelResizePointerActive.current = false;
             panelResizing.current = false;
+            if (!panelAnchor.current) panelAnchorCapture();
+            virtualizer.shouldAdjustScrollPositionOnItemSizeChange = panelAnchor.current
+                ? () => false
+                : undefined;
+        };
+        const onPointerResizeEnd = () => {
+            if (panelResizePointerActive.current) onShellResizeEnd();
+        };
+        const onGeometryScrollIntent = () => {
+            if (!panelResizing.current || panelResizePointerActive.current) return;
+            rowWidthCommit(messageListRowWidth(element.clientWidth, estimateRowWidth));
+            if (resizeEndTimer !== undefined) window.clearTimeout(resizeEndTimer);
+            resizeEndTimer = undefined;
+            panelResizing.current = false;
+            panelAnchor.current = undefined;
+            panelAnchorExpectedScrollTop.current = undefined;
             virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
         };
-        window.addEventListener("lostpointercapture", onShellResizeEnd);
-        window.addEventListener("pointercancel", onShellResizeEnd);
+        const onWheel = (event: WheelEvent) => {
+            /*
+             * The wheel precedes the browser's scroll event. Hand ownership to
+             * the reader immediately so a streaming commit in the same frame
+             * cannot pin them back to the tail before that scroll is reported.
+             */
+            if (event.deltaY < 0) following.current = false;
+            onGeometryScrollIntent();
+        };
+        const onScrollEnd = () => {
+            if (!panelResizePointerActive.current) onShellResizeEnd();
+        };
+        const onVisibilityChange = () => {
+            if (document.visibilityState !== "visible") onShellResizeEnd();
+        };
+        const onShellResizeLayout = (event: Event) => {
+            const shell = event.target instanceof Element ? event.target : undefined;
+            if (!shell?.contains(element)) return;
+            resizeTransactionBegin();
+            if (!panelResizePointerActive.current)
+                rowWidthCommit(messageListRowWidth(element.clientWidth, estimateRowWidth));
+            panelAnchorRestore();
+            if (!panelResizePointerActive.current) resizeEndSchedule();
+        };
+        const onWindowResize = () => {
+            resizeTransactionBegin();
+            panelAnchorRestore();
+            resizeEndSchedule();
+        };
+        window.addEventListener("lostpointercapture", onPointerResizeEnd);
+        window.addEventListener("pointercancel", onPointerResizeEnd);
         window.addEventListener("pointerdown", onShellResizeStart);
-        window.addEventListener("pointerup", onShellResizeEnd);
-        window.addEventListener(APP_SHELL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
+        window.addEventListener("pointerup", onPointerResizeEnd);
+        window.addEventListener("blur", onShellResizeEnd);
+        window.addEventListener("resize", onWindowResize);
+        window.addEventListener(APP_SHELL_RESIZE_LAYOUT_EVENT, onShellResizeLayout);
+        document.addEventListener("visibilitychange", onVisibilityChange);
         let rowWidth = estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
         /* A first lifetime has no mounted ref or restored measure, so its virtual
            estimates begin at width zero. Rebuild them once at the committed
@@ -958,6 +1136,10 @@ export function MessageList(props: MessageListProps) {
         const savedScrollTop = restore.current?.scrollTop;
         if (following.current) scrollToBottom();
         else element.scrollTop = savedScrollTop ?? 0;
+        panelAnchorCapture();
+        virtualizer.shouldAdjustScrollPositionOnItemSizeChange = panelAnchor.current
+            ? () => false
+            : undefined;
         const positionReport = (captureMeasurements = false) => {
             if (captureMeasurements && virtualized)
                 measurements.current = virtualizer.takeSnapshot();
@@ -976,14 +1158,45 @@ export function MessageList(props: MessageListProps) {
              * offset captured against the previous viewport height.
              */
             if (element.clientHeight !== viewportHeight) return;
+            const expected = panelAnchorExpectedScrollTop.current;
+            if (expected !== undefined && Math.abs(element.scrollTop - expected) <= 1) {
+                panelAnchorExpectedScrollTop.current = undefined;
+                positionReport();
+                return;
+            }
+            panelAnchorExpectedScrollTop.current = undefined;
+            if (panelResizing.current) {
+                panelAnchorRestore();
+                positionReport();
+                return;
+            }
             const bottomOffset = Math.max(
                 0,
                 element.scrollHeight - element.scrollTop - viewportHeight,
             );
             following.current = bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
+            if (following.current) {
+                panelAnchor.current = undefined;
+                virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+            } else {
+                /*
+                 * The scroll event is the user-ownership boundary. Capture the
+                 * text now under their chosen bottom edge without writing
+                 * scrollTop, so wheel, keyboard, and scrollbar movement always
+                 * override an older geometry anchor immediately.
+                 */
+                panelAnchorCapture();
+                virtualizer.shouldAdjustScrollPositionOnItemSizeChange = panelAnchor.current
+                    ? () => false
+                    : undefined;
+            }
             positionReport();
         };
         element.addEventListener("scroll", onScroll, { passive: true });
+        element.addEventListener("scrollend", onScrollEnd);
+        element.addEventListener("pointerdown", onGeometryScrollIntent);
+        element.addEventListener("touchstart", onGeometryScrollIntent, { passive: true });
+        element.addEventListener("wheel", onWheel, { passive: true });
         /*
          * TanStack Virtual measures mounted rows through its own ResizeObserver
          * and owns their scroll compensation. A second mutation-driven measure
@@ -1034,21 +1247,42 @@ export function MessageList(props: MessageListProps) {
                       positionReport();
                   });
         viewportObserver?.observe(element);
+        const virtualContent = element.querySelector<HTMLElement>(
+            '[data-happy-desktop-ui="message-list-virtual"]',
+        );
+        let contentObserver: ResizeObserver | undefined;
+        if (virtualized && virtualContent && typeof ResizeObserver !== "undefined") {
+            contentObserver = new ResizeObserver(() => {
+                if (following.current) scrollToBottom();
+            });
+            contentObserver.observe(virtualContent);
+        }
         return () => {
             positionReport(true);
+            contentObserver?.disconnect();
             observer?.disconnect();
             viewportObserver?.disconnect();
+            if (resizeEndTimer !== undefined) window.clearTimeout(resizeEndTimer);
             panelAnchor.current = undefined;
+            panelAnchorExpectedScrollTop.current = undefined;
+            panelResizePointerActive.current = false;
             panelResizing.current = false;
             virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
-            window.removeEventListener("lostpointercapture", onShellResizeEnd);
-            window.removeEventListener("pointercancel", onShellResizeEnd);
+            window.removeEventListener("lostpointercapture", onPointerResizeEnd);
+            window.removeEventListener("pointercancel", onPointerResizeEnd);
             window.removeEventListener("pointerdown", onShellResizeStart);
-            window.removeEventListener("pointerup", onShellResizeEnd);
-            window.removeEventListener(APP_SHELL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
+            window.removeEventListener("pointerup", onPointerResizeEnd);
+            window.removeEventListener("blur", onShellResizeEnd);
+            window.removeEventListener("resize", onWindowResize);
+            window.removeEventListener(APP_SHELL_RESIZE_LAYOUT_EVENT, onShellResizeLayout);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
             element.removeEventListener("scroll", onScroll);
+            element.removeEventListener("scrollend", onScrollEnd);
+            element.removeEventListener("pointerdown", onGeometryScrollIntent);
+            element.removeEventListener("touchstart", onGeometryScrollIntent);
+            element.removeEventListener("wheel", onWheel);
         };
-    }, [estimateRowWidth, virtualized, virtualizer]);
+    }, [estimateRowWidth, virtualized, virtualizer]); // eslint-disable-line react-hooks/exhaustive-deps -- anchor helpers intentionally share this one imperative scrollport lifetime
     // eslint-disable-next-line happy2-react/no-layout-effect -- a new font generation changes offscreen row estimates without changing DOM geometry, so the virtualizer must discard its size cache after that generation commits
     useLayoutEffect(() => {
         if (estimateVersion.current === props.estimateVersion) return;

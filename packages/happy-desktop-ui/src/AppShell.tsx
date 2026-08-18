@@ -426,10 +426,11 @@ export function AppShell(props: AppShellProps) {
         ? clamp(local.panelWidth!, panelMin, panelMax)
         : panelWidthState;
     const panelWidth = panelWidthControlled ? (panelDragWidth ?? panelWidthBase) : panelWidthState;
+    const panelPresent = local.panel !== undefined && local.panel !== null;
     // eslint-disable-next-line happy2-react/no-layout-effect -- live splitter geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
     useLayoutEffect(() => {
         shell.current?.dispatchEvent(new Event(APP_SHELL_RESIZE_LAYOUT_EVENT, { bubbles: true }));
-    }, [panelWidth, sidebarWidth]);
+    }, [panelMaximized, panelPresent, panelWidth, sidebarCollapsed, sidebarWidth]);
     function previewPanelWidth(next: number) {
         if (panelWidthControlled) setPanelDragWidth(next);
         else setPanelWidthState(next);
