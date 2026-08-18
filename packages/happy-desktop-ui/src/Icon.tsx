@@ -58,8 +58,6 @@ export type IconName =
     | "sidebar-expand"
     | "panel-collapse"
     | "panel-expand"
-    | "panel-maximize"
-    | "panel-restore"
     | "trash"
     | "archive"
     | "alert"
@@ -187,10 +185,6 @@ const glyphs: Record<IconName, IconGlyph> = {
     // the same act at the other edge, so they paint the same shapes mirrored.
     "panel-collapse": { set: "drawn", name: "panel-rail", mirrored: true },
     "panel-expand": { set: "drawn", name: "panel-rail-collapsed", mirrored: true },
-    // Filling the window and going back to a docked column, as distinct from
-    // hiding the panel: the pair above says whether the panel is there at all.
-    "panel-maximize": { set: "octicons", name: "screen-full" },
-    "panel-restore": { set: "octicons", name: "screen-normal" },
     trash: { set: "ionicons", name: "trash-outline" },
     archive: { set: "ionicons", name: "archive-outline" },
     // Something went wrong with the thing this glyph sits on — as distinct from

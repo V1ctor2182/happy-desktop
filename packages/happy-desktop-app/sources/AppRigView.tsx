@@ -1963,32 +1963,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const desktop = props.platform === "desktop";
 
-    // Expanded, the panel covers the workspace column — the tab strip, the
-    // transcript, and with them the composer. The write end of the open session
-    // comes along in the panel footer: its input reserves only its own height,
-    // while its gradient still floats over the content above.
-    const panelComposer =
-        panel.open && panel.maximized && conversation.type === "ready" ? (
-            <RigPanelComposer
-                conversation={conversation.value}
-                groupName={openGroup?.name}
-                onChatSelect={props.onChatSelect}
-                projects={rows}
-                canAbort={conversationCanAbort}
-                readOnly={conversationReadOnly}
-                rigOnline={rigOnline}
-                {...(connectionRefusal === undefined ? {} : { unavailable: connectionRefusal })}
-                {...(conversationReadOnlyReason === undefined
-                    ? {}
-                    : { readOnlyReason: conversationReadOnlyReason })}
-                workspace={props.workspace}
-            />
-        ) : undefined;
-    // Exactly one composer may claim typing that nothing else wants, and it is
-    // whichever one the reader can actually see: with the panel expanded over
-    // the workspace column the dock is the write end of the session, and the
-    // composer it covers must not answer the keyboard from underneath it.
-    const composerClaimsTyping = panelComposer === undefined;
     // Whether the chat this workspace was made with is what is on screen. That
     // chat carries the checkout's phase itself, so the lane above the tab strip
     // does not: a file or a terminal open here is not that chat, and those keep
@@ -2043,7 +2017,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 {...(workspace.groupSessionDraft
                     ? { draftMenus: workspace.groupSessionDraft.menus }
                     : {})}
-                focusOnType={composerClaimsTyping}
+                focusOnType
                 groupId={openGroup.id}
                 groupName={openGroup.name}
                 rigOnline={rigOnline}
@@ -2054,7 +2028,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             <RigConversationBody
                 activitySelected={panel.open && panel.activeViewId === "activity"}
                 conversation={conversation}
-                focusOnType={composerClaimsTyping}
+                focusOnType
                 groupId={openGroup.id}
                 groupName={openGroup.name}
                 {...(preparingNotice ? { notice: preparingNotice } : {})}
@@ -2097,11 +2071,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             onPanelWidthChange={(width) => {
                 if (openGroup) props.workspace.panelWidthUpdate(openGroup.id, width);
             }}
-            // Widening the panel is one of its two chrome controls and lives in
-            // its header beside the other, so the shell's floating tab on the
-            // divider is deliberately not asked for here.
-            panelMaximized={panel.maximized}
-            panelFooter={panelComposer}
             panel={
                 // The panel reads and writes the checkout: a file tree, a diff,
                 // a terminal. None of them has anything to open until the
@@ -2415,7 +2384,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             {...(workspace.groupSessionDraft
                                 ? { draftMenus: workspace.groupSessionDraft.menus }
                                 : {})}
-                            focusOnType={composerClaimsTyping}
+                            focusOnType
                             groupId={openGroup.id}
                             groupName={openGroup.name}
                             rigOnline={rigOnline}
@@ -3609,166 +3578,6 @@ function chatTargetLabel(
 }
 
 /**
- * The composer at the bottom of the expanded panel. It writes into the session
- * the window already has open — the same draft, the same store actions, so a
- * half-typed message survives expanding and collapsing the panel — and carries a
- * picker for sending into a different session instead, which addresses that
- * session exactly as choosing its tab would. Its input participates in the
- * footer's height while its fade alone overlays the panel body, keeping the
- * bottom content reachable without an added spacer.
- */
-function RigPanelComposer(props: {
-    conversation: RigConversationSnapshot;
-    groupName: string | undefined;
-    onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
-    projects: readonly RigProjectGroup[];
-    readOnly: boolean;
-    /** Reads current transport health when a Rig-backed action is invoked. */
-    rigOnline: () => boolean;
-    /** Why the input is closed, said in the words of whatever closed it. */
-    readOnlyReason?: string;
-    /** Why this Rig cannot currently accept network actions. */
-    unavailable?: string;
-    /**
-     * Whether a run already going here may be stopped. Separate from `readOnly`
-     * on purpose: a checkout that has gone away closes the input, but the run
-     * inside it is a process the host owns and the reader must still be able to
-     * end it. Only a subagent's own runner takes Stop away, because that run
-     * belongs to the parent that started it.
-     */
-    canAbort: boolean;
-    /** Why this conversation may not be written into, or absent when it may. */
-    writeRefusal?: string;
-    workspace: RigWorkspaceStore;
-}) {
-    const { conversation, workspace } = props;
-    const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
-    return (
-        <FloatingConversationDock placement="footer">
-            <ConversationDock
-                composer={conversation.composer}
-                disabled={props.readOnly}
-                submitDisabled={props.unavailable !== undefined}
-                {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
-                // This dock only exists while it replaces the workspace column's
-                // composer, so it is the surface the reader writes into — and
-                // therefore the one that takes the caret when the conversation
-                // underneath it changes.
-                composerFocusOnType={!props.readOnly}
-                {...(props.readOnly ? {} : { composerFocusKey: props.conversation.conversationId })}
-                composerPlaceholder={
-                    props.readOnly
-                        ? (props.readOnlyReason ?? "Subagent chats are read-only")
-                        : composerPlaceholder(props.groupName)
-                }
-                composerControls={
-                    conversation.menus ? (
-                        <ComposerModelControl
-                            {...rigComposerModelControlProps(conversation.menus, {
-                                disabled:
-                                    props.readOnly ||
-                                    props.unavailable !== undefined ||
-                                    conversation.modelLocked,
-                                onEffortChange: (effort?: RigThinkingLevel) => {
-                                    if (props.rigOnline()) workspace.sessionEffortUpdate(effort);
-                                },
-                                onModelChange: (selection: RigModelSelection) => {
-                                    if (props.rigOnline()) workspace.sessionModelUpdate(selection);
-                                },
-                            })}
-                        />
-                    ) : undefined
-                }
-                composerFooterControl={
-                    <ComposerFooterBar
-                        leading={
-                            <RigSessionControls
-                                disabled={props.readOnly || props.unavailable !== undefined}
-                                fields={["permission", "tier"]}
-                                menuPlacement="above"
-                                variant="ghost"
-                                menus={conversation.menus}
-                                onEffortChange={(effort?: RigThinkingLevel) => {
-                                    if (props.rigOnline()) workspace.sessionEffortUpdate(effort);
-                                }}
-                                onModelChange={(selection: RigModelSelection) => {
-                                    if (props.rigOnline()) workspace.sessionModelUpdate(selection);
-                                }}
-                                onPermissionModeChange={(mode: RigPermissionMode) => {
-                                    if (props.rigOnline())
-                                        workspace.sessionPermissionModeUpdate(mode);
-                                }}
-                                onServiceTierChange={(tier?: RigServiceTier) => {
-                                    if (props.rigOnline()) workspace.sessionServiceTierUpdate(tier);
-                                }}
-                            />
-                        }
-                        trailing={
-                            <>
-                                {/* The same window the conversation surface
-                                    reports: this dock writes into the same
-                                    session, so it answers the same question
-                                    about whether the next message fits. */}
-                                {conversation.contextGauge ? (
-                                    <ContextMeter
-                                        approximate={conversation.contextGauge.approximate}
-                                        measured={conversation.contextGauge.measured}
-                                        totalTokens={conversation.contextGauge.totalTokens}
-                                        usedTokens={conversation.contextGauge.usedTokens}
-                                    />
-                                ) : null}
-                                <RigControlMenu
-                                    items={chatTargetItems(props.projects)}
-                                    label="Chat"
-                                    menuAlign="end"
-                                    menuPlacement="above"
-                                    menuWidth={280}
-                                    variant="ghost"
-                                    onSelect={(id) => {
-                                        const [groupId, chatId] = id.split(CHAT_TARGET_SEP);
-                                        if (groupId && chatId) props.onChatSelect(groupId, chatId);
-                                    }}
-                                    value={
-                                        chatTargetLabel(
-                                            props.projects,
-                                            conversation.conversationId,
-                                        ) ?? "This session"
-                                    }
-                                />
-                            </>
-                        }
-                    />
-                }
-                onAbort={
-                    props.canAbort
-                        ? () => {
-                              if (props.rigOnline()) swallow(workspace.runAbort());
-                          }
-                        : undefined
-                }
-                onCommandInvoke={
-                    props.unavailable === undefined
-                        ? (commandId) => {
-                              if (props.rigOnline()) workspace.composerCommandInvoke(commandId);
-                          }
-                        : undefined
-                }
-                onComposerAttachmentRemove={(attachmentId) =>
-                    workspace.composerAttachmentRemove(attachmentId)
-                }
-                onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
-                onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
-                onComposerSend={() => {
-                    if (props.rigOnline()) workspace.composerTextSubmit();
-                }}
-                onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
-                running={conversation.running}
-            />
-        </FloatingConversationDock>
-    );
-}
-
-/**
  * The scheduled wait the footer counts down, paired with the surface clock it
  * is measured against. The daemon's own label states an absolute deadline that
  * stops being useful the moment it is written; handing the status line both
@@ -4228,11 +4037,7 @@ function RigPanelBody(props: {
     const tabs = baseTabs;
     return (
         <>
-            {/* Both of the panel's own chrome controls, together at its leading
-                edge. Widening the panel used to be a tab pinned to the middle of
-                the divider, which put a control the reader has to hunt for in
-                the one place nothing else lives — and shifted the whole column's
-                content aside to make room for it. */}
+            {/* The panel's own chrome control, at its leading edge. */}
             <PanelHeader edgeControl>
                 <Button
                     aria-label="Hide panel"
@@ -4241,15 +4046,6 @@ function RigPanelBody(props: {
                     iconOnly
                     onClick={props.onPanelClose}
                     shortcut={PANEL_TOGGLE_HINT}
-                    size="small"
-                    variant="ghost"
-                />
-                <Button
-                    aria-label={props.panel.maximized ? "Restore panel" : "Expand panel"}
-                    aria-pressed={props.panel.maximized}
-                    icon={props.panel.maximized ? "panel-restore" : "panel-maximize"}
-                    iconOnly
-                    onClick={() => props.store.panelMaximizeToggle()}
                     size="small"
                     variant="ghost"
                 />

@@ -56,11 +56,6 @@ export interface RigBrowserUpdate {
  */
 export interface RigPanelSnapshot {
     readonly open: boolean;
-    /**
-     * The panel has taken the whole window beside the sidebar. It is a property
-     * of the open panel, so folding the panel away also gives up the expansion.
-     */
-    readonly maximized: boolean;
     readonly tabs: readonly RigPanelTabSnapshot[];
     /** Whether the transient Activity tab is selected/open for this conversation. */
     readonly activityViewOpen: boolean;
@@ -98,18 +93,6 @@ export interface RigPanelStore {
      * one. The panel shows its own content and offers to start a terminal.
      */
     panelToggle(): void;
-    /**
-     * Expands the panel over the workspace column, or returns it to its docked
-     * width. Only meaningful while the panel is showing.
-     */
-    panelMaximizeToggle(): void;
-    /**
-     * Steps the panel back from expanded to its docked width, without folding it
-     * away. It is what the workspace calls when something the reader moved has
-     * landed in the main content, which an expanded panel would be standing in
-     * front of.
-     */
-    panelRestore(): void;
     /** Selects the permanent workspace-files tab and opens the panel. */
     filesSelect(): void;
     /** Opens or selects the transient Activity tab for the current conversation. */
@@ -247,7 +230,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     /** Which live tool tab each group had selected, so returning to it lands there. */
     const activeByGroup = new Map<RigGroupId, RigPanelTabId>();
     /** Whether each group's panel was showing, and how wide, when it was left. */
-    const chromeByGroup = new Map<RigGroupId, { open: boolean; maximized: boolean }>();
+    const chromeByGroup = new Map<RigGroupId, { open: boolean }>();
     /** Groups whose remembered arrangement has already been read back in this run. */
     const restoredGroupIds = new Set<RigGroupId>();
     let groupId: RigGroupId | undefined;
@@ -255,7 +238,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     /** Why a shell cannot be started in the current scope; supplied by the owner. */
     let terminalRefusal: string | undefined;
     let open = false;
-    let maximized = false;
     let activeViewId: RigPanelSnapshot["activeViewId"] = "files";
     let activityViewShown = false;
     let activityViewDismissed = false;
@@ -269,7 +251,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         activityViewDismissed: false,
         activityViewOpen: false,
         fileViewOpen: false,
-        maximized: false,
         open: false,
         tabs: NO_TABS,
     };
@@ -281,7 +262,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             activityViewDismissed,
             activityViewOpen: activityViewShown,
             fileViewOpen: fileViewShown,
-            maximized,
             open,
             tabs: visible.map(
                 (tab): RigPanelTabSnapshot =>
@@ -309,7 +289,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const next = project();
         if (
             next.open === snapshot.open &&
-            next.maximized === snapshot.maximized &&
             next.activeViewId === snapshot.activeViewId &&
             next.activityViewDismissed === snapshot.activityViewDismissed &&
             next.activityViewOpen === snapshot.activityViewOpen &&
@@ -327,7 +306,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             activityViewDismissed: next.activityViewDismissed,
             activityViewOpen: next.activityViewOpen,
             fileViewOpen: next.fileViewOpen,
-            maximized: next.maximized,
             open: next.open,
             tabs: next.tabs.map((tab, index) => {
                 const before = snapshot.tabs[index];
@@ -352,7 +330,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const activeIndex = browsers.findIndex((tab) => tab.id === activeViewId);
         deps.memoryWrite(groupId, {
             open,
-            maximized,
             browsers: browsers.map((tab) => ({
                 url: tab.url ?? "about:blank",
                 label: tab.label,
@@ -421,7 +398,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const active = remembered?.placement === "panel" ? remembered.id : undefined;
         if (active) activeByGroup.set(group, active);
         else activeByGroup.delete(group);
-        chromeByGroup.set(group, { open: memory.open, maximized: memory.maximized });
+        chromeByGroup.set(group, { open: memory.open });
     };
 
     /** The tab the panel falls back to in this group, if it still draws one. */
@@ -453,21 +430,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         panelToggle() {
             if (disposed) return;
             open = !open;
-            // A folded-away panel keeps no expansion: reopening it should give
-            // back the column it was docked at, not swallow the workspace.
-            if (!open) maximized = false;
-            remember();
-            recompute();
-        },
-        panelMaximizeToggle() {
-            if (disposed || !open) return;
-            maximized = !maximized;
-            remember();
-            recompute();
-        },
-        panelRestore() {
-            if (disposed || !maximized) return;
-            maximized = false;
             remember();
             recompute();
         },
@@ -606,11 +568,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                     activeViewId = "files";
                 }
             }
-            // Expanded, the panel covers the whole workspace column. Sending a
-            // tab to the main content while it is expanded would put the tab
-            // somewhere the panel is standing in front of, so the panel steps
-            // back to its docked width and lets the reader see where it went.
-            if (placement === "main") maximized = false;
             remember();
             recompute();
         },
@@ -635,7 +592,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                 recompute();
                 return;
             }
-            if (groupId) chromeByGroup.set(groupId, { open, maximized });
+            if (groupId) chromeByGroup.set(groupId, { open });
             groupId = nextGroupId;
             // A file was opened out of one checkout, and a path only means
             // something inside that checkout, so it does not travel to the next
@@ -646,7 +603,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             if (nextGroupId) groupRestore(nextGroupId);
             const chrome = nextGroupId ? chromeByGroup.get(nextGroupId) : undefined;
             open = chrome?.open ?? false;
-            maximized = (chrome?.open ?? false) && (chrome?.maximized ?? false);
             const remembered =
                 nextGroupId === undefined ? undefined : activeByGroup.get(nextGroupId);
             const drawn = tabs.find(

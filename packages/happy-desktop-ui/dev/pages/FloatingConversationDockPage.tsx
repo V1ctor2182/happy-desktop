@@ -235,20 +235,17 @@ export function FloatingConversationDockPage() {
                 </Box>
             </Specimen>
             <FullScreenSpecimen
-                detail="The expanded workspace panel: the input reserves only its own height while the 72px fade floats over the content above it"
-                label="Expanded panel with the dock"
+                detail="The workspace panel: the input reserves only its own height while the 72px fade floats over the content above it"
+                label="Panel with the dock"
                 number="02"
             >
                 <AppShell
-                    onPanelMaximizedChange={noop}
                     panel={panelBody()}
                     panelFooter={
                         <FloatingConversationDock placement="footer">
                             {dock("")}
                         </FloatingConversationDock>
                     }
-                    panelMaximizable
-                    panelMaximized
                     panelResizable
                     sidebar={
                         <Sidebar
@@ -277,14 +274,12 @@ export function FloatingConversationDockPage() {
                 </AppShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Docked at its ordinary width for comparison: the dock belongs only to the expanded panel"
+                detail="The same panel without a footer, for comparison"
                 label="Docked panel"
                 number="03"
             >
                 <AppShell
-                    onPanelMaximizedChange={noop}
                     panel={panelBody()}
-                    panelMaximizable
                     panelResizable
                     sidebar={
                         <Sidebar

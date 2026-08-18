@@ -45,9 +45,8 @@
 /*
  * The panel affordance is one control at two edges of the window, and the left
  * one is a 28px chrome button carrying a 16px glyph. A small Button hands its
- * icon 14, which would set 12.25px of ink against the 14px its twin carries —
- * and against the 14px of the maximize glyph beside it, an Octicon that fills
- * its whole box. So the drawn set keeps 16 inside a button, the same way the
+ * icon 14, which would set 12.25px of ink against the 14px its twin carries.
+ * So the drawn set keeps 16 inside a button, the same way the
  * composer pins the ink of its own circular controls.
  */
 .happy2-button__icon .happy2-icon[data-set="drawn"] {

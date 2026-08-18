@@ -67,8 +67,8 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * Reports the settled width after a pointer drag or keyboard resize step.
      *
      * Supplying `panelWidth` alongside `panelResizable` hands the width to the
-     * caller the same way `panelMaximized` hands over the maximize state: the
-     * shell stops tracking it and only reports intent here. That is what lets a
+     * caller: the shell stops tracking it and only reports intent here. That is
+     * what lets a
      * host keep a width per checkout, because a width the shell owned could only
      * ever be seeded once and would then follow the reader from project to
      * project. Without `panelWidth` the shell keeps owning it and this is simply
@@ -77,20 +77,10 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     onPanelWidthChange?: (width: number) => void;
     panelMinWidth?: number;
     panelMaxWidth?: number;
-    /** Enables the panel maximize/restore control that overlays the whole content region. */
-    panelMaximizable?: boolean;
-    panelDefaultMaximized?: boolean;
-    /**
-     * Controlled maximize state. When provided the caller owns whether the panel is
-     * maximized (e.g. to swap in extra panel content while expanded); AppShell stops
-     * tracking it internally and only reports intent through `onPanelMaximizedChange`.
-     */
-    panelMaximized?: boolean;
-    onPanelMaximizedChange?: (maximized: boolean) => void;
     /**
      * Optional content pinned to the bottom of the panel column, below the panel
      * body. Used to keep a composer/input usable while the panel body (e.g. a live
-     * trace) fills the expanded region. Rendering it does not affect the panel body's
+     * trace) fills the column. Rendering it does not affect the panel body's
      * identity, so the body stays mounted as the footer mounts/unmounts.
      */
     panelFooter?: ReactNode;
@@ -102,8 +92,6 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * gradient and pointer-transparent regions.
      */
     panelFooterFloating?: boolean;
-    panelMaximizeLabel?: string;
-    panelRestoreLabel?: string;
     panelResizeLabel?: string;
 };
 const SIDEBAR_DEFAULT_WIDTH = 288;
@@ -286,11 +274,9 @@ function ResizeHandle(props: {
  * then rail | navigation | workspace and an optional right inspector. Every
  * region meets on a hairline so the desktop feels like one native surface.
  *
- * The sidebar collapse/resize, the panel resize, and the panel maximize/restore
- * are narrowly scoped local UI interactions owned here so application code stays
- * props-only. Maximize overlays the workspace only, preserving the left sidebar's
- * visibility and interaction while keeping every region mounted so focus, scroll,
- * and any in-flight content survive the transition.
+ * The sidebar collapse/resize and the panel resize are narrowly scoped local UI
+ * interactions owned here so application code stays props-only. Every region
+ * stays mounted across them so focus, scroll, and any in-flight content survive.
  */
 export function AppShell(props: AppShellProps) {
     const shell = useRef<HTMLDivElement>(null);
@@ -320,14 +306,8 @@ export function AppShell(props: AppShellProps) {
         "panelDefaultWidth",
         "panelMinWidth",
         "panelMaxWidth",
-        "panelMaximizable",
-        "panelDefaultMaximized",
-        "panelMaximized",
-        "onPanelMaximizedChange",
         "panelFooter",
         "panelFooterFloating",
-        "panelMaximizeLabel",
-        "panelRestoreLabel",
         "panelResizeLabel",
     ]);
     const sidebarMin = local.sidebarMinWidth ?? SIDEBAR_MIN_WIDTH;
@@ -372,18 +352,7 @@ export function AppShell(props: AppShellProps) {
         laneMaxWidthOf(sidebarCap, sidebarMin, railFootprint + panelOccupied);
     const panelMax =
         local.panelMaxWidth ?? laneMaxWidthOf(panelCap, panelMin, railFootprint + sidebarOccupied);
-    const [panelMaximizedState, setPanelMaximizedState] = useState(
-        local.panelDefaultMaximized ?? false,
-    );
     const [shortcutHintsHeld, setShortcutHintsHeld] = useState(false);
-    // Controlled when the caller supplies `panelMaximized`; otherwise AppShell owns it.
-    const panelMaximizedControlled = local.panelMaximized !== undefined;
-    const panelMaximized = panelMaximizedControlled ? local.panelMaximized! : panelMaximizedState;
-    function togglePanelMaximized() {
-        const next = !panelMaximized;
-        if (!panelMaximizedControlled) setPanelMaximizedState(next);
-        local.onPanelMaximizedChange?.(next);
-    }
     const sidebarInteractive = local.sidebarCollapsible === true;
     const shortcutHintsEnabled = local.shortcutHints !== undefined;
     const shortcutHintsInteractive = local.shortcutHints === "interactive";
@@ -466,8 +435,7 @@ export function AppShell(props: AppShellProps) {
         };
     }, [shortcutHintsInteractive, sidebarInteractive]);
     const panelResizable = local.panelResizable === true;
-    // Controlled when a resizable panel is given a width; otherwise AppShell owns
-    // it, exactly as `panelMaximized` above.
+    // Controlled when a resizable panel is given a width; otherwise AppShell owns it.
     const panelWidthControlled = panelResizable && local.panelWidth !== undefined;
     const panelWidthBase = panelWidthControlled
         ? clamp(local.panelWidth!, panelMin, panelMax)
@@ -477,7 +445,7 @@ export function AppShell(props: AppShellProps) {
     // eslint-disable-next-line happy2-react/no-layout-effect -- live splitter geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
     useLayoutEffect(() => {
         shell.current?.dispatchEvent(new Event(APP_SHELL_RESIZE_LAYOUT_EVENT, { bubbles: true }));
-    }, [panelMaximized, panelPresent, panelWidth, sidebarCollapsed, sidebarWidth]);
+    }, [panelPresent, panelWidth, sidebarCollapsed, sidebarWidth]);
     function previewPanelWidth(next: number) {
         if (panelWidthControlled) setPanelDragWidth(next);
         else setPanelWidthState(next);
@@ -486,7 +454,6 @@ export function AppShell(props: AppShellProps) {
         local.onPanelWidthChange?.(next);
         setPanelDragWidth(undefined);
     }
-    const panelMaximizable = local.panelMaximizable === true;
     const showSidebarHandle = sidebarInteractive && !sidebarCollapsed;
     const sidebarStyle: CSSProperties | undefined = sidebarInteractive
         ? {
@@ -495,28 +462,26 @@ export function AppShell(props: AppShellProps) {
               maxWidth: `${sidebarMax}px`,
           }
         : undefined;
-    const panelStyle: CSSProperties | undefined = panelMaximized
-        ? undefined
-        : panelResizable
-          ? {
-                width: `${panelWidth}px`,
-                minWidth: `${panelMin}px`,
-                // Where the bound is this component's own it is also stated in
-                // viewport units, which the browser keeps current: a window
-                // shrunk between renders narrows the panel with it rather than
-                // waiting for the next one. Both halves of the bound are here —
-                // the panel's share of the window, and the room left once the
-                // rail, the sidebar, and the workspace's floor have theirs — so
-                // a live resize cannot cross the second one either. A caller
-                // that named a width means that width.
-                maxWidth:
-                    local.panelMaxWidth === undefined
-                        ? `min(${panelMax}px, ${String(PANEL_MAX_FRACTION * 100)}vw, calc(100vw - ${String(railFootprint + sidebarOccupied + WORKSPACE_MIN_WIDTH)}px))`
-                        : `${panelMax}px`,
-            }
-          : local.panelWidth === undefined
-            ? undefined
-            : { width: `${local.panelWidth}px` };
+    const panelStyle: CSSProperties | undefined = panelResizable
+        ? {
+              width: `${panelWidth}px`,
+              minWidth: `${panelMin}px`,
+              // Where the bound is this component's own it is also stated in
+              // viewport units, which the browser keeps current: a window
+              // shrunk between renders narrows the panel with it rather than
+              // waiting for the next one. Both halves of the bound are here —
+              // the panel's share of the window, and the room left once the
+              // rail, the sidebar, and the workspace's floor have theirs — so
+              // a live resize cannot cross the second one either. A caller
+              // that named a width means that width.
+              maxWidth:
+                  local.panelMaxWidth === undefined
+                      ? `min(${panelMax}px, ${String(PANEL_MAX_FRACTION * 100)}vw, calc(100vw - ${String(railFootprint + sidebarOccupied + WORKSPACE_MIN_WIDTH)}px))`
+                      : `${panelMax}px`,
+          }
+        : local.panelWidth === undefined
+          ? undefined
+          : { width: `${local.panelWidth}px` };
     const sidebarHidden = sidebarInteractive && sidebarCollapsed;
     // Under native window controls a collapsed sidebar leaves no lane behind: the
     // reveal control floats beside the traffic lights, exactly where the collapse
@@ -531,15 +496,6 @@ export function AppShell(props: AppShellProps) {
             : sidebarInteractive
               ? sidebarMin
               : FIXED_SIDEBAR_MIN_WIDTH;
-    const sidebarFootprint = !local.sidebar
-        ? "0px"
-        : revealFloating
-          ? "0px"
-          : sidebarHidden
-            ? `${REVEAL_WIDTH}px`
-            : sidebarInteractive
-              ? `${sidebarWidth}px`
-              : "clamp(250px, 30vw, 360px)";
     const revealButton = sidebarHidden ? (
         <button
             aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
@@ -583,9 +539,6 @@ export function AppShell(props: AppShellProps) {
     const mainStyle: CSSProperties = {
         minWidth: `${sidebarLayoutMin + WORKSPACE_MIN_WIDTH}px`,
     };
-    const contentStyle = {
-        "--happy-desktop-app-shell-panel-expanded-left": sidebarFootprint,
-    } as CSSProperties;
     return (
         <div
             {...rest}
@@ -638,7 +591,6 @@ export function AppShell(props: AppShellProps) {
                 <div
                     className="happy-desktop-app-shell__content"
                     data-happy-desktop-ui="app-shell-content"
-                    style={contentStyle}
                 >
                     <main
                         className="happy-desktop-app-shell__main"
@@ -706,11 +658,10 @@ export function AppShell(props: AppShellProps) {
                         <aside
                             className="happy-desktop-app-shell__panel"
                             data-happy-desktop-ui="app-shell-panel"
-                            data-maximized={panelMaximized ? "" : undefined}
                             data-resizable={panelResizable ? "" : undefined}
                             style={panelStyle}
                         >
-                            {panelResizable && !panelMaximized ? (
+                            {panelResizable ? (
                                 <ResizeHandle
                                     edge="left"
                                     label={local.panelResizeLabel ?? "Resize panel"}
@@ -735,30 +686,6 @@ export function AppShell(props: AppShellProps) {
                                 >
                                     {local.panelFooter}
                                 </div>
-                            ) : null}
-                            {panelMaximizable ? (
-                                <button
-                                    aria-label={
-                                        panelMaximized
-                                            ? (local.panelRestoreLabel ?? "Restore panel")
-                                            : (local.panelMaximizeLabel ?? "Expand panel")
-                                    }
-                                    aria-pressed={panelMaximized}
-                                    className="happy-desktop-app-shell__panel-toggle"
-                                    data-happy-desktop-ui="app-shell-panel-toggle"
-                                    onClick={togglePanelMaximized}
-                                    type="button"
-                                >
-                                    <span
-                                        className={
-                                            panelMaximized
-                                                ? undefined
-                                                : "happy-desktop-app-shell__chevron-left"
-                                        }
-                                    >
-                                        <Icon name="chevron-right" size={16} />
-                                    </span>
-                                </button>
                             ) : null}
                         </aside>
                     ) : null}

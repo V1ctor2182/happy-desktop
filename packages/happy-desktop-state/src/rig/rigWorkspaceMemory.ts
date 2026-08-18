@@ -43,7 +43,6 @@ export type RigPanelViewMemory =
  */
 export interface RigPanelMemory {
     readonly open: boolean;
-    readonly maximized: boolean;
     readonly browsers: readonly RigPanelBrowserMemory[];
     readonly active: RigPanelViewMemory;
 }
@@ -198,13 +197,12 @@ function panelParse(value: unknown): RigPanelMemory | undefined {
             : { type: "files" };
     const panel: RigPanelMemory = {
         open: record.open === true,
-        maximized: record.maximized === true,
         browsers,
         active,
     };
     // A closed panel with nothing in it is the default, and writing it down for
     // every group anyone ever opened would only grow the document.
-    return !panel.open && !panel.maximized && browsers.length === 0 ? undefined : panel;
+    return !panel.open && browsers.length === 0 ? undefined : panel;
 }
 
 function groupParse(value: unknown): RigGroupTabMemory | undefined {
@@ -328,12 +326,7 @@ export function rigWorkspaceMemoryStoreCreate(
             const { panel: _dropped, ...rest } = previous;
             // The default arrangement is not worth a record: a panel nobody has
             // opened must not keep a group alive in this document.
-            merge(
-                groupId,
-                !panel.open && !panel.maximized && panel.browsers.length === 0
-                    ? rest
-                    : { ...rest, panel },
-            );
+            merge(groupId, !panel.open && panel.browsers.length === 0 ? rest : { ...rest, panel });
         },
         groupForget(groupId) {
             if (!groups.delete(groupId)) return;

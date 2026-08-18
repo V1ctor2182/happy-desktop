@@ -4064,9 +4064,6 @@ export function rigWorkspaceStoreCreate(
                     panel.fileViewOpen();
                 } else {
                     panel.fileViewClose();
-                    // An expanded panel covers the workspace column the file is
-                    // about to arrive in, so it steps back to its docked width.
-                    panel.panelRestore();
                     // A glance the reader settled on is a document they keep,
                     // not another replaceable preview.
                     activeMainViewId = file.id;

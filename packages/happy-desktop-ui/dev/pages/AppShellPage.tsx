@@ -188,7 +188,7 @@ export function AppShellPage() {
             </Specimen>
 
             <Specimen
-                detail="sidebarCollapsible + panelResizable: an 8px drag separator (role=separator) sits on each inner edge, the sidebar carries a collapse control, and the panel a maximize control"
+                detail="sidebarCollapsible + panelResizable: an 8px drag separator (role=separator) sits on each inner edge, and the sidebar carries a collapse control"
                 label="Resizable sidebar + inspector"
                 number="04"
                 stage="chrome"
@@ -196,7 +196,6 @@ export function AppShellPage() {
                 {window1024(
                     <AppShell
                         panel={<Slot label="panel" note="resizable · 340px" />}
-                        panelMaximizable
                         panelResizable
                         rail={railSlot()}
                         sidebar={<Slot label="sidebar" note="resizable · 288px" />}
@@ -228,31 +227,9 @@ export function AppShellPage() {
             </Specimen>
 
             <Specimen
-                detail="maximized inspector: the panel overlays the whole content region — including the left sidebar — while the sidebar and workspace stay mounted underneath; the control restores the docked width"
-                label="Inspector maximized"
+                detail="trace + input: the panel body (live trace) fills the column while a panelFooter keeps the composer pinned at the bottom; the panel body identity is unaffected as the footer mounts"
+                label="Trace with composer footer"
                 number="06"
-                stage="chrome"
-            >
-                {window1024(
-                    <AppShell
-                        panel={<Slot label="panel" note="maximized · overlays content" />}
-                        panelDefaultMaximized
-                        panelMaximizable
-                        panelResizable
-                        rail={railSlot()}
-                        sidebar={<Slot label="sidebar" note="mounted, overlaid" />}
-                        sidebarCollapsible
-                        titleBar={titleBarSlot()}
-                    >
-                        <Slot label="children" note="mounted, overlaid" />
-                    </AppShell>,
-                )}
-            </Specimen>
-
-            <Specimen
-                detail="expanded trace + input: the panel body (live trace) fills the overlay while a panelFooter keeps the composer pinned at the bottom; the panel body identity is unaffected as the footer mounts"
-                label="Expanded trace with composer footer"
-                number="07"
                 stage="chrome"
             >
                 {window1024(
@@ -260,7 +237,6 @@ export function AppShellPage() {
                         panel={
                             <Slot label="panel body" note="AgentTracePanel · ongoing inference" />
                         }
-                        panelDefaultMaximized
                         panelFooter={
                             <div
                                 style={{ boxSizing: "border-box", height: "96px", display: "flex" }}
@@ -273,14 +249,13 @@ export function AppShellPage() {
                                 />
                             </div>
                         }
-                        panelMaximizable
                         panelResizable
                         rail={railSlot()}
-                        sidebar={<Slot label="sidebar" note="mounted, overlaid" />}
+                        sidebar={<Slot label="sidebar" note="resizable · 288px" />}
                         sidebarCollapsible
                         titleBar={titleBarSlot()}
                     >
-                        <Slot label="children" note="mounted, overlaid" />
+                        <Slot label="children" note="main workspace" />
                     </AppShell>,
                 )}
             </Specimen>
@@ -288,7 +263,7 @@ export function AppShellPage() {
             <Specimen
                 detail="default state: shortcut KeyCaps stay in the DOM but paint nothing and leave both 28px controls unchanged"
                 label="Command shortcuts · rest"
-                number="08"
+                number="07"
                 stage="chrome"
             >
                 {shortcutShell(false)}
@@ -297,7 +272,7 @@ export function AppShellPage() {
             <Specimen
                 detail="deterministic held-Command state after the 500ms discovery delay: the sidebar toggle and descendant panel control reveal out-of-flow KeyCaps without changing either hit box"
                 label="Command shortcuts · held"
-                number="09"
+                number="08"
                 stage="chrome"
             >
                 {shortcutShell(true)}

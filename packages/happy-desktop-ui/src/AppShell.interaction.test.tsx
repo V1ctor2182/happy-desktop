@@ -64,7 +64,6 @@ function interactiveShell() {
             data-testid="shell"
             panel={slot("panel-slot", { background: "var(--surface)" })}
             panelDefaultWidth={340}
-            panelMaximizable
             panelMinWidth={280}
             panelMaxWidth={560}
             panelResizable
@@ -105,9 +104,6 @@ it("does not render resize or collapse chrome unless the interaction props are s
     ).toBeNull();
     expect(
         view.container.querySelector('[data-happy-desktop-ui="app-shell-sidebar-collapse"]'),
-    ).toBeNull();
-    expect(
-        view.container.querySelector('[data-happy-desktop-ui="app-shell-panel-toggle"]'),
     ).toBeNull();
     // The fixed sidebar keeps its 30vw clamp contract (1280 → 360).
     expect(view.$('[data-happy-desktop-ui="app-shell-sidebar"]').bounds().width).toBe(360);
@@ -377,68 +373,13 @@ it("keeps both resized sidebars fully reachable at the minimum desktop width", a
     expect(panel.x + panel.width).toBe(content.x + content.width);
 });
 
-it("maximizes the panel over the workspace without covering the sidebar", async () => {
-    const view = createRenderer().render(interactiveShell, shellSize);
-    await view.ready();
-
-    const panelNode = view.$('[data-happy-desktop-ui="app-shell-panel"]').element;
-    const workspaceNode = view.$('[data-happy-desktop-ui="app-shell-workspace"]').element;
-    const sidebarNode = view.$('[data-happy-desktop-ui="app-shell-sidebar"]').element;
-    const content = view.$('[data-happy-desktop-ui="app-shell-content"]').bounds();
-    const workspace = view.$('[data-happy-desktop-ui="app-shell-workspace"]').bounds();
-
-    const toggle = view.$('[data-happy-desktop-ui="app-shell-panel-toggle"]');
-    expect(toggle.element.getAttribute("aria-label")).toBe("Expand panel");
-    (toggle.element as HTMLButtonElement).click();
-    await view.ready();
-
-    // Maximized: the panel fills workspace space but leaves the sidebar exposed.
-    const maximized = view.$('[data-happy-desktop-ui="app-shell-panel"]');
-    expect(maximized.element.getAttribute("data-maximized")).toBe("");
-    expect(maximized.bounds()).toMatchObject({
-        x: workspace.x,
-        width: content.x + content.width - workspace.x,
-    });
-    const collapse = view.$('[data-happy-desktop-ui="app-shell-sidebar-collapse"]').bounds();
-    const topmostAtCollapse = document.elementFromPoint(
-        collapse.x + collapse.width / 2,
-        collapse.y + collapse.height / 2,
-    );
-    expect(maximized.element.contains(topmostAtCollapse)).toBe(false);
-    // Every region kept its identity and stays in the DOM under the overlay.
-    expect(view.$('[data-happy-desktop-ui="app-shell-panel"]').element).toBe(panelNode);
-    expect(view.$('[data-happy-desktop-ui="app-shell-workspace"]').element).toBe(workspaceNode);
-    expect(view.$('[data-happy-desktop-ui="app-shell-sidebar"]').element).toBe(sidebarNode);
-    expect(
-        view
-            .$('[data-happy-desktop-ui="app-shell-panel-toggle"]')
-            .element.getAttribute("aria-label"),
-    ).toBe("Restore panel");
-
-    (
-        view.$('[data-happy-desktop-ui="app-shell-panel-toggle"]').element as HTMLButtonElement
-    ).click();
-    await view.ready();
-
-    const restored = view.$('[data-happy-desktop-ui="app-shell-panel"]');
-    expect(restored.element.getAttribute("data-maximized")).toBeNull();
-    expect(restored.bounds().width).toBe(340);
-    expect(restored.element).toBe(panelNode);
-    expect(view.$('[data-happy-desktop-ui="app-shell-workspace"]').element).toBe(workspaceNode);
-    expect(view.$('[data-happy-desktop-ui="app-shell-sidebar"]').element).toBe(sidebarNode);
-});
-
-it("supports controlled maximize with a panel footer pinned below the body", async () => {
-    const changes: boolean[] = [];
+it("pins a panel footer below the panel body", async () => {
     const view = createRenderer().render(
         () => (
             <AppShell
                 data-testid="shell"
                 panel={slot("panel", { background: "var(--surface)" })}
                 panelFooter={slot("footer", { background: "var(--surface-pressed)" })}
-                panelMaximizable
-                panelMaximized
-                onPanelMaximizedChange={(value) => changes.push(value)}
                 sidebar={slot("sidebar", {
                     background: "var(--groupped-background)",
                     width: "100%",
@@ -452,30 +393,15 @@ it("supports controlled maximize with a panel footer pinned below the body", asy
     );
     await view.ready();
 
-    // Controlled maximized: the panel overlays the workspace but preserves the sidebar.
-    const content = view.$('[data-happy-desktop-ui="app-shell-content"]').bounds();
-    const workspace = view.$('[data-happy-desktop-ui="app-shell-workspace"]').bounds();
-    const panel = view.$('[data-happy-desktop-ui="app-shell-panel"]');
-    expect(panel.element.getAttribute("data-maximized")).toBe("");
-    expect(panel.bounds()).toMatchObject({
-        x: workspace.x,
-        width: content.x + content.width - workspace.x,
-    });
-
-    // The footer sits below the panel body inside the same column, both full width.
+    // The footer sits directly below the panel body and spans the same column.
+    // That column is the panel's content box: a docked panel draws a 1px left
+    // border, which is outside it.
+    const panel = view.$('[data-happy-desktop-ui="app-shell-panel"]').bounds();
     const body = view.$('[data-happy-desktop-ui="app-shell-panel-content"]').bounds();
     const footer = view.$('[data-happy-desktop-ui="app-shell-panel-footer"]').bounds();
-    expect(footer.width).toBe(panel.bounds().width);
+    expect(footer.width).toBe(body.width);
+    expect(footer.x).toBe(body.x);
+    expect(footer.x + footer.width).toBe(panel.x + panel.width);
     expect(footer.y).toBe(body.y + body.height);
     expect(view.container.querySelector('[data-testid="footer"]')).not.toBeNull();
-
-    const toggle = view.$('[data-happy-desktop-ui="app-shell-panel-toggle"]');
-    expect(toggle.element.getAttribute("aria-label")).toBe("Restore panel");
-    // Controlled: clicking only reports intent; AppShell does not flip its own view.
-    (toggle.element as HTMLButtonElement).click();
-    await view.ready();
-    expect(changes).toEqual([false]);
-    expect(
-        view.$('[data-happy-desktop-ui="app-shell-panel"]').element.getAttribute("data-maximized"),
-    ).toBe("");
 });
