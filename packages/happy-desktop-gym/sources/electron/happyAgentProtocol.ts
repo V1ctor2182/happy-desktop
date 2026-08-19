@@ -125,8 +125,10 @@ export class GymHappyAgentClient {
         agentId: string,
         text: string,
     ): Promise<{ readonly messageId: string; readonly runId: string }> {
+        const messageId = cuid(`m${randomUUID().replaceAll("-", "").slice(0, 23)}`);
         const response = await this.#client.sendMessage(cuid(agentId), {
             delivery: "queue",
+            id: messageId,
             mode: {
                 effort: "medium",
                 modelId: GYM_AGENT_MODEL_ID,
@@ -134,7 +136,6 @@ export class GymHappyAgentClient {
                 providerId: GYM_AGENT_PROVIDER_ID,
                 serviceTier: null,
             },
-            mutationId: randomUUID(),
             text,
         });
         const runId = await this.#runIdWait(agentId, response.message.id, response.cursor);
@@ -151,15 +152,16 @@ export class GymHappyAgentClient {
     }
 
     async agentMessageCount(agentId: string): Promise<number> {
+        const bootstrap = await this.#client.getAgentBootstrap(cuid(agentId));
         let before: Cuid2 | undefined;
-        let messages = 0;
+        let messages = bootstrap.pending.length;
         for (;;) {
             const history = await this.#client.getMessages(cuid(agentId), {
                 ...(before === undefined ? {} : { before }),
                 limit: 1_000,
             });
             messages += history.runs.reduce((total, run) => total + run.messages.length, 0);
-            if (!history.hasMore) return messages + history.pending.length;
+            if (!history.hasMore) return messages;
             const oldest = history.runs[0]?.id;
             if (oldest === undefined || oldest === before) {
                 throw new Error(`Happy Agent history pagination stalled for ${agentId}.`);

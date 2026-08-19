@@ -69,7 +69,7 @@ import {
 import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
-import { desktopModelSettingsCreate } from "./desktopModelSettings";
+import { desktopPreferencesCreate } from "./desktopPreferences";
 import { desktopDebugStoreCreate } from "./desktopDebugStore";
 import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
@@ -634,18 +634,22 @@ if (mediaPreviewBridge) {
         // here and the session store navigates through it when a conversation it
         // created should be opened.
         const rigRouter = rigRouterCreate();
+        // Appearance and model choices share one durable desktop document. The
+        // adapter keeps its current value synchronous so writes from either
+        // product store preserve changes already made by the other.
+        const preferences = desktopPreferencesCreate(desktopBridge, config);
         // Appearance is chosen for the window, not for one connection, so the store is
         // created here beside the router and outlives both.
-        const appearance = appearanceStoreCreate();
+        const appearance = appearanceStoreCreate({ mode: preferences.initialAppearance });
         desktopAppearanceSynchronize(appearance, desktopBridge);
-        const modelSettings = desktopModelSettingsCreate(desktopBridge, config);
+        appearance.subscribe(() => preferences.appearanceChanged(appearance.get().mode));
         const debug = desktopDebugStoreCreate(desktopBridge);
         const profiler = desktopProfilerStoreCreate(desktopBridge);
         // Defaults and model picker memory belong to the desktop, not one daemon.
         // The state stores stay synchronous while the bridge persists their typed
         // snapshots through the main process.
-        const settings = rigSettingsStoreCreate(modelSettings.initialSettings);
-        settings.subscribe(() => modelSettings.settingsChanged(settings.get()));
+        const settings = rigSettingsStoreCreate(preferences.initialSettings);
+        settings.subscribe(() => preferences.settingsChanged(settings.get()));
         // How the reader arranged the sidebar's pinned rows. It is the window's
         // Those rows are window chrome whether or not any machine is reachable,
         // so the arrangement must outlive every connection this window makes.
@@ -675,7 +679,7 @@ if (mediaPreviewBridge) {
                 rigRouterConversationOpen(rigRouter, rigId, location),
             groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
             listOpen: (rigId, groupId) => rigRouterListOpen(rigRouter, rigId, groupId),
-            modelPreferencePersistence: modelSettings.preferencePersistence,
+            modelPreferencePersistence: preferences.preferencePersistence,
         });
         let materialized = "";
         rigs.subscribe(() => {
@@ -730,8 +734,9 @@ if (mediaPreviewBridge) {
         );
     };
     void desktopBridge.desktopConfigGet().then(start, (error: unknown) => {
-        console.error("Could not read desktop model settings.", error);
+        console.error("Could not read desktop preferences.", error);
         start({
+            appearance: "system",
             defaultEffort: RIG_DEFAULT_THINKING_LEVEL,
             defaultPermissionMode: "auto",
             modelPreferences: [],

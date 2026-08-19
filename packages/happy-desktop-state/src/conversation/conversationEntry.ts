@@ -151,6 +151,12 @@ export type ConversationActivityPresentation =
           readonly input: string;
           /** Present when the interaction belongs to a detached terminal. */
           readonly backgroundProcessId?: number;
+      }
+    | {
+          readonly type: "search";
+          readonly target: "web" | "x";
+          readonly query: string;
+          readonly sources?: readonly { readonly url: string; readonly title: string }[];
       };
 
 export interface ConversationActivityFailure {

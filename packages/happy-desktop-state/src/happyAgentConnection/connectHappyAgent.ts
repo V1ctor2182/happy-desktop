@@ -1,7 +1,10 @@
 import {
     HappyAgentClient,
+    HappyAgentApiError,
     type Agent,
     type AgentActivityResponse,
+    type AgentContextUsage,
+    type AgentDraftSnapshot,
     type DaemonConfig,
     type GitState,
     type HappyAgentEvent,
@@ -11,6 +14,8 @@ import {
     type Project,
     type Question,
     type Run,
+    type SendMessageRequest,
+    type SendMessageResponse,
     type UsageBreakdown,
     type Workspace,
 } from "@slopus/happy-agent-client";
@@ -55,6 +60,8 @@ const DEFAULT_HISTORY_LIMIT = 100;
  * operations such as compaction are exempt.
  */
 const MUTATION_RESPONSE_TIMEOUT_MS = 60_000;
+const SEND_ATTEMPTS = 3;
+const INITIAL_SEND_RETRY_MS = 250;
 
 interface SessionSubscriber extends RigSessionSubscriptionOptions {
     closed: boolean;
@@ -81,6 +88,9 @@ interface SessionEntry {
     activity?: AgentActivityResponse;
     question?: Question | null;
     usage?: UsageBreakdown;
+    context?: AgentContextUsage | null;
+    draft?: AgentDraftSnapshot;
+    mode?: MessageMode | null;
 }
 
 interface GroupsSubscriber extends RigGroupsSubscriptionOptions {
@@ -97,7 +107,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const sessions = new Map<string, SessionEntry>();
     const groupSubscribers = new Set<GroupsSubscriber>();
     const intendedModes = new Map<string, MessageMode>();
+    const agentDrafts = new Map<string, AgentDraftSnapshot>();
+    const agentModes = new Map<string, MessageMode | null>();
     const draftRevisions = new Map<string, number>();
+    const sendConfirmations = new Map<string, () => void>();
     const mutationQueues = new Map<string, Promise<void>>();
     const sessionMutationCounts = new Map<string, number>();
     const gitStates = new Map<string, GitState>();
@@ -158,7 +171,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     const publishGroups = (deltas: readonly GroupDelta[] = []): void => {
         if (config !== undefined) {
-            groups = projectGroups(projects, workspaces, endpoint, config, gitStates);
+            groups = projectGroups(
+                projects,
+                workspaces,
+                endpoint,
+                config,
+                gitStates,
+                agentDrafts,
+                agentModes,
+            );
         }
         const state = groupState();
         for (const subscriber of groupSubscribers) {
@@ -177,7 +198,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             endpoint,
             hasMore: entry.hasMore,
             messages: [...entry.messages.values()],
-            mode: intendedModes.get(entry.id),
+            intendedMode: intendedModes.get(entry.id),
+            ...(entry.mode === undefined ? {} : { mode: entry.mode }),
+            ...(entry.draft === undefined ? {} : { draft: entry.draft }),
+            ...(entry.context === undefined ? {} : { context: entry.context }),
             ...(entry.activity === undefined ? {} : { activity: entry.activity }),
             ...(entry.question === undefined ? {} : { question: entry.question }),
             runs: [...entry.runs.values()].sort(runCompare),
@@ -261,6 +285,29 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         return true;
     };
 
+    const replaceDraft = (agentId: string, draft: AgentDraftSnapshot): void => {
+        agentDrafts.set(agentId, draft);
+        const entry = sessions.get(agentId);
+        if (entry !== undefined) {
+            entry.draft = draft;
+            publishSession(entry);
+        }
+        publishGroups();
+    };
+
+    const adoptDraft = (agentId: string, draft: AgentDraftSnapshot): boolean => {
+        const current = agentDrafts.get(agentId);
+        if (
+            current?.updatedAt !== null &&
+            current?.updatedAt !== undefined &&
+            (draft.updatedAt === null || draft.updatedAt < current.updatedAt)
+        ) {
+            return false;
+        }
+        replaceDraft(agentId, draft);
+        return true;
+    };
+
     const adoptProject = (project: Project, deltas: readonly GroupDelta[] = []): boolean => {
         const current = projects.find((candidate) => candidate.id === project.id);
         if (!shouldAdoptVersion(current, project)) return false;
@@ -308,7 +355,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             intended !== undefined &&
             agent !== undefined &&
             config !== undefined &&
-            modesEqual(modeOf(agent, config), intended)
+            modesEqual(
+                modeOf(config, agentDrafts.get(entry.id), agentModes.get(entry.id)),
+                intended,
+            )
         ) {
             intendedModes.delete(entry.id);
         }
@@ -329,25 +379,38 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 { limit: DEFAULT_HISTORY_LIMIT, omitToolData: false },
                 { signal: rootController.signal },
             ),
+            client.getAgentBootstrap(entry.id, { signal: rootController.signal }),
             optional(() => client.getAgentActivity(entry.id, { signal: rootController.signal })),
             optional(() => client.getPendingQuestion(entry.id, { signal: rootController.signal })),
-            optional(() => client.getAgentUsage(entry.id, { signal: rootController.signal })),
         ])
-            .then(async ([history, activity, question, usage]) => {
-                const agentResponse = await client.getAgent(entry.id, {
-                    signal: rootController.signal,
-                });
+            .then(([history, bootstrap, activity, question]) => {
                 if (closed) return;
-                entry.agent = agentResponse.agent;
-                entry.workspace = workspaceOf(agentResponse.agent.workspaceId);
+                entry.agent = bootstrap.agent;
+                entry.workspace = workspaceOf(bootstrap.agent.workspaceId);
+                entry.context = bootstrap.context;
+                entry.draft = bootstrap.draft;
+                entry.mode = bootstrap.mode;
+                entry.usage = bootstrap.usage;
+                agentDrafts.set(entry.id, bootstrap.draft);
+                agentModes.set(entry.id, bootstrap.mode);
+                const pendingSends = [...entry.messages.values()].filter(
+                    (message) => message.pendingSend,
+                );
                 entry.messages.clear();
                 entry.messageBlockOffsets.clear();
                 entry.runs.clear();
-                ingestHistory(entry, history.runs, history.pending);
+                ingestHistory(entry, history.runs, bootstrap.pending);
+                for (const message of pendingSends) {
+                    if (entry.messages.has(message.message.id)) {
+                        sendConfirmations.get(message.message.id)?.();
+                    } else {
+                        entry.messages.set(message.message.id, message);
+                    }
+                }
                 entry.hasMore = history.hasMore;
                 if (activity !== undefined) setActivity(entry, activity);
                 if (question !== undefined) entry.question = question.question;
-                if (usage !== undefined) entry.usage = usage.usage;
+                advanceCursor(bootstrap.cursor);
                 entry.hydrating = false;
                 // The loaded history already contains every change up to the
                 // agent's lastCursor. Replaying an older buffered event over it
@@ -356,16 +419,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 // blocks, so the merge appends the whole segment again.
                 const buffered = entry.bufferedEvents
                     .splice(0)
-                    .filter(
-                        (event) => event.cursor.localeCompare(agentResponse.agent.lastCursor) > 0,
-                    );
-                replaceAgent(agentResponse.agent);
+                    .filter((event) => event.cursor.localeCompare(bootstrap.cursor) > 0);
+                replaceAgent(bootstrap.agent);
                 publishSession(entry);
                 for (const event of buffered) applyEvent(event);
                 drainHydrationBroadcastEvents();
                 if (
                     question === undefined &&
-                    agentResponse.agent.pendingQuestionId !== null &&
+                    bootstrap.agent.pendingQuestionId !== null &&
                     entry.subscribers.size > 0
                 ) {
                     recoverQuestion(entry);
@@ -436,7 +497,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             publishGroups([
                 {
                     type: "projects_changed",
-                    projects: projectGroups(projects, workspaces, endpoint, config, gitStates),
+                    projects: projectGroups(
+                        projects,
+                        workspaces,
+                        endpoint,
+                        config,
+                        gitStates,
+                        agentDrafts,
+                        agentModes,
+                    ),
                 },
             ]);
             await Promise.all([...sessions.values()].map((entry) => loadSession(entry)));
@@ -629,6 +698,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 });
                 return;
             }
+            case "agent.context.updated": {
+                const entry = sessions.get(event.payload.agentId);
+                if (entry !== undefined) {
+                    entry.context = event.payload.context;
+                    publishSession(entry);
+                }
+                return;
+            }
+            case "agent.draft.updated":
+                adoptDraft(event.payload.agentId, event.payload.draft);
+                return;
             case "run.started":
                 acceptMessages(
                     event.payload.agentId,
@@ -661,12 +741,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 options.onSessionFinished?.(event.payload.agentId);
                 return;
             case "message.created":
-                createMessage(
-                    event.payload.agentId,
-                    event.payload.message,
-                    event.payload.runId,
-                    event.payload.mutationId,
-                );
+                createMessage(event.payload.agentId, event.payload.message, event.payload.runId);
                 return;
             case "message.updated":
                 updateMessageSnapshot(
@@ -772,27 +847,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         publishSession(entry);
     };
 
-    const updateMessage = (
-        agentId: string,
-        message: Message,
-        runId: string | null,
-        optimisticId?: string,
-    ): void => {
+    const updateMessage = (agentId: string, message: Message, runId: string | null): void => {
+        if (message.role === "user") sendConfirmations.get(message.id)?.();
         const entry = sessions.get(agentId);
         if (entry === undefined) return;
-        const current = entry.messages.get(message.id);
-        const optimistic =
-            optimisticId === undefined ? undefined : entry.messages.get(optimisticId);
-        if (optimisticId !== undefined && optimisticId !== message.id) {
-            entry.messages.delete(optimisticId);
+        entry.messages.set(message.id, { message, runId });
+        if (message.role === "user") {
+            entry.mode = message.mode;
+            agentModes.set(agentId, message.mode);
+            const intended = intendedModes.get(agentId);
+            if (intended !== undefined && modesEqual(intended, message.mode)) {
+                intendedModes.delete(agentId);
+            }
+            publishGroups();
         }
-        entry.messages.set(message.id, {
-            message,
-            runId,
-            ...(current?.elementId === undefined && optimistic === undefined
-                ? {}
-                : { elementId: current?.elementId ?? optimistic?.elementId ?? optimisticId }),
-        });
         publishSession(entry);
     };
 
@@ -823,12 +891,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         updateMessage(agentId, { ...message, content: merged.content }, runId);
     };
 
-    const createMessage = (
-        agentId: string,
-        message: Message,
-        runId: string | null,
-        optimisticId?: string,
-    ): void => {
+    const createMessage = (agentId: string, message: Message, runId: string | null): void => {
         const entry = sessions.get(agentId);
         const current = entry?.messages.get(message.id);
         /*
@@ -847,7 +910,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             return;
         }
         if (entry !== undefined) entry.messageBlockOffsets.set(message.id, 0);
-        updateMessage(agentId, message, runId, optimisticId);
+        updateMessage(agentId, message, runId);
     };
 
     const acceptMessages = (
@@ -861,7 +924,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             const current = entry.messages.get(messageId);
             if (current?.message.role !== "user") continue;
             entry.messages.set(messageId, {
-                elementId: current.elementId,
                 message: {
                     ...current.message,
                     status: "accepted",
@@ -1039,12 +1101,39 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const deadlineSignal = (): AbortSignal =>
         AbortSignal.any([rootController.signal, AbortSignal.timeout(MUTATION_RESPONSE_TIMEOUT_MS)]);
 
+    const sendMessageWithRetry = async (
+        sessionId: string,
+        request: SendMessageRequest,
+        confirmed: Promise<void>,
+    ): Promise<SendMessageResponse | undefined> => {
+        let retryMs = INITIAL_SEND_RETRY_MS;
+        for (let attempt = 1; ; attempt += 1) {
+            try {
+                return await Promise.race([
+                    client.sendMessage(sessionId, request, { signal: deadlineSignal() }),
+                    confirmed.then(() => undefined),
+                ]);
+            } catch (error) {
+                const retryable =
+                    !(error instanceof HappyAgentApiError) ||
+                    error.status === 408 ||
+                    error.status === 429 ||
+                    error.status >= 500;
+                if (rootController.signal.aborted || !retryable || attempt >= SEND_ATTEMPTS) {
+                    throw error;
+                }
+                await wait(retryMs, rootController.signal);
+                retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
+            }
+        }
+    };
+
     const mutation = <T>(
         action: MutationAction,
         mutationId: string,
         request: () => Promise<T>,
         applied?: (value: T) => void,
-        rejected?: () => void,
+        rejected?: () => boolean | void,
         sessionId?: string,
         queueKey = mutationId,
     ): string => {
@@ -1063,14 +1152,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             })
             .catch((error: unknown) => {
                 if (!rootController.signal.aborted) {
-                    rejected?.();
+                    const shouldReport = rejected?.() !== false;
                     const timedOut = error instanceof DOMException && error.name === "TimeoutError";
-                    reportMutationFailure(
-                        action,
-                        mutationId,
-                        timedOut ? new Error("The agent did not answer in time.") : error,
-                        sessionId,
-                    );
+                    if (shouldReport) {
+                        reportMutationFailure(
+                            action,
+                            mutationId,
+                            timedOut ? new Error("The agent did not answer in time.") : error,
+                            sessionId,
+                        );
+                    }
                 }
             })
             .finally(() => {
@@ -1101,12 +1192,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             return mutationId;
         }
         const previousMode = intendedModes.get(sessionId);
-        const mode = change(modeOf(agent, config, previousMode));
+        const previousDraft =
+            agentDrafts.get(sessionId) ?? ({ value: null, updatedAt: null } as const);
+        const mode = change(modeOf(config, previousDraft, agentModes.get(sessionId), previousMode));
+        const updatedAt = now();
+        const draft: AgentDraftSnapshot = {
+            value: { ...mode, text: previousDraft.value?.text ?? "" },
+            updatedAt,
+        };
         intendedModes.set(sessionId, mode);
         const revision = (draftRevisions.get(sessionId) ?? 0) + 1;
         draftRevisions.set(sessionId, revision);
-        const entry = sessions.get(sessionId);
-        if (entry !== undefined) publishSession(entry);
+        replaceDraft(sessionId, draft);
         return mutation(
             action,
             mutationId,
@@ -1114,24 +1211,24 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 client.saveAgentDraft(
                     sessionId,
                     {
-                        draft: { ...mode, text: agent.draft?.text ?? "" },
+                        draft: draft.value,
                         mutationId,
-                        updatedAt: now(),
+                        updatedAt,
                     },
                     { signal: rootController.signal },
                 ),
-            ({ agent: updated }) => {
+            ({ draft: saved }) => {
                 if (draftRevisions.get(sessionId) !== revision) return;
                 draftRevisions.delete(sessionId);
                 intendedModes.delete(sessionId);
-                adoptAgent(updated);
+                replaceDraft(sessionId, saved);
             },
             () => {
                 if (draftRevisions.get(sessionId) !== revision) return;
                 draftRevisions.delete(sessionId);
                 if (previousMode === undefined) intendedModes.delete(sessionId);
                 else intendedModes.set(sessionId, previousMode);
-                if (entry !== undefined) publishSession(entry);
+                replaceDraft(sessionId, previousDraft);
             },
             sessionId,
             `agent:${sessionId}`,
@@ -1387,7 +1484,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     `agent:${sessionId}`,
                 );
             }
-            if (config !== undefined) intendedModes.set(sessionId, modeFromInput(input, config));
+            if (config !== undefined) {
+                const mode = modeFromInput(input, config);
+                intendedModes.set(sessionId, mode);
+                agentModes.set(sessionId, mode);
+            }
             const workspace = workspaceOf(workspaceId);
             const createdAt = now();
             if (workspace !== undefined) {
@@ -1401,9 +1502,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     subagents: { total: 0, running: 0 },
                     processes: { running: 0 },
                     pendingQuestionId: null,
-                    lastMode: null,
                     unread: null,
-                    draft: null,
                     orderKey: sessionId,
                     lastCursor: cursor ?? "",
                     version: sessionId,
@@ -1433,6 +1532,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 },
                 () => {
                     intendedModes.delete(sessionId);
+                    agentModes.delete(sessionId);
+                    agentDrafts.delete(sessionId);
                     draftRevisions.delete(sessionId);
                     workspaces = workspaces.map((candidate) =>
                         candidate.id === workspaceId
@@ -1491,7 +1592,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 return mutationId;
             }
             const input = typeof message === "string" ? { text: message } : message;
-            const mode = modeOf(agent, config, intendedModes.get(sessionId));
+            const mode = modeOf(
+                config,
+                agentDrafts.get(sessionId),
+                agentModes.get(sessionId),
+                intendedModes.get(sessionId),
+            );
             const content = input.content?.map((block) =>
                 block.type === "image"
                     ? {
@@ -1506,6 +1612,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             // than waiting behind it, and on an idle agent the daemon treats
             // steer and queue identically.
             const delivery = "steer" as const;
+            let confirmSend!: () => void;
+            const confirmed = new Promise<void>((resolve) => {
+                confirmSend = resolve;
+            });
+            sendConfirmations.set(mutationId, confirmSend);
             const entry = sessions.get(sessionId);
             if (entry !== undefined) {
                 entry.messages.set(mutationId, {
@@ -1520,6 +1631,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         runId: null,
                     },
                     runId: null,
+                    pendingSend: true,
                 });
                 publishSession(entry);
             }
@@ -1527,32 +1639,36 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 "send_message",
                 mutationId,
                 () =>
-                    client.sendMessage(
+                    sendMessageWithRetry(
                         sessionId,
                         {
+                            id: mutationId,
                             text: input.text,
                             ...(richContent.length === 0 ? {} : { content: richContent }),
                             delivery,
                             mode,
-                            mutationId,
                         },
-                        { signal: deadlineSignal() },
+                        confirmed,
                     ),
-                ({ message: sent }) => {
-                    updateMessage(sessionId, sent, sent.runId, mutationId);
-                    const intended = intendedModes.get(sessionId);
-                    if (intended !== undefined && modesEqual(intended, sent.mode)) {
-                        intendedModes.delete(sessionId);
-                        const current = sessions.get(sessionId)?.agent ?? agentOf(sessionId);
-                        if (current !== undefined) {
-                            replaceAgent({ ...current, lastMode: sent.mode });
-                        }
+                (response) => {
+                    sendConfirmations.delete(mutationId);
+                    if (response !== undefined) {
+                        updateMessage(sessionId, response.message, response.message.runId);
                     }
                 },
                 () => {
+                    sendConfirmations.delete(mutationId);
                     const current = sessions.get(sessionId);
-                    current?.messages.delete(mutationId);
-                    if (current !== undefined) publishSession(current);
+                    const message = current?.messages.get(mutationId);
+                    if (current !== undefined && message?.pendingSend) {
+                        current.messages.delete(mutationId);
+                        publishSession(current);
+                        return true;
+                    }
+                    // The event stream or bootstrap already confirmed this ID;
+                    // a lost HTTP response must not turn a delivered message
+                    // into a visible failure.
+                    return message === undefined;
                 },
                 sessionId,
                 `agent:${sessionId}`,
@@ -1648,16 +1764,22 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 return mutationId;
             }
             const value: DraftUpdate = typeof update === "string" ? { draft: update } : update;
-            const mode = modeOf(agent, config, intendedModes.get(sessionId));
-            const priorAgent = agent;
+            const mode = modeOf(
+                config,
+                agentDrafts.get(sessionId),
+                agentModes.get(sessionId),
+                intendedModes.get(sessionId),
+            );
+            const previousDraft =
+                agentDrafts.get(sessionId) ?? ({ value: null, updatedAt: null } as const);
             const updatedAt = value.updatedAt ?? now();
+            const draft: AgentDraftSnapshot = {
+                value: value.draft === null ? null : { ...mode, text: value.draft },
+                updatedAt,
+            };
             const revision = (draftRevisions.get(sessionId) ?? 0) + 1;
             draftRevisions.set(sessionId, revision);
-            replaceAgent({
-                ...agent,
-                draft: value.draft === null ? null : { ...mode, text: value.draft },
-                updatedAt,
-            });
+            replaceDraft(sessionId, draft);
             return mutation(
                 "set_draft",
                 mutationId,
@@ -1665,31 +1787,21 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     client.saveAgentDraft(
                         sessionId,
                         {
-                            draft: value.draft === null ? null : { ...mode, text: value.draft },
+                            draft: draft.value,
                             mutationId,
                             updatedAt,
                         },
                         { signal: rootController.signal },
                     ),
-                ({ agent: updated }) => {
+                ({ draft: saved }) => {
                     if (draftRevisions.get(sessionId) !== revision) return;
                     draftRevisions.delete(sessionId);
-                    const current = sessions.get(sessionId)?.agent ?? agentOf(sessionId);
-                    if (
-                        current === undefined ||
-                        current.version === priorAgent.version ||
-                        current.version.localeCompare(updated.version) <= 0
-                    ) {
-                        adoptAgent(updated);
-                    }
+                    replaceDraft(sessionId, saved);
                 },
                 () => {
                     if (draftRevisions.get(sessionId) !== revision) return;
                     draftRevisions.delete(sessionId);
-                    const current = sessions.get(sessionId)?.agent ?? agentOf(sessionId);
-                    if (current?.version === priorAgent.version) {
-                        replaceAgent({ ...current, draft: priorAgent.draft });
-                    }
+                    replaceDraft(sessionId, previousDraft);
                 },
                 sessionId,
                 `agent:${sessionId}`,
@@ -1877,6 +1989,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             for (const entry of sessions.values()) entry.subscribers.clear();
             sessions.clear();
             intendedModes.clear();
+            agentModes.clear();
+            agentDrafts.clear();
+            sendConfirmations.clear();
             draftRevisions.clear();
             mutationQueues.clear();
             sessionMutationCounts.clear();
@@ -1899,7 +2014,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 { before: token, limit: DEFAULT_HISTORY_LIMIT, omitToolData: false },
                 { signal: rootController.signal },
             );
-            ingestHistory(entry, page.runs, page.pending);
+            ingestHistory(entry, page.runs, []);
             entry.hasMore = page.hasMore;
         } catch (error) {
             entry.loadMoreError = error instanceof Error ? error.message : String(error);
@@ -2135,6 +2250,8 @@ function agentIdOfEvent(event: HappyAgentEvent): string | undefined {
         case "agent.created":
             return event.payload.agent.id;
         case "agent.updated":
+        case "agent.context.updated":
+        case "agent.draft.updated":
         case "run.started":
         case "run.boundary":
         case "run.finished":

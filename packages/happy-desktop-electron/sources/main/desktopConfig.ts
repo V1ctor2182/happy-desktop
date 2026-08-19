@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type {
+    DesktopAppearanceMode,
     DesktopConfig,
     DesktopDefaultModel,
     DesktopModelIdentity,
@@ -24,6 +25,7 @@ const PERMISSION_MODES: ReadonlySet<string> = new Set([
 class InvalidDesktopConfigError extends Error {}
 
 export const desktopConfigEmpty: DesktopConfig = {
+    appearance: "system",
     defaultEffort: DEFAULT_EFFORT,
     defaultPermissionMode: "auto",
     modelPreferences: [],
@@ -107,6 +109,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
     )
         throw invalidConfigError();
     const allowed = new Set([
+        "appearance",
         "defaultEffort",
         "defaultModel",
         "defaultPermissionMode",
@@ -116,6 +119,8 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
     ]);
     if (Object.keys(candidate).some((key) => !allowed.has(key))) throw invalidConfigError();
 
+    const appearance =
+        candidate.appearance === undefined ? "system" : appearanceModeParse(candidate.appearance);
     const defaultModel =
         candidate.defaultModel === undefined
             ? undefined
@@ -135,6 +140,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
             ? undefined
             : modelIdentityOnlyParse(candidate.lastPickedModel);
     if (
+        !appearance ||
         (candidate.defaultModel !== undefined && !defaultModel) ||
         !defaultEffort ||
         !defaultPermissionMode ||
@@ -153,6 +159,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         modelPreferences.push(preference);
     }
     return {
+        appearance,
         defaultEffort,
         ...(defaultModel ? { defaultModel } : {}),
         defaultPermissionMode,
@@ -160,6 +167,10 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         modelPreferences,
         version: CONFIG_VERSION,
     };
+}
+
+function appearanceModeParse(value: unknown): DesktopAppearanceMode | undefined {
+    return value === "dark" || value === "light" || value === "system" ? value : undefined;
 }
 
 function defaultModelParse(candidate: unknown): DesktopDefaultModel | undefined {

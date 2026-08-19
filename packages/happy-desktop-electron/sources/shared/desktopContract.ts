@@ -32,10 +32,12 @@ export interface DesktopModelPreference extends DesktopModelIdentity {
 }
 
 /**
- * Machine-local desktop preferences. Model ids are provider-qualified because
- * the same model can be offered through more than one account/provider.
+ * Machine-local desktop preferences. Appearance belongs here because it must
+ * survive every window and Rig lifetime. Model ids are provider-qualified
+ * because the same model can be offered through more than one account/provider.
  */
 export interface DesktopConfig {
+    readonly appearance: DesktopAppearanceMode;
     readonly defaultModel?: DesktopDefaultModel;
     readonly defaultEffort: string;
     readonly defaultPermissionMode: DesktopPermissionMode;

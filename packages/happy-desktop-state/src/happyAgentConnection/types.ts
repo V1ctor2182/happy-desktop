@@ -292,9 +292,10 @@ export interface SessionUsage {
     totalTokens: number;
     totalCost: number;
     context?: {
-        modelId: string;
+        modelId?: string;
         providerId: string;
         totalTokens: number;
+        contextWindow: number | null;
         approximate: boolean;
     };
     quotas: readonly {

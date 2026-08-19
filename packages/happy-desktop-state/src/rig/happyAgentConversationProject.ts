@@ -751,10 +751,13 @@ function presentationProject(
                 input: presentation.input,
                 backgroundProcessId: presentation.terminalId,
             };
-        // A search outside the workspace, which this surface has no row for yet.
-        // Its result text is what the reader sees until it does.
         case "search":
-            return undefined;
+            return {
+                type: "search",
+                target: presentation.target,
+                query: presentation.query,
+                ...(presentation.sources === undefined ? {} : { sources: presentation.sources }),
+            };
     }
 }
 

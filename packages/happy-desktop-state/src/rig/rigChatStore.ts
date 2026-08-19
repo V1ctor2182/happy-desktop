@@ -154,9 +154,12 @@ function transcriptUsageProject(usage: SessionUsage): RigSessionUsage {
         ...(usage.context
             ? {
                   context: {
-                      modelId: usage.context.modelId,
+                      ...(usage.context.modelId === undefined
+                          ? {}
+                          : { modelId: usage.context.modelId }),
                       providerId: usage.context.providerId,
                       totalTokens: usage.context.totalTokens,
+                      contextWindow: usage.context.contextWindow,
                       approximate: usage.context.approximate,
                   },
               }
@@ -290,12 +293,31 @@ export function detachedProcessIdsUpdate(
 function contextGaugeDerive(
     catalog: RigModelCatalog,
     context: RigSessionUsage["context"],
+    selection?: { readonly modelId: string; readonly providerId: string },
 ): RigContextGauge | undefined {
-    if (!context) return undefined;
-    const total = catalog.providers
-        .find((provider) => provider.id === context.providerId)
-        ?.models.find((model) => model.id === context.modelId)?.contextWindow;
-    if (total === undefined || total <= 0) return undefined;
+    if (!context) {
+        if (selection === undefined) return undefined;
+        const total = catalog.providers
+            .find((provider) => provider.id === selection.providerId)
+            ?.models.find((model) => model.id === selection.modelId)?.contextWindow;
+        if (total === undefined || total <= 0) return undefined;
+        return {
+            usedTokens: 0,
+            remainingTokens: total,
+            totalTokens: total,
+            remainingFraction: 1,
+            approximate: false,
+            measured: false,
+        };
+    }
+    const catalogWindow =
+        context.modelId === undefined
+            ? undefined
+            : catalog.providers
+                  .find((provider) => provider.id === context.providerId)
+                  ?.models.find((model) => model.id === context.modelId)?.contextWindow;
+    const total = context.contextWindow ?? catalogWindow;
+    if (total == null || total <= 0) return undefined;
     const usedTokens = Math.max(0, Math.min(context.totalTokens, total));
     const remainingTokens = total - usedTokens;
     return {
@@ -749,11 +771,16 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             usagePanelOpen,
             ...(usage === undefined ? {} : { usage }),
             usageLoading: false,
-            ...(usage?.context === undefined
-                ? {}
-                : {
-                      contextGauge: contextGaugeDerive(deps.catalog, usage.context),
-                  }),
+            contextGauge: contextGaugeDerive(
+                deps.catalog,
+                usage?.context,
+                connected === undefined
+                    ? undefined
+                    : {
+                          modelId: connected.modelId,
+                          providerId: connected.providerId,
+                      },
+            ),
             activityPanelOpen,
             ...(openImageProject(entries, openImageRef) === undefined
                 ? {}

@@ -10,6 +10,8 @@ export interface ContextMeterProps {
     readonly totalTokens: number;
     /** True when the underlying count is estimated rather than reported. */
     readonly approximate?: boolean;
+    /** False while the model window is known but no provider measurement exists yet. */
+    readonly measured?: boolean;
 }
 
 /** Above this share used, the bar asks for a compaction; above the second, it insists. */
@@ -91,16 +93,17 @@ function tokensFormat(tokens: number): string {
  *
  * It rides at the end of the composer's control row, beside the access mode and
  * the speed, because it belongs to the message being written: the reader is
- * about to type one more and wants to know whether it still fits. At rest only
- * the bar shows — the proportion is the whole answer at a glance — and pointing
- * at it slides the percentage and the token counts out to its left.
+ * about to type one more and wants to know whether it still fits. Its percentage
+ * and token count stay visible at rest; context pressure is important enough
+ * that discovering the meter must not depend on noticing or hovering a hairline.
  *
  * Quiet by default. It takes colour only once compacting is the next thing to
  * do, so the colour means something when it appears.
  */
 export function ContextMeter(props: ContextMeterProps) {
     const total = Math.max(0, props.totalTokens);
-    const used = Math.max(0, Math.min(props.usedTokens, total));
+    const measured = props.measured !== false;
+    const used = measured ? Math.max(0, Math.min(props.usedTokens, total)) : 0;
     const fraction = total === 0 ? 0 : used / total;
     const percent = Math.round(fraction * 100);
     const tone =
@@ -111,7 +114,11 @@ export function ContextMeter(props: ContextMeterProps) {
               : "ample";
     return (
         <div
-            aria-label={`${tokensFormat(used)} of ${tokensFormat(total)} context tokens used${props.approximate ? ", approximate" : ""}`}
+            aria-label={
+                measured
+                    ? `${tokensFormat(used)} of ${tokensFormat(total)} context tokens used${props.approximate ? ", approximate" : ""}`
+                    : `Context measurement pending for a ${tokensFormat(total)} token window`
+            }
             className={["happy2-context-meter", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="context-meter"
             data-testid={props["data-testid"]}
@@ -121,15 +128,18 @@ export function ContextMeter(props: ContextMeterProps) {
             }}
             role="img"
             style={props.style}
-            title={`${tokensFormat(used)} of ${tokensFormat(total)} context tokens used${props.approximate ? " (approximate)" : ""}${tone === "ample" ? "" : " — compact the conversation to free room"}`}
+            title={
+                measured
+                    ? `${tokensFormat(used)} of ${tokensFormat(total)} context tokens used${props.approximate ? " (approximate)" : ""}${tone === "ample" ? "" : " — compact the conversation to free room"}`
+                    : `Waiting for the first context measurement (${tokensFormat(total)} token window)`
+            }
         >
             <span aria-hidden="true" className="happy2-context-meter__readout">
                 <span className="happy2-context-meter__percent">
-                    {props.approximate ? "~" : ""}
-                    {percent}%
+                    {measured ? `${props.approximate ? "~" : ""}${String(percent)}%` : "—"}
                 </span>
                 <span className="happy2-context-meter__tokens">
-                    {tokensFormat(used)}/{tokensFormat(total)}
+                    {measured ? tokensFormat(used) : "—"}/{tokensFormat(total)}
                 </span>
             </span>
             <span

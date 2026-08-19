@@ -9,6 +9,7 @@ import type {
 } from "happy-desktop-state";
 import { RIG_DEFAULT_THINKING_LEVEL } from "happy-desktop-state";
 import type {
+    DesktopAppearanceMode,
     DesktopConfig,
     DesktopDefaultModel,
     DesktopModelPreference,
@@ -28,20 +29,24 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set([
     "ultra",
 ]);
 
-export interface DesktopModelSettings {
+export interface DesktopPreferences {
+    readonly initialAppearance: DesktopAppearanceMode;
     readonly initialSettings: RigSettingsInitial;
     readonly preferencePersistence: RigModelPreferencePersistence;
+    appearanceChanged(mode: DesktopAppearanceMode): void;
     settingsChanged(snapshot: RigSettingsSnapshot): void;
 }
 
 /**
- * Adapts the desktop's one JSON document to the two framework-independent state
- * stores that consume it: explicit defaults and per-model picker memory.
+ * Adapts the desktop's one JSON document to the framework-independent product
+ * stores that consume it: appearance, explicit defaults, and per-model picker
+ * memory. One adapter owns the current document so concurrent store changes
+ * preserve each other's fields before the main process serializes their writes.
  */
-export function desktopModelSettingsCreate(
+export function desktopPreferencesCreate(
     bridge: HappyDesktopBridge,
     initial: DesktopConfig,
-): DesktopModelSettings {
+): DesktopPreferences {
     let config = initial;
     const preferenceListeners = new Set<() => void>();
 
@@ -51,7 +56,7 @@ export function desktopModelSettingsCreate(
         // Invoke immediately; the privileged store is the single serialization
         // authority, so every quick selection enters its ordered write queue.
         void bridge.desktopConfigWrite(next).catch((error: unknown) => {
-            console.error("Could not save desktop model settings.", error);
+            console.error("Could not save desktop preferences.", error);
         });
     };
 
@@ -67,8 +72,13 @@ export function desktopModelSettingsCreate(
     };
 
     return {
+        initialAppearance: config.appearance,
         initialSettings: settingsInitial(config),
         preferencePersistence,
+        appearanceChanged(mode) {
+            if (config.appearance === mode) return;
+            commit({ ...config, appearance: mode });
+        },
         settingsChanged(snapshot) {
             const nextEffort = snapshot.defaultEffort;
             const nextPermissionMode = snapshot.defaultPermissionMode;
@@ -110,6 +120,7 @@ export function desktopModelSettingsCreate(
                 ];
             }
             commit({
+                appearance: config.appearance,
                 defaultEffort: nextEffort,
                 ...(nextDefault ? { defaultModel: nextDefault } : {}),
                 defaultPermissionMode: nextPermissionMode,
@@ -205,6 +216,7 @@ function configFromPreferenceDocument(
             left.modelId.localeCompare(right.modelId),
     );
     return {
+        appearance: current.appearance,
         defaultEffort: document.defaultEffort ?? current.defaultEffort,
         ...(document.defaultSelection
             ? {

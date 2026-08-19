@@ -1,6 +1,8 @@
 import {
     HAPPY_AGENT_PROTOCOL_VERSION,
     type Agent,
+    type AgentContextUsage,
+    type AgentDraftSnapshot,
     type DaemonConfig,
     type EventStreamFrame,
     type EventStreamOptions,
@@ -122,6 +124,7 @@ function configDefault(): DaemonConfig {
         mcpServers: {},
         models: {
             "test-model": {
+                contextWindow: 100_000,
                 defaultEffort: "medium",
                 efforts: ["low", "medium", "high"],
                 name: "Test Model",
@@ -232,6 +235,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     const projects: Project[] = [];
     const workspaces: Workspace[] = [];
     const agents = new Map<string, Agent>();
+    const contexts = new Map<string, AgentContextUsage | null>();
+    const drafts = new Map<string, AgentDraftSnapshot>();
+    const modes = new Map<string, MessageMode | null>();
     const histories = new Map<string, { runs: HistoryRun[]; pending: UserMessage[] }>();
     const hasMore = new Map<string, boolean>();
     const questions = new Map<string, Question | null>();
@@ -391,12 +397,24 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (query.before !== undefined) {
                 const boundary = runs.findIndex((run) => run.id === query.before);
                 runs = boundary < 0 ? [] : runs.slice(0, boundary);
-                return { runs, pending: [...history.pending], hasMore: false };
+                return { runs, hasMore: false };
             }
             return {
                 runs,
-                pending: [...history.pending],
                 hasMore: hasMore.get(agentId) ?? false,
+            };
+        },
+        async getAgentBootstrap(agentId: string, ...rest: unknown[]) {
+            await record("getAgentBootstrap", [agentId, ...rest]);
+            const history = historyOf(agentId);
+            return {
+                agent: agentRequired(agentId),
+                context: contexts.get(agentId) ?? null,
+                cursor: latestCursor,
+                draft: drafts.get(agentId) ?? { value: null, updatedAt: null },
+                mode: modes.get(agentId) ?? null,
+                pending: [...history.pending],
+                usage: {},
             };
         },
         async getAgent(agentId: string, ...rest: unknown[]) {
@@ -413,7 +431,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async getAgentUsage(agentId: string, ...rest: unknown[]) {
             await record("getAgentUsage", [agentId, ...rest]);
-            return { usage: {} };
+            return { context: contexts.get(agentId) ?? null, usage: {} };
         },
         async getProject(projectId: string, ...rest: unknown[]) {
             await record("getProject", [projectId, ...rest]);
@@ -431,6 +449,12 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async sendMessage(agentId: string, request: SendMessageRequest, ...rest: unknown[]) {
             await record("sendMessage", [agentId, request, ...rest]);
+            const history = historyOf(agentId);
+            const existing = [
+                ...history.pending,
+                ...history.runs.flatMap((run) => run.messages),
+            ].find((message) => message.id === request.id);
+            if (existing?.role === "user") return { message: existing, cursor: latestCursor };
             const message: UserMessage = {
                 content: [
                     { type: "text", text: request.text },
@@ -438,18 +462,17 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 ],
                 createdAt: 1,
                 delivery: request.delivery ?? "queue",
-                id: `server-${String((idCounter += 1))}`,
+                id: request.id ?? `server-${String((idCounter += 1))}`,
                 mode: request.mode,
                 role: "user",
                 runId: null,
                 status: "pending",
             };
-            historyOf(agentId).pending.push(message);
+            history.pending.push(message);
             const event = emit("message.created", {
                 agentId,
                 message,
                 runId: null,
-                ...(request.mutationId === undefined ? {} : { mutationId: request.mutationId }),
             });
             // A held "sendMessage:respond" gate delays only the HTTP response,
             // letting a test deliver the caused event before the reply.
@@ -459,8 +482,22 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async saveAgentDraft(agentId: string, ...rest: unknown[]) {
             await record("saveAgentDraft", [agentId, ...rest]);
-            const request = rest[0] as { draft: Agent["draft"] };
-            return { agent: agentBump(agentId, { draft: request.draft }) };
+            const request = rest[0] as {
+                draft: AgentDraftSnapshot["value"];
+                mutationId?: string;
+                updatedAt?: number;
+            };
+            const draft: AgentDraftSnapshot = {
+                value: request.draft,
+                updatedAt: request.updatedAt ?? 1,
+            };
+            drafts.set(agentId, draft);
+            emit("agent.draft.updated", {
+                agentId,
+                draft,
+                ...(request.mutationId === undefined ? {} : { mutationId: request.mutationId }),
+            });
+            return { draft };
         },
         async answerQuestion(agentId: string, questionId: string, ...rest: unknown[]) {
             await record("answerQuestion", [agentId, questionId, ...rest]);
@@ -605,9 +642,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         const agent: Agent = {
             archivedAt: null,
             createdAt: 1,
-            draft: null,
             lastCursor: latestCursor,
-            lastMode: MODE,
             orderKey: id,
             parentAgentId: null,
             pendingQuestionId: null,
@@ -624,6 +659,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             id,
         };
         agents.set(id, agent);
+        contexts.set(id, null);
+        drafts.set(id, { value: null, updatedAt: null });
+        modes.set(id, MODE);
         return agent;
     }
 

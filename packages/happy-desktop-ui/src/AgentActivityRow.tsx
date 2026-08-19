@@ -139,6 +139,7 @@ function toolVerb(
     if (status === "stopped") return "Stopped";
     const active = status === "running";
     const lower = name.toLowerCase();
+    if (presentation?.type === "search") return active ? "Searching" : "Searched";
     if (presentation?.type === "exploration") return active ? "Exploring" : "Explored";
     // Typing into a terminal that is already running is not the same act as
     // starting one, and it is certainly not editing a file: `write_stdin` would
@@ -197,6 +198,7 @@ function toolGlyph(
     failed: boolean,
 ): ToolGlyph {
     if (failed) return { set: "octicons", name: "alert" };
+    if (presentation?.type === "search") return { set: "house", name: "globe" };
     if (presentation?.type === "exploration") return { set: "house", name: "search" };
     if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
     const lower = name.toLowerCase();
@@ -503,6 +505,9 @@ function AgentToolActivity(props: {
     if (mcp) {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = `${mcp.server} · ${mcp.tool}`;
+    } else if (presentation?.type === "search") {
+        verb = toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = presentation.query;
     } else if (presentation?.type === "exploration") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = explorationSummary(presentation);
@@ -557,9 +562,11 @@ function AgentToolActivity(props: {
         primaryText,
         presentation?.type === "execCommand"
             ? presentation.output
-            : presentation === undefined
-              ? tool.display
-              : undefined,
+            : presentation?.type === "search"
+              ? presentation.sources?.map((source) => `${source.title}\n${source.url}`).join("\n")
+              : presentation === undefined
+                ? tool.display
+                : undefined,
     ]
         .map((part) => part?.replace(/\n+$/, ""))
         .filter((part): part is string => part !== undefined && part.length > 0)
@@ -569,11 +576,13 @@ function AgentToolActivity(props: {
         ? false
         : presentation?.type === "fileDiff"
           ? presentation.files.length > 0
-          : presentation?.type === "execCommand"
-            ? presentation.output.trim().length > 0
-            : presentation?.type === "backgroundTerminalInteraction"
-              ? presentation.input.trim().length > 0
-              : Boolean(argsJson);
+          : presentation?.type === "search"
+            ? (presentation.sources?.length ?? 0) > 0
+            : presentation?.type === "execCommand"
+              ? presentation.output.trim().length > 0
+              : presentation?.type === "backgroundTerminalInteraction"
+                ? presentation.input.trim().length > 0
+                : Boolean(argsJson);
 
     // MCP results render as capped dim rows (≤5, then "… N more"); an interrupted
     // call collapses to a single "Interrupted." row, matching the TUI.
@@ -862,6 +871,21 @@ function AgentToolActivity(props: {
                             ))}
                         </div>
                     ) : null}
+
+                    {presentation?.type === "search"
+                        ? presentation.sources?.map((source) => (
+                              <ChildRow key={source.url}>
+                                  <a
+                                      className="happy2-agent-activity__source"
+                                      href={source.url}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                  >
+                                      {source.title || source.url}
+                                  </a>
+                              </ChildRow>
+                          ))
+                        : null}
 
                     {argsJson ? (
                         <pre

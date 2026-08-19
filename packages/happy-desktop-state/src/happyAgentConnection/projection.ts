@@ -1,6 +1,8 @@
 import type {
     Agent,
     AgentActivityResponse,
+    AgentContextUsage,
+    AgentDraftSnapshot,
     DaemonConfig,
     GitState,
     Message,
@@ -28,8 +30,8 @@ import type {
 export interface TranscriptMessage {
     message: Message;
     runId: string | null;
-    /** Stable local row identity retained when the daemon assigns its message ID. */
-    elementId?: string;
+    /** Present only until this client observes the durable message with the same ID. */
+    pendingSend?: true;
 }
 
 export interface SessionProjectionInput {
@@ -39,7 +41,10 @@ export interface SessionProjectionInput {
     endpoint: string;
     hasMore: boolean;
     messages: readonly TranscriptMessage[];
-    mode?: MessageMode;
+    intendedMode?: MessageMode;
+    mode?: MessageMode | null;
+    draft?: AgentDraftSnapshot;
+    context?: AgentContextUsage | null;
     activity?: AgentActivityResponse;
     question?: Question | null;
     runs: readonly Run[];
@@ -57,22 +62,27 @@ export function defaultMode(config: DaemonConfig): MessageMode {
     };
 }
 
-export function modeOf(agent: Agent, config: DaemonConfig, intended?: MessageMode): MessageMode {
+export function modeOf(
+    config: DaemonConfig,
+    draft?: AgentDraftSnapshot,
+    stored?: MessageMode | null,
+    intended?: MessageMode,
+): MessageMode {
     if (intended) return intended;
-    if (agent.draft)
+    if (draft?.value)
         return {
-            effort: agent.draft.effort,
-            modelId: agent.draft.modelId,
-            permissionMode: agent.draft.permissionMode,
-            providerId: agent.draft.providerId,
-            serviceTier: agent.draft.serviceTier,
+            effort: draft.value.effort,
+            modelId: draft.value.modelId,
+            permissionMode: draft.value.permissionMode,
+            providerId: draft.value.providerId,
+            serviceTier: draft.value.serviceTier,
         };
-    return agent.lastMode ?? defaultMode(config);
+    return stored ?? defaultMode(config);
 }
 
 export function projectSession(input: SessionProjectionInput): SessionState {
     const { agent, config, workspace } = input;
-    const mode = modeOf(agent, config, input.mode);
+    const mode = modeOf(config, input.draft, input.mode, input.intendedMode);
     const activeRun = newestRunningRun(input.runs);
     const projectId = workspace?.projectId;
     const scope =
@@ -82,7 +92,9 @@ export function projectSession(input: SessionProjectionInput): SessionState {
               ? ({ kind: "project", projectId } as const)
               : ({ kind: "workspace", projectId, workspaceId: workspace.id } as const);
     const usage =
-        input.usage === undefined ? undefined : projectUsage(input.usage, mode.providerId);
+        input.usage === undefined
+            ? undefined
+            : projectUsage(input.usage, mode.providerId, input.context);
     const pendingUserInputs =
         input.question?.status === "pending" ? [projectQuestion(input.question)] : [];
 
@@ -107,9 +119,14 @@ export function projectSession(input: SessionProjectionInput): SessionState {
         ...(workspace?.kind === "root" ? {} : { workspaceId: workspace?.id }),
         ...(agent.orderKey === null ? {} : { orderKey: agent.orderKey }),
         cwd: workspacePath(workspace),
-        ...(agent.draft === null
+        ...(input.draft?.value == null
             ? {}
-            : { draft: agent.draft.text, draftUpdatedAt: agent.updatedAt }),
+            : {
+                  draft: input.draft.value.text,
+                  ...(input.draft.updatedAt === null
+                      ? {}
+                      : { draftUpdatedAt: input.draft.updatedAt }),
+              }),
         modelId: mode.modelId,
         providerId: mode.providerId,
         ...(agent.title === null ? {} : { title: agent.title }),
@@ -225,6 +242,8 @@ export function projectGroups(
     endpoint: string,
     config: DaemonConfig,
     gitStates: ReadonlyMap<string, GitState> = new Map(),
+    drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
+    modes: ReadonlyMap<string, MessageMode | null> = new Map(),
 ): readonly ProjectGroup[] {
     const workspacesByProject = new Map<string, Workspace[]>();
     for (const workspace of workspaces) {
@@ -244,7 +263,14 @@ export function projectGroups(
                 .filter((workspace) => workspace.id !== project.id)
                 .sort(orderCompare)
                 .map((workspace) =>
-                    projectWorkspace(workspace, endpoint, config, gitStates.get(workspace.id)),
+                    projectWorkspace(
+                        workspace,
+                        endpoint,
+                        config,
+                        gitStates.get(workspace.id),
+                        drafts,
+                        modes,
+                    ),
                 );
             const agents = (root?.agents ?? project.agents).filter(
                 (agent) => agent.archivedAt === null,
@@ -280,7 +306,16 @@ export function projectGroups(
                 workspaces: children,
                 sessions: agents
                     .sort(orderCompare)
-                    .map((agent) => projectAgent(agent, root, endpoint, config)),
+                    .map((agent) =>
+                        projectAgent(
+                            agent,
+                            root,
+                            endpoint,
+                            config,
+                            drafts.get(agent.id),
+                            modes.get(agent.id),
+                        ),
+                    ),
             };
         });
 }
@@ -306,6 +341,8 @@ function projectWorkspace(
     endpoint: string,
     config: DaemonConfig,
     gitState: GitState | undefined,
+    drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
+    modes: ReadonlyMap<string, MessageMode | null> = new Map(),
 ): WorkspaceGroup {
     const agents = workspace.agents.filter((agent) => agent.archivedAt === null);
     const git = workspaceGit(gitState);
@@ -323,7 +360,16 @@ function projectWorkspace(
         ...(git === undefined ? {} : { git }),
         sessions: agents
             .sort(orderCompare)
-            .map((agent) => projectAgent(agent, workspace, endpoint, config)),
+            .map((agent) =>
+                projectAgent(
+                    agent,
+                    workspace,
+                    endpoint,
+                    config,
+                    drafts.get(agent.id),
+                    modes.get(agent.id),
+                ),
+            ),
         usage: { totalTokens: 0 },
         unread: unreadOf(agents),
     };
@@ -334,8 +380,10 @@ function projectAgent(
     workspace: Workspace | undefined,
     endpoint: string,
     config: DaemonConfig,
+    draft?: AgentDraftSnapshot,
+    storedMode?: MessageMode | null,
 ): GroupSession {
-    const mode = modeOf(agent, config);
+    const mode = modeOf(config, draft, storedMode);
     const projectId = workspace?.projectId ?? agent.workspaceId;
     const scope =
         workspace?.kind === "root"
@@ -345,9 +393,12 @@ function projectAgent(
         archived: agent.archivedAt !== null,
         createdAt: agent.createdAt,
         cwd: workspacePath(workspace),
-        ...(agent.draft === null
+        ...(draft?.value == null
             ? {}
-            : { draft: agent.draft.text, draftUpdatedAt: agent.updatedAt }),
+            : {
+                  draft: draft.value.text,
+                  ...(draft.updatedAt === null ? {} : { draftUpdatedAt: draft.updatedAt }),
+              }),
         effort: mode.effort,
         id: agent.id,
         modelId: mode.modelId,
@@ -393,12 +444,11 @@ function projectSubagents(
     activity: AgentActivityResponse | undefined,
 ): SessionState["subagents"] {
     return (activity?.subagents ?? []).map((agent) => {
-        const mode = agent.lastMode ?? agent.draft;
         return {
             id: agent.id,
             parentSessionId: parent.id,
             description: agent.title ?? "Subagent",
-            modelId: mode?.modelId ?? "",
+            modelId: "",
             status: agent.status === "idle" ? "completed" : "running",
             depth: 1,
             createdAt: agent.createdAt,
@@ -414,7 +464,7 @@ function projectMessage(
     runStatus: Run["status"],
 ): readonly ChatElement[] {
     const { message } = entry;
-    const elementId = entry.elementId ?? message.id;
+    const elementId = message.id;
     const base = { groupId: runId, runId, createdAt: message.createdAt };
     if (message.role === "user") {
         return [
@@ -572,7 +622,11 @@ function projectToolPresentation(
     }
 }
 
-function projectUsage(usage: UsageBreakdown, currentProviderId: string): SessionUsage {
+function projectUsage(
+    usage: UsageBreakdown,
+    currentProviderId: string,
+    context?: AgentContextUsage | null,
+): SessionUsage {
     const groups: SessionUsage["groups"][number][] = [];
     let totalTokens = 0;
     for (const [providerId, models] of Object.entries(usage)) {
@@ -587,6 +641,17 @@ function projectUsage(usage: UsageBreakdown, currentProviderId: string): Session
         groups,
         totalTokens,
         totalCost: 0,
+        ...(context === undefined || context === null
+            ? {}
+            : {
+                  context: {
+                      approximate: context.approximate,
+                      contextWindow: context.contextWindow,
+                      ...(context.modelId === null ? {} : { modelId: context.modelId }),
+                      providerId: context.providerId,
+                      totalTokens: context.contextTokens,
+                  },
+              }),
         quotas: [],
     };
 }

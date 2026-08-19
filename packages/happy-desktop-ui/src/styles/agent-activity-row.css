@@ -243,6 +243,16 @@
     color: var(--status-error);
 }
 
+.happy2-agent-activity__source {
+    color: var(--text-link);
+    text-decoration: none;
+}
+
+.happy2-agent-activity__source:hover,
+.happy2-agent-activity__source:focus-visible {
+    text-decoration: underline;
+}
+
 .happy2-agent-activity__review-body {
     display: flex;
     flex-direction: column;

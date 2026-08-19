@@ -1162,6 +1162,9 @@ void app
             join(desktopRoot, "window-state.json"),
         );
         desktopConfigStore = await DesktopConfigStore.create(desktopConfigPath());
+        // Apply the remembered source before the first window is created, so
+        // its native background and Chromium guests start in the chosen theme.
+        nativeTheme.themeSource = desktopConfigStore.get().appearance;
         const connector = localRigConnectorCreate({ debug: desktopDebugLog });
         const rendererOrigin =
             desktopFlavor.kind === "local-web"

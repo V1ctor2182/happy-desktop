@@ -3467,13 +3467,14 @@ function RigConversationSurface(props: {
                        end of the same row as the access mode and the speed: the
                        reader is about to type one more message, and this is
                        where they find out whether it still fits and when to
-                       compact. Absent until both a token count and a declared
-                       window are known — a bar over a guessed denominator says
-                       nothing. */
+                       compact. Before the provider's first measurement, the
+                       declared window still appears with an empty-state count
+                       so the context surface is discoverable. */
                     trailing={
                         conversation.contextGauge ? (
                             <ContextMeter
                                 approximate={conversation.contextGauge.approximate}
+                                measured={conversation.contextGauge.measured}
                                 totalTokens={conversation.contextGauge.totalTokens}
                                 usedTokens={conversation.contextGauge.usedTokens}
                             />
@@ -3727,6 +3728,7 @@ function RigPanelComposer(props: {
                                 {conversation.contextGauge ? (
                                     <ContextMeter
                                         approximate={conversation.contextGauge.approximate}
+                                        measured={conversation.contextGauge.measured}
                                         totalTokens={conversation.contextGauge.totalTokens}
                                         usedTokens={conversation.contextGauge.usedTokens}
                                     />

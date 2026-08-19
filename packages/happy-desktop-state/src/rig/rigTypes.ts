@@ -236,9 +236,10 @@ export interface RigUsageGroup {
 
 /** Approximate context-window occupancy for the session's current model. */
 export interface RigUsageContext {
-    readonly modelId: string;
+    readonly modelId?: string;
     readonly providerId: string;
     readonly totalTokens: number;
+    readonly contextWindow?: number | null;
     /** True when the count is estimated rather than provider-reported. */
     readonly approximate: boolean;
 }
@@ -259,6 +260,8 @@ export interface RigContextGauge {
     readonly remainingFraction: number;
     /** True when the underlying token count is estimated, not provider-reported. */
     readonly approximate: boolean;
+    /** False until the provider reports the active conversation's token count. */
+    readonly measured?: boolean;
 }
 
 /** One provider rate-limit window (five-hour or weekly) with reset timing. */
