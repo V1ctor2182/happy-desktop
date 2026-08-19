@@ -115,9 +115,15 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         "defaultPermissionMode",
         "lastPickedModel",
         "modelPreferences",
+        "titleShimmerEnabled",
         "version",
     ]);
     if (Object.keys(candidate).some((key) => !allowed.has(key))) throw invalidConfigError();
+    if (
+        candidate.titleShimmerEnabled !== undefined &&
+        typeof candidate.titleShimmerEnabled !== "boolean"
+    )
+        throw invalidConfigError();
 
     const appearance =
         candidate.appearance === undefined ? "system" : appearanceModeParse(candidate.appearance);
@@ -139,6 +145,10 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         candidate.lastPickedModel === undefined
             ? undefined
             : modelIdentityOnlyParse(candidate.lastPickedModel);
+    const titleShimmerEnabled =
+        typeof candidate.titleShimmerEnabled === "boolean"
+            ? candidate.titleShimmerEnabled
+            : undefined;
     if (
         !appearance ||
         (candidate.defaultModel !== undefined && !defaultModel) ||
@@ -165,6 +175,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         defaultPermissionMode,
         ...(lastPickedModel ? { lastPickedModel } : {}),
         modelPreferences,
+        ...(titleShimmerEnabled === undefined ? {} : { titleShimmerEnabled }),
         version: CONFIG_VERSION,
     };
 }

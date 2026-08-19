@@ -76,7 +76,6 @@ import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
-import { desktopTitleShimmerPersistence } from "./desktopTitleShimmer";
 import { DesktopBootGate } from "./DesktopBootGate";
 import {
     DesktopMediaPreviewWindow,
@@ -634,9 +633,9 @@ if (mediaPreviewBridge) {
         // here and the session store navigates through it when a conversation it
         // created should be opened.
         const rigRouter = rigRouterCreate();
-        // Appearance and model choices share one durable desktop document. The
-        // adapter keeps its current value synchronous so writes from either
-        // product store preserve changes already made by the other.
+        // Appearance, title motion, and model choices share one durable desktop
+        // document. The adapter keeps its current value synchronous so writes
+        // from any product store preserve changes already made by the others.
         const preferences = desktopPreferencesCreate(desktopBridge, config);
         // Appearance is chosen for the window, not for one connection, so the store is
         // created here beside the router and outlives both.
@@ -665,7 +664,7 @@ if (mediaPreviewBridge) {
         // Active-title motion is also this window's own choice. The store keeps
         // the product default in memory and writes only after the reader changes
         // the switch, so untouched installations follow future defaults.
-        const titleShimmer = titleShimmerStoreCreate(desktopTitleShimmerPersistence());
+        const titleShimmer = titleShimmerStoreCreate(preferences.titleShimmerPersistence);
         // Whether this machine's owner has been welcomed. Kept beside the two
         // above because it answers the same kind of question: what this
         // installation shows, rather than anything a Rig knows.

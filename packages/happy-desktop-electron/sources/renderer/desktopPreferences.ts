@@ -6,6 +6,7 @@ import type {
     RigSettingsInitial,
     RigSettingsSnapshot,
     RigThinkingLevel,
+    TitleShimmerPersistence,
 } from "happy-desktop-state";
 import { RIG_DEFAULT_THINKING_LEVEL } from "happy-desktop-state";
 import type {
@@ -33,15 +34,17 @@ export interface DesktopPreferences {
     readonly initialAppearance: DesktopAppearanceMode;
     readonly initialSettings: RigSettingsInitial;
     readonly preferencePersistence: RigModelPreferencePersistence;
+    readonly titleShimmerPersistence: TitleShimmerPersistence;
     appearanceChanged(mode: DesktopAppearanceMode): void;
     settingsChanged(snapshot: RigSettingsSnapshot): void;
 }
 
 /**
  * Adapts the desktop's one JSON document to the framework-independent product
- * stores that consume it: appearance, explicit defaults, and per-model picker
- * memory. One adapter owns the current document so concurrent store changes
- * preserve each other's fields before the main process serializes their writes.
+ * stores that consume it: appearance, title motion, explicit defaults, and
+ * per-model picker memory. One adapter owns the current document so concurrent
+ * store changes preserve each other's fields before the main process serializes
+ * their writes.
  */
 export function desktopPreferencesCreate(
     bridge: HappyDesktopBridge,
@@ -71,10 +74,23 @@ export function desktopPreferencesCreate(
         },
     };
 
+    const titleShimmerPersistence: TitleShimmerPersistence = {
+        read: () =>
+            config.titleShimmerEnabled === undefined
+                ? undefined
+                : { titleShimmerEnabled: config.titleShimmerEnabled },
+        write(document) {
+            const enabled = document.titleShimmerEnabled;
+            if (enabled === undefined || config.titleShimmerEnabled === enabled) return;
+            commit({ ...config, titleShimmerEnabled: enabled });
+        },
+    };
+
     return {
         initialAppearance: config.appearance,
         initialSettings: settingsInitial(config),
         preferencePersistence,
+        titleShimmerPersistence,
         appearanceChanged(mode) {
             if (config.appearance === mode) return;
             commit({ ...config, appearance: mode });
@@ -135,6 +151,9 @@ export function desktopPreferencesCreate(
                       ? { lastPickedModel: config.lastPickedModel }
                       : {}),
                 modelPreferences,
+                ...(config.titleShimmerEnabled === undefined
+                    ? {}
+                    : { titleShimmerEnabled: config.titleShimmerEnabled }),
                 version: 1,
             });
         },
@@ -234,6 +253,9 @@ function configFromPreferenceDocument(
         ...(document.lastPickedModel ? { lastPickedModel: document.lastPickedModel } : {}),
         defaultPermissionMode: current.defaultPermissionMode,
         modelPreferences,
+        ...(current.titleShimmerEnabled === undefined
+            ? {}
+            : { titleShimmerEnabled: current.titleShimmerEnabled }),
         version: 1,
     };
 }
