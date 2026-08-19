@@ -141,12 +141,17 @@
     white-space: nowrap;
 }
 
+.happy2-delegated-agent__argument,
 .happy2-delegated-agent__task,
 .happy2-delegated-agent__model {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.happy2-delegated-agent__argument {
+    flex: 0 1 auto;
 }
 
 .happy2-delegated-agent__task {

@@ -364,6 +364,8 @@ it("keeps both resized sidebars fully reachable at the minimum desktop width", a
     const workspace = view.$('[data-happy-desktop-ui="app-shell-workspace"]').bounds();
     const panel = view.$('[data-happy-desktop-ui="app-shell-panel"]').bounds();
 
+    /* 64px rail + 220px sidebar + 140px workspace leaves 296px for the
+       panel, accounting for every pixel of the 720px desktop minimum. */
     expect(sidebar.width).toBe(220);
     expect(workspace.width).toBe(140);
     // The rail leaves 656px for content. After preserving the sidebar and

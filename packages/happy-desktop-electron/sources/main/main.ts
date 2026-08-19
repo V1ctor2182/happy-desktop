@@ -761,10 +761,8 @@ function windowOptions(
         width: bounds?.width ?? 1100,
         height: bounds?.height ?? 760,
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
-        /* The shell's own arithmetic, so the window cannot be dragged narrower
-           than the layout admits: a 64px rail, two 250px side lanes, and a
-           workspace that holds twice a lane between them. See app-shell.css. */
-        minWidth: 64 + 250 * 2 + 500,
+        /* Happy's native desktop minimum; AppShell states the same contract. */
+        minWidth: 720,
         minHeight: 480,
         ...(applicationIconPath ? { icon: applicationIconPath } : {}),
         show: false,

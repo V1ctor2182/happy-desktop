@@ -775,6 +775,7 @@ export function MessageList(props: MessageListProps) {
     >(undefined);
     const panelAnchorRestoring = useRef(false);
     const expectedScrollTop = useRef<number | undefined>(undefined);
+    const scrollHeightBaseline = useRef(0);
     const scrollTopWrite = (element: HTMLElement, value: number) => {
         element.scrollTop = value;
         expectedScrollTop.current = element.scrollTop;
@@ -1016,8 +1017,9 @@ export function MessageList(props: MessageListProps) {
     // eslint-disable-next-line happy2-react/no-layout-effect -- streaming React commits change scrollHeight before the virtual row ResizeObserver; a follower must pin in this same pre-paint commit
     useLayoutEffect(() => {
         const element = list.current;
-        if (element && following.current)
-            scrollTopWrite(element, element.scrollHeight - element.clientHeight);
+        if (!element) return;
+        if (following.current) scrollTopWrite(element, element.scrollHeight - element.clientHeight);
+        else scrollHeightBaseline.current = element.scrollHeight;
     });
     // eslint-disable-next-line happy2-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {
@@ -1146,6 +1148,18 @@ export function MessageList(props: MessageListProps) {
         const savedScrollTop = restore.current?.scrollTop;
         if (following.current) scrollToBottom();
         else scrollTopWrite(element, savedScrollTop ?? 0);
+        /*
+         * TanStack can compensate newly measured rows after this layout effect.
+         * A parked lifetime without a measurement cache still promises the
+         * exact persisted pixel offset, so reapply it after those initial
+         * measurements settle and before the next paint.
+         */
+        const restoreFrame =
+            !following.current && savedScrollTop !== undefined
+                ? requestAnimationFrame(() => {
+                      scrollTopWrite(element, savedScrollTop);
+                  })
+                : undefined;
         panelAnchorCapture();
         virtualizer.shouldAdjustScrollPositionOnItemSizeChange = following.current
             ? undefined
@@ -1162,11 +1176,14 @@ export function MessageList(props: MessageListProps) {
         };
         let viewportHeight = element.clientHeight;
         let previousScrollTop = element.scrollTop;
+        scrollHeightBaseline.current = element.scrollHeight;
         const onScroll = () => {
+            const currentScrollHeight = element.scrollHeight;
             const expected = expectedScrollTop.current;
             if (expected !== undefined && Math.abs(element.scrollTop - expected) <= 1) {
                 expectedScrollTop.current = undefined;
                 previousScrollTop = element.scrollTop;
+                scrollHeightBaseline.current = currentScrollHeight;
                 positionReport();
                 return;
             }
@@ -1178,11 +1195,13 @@ export function MessageList(props: MessageListProps) {
              */
             if (element.clientHeight !== viewportHeight) {
                 previousScrollTop = element.scrollTop;
+                scrollHeightBaseline.current = currentScrollHeight;
                 return;
             }
             if (panelResizing.current) {
                 panelAnchorRestore();
                 previousScrollTop = element.scrollTop;
+                scrollHeightBaseline.current = currentScrollHeight;
                 positionReport();
                 return;
             }
@@ -1191,9 +1210,16 @@ export function MessageList(props: MessageListProps) {
                 element.scrollHeight - element.scrollTop - viewportHeight,
             );
             const scrollDelta = element.scrollTop - previousScrollTop;
+            const contentHeightChanged =
+                Math.abs(currentScrollHeight - scrollHeightBaseline.current) > 1;
             previousScrollTop = element.scrollTop;
+            scrollHeightBaseline.current = currentScrollHeight;
             if (scrollDelta < 0) escapedFromFollow.current = true;
-            else if (scrollDelta > 0 && bottomOffset <= FOLLOW_BOTTOM_THRESHOLD)
+            else if (
+                scrollDelta > 0 &&
+                !contentHeightChanged &&
+                bottomOffset <= FOLLOW_BOTTOM_THRESHOLD
+            )
                 escapedFromFollow.current = false;
             following.current =
                 !escapedFromFollow.current && bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
@@ -1233,14 +1259,22 @@ export function MessageList(props: MessageListProps) {
         /*
          * The composer is a flex sibling of this scrollport. Once its committed
          * height changes, a reader who was following stays at the transcript
-         * end; a reader parked in history keeps the same scroll offset. The old
-         * path restored a hand-maintained bottom distance for both cases, which
-         * competed with the virtualizer and caused a delayed correction.
+         * end; a reader parked in history keeps the same bottom-edge text
+         * anchor. During a shell resize, that semantic anchor already owns the
+         * correction; applying the ordinary height-delta write afterward would
+         * compensate the same viewport change twice.
          */
+        let viewportWindowWidth = window.innerWidth;
+        let viewportWindowHeight = window.innerHeight;
         const viewportObserver =
             typeof ResizeObserver === "undefined"
                 ? undefined
                 : new ResizeObserver(() => {
+                      const windowGeometryChanged =
+                          window.innerWidth !== viewportWindowWidth ||
+                          window.innerHeight !== viewportWindowHeight;
+                      viewportWindowWidth = window.innerWidth;
+                      viewportWindowHeight = window.innerHeight;
                       const nextRowWidth =
                           estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
                       const nextHeight = element.clientHeight;
@@ -1262,12 +1296,18 @@ export function MessageList(props: MessageListProps) {
                       }
                       viewportHeight = nextHeight;
                       if (wasFollowing) scrollToBottom();
+                      else if (
+                          (panelResizing.current || windowGeometryChanged) &&
+                          panelAnchor.current
+                      )
+                          panelAnchorRestore();
                       else if (nextHeight !== previousHeight)
                           scrollTopWrite(element, element.scrollTop + previousHeight - nextHeight);
                       positionReport();
                   });
         viewportObserver?.observe(element);
         return () => {
+            if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
             positionReport(true);
             observer?.disconnect();
             viewportObserver?.disconnect();

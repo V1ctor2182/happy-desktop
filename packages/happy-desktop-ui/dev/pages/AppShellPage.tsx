@@ -66,13 +66,11 @@ function window1024(children: ReactNode) {
 }
 
 /*
- * The narrowest window the shell admits, and the arithmetic behind it: a 64px
- * rail, two 250px side lanes, and a workspace holding twice a lane between
- * them. Written as that sum rather than as its total, so the specimen says
- * where the number comes from — see app-shell.css, which states the same one.
+ * The narrowest window the shell admits: Happy's 720px desktop minimum leaves
+ * a 140px workspace after the 64px rail and two 250px side lanes.
  */
 const LANE_MIN = 250;
-const WORKSPACE_MIN = LANE_MIN * 2;
+const WORKSPACE_MIN = 140;
 const WINDOW_MIN = 64 + LANE_MIN * 2 + WORKSPACE_MIN;
 
 function windowAtMinimum(children: ReactNode) {
@@ -279,7 +277,7 @@ export function AppShellPage() {
             </Specimen>
 
             <Specimen
-                detail="The window at its narrowest, and the order the lanes give up room in. Nothing here is a hand-set width: the frame is the sum, and the shell's own flex does the rest — the two side lanes shrink out of their clamp until each stops at its 250px floor, and the workspace holds twice a lane, because the middle is where the work is and it should be the last thing squeezed rather than the first. Drag the blueprint narrower and the shell stops here and the page scrolls instead, which is exactly what the window's own minimum does."
+                detail="Happy's 720×480 desktop minimum. The two side lanes shrink to their 250px floors and the workspace keeps the remaining 140px after the 64px rail. Drag the blueprint narrower and the shell stops here and the page scrolls instead, matching the native window contract."
                 label="Every lane at its minimum"
                 number="10"
                 stage="chrome"
@@ -303,7 +301,7 @@ export function AppShellPage() {
                     >
                         <Slot
                             label="children"
-                            note={`holding ${String(WORKSPACE_MIN)}px — twice a lane`}
+                            note={`holding the remaining ${String(WORKSPACE_MIN)}px`}
                         />
                     </AppShell>,
                 )}

@@ -4,7 +4,6 @@ import type {
     ConversationEntry,
     ComposerSnapshot,
     ExperimentsStore,
-    ConversationSummary,
     ConversationToolCall,
     RigClockStore,
     RigFileTabKind,
@@ -85,17 +84,14 @@ import {
     ComposerFooterBar,
     ComposerModelControl,
     ComposerPanel,
-    ConversationDock,
     ConversationView,
     DeferredPane,
     EmptyState,
     FileBrowser,
     FileEditor,
     FilePreview,
-    type FilePreviewContent,
     type FilePreviewKind,
     filePreviewKind,
-    FloatingConversationDock,
     Lightbox,
     MarkdownDocument,
     Modal,
@@ -3532,49 +3528,6 @@ function RigConversationSurface(props: {
             viewerId={props.viewerId}
         />
     );
-}
-
-/**
- * Separator between a group and the session inside it in a chat-menu option id.
- * Both halves are CUID2, so no identifier can contain it.
- */
-const CHAT_TARGET_SEP = "|";
-
-/** Every session in the workspace as one menu, grouped under the place it runs in. */
-function chatTargetItems(projects: readonly RigProjectGroup[]): MenuItem[] {
-    const items: MenuItem[] = [];
-    const section = (label: string, groupId: string, conversations: ConversationSummary[]) => {
-        if (conversations.length === 0) return;
-        if (items.length > 0) items.push({ kind: "separator" });
-        items.push({ kind: "label", label });
-        for (const summary of conversations)
-            items.push({
-                id: `${groupId}${CHAT_TARGET_SEP}${summary.id}`,
-                kind: "item",
-                label: summary.title,
-            });
-    };
-    for (const project of projects) {
-        section(project.name, project.id, [...project.conversations]);
-        for (const worktree of project.worktrees)
-            section(`${project.name} · ${worktree.name}`, worktree.id, [...worktree.conversations]);
-    }
-    return items;
-}
-
-/** The open session's title, for the trigger that names where a message is going. */
-function chatTargetLabel(
-    projects: readonly RigProjectGroup[],
-    conversationId: string,
-): string | undefined {
-    for (const project of projects) {
-        for (const summary of project.conversations)
-            if (summary.id === conversationId) return summary.title;
-        for (const worktree of project.worktrees)
-            for (const summary of worktree.conversations)
-                if (summary.id === conversationId) return summary.title;
-    }
-    return undefined;
 }
 
 /**

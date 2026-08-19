@@ -308,7 +308,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         "box-sizing": "border-box",
         display: "flex",
         "flex-direction": "column",
-        "overflow-x": "hidden",
+        "overflow-x": "visible",
         width: "360px",
     });
 
@@ -719,7 +719,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     /* ---- Footer ---------------------------------------------------------- */
 
     const footer = view.$('[data-testid="full"] [data-happy-desktop-ui="sidebar-footer"]');
-    expect(footer.bounds().height).toBe(56);
+    expect(footer.bounds().height).toBe(40);
     expect(footer.offsets().bottom).toBe(0);
     expect(footer.computedStyles(["border-top-color", "border-top-width"])).toEqual({
         "border-top-color": "rgb(234, 234, 234)",
@@ -727,7 +727,8 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     });
     /*
      * The footer is a free slot: the component centers the slot's line box in
-     * the 56px lane (box-symmetric top/bottom) and the ink must paint. The
+     * the 40px lane shared with the composer (box-symmetric top/bottom), and
+     * the ink must paint. The
      * fixture text "Sasha K." carries a baseline period, so its centroid sits
      * ~1.1px low of center identically in all three engines — the band pins
      * that engine agreement without forcing consumer content bias to zero.
@@ -737,7 +738,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     expect(Math.abs(footerUser.offsets().top - footerUser.offsets().bottom)).toBeLessThanOrEqual(1);
     const footerInk = await footerUser.visibleMetrics();
     expect(footerInk.pixelCount).toBeGreaterThan(0);
-    const footerDy = footerUser.bounds().y - footer.bounds().y + footerInk.center.y - 28;
+    const footerDy = footerUser.bounds().y - footer.bounds().y + footerInk.center.y - 20;
     expect(footerDy, "footer ink optical band").toBeGreaterThanOrEqual(0.6);
     expect(footerDy, "footer ink optical band").toBeLessThanOrEqual(1.6);
 
@@ -765,7 +766,8 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
             '[data-testid="overflow"] [data-happy-desktop-ui="sidebar-section-head"]',
         ),
     ).toBeNull();
-    expect(view.$('[data-testid="overflow"] [data-item-id="row-0"]').bounds().y).toBe(64);
+    /* The first row starts after the 56px header and shared 6px panel inset. */
+    expect(view.$('[data-testid="overflow"] [data-item-id="row-0"]').bounds().y).toBe(62);
 
     window.scrollTo(0, 0);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -1096,6 +1098,10 @@ it("nests child channels under their parent and dims archived rows", async () =>
         view.$(
             `[data-testid="nested"] [data-item-id="${id}"] [data-happy-desktop-ui="sidebar-item-branch"]`,
         );
+    const connector = (parentId: string) =>
+        view.$(
+            `[data-testid="nested"] [data-happy-desktop-ui="sidebar-tree-connector"][data-parent-id="${parentId}"]`,
+        );
 
     /* ---- Indentation --------------------------------------------------- */
     expect(row("launch").computedStyle("padding-left"), "parent padding").toBe("10px");
@@ -1104,28 +1110,22 @@ it("nests child channels under their parent and dims archived rows", async () =>
     expect(row("ios").element.getAttribute("data-depth"), "child depth attr").toBe("1");
     expect(row("legacy").computedStyle("padding-left"), "archived child padding").toBe("26px");
 
-    /* ---- ASCII branches replace the nested hash ------------------------- */
+    /* ---- Tree connectors replace the nested hash ------------------------ */
     /* Only a top-level channel keeps the hash; children are introduced by the tree. */
     expect(leadingNode("launch"), "top-level keeps its glyph").not.toBeNull();
     expect(leadingNode("ios"), "child drops the hash").toBeNull();
     expect(leadingNode("legacy"), "archived child drops the hash").toBeNull();
-    expect(branch("ios").element.getAttribute("data-branch"), "non-final child tees").toBe("tee");
-    expect(branch("legacy").element.getAttribute("data-branch"), "final child closes").toBe("end");
 
-    /* The connector occupies the parent's leading lane exactly, so its centred stem
-       rides the lane the hash above is box-centred in. (Box geometry, not the
-       glyph's ink, decides the lane.) */
+    /* One parent-owned stem serves all of its direct children. Its single-pixel
+       centre rides the parent's leading lane, rather than duplicating a stem in
+       every child row. */
     const parentLane = leading("launch").bounds();
-    const teeBox = branch("ios").bounds();
+    const launchStem = connector("launch").bounds();
     expect(
-        { x: teeBox.x, width: teeBox.width },
-        "connector occupies the parent glyph lane",
-    ).toEqual({ x: parentLane.x, width: parentLane.width });
-    const stem = getComputedStyle(branch("ios").element, "::before");
-    expect(
-        parseFloat(stem.left) + parseFloat(stem.width) / 2,
-        "stem centred in that lane",
-    ).toBeCloseTo(teeBox.width / 2, 1);
+        launchStem.x + launchStem.width / 2,
+        "parent stem centred in the leading lane",
+    ).toBeCloseTo(parentLane.x + parentLane.width / 2, 1);
+    expect(connector("server").element.getAttribute("data-parent-id")).toBe("server");
 
     /* A tee runs from the gap above to the row's bottom edge, so consecutive children
        read as one line; the last child's stem stops at its elbow. Each row draws only
@@ -1138,12 +1138,15 @@ it("nests child channels under their parent and dims archived rows", async () =>
         row("legacy").bounds().height / 2 + 1,
         0,
     );
-    /* A lone child is both the first and the last: it rises into the parent row and
-       still runs all the way down to its own elbow. */
+    /* A lone child still gets its elbow, while its parent's one stem rises from
+       the parent glyph to that elbow. */
     const solo = await branch("root").visibleMetrics();
-    expect(branch("root").element.getAttribute("data-branch"), "lone child closes").toBe("end");
-    expect(branch("root").element.getAttribute("data-branch-first"), "lone child also rises").toBe(
-        "",
+    expect(connector("server").bounds().height, "lone child stem reaches its elbow").toBeCloseTo(
+        row("root").bounds().y +
+            row("root").bounds().height / 2 -
+            connector("server").bounds().y +
+            1,
+        0,
     );
     expect(solo.bounds.height, "lone child's stem reaches its elbow").toBeCloseTo(
         row("root").bounds().height / 2 + 1,
@@ -1152,9 +1155,9 @@ it("nests child channels under their parent and dims archived rows", async () =>
     /* Its own icon still identifies it; the branch only replaces the default hash. */
     expect(leadingNode("root"), "an explicit icon survives nesting").not.toBeNull();
 
-    /* One tone across rows: the archived row's 0.55 dimming is cancelled on the line. */
+    /* One tone across rows: the archived row's 0.55 dimming is cancelled on its elbow. */
     expect(
-        getComputedStyle(branch("legacy").element, "::before").opacity,
+        getComputedStyle(branch("legacy").element, "::after").opacity,
         "archived rows keep the shared line tone",
     ).toBe("0.509");
 

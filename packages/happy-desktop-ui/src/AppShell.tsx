@@ -129,11 +129,10 @@ const FIXED_SIDEBAR_MIN_WIDTH = 250;
 const REVEAL_WIDTH = 48;
 const RAIL_WIDTH = 64;
 /**
- * The floor the workspace keeps: twice a side lane, because the middle is where
- * the work is and it should be the last region squeezed rather than the first.
- * The same number app-shell.css states; see the note there.
+ * The workspace remaining at Happy's 720px desktop minimum after the 64px rail
+ * and two 250px side lanes. The same number app-shell.css states.
  */
-const WORKSPACE_MIN_WIDTH = FIXED_SIDEBAR_MIN_WIDTH * 2;
+const WORKSPACE_MIN_WIDTH = 140;
 /**
  * How wide one side lane may grow: never past the room left once the rail, the
  * lane opposite, and the workspace's own floor have taken theirs.

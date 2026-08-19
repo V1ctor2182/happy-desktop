@@ -52,7 +52,7 @@ export function CompactActivityRow(props: CompactActivityRowProps) {
                         {props.arguments.map((argument, index) => (
                             <Fragment key={index}>
                                 {index > 0 ? <span aria-hidden="true">·</span> : null}
-                                <span>{argument}</span>
+                                <span className="happy2-delegated-agent__argument">{argument}</span>
                             </Fragment>
                         ))}
                     </span>

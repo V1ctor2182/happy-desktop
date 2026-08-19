@@ -291,7 +291,7 @@ it("fits long live activity at the minimum desktop content measure", async () =>
     }
 
     const processCommand = view.$(
-        '[data-happy-desktop-ui="rig-activity-process"] .happy2-delegated-agent__arguments',
+        '[data-happy-desktop-ui="rig-activity-process"] .happy2-delegated-agent__argument',
     );
     expect(processCommand.computedStyle("overflow")).toBe("hidden");
     expect(processCommand.computedStyle("text-overflow")).toBe("ellipsis");
