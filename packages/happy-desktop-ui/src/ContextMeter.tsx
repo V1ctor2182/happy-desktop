@@ -93,9 +93,9 @@ function tokensFormat(tokens: number): string {
  *
  * It rides at the end of the composer's control row, beside the access mode and
  * the speed, because it belongs to the message being written: the reader is
- * about to type one more and wants to know whether it still fits. Its percentage
- * and token count stay visible at rest; context pressure is important enough
- * that discovering the meter must not depend on noticing or hovering a hairline.
+ * about to type one more and wants to know whether it still fits. At rest only
+ * the bar shows — the proportion is the whole answer at a glance — and pointing
+ * at it slides the percentage and the token counts out to its left.
  *
  * Quiet by default. It takes colour only once compacting is the next thing to
  * do, so the colour means something when it appears.

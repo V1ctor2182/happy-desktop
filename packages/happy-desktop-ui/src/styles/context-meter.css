@@ -1,8 +1,9 @@
 /*
  * ContextMeter — the spent share of the context window, at the end of the
- * composer's control row. The percentage, token count, and bar remain visible:
- * this is capacity information, not a hidden detail, and a reader should be able
- * to find it without first discovering a four-pixel hover target.
+ * composer's control row. At rest it is only the bar: the row beside it is full
+ * of controls the reader uses constantly, and a running token count sitting
+ * there permanently is noise. Pointing at it is the question being asked, so the
+ * numbers appear then, sliding out to the left of the bar.
  */
 .happy2-context-meter {
     display: inline-flex;
@@ -19,8 +20,27 @@
     display: inline-flex;
     align-items: baseline;
     gap: 4px;
+    max-width: 0;
+    overflow: hidden;
     white-space: nowrap;
+    opacity: 0;
+    margin-inline-end: 0;
+    transition:
+        max-width 140ms ease-out,
+        margin-inline-end 140ms ease-out,
+        opacity 140ms ease-out;
+}
+
+.happy2-context-meter:hover .happy2-context-meter__readout {
+    max-width: 140px;
     margin-inline-end: 6px;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy2-context-meter__readout {
+        transition: none;
+    }
 }
 
 /* The counts are the same fact as the percentage, spelled out; they sit a shade
@@ -33,7 +53,7 @@
     position: relative;
     display: inline-flex;
     flex: none;
-    width: 56px;
+    width: 64px;
     height: 4px;
     border-radius: var(--happy2-radius-pill);
     background: var(--divider);
