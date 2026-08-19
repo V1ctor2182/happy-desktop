@@ -459,6 +459,14 @@ function projectMessage(
                     text: block.text,
                     complete: runStatus !== "running",
                 });
+            } else if (message.role === "service" && runStatus === "failed") {
+                elements.push({
+                    ...base,
+                    id,
+                    kind: "failure",
+                    outcome: "failed",
+                    reason: block.text,
+                });
             } else {
                 elements.push({ ...base, id, kind: "system_notice", text: block.text });
             }

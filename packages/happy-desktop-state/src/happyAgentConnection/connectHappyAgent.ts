@@ -613,10 +613,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 return;
             case "run.finished":
                 updateRun(event.payload.agentId, event.payload.run);
+                {
+                    /*
+                     * A run boundary is the point where durable history becomes
+                     * authoritative. Besides recovering missed deltas, this
+                     * supplies every completed tool block before the
+                     * conversation folds the turn behind its trace control.
+                     */
+                    const entry = sessions.get(event.payload.agentId);
+                    if (entry !== undefined) background(loadSession(entry));
+                }
                 options.onSessionFinished?.(event.payload.agentId);
                 return;
             case "message.created":
-                updateMessage(
+                createMessage(
                     event.payload.agentId,
                     event.payload.message,
                     event.payload.runId,
@@ -744,6 +754,32 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 : { elementId: current?.elementId ?? optimistic?.elementId ?? optimisticId }),
         });
         publishSession(entry);
+    };
+
+    const createMessage = (
+        agentId: string,
+        message: Message,
+        runId: string | null,
+        optimisticId?: string,
+    ): void => {
+        const entry = sessions.get(agentId);
+        const current = entry?.messages.get(message.id);
+        /*
+         * Happy Agent announces the start of every assistant content block
+         * with the same message identity and an empty body. Only the first
+         * announcement creates the message; replacing an existing snapshot
+         * here would erase all preceding reasoning and tool calls until a
+         * later full update (and can erase them permanently when the block
+         * finishes through deltas alone).
+         */
+        if (
+            current?.message.role === "agent" &&
+            message.role === "agent" &&
+            message.content.length === 0
+        ) {
+            return;
+        }
+        updateMessage(agentId, message, runId, optimisticId);
     };
 
     const acceptMessages = (
