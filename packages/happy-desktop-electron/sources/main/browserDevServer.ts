@@ -11,7 +11,6 @@ import {
 } from "./notesIpcValidation";
 import { NotesStore } from "./notesStore";
 import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
-import { rigNodeRouteMatch } from "./rigNodeRoute";
 import { rigProxyHandle } from "./rigProxyHandle";
 import { rigTerminalBridgeCreate } from "./rigTerminalBridge";
 
@@ -31,8 +30,8 @@ export interface BrowserLocalRigOptions {
 
 /**
  * Gives the loopback-only Vite renderer a development bridge to the user's normal
- * Rig daemon. It mirrors the packaged desktop's HTTP proxy: `GET /health` forwards
- * the daemon's projected health, and the renderer's connection loader probes it
+ * Happy Agent daemon. It mirrors the packaged desktop's HTTP proxy: `GET /health`
+ * forwards daemon health, and the renderer's connection loader probes it
  * exactly as it probes the Electron main process's proxy in production.
  *
  * The connection is memoized but never permanent: it is dropped as soon as a
@@ -106,13 +105,7 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
             // upgrade — Vite's own HMR socket above all — to Vite's listeners.
             const terminals = rigTerminalBridgeCreate({
                 allowedOrigin: rendererOrigin,
-                // The same rule the packaged proxy applies: the machine comes
-                // off the path, and a node is attached on that node's own
-                // client rather than on this one's.
-                client: (nodeId) =>
-                    runtime().then(({ connection }) =>
-                        nodeId === undefined ? connection.client : connection.client.peer(nodeId),
-                    ),
+                client: () => runtime().then(({ connection }) => connection.client),
                 expectedHost: () => expectedHost,
                 prefix: endpoint,
             });
@@ -124,7 +117,7 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
                 const path = url.pathname;
                 // The exact endpoint is the browser development bridge for
                 // runtime and machine-local actions; everything under it is a
-                // projected Rig proxy route.
+                // Happy Agent or desktop-local route.
                 if (path === endpoint && request.method === "POST") {
                     await handleRequest(request, response, runtime, desktopConfig);
                     return;
@@ -135,30 +128,14 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
                         pending = runtime();
                         const active = await pending;
                         const bridgePath = path.slice(endpoint.length) || "/";
-                        // A node is addressed here exactly as it is in the
-                        // packaged app: same base, same peer client, same
-                        // projection. Development that could not reach a node
-                        // would be a different product from the one that ships.
-                        const node = rigNodeRouteMatch(bridgePath);
                         const handled = await rigProxyHandle({
-                            client: node
-                                ? active.connection.client.peer(node.nodeId)
-                                : active.connection.client,
+                            client: active.connection.client,
                             method: request.method ?? "GET",
-                            path: node ? node.path : bridgePath,
+                            path: bridgePath,
                             query: url.searchParams,
                             request,
                             response,
-                            // A node that stops answering is that node's
-                            // connection to notice and retry. Dropping this
-                            // bridge's host connection over it would take every
-                            // other Rig in the window down with it.
-                            ...(node
-                                ? {}
-                                : {
-                                      onConnectionError: (error) =>
-                                          runtimeInvalidate(error, pending),
-                                  }),
+                            onConnectionError: (error) => runtimeInvalidate(error, pending),
                         });
                         if (!handled && !response.headersSent) next();
                     } catch (error) {

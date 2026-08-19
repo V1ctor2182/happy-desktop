@@ -6,10 +6,9 @@ import type { RigProject, RigWorktree } from "./rigTypes.js";
  * Conversing, writing, and stopping are separate permissions on purpose.
  *
  * A checkout the host is still preparing has no directory to save a file into
- * or open a shell in, but Rig has already named where it will be and queues the
- * work a session sends until the checkout is there. So a chat can be started
- * and written into before the checkout exists, while everything that reaches
- * for the directory itself has to wait for it.
+ * or open a shell in. Happy may accept the intent to start a conversation, but
+ * holds it locally until the checkout is ready; everything that reaches for the
+ * directory itself must wait too.
  *
  * Stopping is separate again: a checkout that has gone away still has whatever
  * was already running in it, and the reader must be able to end that. Tying the
@@ -31,9 +30,9 @@ export interface RigGroupAccess {
     /** Why writing is refused, in the host's terms. Absent exactly when `canWrite`. */
     readonly writeRefusal?: string;
     /**
-     * Whether a conversation may be started here or sent to. Broader than
-     * `canWrite`: a workspace still being prepared accepts chats, because the
-     * host holds their work until the checkout is ready rather than failing it.
+     * Whether a conversation may be requested here or sent to. Broader than
+     * `canWrite`: Happy can retain a request while the workspace is prepared,
+     * then create the session once the checkout is ready.
      */
     readonly canConverse: boolean;
     /** Why conversing is refused. Absent exactly when `canConverse`. */
@@ -97,13 +96,10 @@ export function rigWorktreeWritable(worktree: RigWorktree): boolean {
  * Why a conversation cannot be started in this worktree or sent to, or
  * `undefined` when it can.
  *
- * A workspace the host is still preparing is deliberately not refused. Rig
- * names the checkout before it has finished making it, and it holds a session's
- * work until the workspace turns ready rather than running it against a
- * directory that is not there. So the reader can open a workspace the moment
- * they ask for it, type into it, and have that first message run by itself once
- * the checkout lands. What is refused here is only what will never work: a
- * workspace that failed, one on its way out, and one whose folder is gone.
+ * A workspace the host is still preparing is deliberately not refused. Happy
+ * can retain the reader's request locally until the checkout becomes ready.
+ * What is refused here is only what will never work: a workspace that failed,
+ * one on its way out, and one whose folder is gone.
  */
 export function rigWorktreeConversationRefusal(worktree: RigWorktree): string | undefined {
     if (worktree.status === "initializing") return undefined;

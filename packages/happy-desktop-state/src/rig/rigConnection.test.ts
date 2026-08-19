@@ -42,11 +42,9 @@ function probeQueue() {
         resolve: (health: RigDaemonHealth) => void;
         reject: (error: unknown) => void;
     }> = [];
-    let waiter: (() => void) | undefined;
     const probe = (): Promise<RigDaemonHealth> =>
         new Promise((resolve, reject) => {
             calls.push({ resolve, reject });
-            waiter?.();
         });
     return {
         probe,
@@ -175,7 +173,7 @@ describe("rigConnectionLoaderCreate", () => {
     });
 
     it("retry() collapses backoff and probes immediately, resetting attempt", async () => {
-        const { store, timers, probe } = loader();
+        const { store, probe } = loader();
         store.subscribe(() => undefined);
         await probe.settle(0, { error: new Error("down") });
         expect(store.get()).toMatchObject({ connection: "disconnected", attempt: 1 });
@@ -188,7 +186,7 @@ describe("rigConnectionLoaderCreate", () => {
     });
 
     it("ignores a stale probe resolution scheduled by a superseded backoff", async () => {
-        const { store, timers, probe } = loader();
+        const { store, probe } = loader();
         store.subscribe(() => undefined);
         await probe.settle(0, { error: new Error("down") });
         // retry() supersedes the in-flight nothing and starts a fresh probe.

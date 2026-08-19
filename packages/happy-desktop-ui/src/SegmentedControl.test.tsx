@@ -13,15 +13,14 @@ const RANGE = [
 ];
 
 /*
- * Contract geometry per size. Track height is the control contract (28/36/44);
- * the segment/pill height is that minus the 1px hairline (×2) and the 4px inset
- * pad (×2): 28−2−8=18, 36−2−8=26, 44−2−8=34. All even so 2× device edges land
- * on physical pixels.
+ * Contract geometry per size. The transparent group and each direct child
+ * share the same 28/36/44px height; selection paints that child without adding
+ * an inset track or changing its border box.
  */
 const sizeSpec = {
-    small: { height: 28, seg: 18, fontSize: 12, lineHeight: 16 },
-    medium: { height: 36, seg: 26, fontSize: 13, lineHeight: 18 },
-    large: { height: 44, seg: 34, fontSize: 14, lineHeight: 20 },
+    small: { height: 28, fontSize: 12, lineHeight: 16 },
+    medium: { height: 36, fontSize: 13, lineHeight: 18 },
+    large: { height: 44, fontSize: 14, lineHeight: 20 },
 } as const;
 
 const sizes = ["small", "medium", "large"] as const;
@@ -46,11 +45,11 @@ async function settleSegmentColors(view: Renderer, activeSelector: string) {
     }
 }
 
-it("holds SegmentedControl dimensions, layout, colors, and pill placement", async () => {
+it("holds SegmentedControl dimensions, layout, colors, and one-layer selection", async () => {
     const view = createRenderer();
 
-    // Each size as a fullWidth 3-segment control in a 280px well: content is
-    // 280−2−8=270, so the three equal columns are exactly 90px.
+    // Each size as a fullWidth 3-segment control in a 280px well: two 2px gaps
+    // leave 276px, so the three equal columns are exactly 92px.
     for (const size of sizes) {
         view.render(
             () => (
@@ -96,72 +95,62 @@ it("holds SegmentedControl dimensions, layout, colors, and pill placement", asyn
             control.computedStyles([
                 "background-color",
                 "border-radius",
-                "border-top-color",
                 "border-top-width",
                 "box-sizing",
+                "column-gap",
                 "display",
                 "font-family",
                 "height",
             ]),
             id,
         ).toEqual({
-            "background-color": "rgb(245, 245, 245)",
-            "border-radius": "6px",
-            "border-top-color": "rgb(234, 234, 234)",
-            "border-top-width": "1px",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "border-radius": "0px",
+            "border-top-width": "0px",
             "box-sizing": "border-box",
+            "column-gap": "2px",
             display: "grid",
             "font-family": fontFamily(),
             height: `${spec.height}px`,
         });
-        // The CSS variables that drive the pill geometry are wired from props.
-        expect(control.computedStyle("--happy2-segmented-count"), id).toBe("3");
-        expect(control.computedStyle("--happy2-segmented-index"), id).toBe("1");
 
-        // Equal segment widths (3 × 90) and the integer contract heights.
+        // Equal segment widths (3 × 92) and the integer contract heights.
         const values = ["day", "week", "month"];
         const segBounds = values.map((value) =>
             view.$(`[data-testid="${id}"] [data-value="${value}"]`).bounds(),
         );
         for (const [index, sb] of segBounds.entries()) {
-            expect(sb.width, `${id} seg ${values[index]} width`).toBe(90);
-            expect(sb.height, `${id} seg ${values[index]} height`).toBe(spec.seg);
+            expect(sb.width, `${id} seg ${values[index]} width`).toBe(92);
+            expect(sb.height, `${id} seg ${values[index]} height`).toBe(spec.height);
         }
 
-        // The pill border box lands on the selected segment (week = 1). The
-        // segment box is an exact 90×spec grid cell; WebKit rounds the pill's
-        // calc() width by ~0.02px, so the pill is asserted against the segment
-        // within tolerance rather than the discrete literal.
-        const pill = view.$(
-            `[data-testid="${id}"] [data-happy-desktop-ui="segmented-control-pill"]`,
-        );
-        const pillBounds = pill.bounds();
-        const weekBounds = segBounds[1]!;
-        expect(Math.abs(pillBounds.x - weekBounds.x), `${id} pill x`).toBeLessThanOrEqual(0.1);
-        expect(Math.abs(pillBounds.y - weekBounds.y), `${id} pill y`).toBeLessThanOrEqual(0.1);
+        // The group remains unpainted. Selection is one layer: the active
+        // segment itself carries the same quiet fill as a selected file row.
+        const active = view.$(`[data-testid="${id}"] [data-value="week"]`);
         expect(
-            Math.abs(pillBounds.width - weekBounds.width),
-            `${id} pill width`,
-        ).toBeLessThanOrEqual(0.1);
-        expect(
-            Math.abs(pillBounds.height - weekBounds.height),
-            `${id} pill height`,
-        ).toBeLessThanOrEqual(0.1);
-        expect(
-            pill.computedStyles([
+            active.computedStyles([
                 "background-color",
                 "border-radius",
                 "border-top-color",
+                "border-top-width",
                 "box-sizing",
-                "position",
             ]),
-            `${id} pill`,
+            `${id} active segment`,
         ).toEqual({
-            "background-color": "rgb(248, 248, 248)",
-            "border-radius": "1px",
+            "background-color": "rgb(234, 234, 234)",
+            "border-radius": "6px",
             "border-top-color": "rgb(234, 234, 234)",
+            "border-top-width": "1px",
             "box-sizing": "border-box",
-            position: "absolute",
+        });
+        const inactive = view.$(`[data-testid="${id}"] [data-value="day"]`);
+        expect(
+            inactive.computedStyles(["background-color", "border-top-color", "border-top-width"]),
+            `${id} inactive segment`,
+        ).toEqual({
+            "background-color": "rgba(0, 0, 0, 0)",
+            "border-top-color": "rgba(0, 0, 0, 0)",
+            "border-top-width": "1px",
         });
 
         // Active vs inactive foreground tokens.
@@ -211,13 +200,17 @@ it("holds SegmentedControl dimensions, layout, colors, and pill placement", asyn
     const onBounds = view.$('[data-testid="sc-content"] [data-value="on"]').bounds();
     const offBounds = view.$('[data-testid="sc-content"] [data-value="off"]').bounds();
     expect(offBounds.width, "equal content columns").toBe(onBounds.width);
-    const contentPill = view
-        .$('[data-testid="sc-content"] [data-happy-desktop-ui="segmented-control-pill"]')
-        .bounds();
-    expect(Math.abs(contentPill.x - onBounds.x), "content pill x").toBeLessThanOrEqual(0.1);
-    expect(Math.abs(contentPill.width - onBounds.width), "content pill width").toBeLessThanOrEqual(
-        0.1,
-    );
+    expect(offBounds.x - (onBounds.x + onBounds.width), "content segment gap").toBe(2);
+    expect(
+        view.$('[data-testid="sc-content"] [data-value="on"]').computedStyle("background-color"),
+        "content active fill",
+    ).toBe("rgb(234, 234, 234)");
+    expect(
+        view.container.querySelector(
+            '[data-testid="sc-content"] [data-happy-desktop-ui="segmented-control-pill"]',
+        ),
+        "retired outer-track pill",
+    ).toBeNull();
 
     await view.screenshot("SegmentedControl.test");
 }, 120_000);
@@ -230,7 +223,7 @@ it("holds SegmentedControl icon segments, selection sweep, fullWidth, and disabl
         { value: "list", label: "List", icon: "clock" as const },
         { value: "grid", label: "Home", icon: "home" as const },
     ];
-    // Medium icon control, fullWidth in a 280px well (columns = 90).
+    // Medium icon control, fullWidth in a 280px well (columns = 92).
     view.render(
         () => (
             <div style={{ width: "280px" }}>
@@ -267,7 +260,8 @@ it("holds SegmentedControl icon segments, selection sweep, fullWidth, and disabl
         { value: "c", label: "Away" },
         { value: "d", label: "Busy" },
     ];
-    // Four-segment sweep, fullWidth in a 282px well: content 272 / 4 = 68.
+    // Four-segment sweep, fullWidth in a 282px well: three 2px gaps leave
+    // 276px, so each segment is exactly 69px.
     for (let index = 0; index < SWEEP.length; index += 1) {
         view.render(
             () => (
@@ -331,20 +325,19 @@ it("holds SegmentedControl icon segments, selection sweep, fullWidth, and disabl
         ).toBeGreaterThan(0);
     }
 
-    // Selection sweep: the pill tracks whichever segment is selected, and only
-    // that segment carries the active foreground token.
+    // Selection sweep: only the selected segment carries the quiet fill,
+    // selected border, and active foreground token.
     for (let index = 0; index < SWEEP.length; index += 1) {
         const id = `sweep-${index}`;
-        const control = view.$(`[data-testid="${id}"]`);
-        expect(control.computedStyle("--happy2-segmented-index"), id).toBe(String(index));
-        const pill = view
-            .$(`[data-testid="${id}"] [data-happy-desktop-ui="segmented-control-pill"]`)
-            .bounds();
-        const seg = view.$(`[data-testid="${id}"] [data-value="${SWEEP[index]!.value}"]`).bounds();
-        expect(seg.width, `${id} seg width`).toBe(68);
-        expect(Math.abs(pill.x - seg.x), `${id} pill x`).toBeLessThanOrEqual(0.1);
-        expect(Math.abs(pill.y - seg.y), `${id} pill y`).toBeLessThanOrEqual(0.1);
-        expect(Math.abs(pill.width - seg.width), `${id} pill width match`).toBeLessThanOrEqual(0.1);
+        const selected = view.$(`[data-testid="${id}"] [data-value="${SWEEP[index]!.value}"]`);
+        expect(selected.bounds().width, `${id} seg width`).toBe(69);
+        expect(
+            selected.computedStyles(["background-color", "border-top-color"]),
+            `${id} active paint`,
+        ).toEqual({
+            "background-color": "rgb(234, 234, 234)",
+            "border-top-color": "rgb(234, 234, 234)",
+        });
         const selectedLabel = view.$(
             `[data-testid="${id}"] [data-value="${SWEEP[index]!.value}"] [data-happy-desktop-ui="segmented-control-label"]`,
         );
@@ -354,6 +347,12 @@ it("holds SegmentedControl icon segments, selection sweep, fullWidth, and disabl
             const otherLabel = view.$(
                 `[data-testid="${id}"] [data-value="${SWEEP[other]!.value}"] [data-happy-desktop-ui="segmented-control-label"]`,
             );
+            expect(
+                view
+                    .$(`[data-testid="${id}"] [data-value="${SWEEP[other]!.value}"]`)
+                    .computedStyle("background-color"),
+                `${id} inactive ${other} fill`,
+            ).toBe("rgba(0, 0, 0, 0)");
             expect(otherLabel.computedStyle("color"), `${id} inactive ${other}`).toBe(
                 "rgb(73, 69, 79)",
             );

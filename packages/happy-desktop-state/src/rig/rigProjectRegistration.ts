@@ -2,7 +2,7 @@ import {
     ProjectRegistrationError,
     ProjectRegistrationProtocolError,
     type ProjectRegistrationErrorCode,
-} from "@slopus/rig-connect";
+} from "../happyAgentConnection/index.js";
 import { UserError } from "../types.js";
 
 /**

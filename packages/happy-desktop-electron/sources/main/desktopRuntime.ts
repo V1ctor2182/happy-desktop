@@ -26,14 +26,11 @@ import {
     type LocalRigConnector,
 } from "./localRig";
 import {
-    connectRig,
-    DEFAULT_INSTALLATION_DISCOVERY_TIMEOUT_MS,
+    HappyAgentClient,
     serverCompatibility,
-    type RigConnection,
-    type RigOnboardingState,
-    type RigProfile,
     type ServerCompatibility,
-} from "@slopus/rig-connect";
+} from "happy-desktop-state";
+import type { LocalRigOnboardingState, LocalRigProfile } from "./localOnboarding";
 import {
     rigDaemonConnectionUnavailable,
     type RigDaemonInspectorResponse,
@@ -61,6 +58,7 @@ const idleUpdate: DesktopUpdateSnapshot = { status: "idle" };
  * delays grow so a genuinely dead daemon still gives up quickly.
  */
 const connectAttemptDelaysMs: readonly number[] = [0, 400, 1_200, 2_500];
+const onboardingRequestTimeoutMs = 5_000;
 
 export interface DesktopRuntimePaths {
     readonly root: string;
@@ -91,9 +89,9 @@ export class DesktopRuntime implements AsyncDisposable {
     private persistOnSuccess = false;
     private reconnectTask?: Promise<void>;
     private rigConnection?: LocalRigConnection;
-    private rigConnectConnection?: {
+    private happyAgentClient?: {
         readonly generation: number;
-        readonly connection: RigConnection;
+        readonly client: HappyAgentClient;
     };
     private rigProxy?: RigHttpProxyHandle;
     private settings?: DesktopSettings;
@@ -113,11 +111,6 @@ export class DesktopRuntime implements AsyncDisposable {
             ((connection, onConnectionError) =>
                 rigHttpProxyCreate({
                     client: connection.client,
-                    // The same daemon connection, addressed at one machine it is
-                    // peered with. Built here because this is where the real
-                    // client lives; the proxy only needs to be able to ask for
-                    // one by the identity the host published.
-                    peerClient: (nodeId) => connection.client.peer(nodeId),
                     onConnectionError,
                     ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
                     ...(options.htmlPreview ? { htmlPreview: options.htmlPreview } : {}),
@@ -184,20 +177,20 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     /** Resolves Rig's complete ordered onboarding contract for this daemon. */
-    localOnboardingResolve(expectedConnectionId: number): Promise<RigOnboardingState> {
+    localOnboardingResolve(expectedConnectionId: number): Promise<LocalRigOnboardingState> {
         return this.serial(() => this.localOnboardingResolveOnce(expectedConnectionId));
     }
 
     private async localOnboardingResolveOnce(
         expectedConnectionId: number,
-    ): Promise<RigOnboardingState> {
+    ): Promise<LocalRigOnboardingState> {
         const connection = this.localConnectionRequire(expectedConnectionId);
-        const rig = this.localRigConnect();
-        if (!rig) throw new Error("The local Rig daemon is unavailable.");
+        const client = this.localHappyAgentClient();
+        if (!client) throw new Error("The local Rig daemon is unavailable.");
         const state = await connectedRigOnboardingResolve(
             connection.protocolVersion,
             connection.version,
-            rig,
+            client,
         );
         if (
             this.snapshotValue.phase !== "ready" ||
@@ -211,42 +204,28 @@ export class DesktopRuntime implements AsyncDisposable {
     async localOnboardingProfileCreate(
         expectedConnectionId: number,
         input: { readonly email: string; readonly name: string },
-    ): Promise<RigProfile> {
+    ): Promise<LocalRigProfile> {
         return this.serial(async () => {
             this.localConnectionRequire(expectedConnectionId);
-            const rig = this.localRigConnect();
-            if (!rig) throw new Error("The local Rig daemon is unavailable.");
-            return rig.createProfile(input);
-        });
-    }
-
-    async localOnboardingProfiles(expectedConnectionId: number): Promise<readonly RigProfile[]> {
-        return this.serial(async () => {
-            this.localConnectionRequire(expectedConnectionId);
-            const rig = this.localRigConnect();
-            if (!rig) throw new Error("The local Rig daemon is unavailable.");
-            return rig.listProfiles();
-        });
-    }
-
-    async localOnboardingMurmurChoose(
-        expectedConnectionId: number,
-        input: { readonly enabled: false } | { readonly enabled: true; readonly profileId: string },
-    ): Promise<void> {
-        await this.serial(async () => {
-            this.localConnectionRequire(expectedConnectionId);
-            const rig = this.localRigConnect();
-            if (!rig) throw new Error("The local Rig daemon is unavailable.");
-            await rig.onboardMurmur(input);
+            const client = this.localHappyAgentClient();
+            if (!client) throw new Error("The local Rig daemon is unavailable.");
+            const current = await client.getProfile();
+            return (
+                await client.updateProfile(input, {
+                    ifMatch: current.profile.version,
+                })
+            ).profile;
         });
     }
 
     localOnboardingFreshness(expectedConnectionId: number): Promise<"fresh" | "used"> {
         return this.serial(async () => {
-            const client = this.localConnectionRequire(expectedConnectionId).client;
-            const catalog = await client.listCatalog();
             this.localConnectionRequire(expectedConnectionId);
-            return catalog.projects.some((project) => project.kind !== "home") ? "used" : "fresh";
+            const client = this.localHappyAgentClient();
+            if (!client) throw new Error("The local Rig daemon is unavailable.");
+            const catalog = await client.listProjects();
+            this.localConnectionRequire(expectedConnectionId);
+            return catalog.projects.length > 0 ? "used" : "fresh";
         });
     }
 
@@ -256,9 +235,10 @@ export class DesktopRuntime implements AsyncDisposable {
     ): Promise<{ readonly path: string }> {
         return this.serial(async () => {
             this.localConnectionRequire(expectedConnectionId);
-            const rig = this.localRigConnect();
-            if (!rig) throw new Error("The local Rig daemon is unavailable.");
-            return rig.projects.add(path);
+            const client = this.localHappyAgentClient();
+            if (!client) throw new Error("The local Rig daemon is unavailable.");
+            await client.registerProject({ path });
+            return { path };
         });
     }
 
@@ -273,51 +253,40 @@ export class DesktopRuntime implements AsyncDisposable {
         return this.rigConnection;
     }
 
-    /** The one shared rig-connect client for this local activation. */
-    private localRigConnect(): RigConnection | undefined {
-        const endpoint = this.localRigEndpoint();
+    /** The one shared Happy Agent HTTP client for this local activation. */
+    private localHappyAgentClient(): HappyAgentClient | undefined {
+        const endpoint = this.localHappyAgentEndpoint();
         if (!endpoint) return undefined;
         const generation = this.connectionGeneration;
-        if (this.rigConnectConnection?.generation !== generation) {
-            this.rigConnectConnection?.connection.close();
-            this.rigConnectConnection = {
-                connection: connectRig({
+        if (this.happyAgentClient?.generation !== generation) {
+            this.happyAgentClient = {
+                client: new HappyAgentClient({
                     endpoint,
                     token: "happy2-local-capability",
                 }),
                 generation,
             };
         }
-        return this.rigConnectConnection.connection;
+        return this.happyAgentClient.client;
     }
 
-    /** The capability-scoped proxy endpoint rig-connect owns for local mode. */
-    private localRigEndpoint(): string | undefined {
+    /** The capability-scoped raw daemon endpoint for local mode. */
+    private localHappyAgentEndpoint(): string | undefined {
         if (this.snapshotValue.phase !== "ready" || this.snapshotValue.mode !== "local")
             return undefined;
         const endpoint = this.rigProxy?.url;
         return endpoint ? `${endpoint.replace(/\/$/u, "")}/rig-connect` : undefined;
     }
 
-    /**
-     * Opens one authenticated browser-proxy tunnel for a session, on the Rig
-     * that session belongs to: this machine's daemon, or the client addressing
-     * the peered machine named here. The session is resolved on the same Rig
-     * the tunnel is opened on, so a name that exists on both machines can never
-     * be answered by the wrong one.
-     */
-    openHttpProxy(sessionId: string, nodeId?: string): Promise<Duplex> {
+    /** Opens one authenticated browser-proxy tunnel for a local session. */
+    openHttpProxy(sessionId: string): Promise<Duplex> {
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.mode !== "local" ||
             !this.rigConnection
         )
             throw new Error("The local Rig daemon is unavailable.");
-        const client =
-            nodeId === undefined
-                ? this.rigConnection.client
-                : this.rigConnection.client.peer(nodeId);
-        return client.openHttpProxy(sessionId);
+        return this.rigConnection.client.openHttpProxy(sessionId);
     }
 
     start(request: DesktopStartRequest): Promise<void> {
@@ -387,15 +356,13 @@ export class DesktopRuntime implements AsyncDisposable {
             try {
                 proxy.replace({
                     client: replacement.client,
-                    peerClient: (nodeId) => replacement.client.peer(nodeId),
                 });
             } catch (replaceError) {
                 replacement.close();
                 throw replaceError;
             }
             this.rigConnection = replacement;
-            this.rigConnectConnection?.connection.close();
-            this.rigConnectConnection = undefined;
+            this.happyAgentClient = undefined;
             failedConnection.close();
             const snapshot = this.snapshotValue;
             if (snapshot.phase === "ready") {
@@ -571,8 +538,7 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     private localDispose(): void {
-        this.rigConnectConnection?.connection.close();
-        this.rigConnectConnection = undefined;
+        this.happyAgentClient = undefined;
         this.rigProxy?.close();
         this.rigProxy = undefined;
         this.rigConnection?.close();
@@ -633,15 +599,18 @@ function displayError(error: unknown): string {
 async function connectedRigOnboardingResolve(
     protocolVersion: number,
     installedVersion: string,
-    rig: RigConnection,
-): Promise<RigOnboardingState> {
+    client: HappyAgentClient,
+): Promise<LocalRigOnboardingState> {
     const compatibility = serverCompatibility(protocolVersion);
     if (compatibility.status !== "compatible")
         return daemonProtocolMismatchState(compatibility, installedVersion);
     try {
-        return await rig.getOnboardingStatus({
-            signal: AbortSignal.timeout(DEFAULT_INSTALLATION_DISCOVERY_TIMEOUT_MS),
+        const state = await client.getOnboarding({
+            signal: AbortSignal.timeout(onboardingRequestTimeoutMs),
         });
+        if (!state.steps.providers.done) return { state: "provider_setup" };
+        if (!state.steps.profile.done) return { state: "profile_required" };
+        return { state: "complete" };
     } catch (error) {
         return rigUnreachableState(error);
     }
@@ -650,7 +619,7 @@ async function connectedRigOnboardingResolve(
 function daemonProtocolMismatchState(
     compatibility: Exclude<ServerCompatibility, { status: "checking" } | { status: "compatible" }>,
     installedVersion: string,
-): RigOnboardingState {
+): LocalRigOnboardingState {
     return {
         installedVersion: installedVersion.slice(0, 256),
         maximumSupportedProtocolVersion: compatibility.maximumSupportedProtocolVersion,
@@ -663,7 +632,7 @@ function daemonProtocolMismatchState(
     };
 }
 
-function rigUnreachableState(error: unknown): RigOnboardingState {
+function rigUnreachableState(error: unknown): LocalRigOnboardingState {
     return {
         message: displayError(error).slice(0, 2_048) || "Rig could not be reached.",
         state: "rig_unreachable",

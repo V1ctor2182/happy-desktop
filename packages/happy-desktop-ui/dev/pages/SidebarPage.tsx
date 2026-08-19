@@ -151,43 +151,6 @@ const PHOTO =
  * compares: the leading slot and the trailing word change while the row's name,
  * indent, and branch stay exactly where they were.
  */
-/**
- * The folder tree: rows marked with a character the reader chose rather than with
- * a house glyph, nested the way the tree is, with a heading control that makes
- * another one.
- */
-const folderSections: SidebarSection[] = [
-    {
-        action: { icon: "plus", label: "New folder", reveal: "always" },
-        id: "folders",
-        items: [
-            { emoji: "\u{1F680}", id: "ship", kind: "folder", label: "Ship it" },
-            { emoji: "\u{1F41B}", id: "bugs", kind: "folder", label: "Bug reports" },
-            { depth: 1, emoji: "\u{1F525}", id: "bugs-urgent", kind: "folder", label: "Urgent" },
-            { depth: 1, emoji: "\u{1F4DA}", id: "bugs-known", kind: "folder", label: "Known" },
-            // A folder nobody has marked wears the default character, so the
-            // column keeps one family of marks rather than two.
-            { emoji: "\u{1F4C1}", id: "unsorted", kind: "folder", label: "Reading list" },
-        ],
-        label: "Folders",
-    },
-];
-
-const emptyFolderSections: SidebarSection[] = [
-    {
-        action: { icon: "plus", label: "New folder", reveal: "always" },
-        empty: {
-            actionLabel: "New folder",
-            description: "Group your chats into folders to keep them apart.",
-            icon: "archive",
-            title: "No folders yet",
-        },
-        id: "folders",
-        items: [],
-        label: "Folders",
-    },
-];
-
 const lifecycleSections: SidebarSection[] = [
     {
         id: "lifecycle",
@@ -419,8 +382,8 @@ const REORDER_TREE: readonly ReorderNode[] = [
     {
         children: [
             { children: [], id: "sub-a", label: "Sub a" },
-            // Three levels, because a folder holds folders and nothing stops an
-            // owner nesting them further: a row this deep must be ordered among
+            // Three levels, because nested rows may contain more nested rows: a
+            // row this deep must be ordered among
             // its own siblings, not among everything under its top-level row.
             {
                 children: [
@@ -543,7 +506,7 @@ function ReorderDemo() {
  *
  * The folded rows are held here exactly as a product store holds them: the
  * sidebar is told which rows are shut and reports a press, and never decides for
- * itself what is open. A folder folded away takes the folders inside it with it,
+ * itself what is open. A folded row takes its descendants with it,
  * which is why the tree is three levels deep and why one row starts shut.
  */
 function FoldDemo() {
@@ -1036,43 +999,6 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="A folder wears a character the reader chose, in the same 16px lane a house glyph occupies, so a marked row and an unmarked one keep one rhythm. The heading control is always shown: making a folder is what the section is for."
-                label="Folder rows"
-                number="01b"
-                stage="app"
-            >
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <Frame height={300}>
-                        <Sidebar
-                            activeItemId="bugs"
-                            onItemSelect={() => {}}
-                            onSectionAction={() => {}}
-                            sections={folderSections}
-                            title="Folders"
-                        />
-                    </Frame>
-                    <DimensionRule label="emoji slot 16 × 16 · 13px · row 32 px unchanged · nested rows keep the branch" />
-                </div>
-            </Specimen>
-
-            <Specimen
-                detail="A Rig with no folders states that and offers the one act that fills it, rather than showing a heading over nothing."
-                label="Folders, empty"
-                number="01c"
-                stage="app"
-            >
-                <Frame height={260}>
-                    <Sidebar
-                        activeItemId=""
-                        onItemSelect={() => {}}
-                        onSectionAction={() => {}}
-                        sections={emptyFolderSections}
-                        title="Folders"
-                    />
-                </Frame>
-            </Specimen>
-
-            <Specimen
                 detail="Active = raised + 600 · unread = 700 + dot · direct mention = numeric CountBadge · meta 11px muted"
                 label="Row treatments and kinds"
                 number="02"
@@ -1320,52 +1246,6 @@ export function SidebarPage() {
                         ))}
                     </div>
                     <DimensionRule label="row 32 px · labels yield width to held-Command caps" />
-                </div>
-            </Specimen>
-
-            <Specimen
-                detail="A section whose source cannot be reached states the fault under its heading and does not claim to be empty; with nothing to press, it offers no button"
-                label="Unreachable source"
-                number="05"
-                stage="app"
-            >
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <Frame height={380}>
-                        <Sidebar
-                            activeItemId=""
-                            onCompose={() => {}}
-                            onItemSelect={() => {}}
-                            onSectionAction={() => {}}
-                            sections={[
-                                {
-                                    empty: {
-                                        description: "Connecting to this machine…",
-                                        icon: "link",
-                                        title: "Connecting…",
-                                    },
-                                    id: "connecting",
-                                    items: [],
-                                    label: "workshop",
-                                    status: "connecting",
-                                },
-                                {
-                                    empty: {
-                                        description:
-                                            "Its projects will appear once this machine can be reached again.",
-                                        icon: "link",
-                                        title: "Not reachable",
-                                    },
-                                    error: "The peer could not complete the request.",
-                                    id: "unreachable",
-                                    items: [],
-                                    label: "hjq4sq5xxwpw5ekbk7pug682",
-                                    status: "error",
-                                },
-                            ]}
-                            title="Nodes"
-                        />
-                    </Frame>
-                    <DimensionRule label="error line 11/15 destructive · empty copy 11/15 · no action" />
                 </div>
             </Specimen>
 

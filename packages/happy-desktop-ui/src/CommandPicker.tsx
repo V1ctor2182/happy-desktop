@@ -113,11 +113,8 @@ const COMMAND_META: Record<string, CommandMeta> = {
     agents: { description: "Monitor delegated subagents", icon: "users" },
     goal: { description: "Show the persistent goal", icon: "star" },
     ps: { description: "List running background terminals", icon: "terminal" },
-    new: { description: "Reset and start fresh", icon: "plus" },
     compact: { description: "Summarize older messages to free context", icon: "filter" },
     abort: { description: "Stop the current response", icon: "close" },
-    fork: { description: "Start a new session from this one", icon: "branch" },
-    rewind: { description: "Truncate back to a message", icon: "reply" },
     clear: { description: "Clear the visible conversation", icon: "trash" },
 };
 
@@ -125,13 +122,15 @@ const COMMAND_META: Record<string, CommandMeta> = {
 export function commandPickerItems(
     commands: readonly ComposerCommand[],
 ): readonly CommandPickerItem[] {
-    return commands.map((command) => {
-        const meta = COMMAND_META[command.id];
-        return {
-            id: command.id,
-            slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
-            description: meta?.description ?? command.description ?? "",
-            icon: meta?.icon ?? "spark",
-        };
-    });
+    return commands
+        .filter((command) => command.id !== "new" && command.id !== "fork")
+        .map((command) => {
+            const meta = COMMAND_META[command.id];
+            return {
+                id: command.id,
+                slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
+                description: meta?.description ?? command.description ?? "",
+                icon: meta?.icon ?? "spark",
+            };
+        });
 }

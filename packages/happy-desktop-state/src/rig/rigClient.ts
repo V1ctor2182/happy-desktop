@@ -1,7 +1,9 @@
 import type { TerminalDriverCreate } from "../modules/terminal/terminalState.js";
+import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import { UserError } from "../types.js";
 import { rigProjectAddError } from "./rigProjectRegistration.js";
-import type { MutationRejectedDelta, RigConnection } from "@slopus/rig-connect";
+import type { MutationRejectedDelta } from "../happyAgentConnection/index.js";
+import type { RigConnection } from "../happyAgentConnection/index.js";
 import { rigTerminalOpen, type RigTerminalHandle } from "./rigTerminalStore.js";
 import {
     rigChatStoreCreate,
@@ -16,13 +18,16 @@ import {
     type RigSessionListOutput,
     type RigSessionListStore,
 } from "./rigSessionListStore.js";
-import type { RigTransport } from "./rigTransport.js";
-import { rigSlotsStoreCreate, type RigSlotsStore } from "./rigSlotsStore.js";
-import { rigSecretsStoreCreate, type RigSecretsStore } from "./rigSecretsStore.js";
+import type { RigHostServices } from "./rigHostServices.js";
+import {
+    rigHappyAgentChangedFileProject,
+    rigHappyAgentModelCatalogProject,
+    rigTextDecodeBase64,
+    rigTextEncodeBase64,
+} from "./rigHappyAgentProject.js";
 import type {
     RigChangedFileDocument,
     RigFileSearchResult,
-    RigDocumentId,
     RigGroupId,
     RigOpenInTargets,
     RigWorkspaceFileBytes,
@@ -50,29 +55,6 @@ import {
     type RigProviderUsageSource,
     type RigProviderUsageStore,
 } from "./rigProviderUsageStore.js";
-import { rigNodesStoreCreate, type RigNodesSource, type RigNodesStore } from "./rigNodesStore.js";
-import {
-    rigFoldersStoreCreate,
-    type RigFoldersSource,
-    type RigFoldersStore,
-} from "./rigFoldersStore.js";
-import { rigDocumentsStoreCreate, type RigDocumentsStore } from "./rigDocumentsStore.js";
-import {
-    rigDocumentStoreCreate,
-    type RigDocumentActions,
-    type RigDocumentSource,
-    type RigDocumentStore,
-} from "./rigDocumentStore.js";
-import {
-    rigPairingStoreCreate,
-    type RigPairingSource,
-    type RigPairingStore,
-} from "./rigPairingStore.js";
-import {
-    rigSharingStoreCreate,
-    type RigSharingSource,
-    type RigSharingStore,
-} from "./rigSharingStore.js";
 import {
     rigProfilesStoreCreate,
     type RigProfilesActions,
@@ -117,55 +99,8 @@ export interface RigClient {
      * empty for the wrong reason.
      */
     providerUsage(): RigProviderUsageStore | undefined;
-    /**
-     * The single nodes store for this Rig: the machines this host is peered with
-     * and how each link is doing. Materialized on first access and shared, so the
-     * settings list and the sidebar read one stream rather than two. Unavailable
-     * when the host supplied no P2P feed, so a surface can say the host does not
-     * peer rather than showing a list that is empty for the wrong reason.
-     */
-    nodes(): RigNodesStore | undefined;
-    /**
-     * The single folders store for this Rig: the virtual tree its chats are
-     * filed into. Materialized on first access and shared, because the tree
-     * belongs to the machine rather than to any project or conversation.
-     * Unavailable when the host supplied no folder feed, so a surface can say
-     * this Rig has no folders rather than showing a tree that is empty for the
-     * wrong reason.
-     */
-    folders(): RigFoldersStore | undefined;
-    /**
-     * What each document linked into this Rig's folders is called. Materialized
-     * on first access and shared: a document carries no name on the Rig, so its
-     * title is read from its content, and one store does that for every row
-     * rather than each row opening a feed of its own.
-     */
-    documents(): RigDocumentsStore | undefined;
-    /**
-     * One open document, with a lifetime of its own rather than the client's.
-     * The caller disposes it: which document is open is decided by the address,
-     * and the collaborative document behind it must outlive any render.
-     */
-    documentOpen(documentId: RigDocumentId): RigDocumentStore | undefined;
-    /** Creates one empty document on this Rig and returns its stable address. */
-    documentCreate(): RigDocumentId | undefined;
     /** Host-owned human identities used to author work sent into remote Rigs. */
     profiles(): RigProfilesStore | undefined;
-    /**
-     * The single pairing store for this Rig: trusting a new machine by
-     * comparing four emojis on both ends. Materialized on first access and
-     * shared. Unavailable on a connection that does not own trust — a node is
-     * reached because the host already trusts it, and this window does not
-     * negotiate trust on another machine's behalf.
-     */
-    pairing(): RigPairingStore | undefined;
-    /**
-     * The single sharing store for this Rig: the people it shares work with and
-     * the requests waiting at either end. Materialized on first access and
-     * shared. Unavailable on a connection that does not own an identity — a node
-     * shares under its host's, so it has no contact list of its own.
-     */
-    sharing(): RigSharingStore | undefined;
     /**
      * This Rig's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -174,13 +109,6 @@ export interface RigClient {
     instructions(): RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy, as one editable document. */
     securityPolicy(): RigSecurityPolicyStore;
-    /**
-     * This Rig's secret bundles: what it holds, and the one place they are
-     * registered, replaced, and removed. Materialized on first access and
-     * shared, because the registry belongs to the machine rather than to any
-     * project or conversation.
-     */
-    secrets(): RigSecretsStore;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
     /**
@@ -216,13 +144,6 @@ export interface RigClient {
      * that renders the document rather than its source.
      */
     htmlPreviewOpen(groupId: RigGroupId, path: string): Promise<string>;
-    /**
-     * The slots/applets surface: one instance for the client's lifetime, because
-     * both catalogs are Rig-global. What the window has open never replaces it.
-     */
-    slots(): RigSlotsStore;
-    /** Resolves the current applet version into the host's isolated preview site. */
-    appletPreviewOpen(name: string): Promise<string>;
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
         groupId: RigGroupId,
@@ -261,12 +182,6 @@ export interface RigClient {
         signal?: AbortSignal,
     ): Promise<RigChangedFileDocument>;
     /**
-     * Throws away the working-tree changes of the named files in one checkout.
-     * The listing is not updated from here: the daemon's Git watch reports the
-     * new state, which is the same path every other change to the checkout takes.
-     */
-    changedFilesRevert(groupId: RigGroupId, paths: readonly string[]): Promise<void>;
-    /**
      * Acquires a retained chat store for one session. Concurrent and later
      * acquisitions share its messages and model state; releasing a view lease
      * never evicts it or stops its client-owned background synchronization.
@@ -285,9 +200,11 @@ export interface RigClient {
 }
 
 export interface RigClientDeps {
-    readonly transport: RigTransport;
+    readonly client: HappyAgentClient;
+    readonly connection: RigConnection;
+    readonly hostServices: RigHostServices;
     /** Stream-owned read authority for the project/workspace/session catalog. */
-    readonly catalogSource?: RigSessionCatalogSource;
+    readonly catalogSource: RigSessionCatalogSource;
     /**
      * Stream-owned feed of the questions this Rig's agents are waiting on.
      * Omitted leaves the inbox unavailable rather than empty.
@@ -298,50 +215,18 @@ export interface RigClientDeps {
      * unavailable rather than empty.
      */
     readonly providerUsageSource?: RigProviderUsageSource;
-    /**
-     * Stream-owned feed of the host's P2P status: which machines it is peered
-     * with, and how each link is doing. Omitted leaves nodes unavailable rather
-     * than empty.
-     */
-    readonly nodesSource?: RigNodesSource;
-    /**
-     * Stream-owned feed of this Rig's folder tree. Omitted leaves folders
-     * unavailable rather than empty.
-     */
-    readonly foldersSource?: RigFoldersSource;
-    /**
-     * Opens the host's feed for one document. Omitted leaves documents
-     * unavailable rather than empty, which is what a Rig too old to serve them
-     * should look like.
-     */
-    readonly documentSourceCreate?: (documentId: RigDocumentId) => RigDocumentSource;
-    /** One compare-version-and-write per document. Omitted leaves them read-only. */
-    readonly documentActions?: RigDocumentActions;
-    /**
-     * The host's own pairing service. Omitted on a connection that does not
-     * own trust, which leaves pairing unavailable rather than idle.
-     */
-    readonly pairingSource?: RigPairingSource;
-    /** Host-only sharing feed and contact mutations. Omitted on a node connection. */
-    readonly sharingSource?: RigSharingSource;
     /** Host-only profile catalog and mutations. Omitted on a node connection. */
     readonly profilesSource?: RigProfilesSource;
     readonly profilesActions?: RigProfilesActions;
     readonly profileSelectionPersistence?: RigProfileSelectionPersistence;
-    /** Selected host identity required by work sent through a node route. */
-    readonly peerIdentity?: () => string | undefined;
-    /** Opens rig-connect's core transcript stream for one materialized chat. */
-    readonly transcriptConnect?: RigChatTranscriptConnect;
-    /** Shared rig-connect actions for session mutations. */
-    readonly connectActions?: RigConnection;
-    readonly connectMutationSubscribe?: (
+    /** Opens the core transcript stream for one materialized chat. */
+    readonly transcriptConnect: RigChatTranscriptConnect;
+    /** Terminal failures emitted by the shared Happy Agent mutation authority. */
+    readonly connectMutationSubscribe: (
         listener: (rejection: MutationRejectedDelta) => void,
     ) => () => void;
-    readonly createId?: () => string;
-    readonly now?: () => number;
     readonly sessionListOutput?: (event: RigSessionListOutput) => void;
     readonly chatOutput?: (sessionId: RigSessionId, event: RigChatOutput) => void;
-    readonly backgroundError?: (error: UserError) => void;
     readonly modelPreferencePersistence?: RigModelPreferencePersistence;
     /** Where this Rig's tab and read memory is kept; omitted keeps it in memory. */
     readonly workspaceMemoryPersistence?: RigWorkspaceMemoryPersistence;
@@ -362,16 +247,71 @@ interface ChatBinding {
     archived: boolean;
 }
 
+async function workspaceFilesRead(
+    client: Pick<HappyAgentClient, "getFileTree">,
+    groupId: RigGroupId,
+): Promise<RigWorkspaceFiles> {
+    const directories = [""];
+    const paths: string[] = [];
+    for (let directoryIndex = 0; directoryIndex < directories.length; directoryIndex += 1) {
+        const directory = directories[directoryIndex]!;
+        let cursor: string | undefined;
+        do {
+            const page = await client.getFileTree(groupId, {
+                ...(directory === "" ? {} : { path: directory }),
+                ...(cursor === undefined ? {} : { cursor }),
+            });
+            for (const entry of page.entries) {
+                if (entry.type === "directory") directories.push(entry.path);
+                else if (entry.type === "file" || entry.type === "symlink") paths.push(entry.path);
+            }
+            cursor = page.nextCursor ?? undefined;
+        } while (cursor !== undefined);
+    }
+    paths.sort((left, right) => left.localeCompare(right));
+    return { paths, truncated: false };
+}
+
+async function changedFileRead(
+    client: Pick<HappyAgentClient, "getWorkspaceGit" | "readFile" | "readFileRevision">,
+    groupId: RigGroupId,
+    path: string,
+    signal?: AbortSignal,
+): Promise<RigChangedFileDocument> {
+    const { git } = await client.getWorkspaceGit(groupId, { signal });
+    const change = git.files.find((candidate) => candidate.path === path);
+    if (change === undefined) throw new UserError("That file is no longer changed.");
+
+    const oldContent =
+        change.status === "added" ||
+        change.status === "untracked" ||
+        git.comparison === "unavailable" ||
+        git.base === null
+            ? ""
+            : rigTextDecodeBase64(
+                  (await client.readFileRevision(groupId, { path, revision: git.base }, { signal }))
+                      .content,
+              );
+    const current =
+        change.status === "deleted" ? undefined : await client.readFile(groupId, path, { signal });
+    return rigHappyAgentChangedFileProject({
+        path,
+        oldContent,
+        newContent: current === undefined ? "" : rigTextDecodeBase64(current.content),
+        ...(current === undefined ? {} : { hash: current.hash }),
+    });
+}
+
 /**
- * Composition root for a direct Rig client: it owns the injected transport, the
- * daemon-global model store, session list, and retained per-session chat stores.
+ * Composition root for a direct Happy Agent client: it owns the stateless `/v0`
+ * client, the live connection, model store, session list, and retained chats.
  * Once opened, a non-archived chat stays synchronized for this client's lifetime;
- * archiving suspends its transport but leaves messages and model state in memory.
+ * archiving suspends its live subscription but leaves messages and model state in memory.
  */
 export function rigClientCreate(deps: RigClientDeps): RigClient {
-    const transport = deps.transport;
     const models = rigModelStoreCreate({
-        catalogRead: () => transport.modelsRead(),
+        catalogRead: async () =>
+            rigHappyAgentModelCatalogProject((await deps.client.getConfig()).config),
         ...(deps.modelPreferencePersistence
             ? { preferencePersistence: deps.modelPreferencePersistence }
             : {}),
@@ -380,16 +320,9 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let sessionListStore: RigSessionListStore | undefined;
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
-    let nodesStore: RigNodesStore | undefined;
-    let foldersStore: RigFoldersStore | undefined;
-    let documentsStore: RigDocumentsStore | undefined;
-    let pairingStore: RigPairingStore | undefined;
-    let sharingStore: RigSharingStore | undefined;
     let profilesStore: RigProfilesStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
-    let secretsStore: RigSecretsStore | undefined;
-    let slotsStore: RigSlotsStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
@@ -398,55 +331,55 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         memory,
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
         changedFileRead: (groupId, path, signal) =>
-            transport.changedFileRead(groupId, path, signal),
-        changedFilesRevert: (groupId, paths) => transport.changedFilesRevert(groupId, paths),
-        workspaceFilesRead: (groupId) => transport.workspaceFilesRead(groupId),
-        filesSearch: (groupId, query, limit) => transport.filesSearch(groupId, query, limit),
-        workspaceFileRead: (groupId, path, signal) =>
-            transport.workspaceFileRead(groupId, path, signal),
-        workspaceFileBytesRead: (groupId, path, signal) =>
-            transport.workspaceFileBytesRead(groupId, path, signal),
-        htmlPreviewOpen: (groupId, path) => transport.htmlPreviewOpen(groupId, path),
-        slots() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            slotsStore ??= rigSlotsStoreCreate({ transport });
-            return slotsStore;
+            changedFileRead(deps.client, groupId, path, signal),
+        workspaceFilesRead: (groupId) => workspaceFilesRead(deps.client, groupId),
+        filesSearch: async (groupId, query, limit) =>
+            (
+                await deps.client.searchFiles(groupId, {
+                    query,
+                    ...(limit === undefined ? {} : { limit }),
+                })
+            ).files.map((file) => ({ fileName: file.fileName, path: file.path })),
+        workspaceFileRead: async (groupId, path, signal) => {
+            const file = await deps.client.readFile(groupId, path, { signal });
+            return { path, content: rigTextDecodeBase64(file.content), hash: file.hash };
         },
-        appletPreviewOpen: (name) => transport.appletPreviewOpen(name),
-        workspaceFileWrite: (groupId, path, content, expectedHash) =>
-            transport.workspaceFileWrite(groupId, path, content, expectedHash),
+        workspaceFileBytesRead: (groupId, path, signal) =>
+            deps.hostServices.workspaceFileBytesRead(groupId, path, signal),
+        htmlPreviewOpen: (groupId, path) => deps.hostServices.htmlPreviewOpen(groupId, path),
+        workspaceFileWrite: async (groupId, path, content, expectedHash) => {
+            await deps.client.writeFile(groupId, {
+                path,
+                content: rigTextEncodeBase64(content),
+                expectedHash,
+            });
+        },
         attachmentWrite: (groupId, name, content) =>
-            transport.attachmentWrite(groupId, name, content),
+            deps.hostServices.attachmentWrite(groupId, name, content),
         async projectAdd(path) {
-            // Registration is Rig's own decision, so it goes to Rig directly
-            // rather than through the projected transport: the daemon validates
-            // the folder, names the project, and is idempotent by canonical
-            // path. A connection that carries no rig-connect actions cannot ask,
-            // and says so rather than pretending the folder was added.
-            const actions = deps.connectActions;
-            if (!actions) throw new UserError("This Rig cannot add projects.");
+            // Registration is the daemon's own decision, so it goes directly
+            // through the connection actions: the daemon validates the folder,
+            // names the project, and is idempotent by canonical path. A
+            // connection without project actions cannot ask, and says so rather
+            // than pretending the folder was added.
             try {
-                const project = await actions.projects.add(path);
+                const project = await deps.connection.projects.add(path);
                 return project.id as RigProjectId;
             } catch (error) {
                 throw rigProjectAddError(error, path);
             }
         },
-        openInTargetsRead: () => transport.openInTargetsRead(),
-        openIn: (groupId, targetId) => transport.openIn(groupId, targetId),
+        openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
+        openIn: (groupId, targetId) => deps.hostServices.openIn(groupId, targetId),
         sessionList() {
             if (disposed) throw new Error("The Rig client is disposed.");
             if (!sessionListStore) {
                 sessionListStore = rigSessionListStoreCreate({
-                    transport,
+                    client: deps.client,
                     catalogSource: deps.catalogSource,
-                    ...(deps.connectActions ? { connectActions: deps.connectActions } : {}),
-                    ...(deps.connectMutationSubscribe
-                        ? { connectMutationSubscribe: deps.connectMutationSubscribe }
-                        : {}),
-                    ...(deps.peerIdentity ? { peerIdentity: deps.peerIdentity } : {}),
+                    connectActions: deps.connection,
+                    connectMutationSubscribe: deps.connectMutationSubscribe,
                     output: deps.sessionListOutput,
-                    createId: deps.createId,
                 });
             }
             return sessionListStore;
@@ -460,31 +393,10 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 output: (event) => {
                     const store = inboxStore;
                     if (!store) return;
-                    if (deps.connectActions) {
-                        deps.connectActions.answerUserInput(event.sessionId, event.requestId, {
-                            answers: event.answers,
-                        });
-                        store.inboxInput({ type: "itemAnswerSucceeded", itemId: event.itemId });
-                        return;
-                    }
-                    transport
-                        .answerUserInput(event.sessionId, {
-                            requestId: event.requestId,
-                            answers: event.answers,
-                        })
-                        .then(() => {
-                            store.inboxInput({
-                                type: "itemAnswerSucceeded",
-                                itemId: event.itemId,
-                            });
-                        })
-                        .catch((error: unknown) => {
-                            store.inboxInput({
-                                type: "itemAnswerFailed",
-                                itemId: event.itemId,
-                                error,
-                            });
-                        });
+                    deps.connection.answerUserInput(event.sessionId, event.requestId, {
+                        answers: event.answers,
+                    });
+                    store.inboxInput({ type: "itemAnswerSucceeded", itemId: event.itemId });
                 },
             });
             return inboxStore;
@@ -495,75 +407,6 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!source) return undefined;
             providerUsageStore ??= rigProviderUsageStoreCreate({ source });
             return providerUsageStore;
-        },
-        nodes() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const source = deps.nodesSource;
-            if (!source) return undefined;
-            nodesStore ??= rigNodesStoreCreate({ source });
-            return nodesStore;
-        },
-        folders() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const source = deps.foldersSource;
-            const actions = deps.connectActions;
-            // Both halves or neither: a tree that can be read but not changed
-            // would offer controls that go nowhere, and a tree that can be
-            // changed but not read would never show what happened.
-            if (!source || !actions) return undefined;
-            foldersStore ??= rigFoldersStoreCreate({
-                source,
-                ...(deps.connectMutationSubscribe
-                    ? { mutationSubscribe: deps.connectMutationSubscribe }
-                    : {}),
-                actions: {
-                    folderCreate: (input) =>
-                        actions.folders.create({
-                            name: input.name,
-                            ...(input.icon === undefined ? {} : { icon: input.icon }),
-                            ...(input.parentId === undefined ? {} : { parentId: input.parentId }),
-                        }),
-                    folderUpdate: (folderId, changes) => actions.folders.update(folderId, changes),
-                    folderMove: (folderId, parentId, afterId) =>
-                        actions.folders.move(folderId, { afterId, parentId }),
-                    folderArchive: (folderId) => actions.folders.archive(folderId),
-                    folderSessionSet: (sessionId, folderId) =>
-                        actions.folders.setSessionFolder(sessionId, folderId),
-                    folderItemLink: (folderId, target) =>
-                        actions.folders.linkItem(folderId, { target }),
-                    folderItemMove: (itemId, folderId, afterId) =>
-                        actions.folders.moveItem(itemId, { afterId, folderId }),
-                    folderItemUnlink: (itemId) => actions.folders.unlinkItem(itemId),
-                },
-            });
-            return foldersStore;
-        },
-        documents() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const sourceCreate = deps.documentSourceCreate;
-            // Titles are read from the documents the tree links, so both the
-            // tree and a way to read one are needed before anything can be named.
-            if (!sourceCreate) return undefined;
-            const folders = this.folders();
-            if (!folders) return undefined;
-            documentsStore ??= rigDocumentsStoreCreate({ folders, sourceCreate });
-            return documentsStore;
-        },
-        documentOpen(documentId) {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const sourceCreate = deps.documentSourceCreate;
-            const actions = deps.documentActions;
-            // Both halves or neither: a document that could be read but not
-            // written would offer an editor that silently discards every edit.
-            if (!sourceCreate || !actions) return undefined;
-            return rigDocumentStoreCreate(documentId, {
-                actions,
-                source: sourceCreate(documentId),
-            });
-        },
-        documentCreate() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            return deps.documentActions?.documentCreate();
         },
         profiles() {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -577,34 +420,15 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             });
             return profilesStore;
         },
-        pairing() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const source = deps.pairingSource;
-            if (!source) return undefined;
-            pairingStore ??= rigPairingStoreCreate({ source });
-            return pairingStore;
-        },
-        sharing() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const source = deps.sharingSource;
-            if (!source) return undefined;
-            sharingStore ??= rigSharingStoreCreate({ source });
-            return sharingStore;
-        },
         instructions() {
             if (disposed) throw new Error("The Rig client is disposed.");
-            instructionsStore ??= rigInstructionsStoreCreate({ transport });
+            instructionsStore ??= rigInstructionsStoreCreate({ client: deps.client });
             return instructionsStore;
         },
         securityPolicy() {
             if (disposed) throw new Error("The Rig client is disposed.");
-            securityPolicyStore ??= rigSecurityPolicyStoreCreate({ transport });
+            securityPolicyStore ??= rigSecurityPolicyStoreCreate({ client: deps.client });
             return securityPolicyStore;
-        },
-        secrets() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            secretsStore ??= rigSecretsStoreCreate({ transport });
-            return secretsStore;
         },
         async chat(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -612,20 +436,12 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!binding) {
                 const storePromise = models.load().then(({ catalog }) => {
                     const chatDeps: RigChatDeps = {
-                        transport,
                         catalog,
-                        ...(deps.transcriptConnect
-                            ? { transcriptConnect: deps.transcriptConnect }
-                            : {}),
-                        ...(deps.connectActions ? { connectActions: deps.connectActions } : {}),
-                        ...(deps.peerIdentity ? { messageIdentity: deps.peerIdentity } : {}),
-                        ...(deps.connectMutationSubscribe
-                            ? { connectMutationSubscribe: deps.connectMutationSubscribe }
-                            : {}),
+                        transcriptConnect: deps.transcriptConnect,
+                        connectActions: deps.connection,
+                        connectMutationSubscribe: deps.connectMutationSubscribe,
                         selectionUsed: (selection) => models.selectionUsed(selection),
                         modelSelect: (current, input) => models.modelSelect(current, input),
-                        createId: deps.createId,
-                        now: deps.now,
                         output: deps.chatOutput
                             ? (event) => deps.chatOutput?.(sessionId, event)
                             : undefined,
@@ -687,7 +503,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (disposed) throw new Error("The Rig client is disposed.");
             return rigTerminalOpen(
                 {
-                    transport,
+                    client: deps.client,
+                    hostServices: deps.hostServices,
                     ...(deps.terminalDriverCreate
                         ? { driverCreate: deps.terminalDriverCreate }
                         : {}),
@@ -705,27 +522,13 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             inboxStore = undefined;
             providerUsageStore?.[Symbol.dispose]();
             providerUsageStore = undefined;
-            nodesStore?.[Symbol.dispose]();
-            nodesStore = undefined;
-            foldersStore?.[Symbol.dispose]();
-            foldersStore = undefined;
-            documentsStore?.[Symbol.dispose]();
-            documentsStore = undefined;
-            pairingStore?.[Symbol.dispose]();
-            pairingStore = undefined;
-            sharingStore?.[Symbol.dispose]();
-            sharingStore = undefined;
             profilesStore?.[Symbol.dispose]();
             profilesStore = undefined;
             instructionsStore?.[Symbol.dispose]();
-            slotsStore?.[Symbol.dispose]();
-            slotsStore = undefined;
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();
             securityPolicyStore = undefined;
-            secretsStore?.[Symbol.dispose]();
-            secretsStore = undefined;
-            deps.catalogSource?.[Symbol.dispose]();
+            deps.catalogSource[Symbol.dispose]();
             for (const binding of chats.values()) {
                 binding.backgroundUnsubscribe?.();
                 binding.store?.[Symbol.dispose]();

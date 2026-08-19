@@ -4,13 +4,13 @@ import { promisify } from "node:util";
 import { join } from "node:path";
 
 import { gymRigLauncherWrite, gymRunProfileWrite, rigEntrypointResolve } from "./paths.js";
-import { RigProtocolClient } from "./rigProtocol.js";
+import { GymHappyAgentClient } from "./happyAgentProtocol.js";
 import type { GymInferenceServer, GymRunPaths, RigRuntime } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
 export interface StartedRigRuntime extends RigRuntime {
-    readonly client: RigProtocolClient;
+    readonly client: GymHappyAgentClient;
 }
 
 export async function rigRuntimeCreate(
@@ -53,7 +53,7 @@ class LocalRigRuntime implements StartedRigRuntime {
     readonly #environment: Record<string, string>;
     readonly #command: string;
     #token = "";
-    #client: RigProtocolClient | undefined;
+    #client: GymHappyAgentClient | undefined;
 
     constructor(
         paths: GymRunPaths,
@@ -88,7 +88,7 @@ class LocalRigRuntime implements StartedRigRuntime {
         return this.#token;
     }
 
-    get client(): RigProtocolClient {
+    get client(): GymHappyAgentClient {
         if (this.#client === undefined) throw new Error("Rig runtime has not started.");
         return this.#client;
     }
@@ -103,7 +103,7 @@ class LocalRigRuntime implements StartedRigRuntime {
         await waitForToken(this.tokenPath, 30_000);
         this.#token = (await readFile(this.tokenPath, "utf8")).trim();
         if (!this.#token) throw new Error("Rig daemon wrote an empty authentication token.");
-        this.#client = new RigProtocolClient(this.socketPath, this.#token);
+        this.#client = new GymHappyAgentClient(this.socketPath, this.#token);
         await waitForHealth(this.#client, 30_000);
     }
 
@@ -171,7 +171,7 @@ async function waitForToken(path: string, timeoutMs: number): Promise<void> {
     throw new Error(`Timed out waiting for the isolated Rig token at ${path}.`);
 }
 
-async function waitForHealth(client: RigProtocolClient, timeoutMs: number): Promise<void> {
+async function waitForHealth(client: GymHappyAgentClient, timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     let lastError: unknown;
     while (Date.now() < deadline) {

@@ -26,9 +26,7 @@ import {
     type KeyboardShortcut,
 } from "./keyboardShortcut";
 import { Menu, type MenuItem } from "./Menu";
-import { RigPeerStatus, type RigPeerState } from "./RigPeerStatus";
 import { ShimmerText } from "./ShimmerText";
-import { SidebarNodes, type SidebarNode } from "./SidebarNodes";
 import { Spinner } from "./Spinner";
 /** One control on a row: its glyph, what it does, and when it shows. */
 export type SidebarItemAction = {
@@ -97,14 +95,6 @@ export type SidebarItem = {
      * a project's delta lines up with the rows under it.
      */
     secondaryAction?: SidebarItemAction;
-    /**
-     * A folder-sharing group at this row: one durable trailing mark at rest,
-     * with a spinner while its contents are crossing Murmur.
-     */
-    share?: {
-        status: "syncing" | "synced" | "error";
-        label: string;
-    };
     online?: boolean;
     /**
      * `working` spins in the leading slot; `waiting` shows a highlighted clock
@@ -215,19 +205,6 @@ export type SidebarSection = {
     headingOnly?: boolean;
     items: SidebarItem[];
     label?: string;
-    /**
-     * Machines this Rig is peered with that there is nothing to open on,
-     * reported under the heading instead of being listed as rows. They are
-     * stated separately from `items` because they are not places to go — see
-     * `SidebarNodes` — and a section that has them has no rows of its own.
-     */
-    nodes?: readonly SidebarNode[];
-    /**
-     * Where the machine this section's rows come from currently is, shown as the
-     * shared peer marker beside the heading. A section that is not one machine's
-     * list supplies none and its heading is only a name.
-     */
-    status?: RigPeerState;
     /**
      * What went wrong with this section, said under its heading until it
      * clears. It is the section's, not a row's, in both directions: an add that
@@ -940,26 +917,6 @@ function SidebarRow({
                 label: `${item().label}: ${item().lifecycleLabel ?? "unavailable"}`,
                 lifecycle: lifecycle()!,
             };
-        if (item().share?.status === "syncing")
-            return {
-                kind: "spinner",
-                tone: "accent",
-                label: item().share!.label,
-            };
-        if (item().share?.status === "error")
-            return {
-                kind: "glyph",
-                icon: "alert",
-                label: item().share!.label,
-                lifecycle: "failed",
-            };
-        if (item().share?.status === "synced")
-            return {
-                kind: "glyph",
-                icon: "link",
-                label: item().share!.label,
-                lifecycle: "shared",
-            };
         if (item().kind !== "workspace" && item().kind !== "project") return undefined;
         if (item().status === "working")
             return { kind: "spinner", tone: "muted", label: `${item().label} is working` };
@@ -983,16 +940,13 @@ function SidebarRow({
      *
      * A place can start working at any moment, and its delta may not jump
      * sideways when it does. So the cell is reserved by what the row is — a
-     * project or a workspace, or anything already crossing Murmur or still
-     * being made — rather than by what it happens to be doing this second. A
+     * project or a workspace, or anything still being made — rather than by
+     * what it happens to be doing this second. A
      * channel or a person never spins, and reserving a lane for a mark they
      * cannot show would only pull their names in from the edge.
      */
     const reservesActivity = () =>
-        item().kind === "project" ||
-        item().kind === "workspace" ||
-        item().share !== undefined ||
-        lifecycle() !== undefined;
+        item().kind === "project" || item().kind === "workspace" || lifecycle() !== undefined;
     /*
      * How wide the trailing slot is. Every term comes from the row's own
      * description, never from hover or from the current activity, which is what
@@ -1036,7 +990,6 @@ function SidebarRow({
             data-happy-desktop-ui="sidebar-item"
             data-lifecycle={lifecycle()}
             data-status={item().status}
-            data-share={item().share?.status}
             data-shortcut-row={props.shortcut ? "" : undefined}
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
@@ -2014,13 +1967,6 @@ export function Sidebar(props: SidebarProps) {
                                         >
                                             {section.label}
                                         </span>
-                                        {section.status ? (
-                                            <RigPeerStatus
-                                                className="happy2-sidebar__section-status"
-                                                name={section.label}
-                                                state={section.status}
-                                            />
-                                        ) : null}
                                         {section.action
                                             ? ((action) => (
                                                   <button
@@ -2057,11 +2003,6 @@ export function Sidebar(props: SidebarProps) {
                                     >
                                         {section.error}
                                     </p>
-                                ) : null}
-                                {!section.headingOnly &&
-                                section.nodes &&
-                                section.nodes.length > 0 ? (
-                                    <SidebarNodes label={section.label} nodes={section.nodes} />
                                 ) : null}
                                 {!section.headingOnly ? (
                                     <div

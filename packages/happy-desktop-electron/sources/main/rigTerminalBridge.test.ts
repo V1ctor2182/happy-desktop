@@ -11,7 +11,7 @@ import {
 } from "./rigTerminalBridge";
 
 const capability = "test-capability";
-const path = "/sessions/session-1/terminals/terminal-1/attach";
+const path = "/v0/workspaces/workspace-1/terminals/terminal-1/attach";
 
 interface Fixture {
     readonly attachTerminal: ReturnType<typeof vi.fn>;
@@ -125,8 +125,8 @@ describe("rigTerminalBridge", () => {
         const second = await connect(fixture, { capability, origin: "null" });
 
         expect(fixture.attachTerminal).toHaveBeenCalledTimes(2);
-        expect(fixture.attachTerminal).toHaveBeenNthCalledWith(1, "session-1", "terminal-1");
-        expect(fixture.attachTerminal).toHaveBeenNthCalledWith(2, "session-1", "terminal-1");
+        expect(fixture.attachTerminal).toHaveBeenNthCalledWith(1, "workspace-1", "terminal-1");
+        expect(fixture.attachTerminal).toHaveBeenNthCalledWith(2, "workspace-1", "terminal-1");
         second.close();
     });
 });

@@ -251,11 +251,7 @@ let happyBrowserUserAgent = "";
 let browserProxy: RigBrowserProxyHandle | undefined;
 let htmlPreviewProxy: HtmlPreviewProxyHandle | undefined;
 let browserProxyConnectionId: number | undefined;
-/**
- * Which machine and session the live tunnel was built for. Held beside the
- * handle rather than inside it because the proxy itself is only a socket: what
- * makes one tunnel the wrong one for a request is the Rig it was opened on.
- */
+/** Which local session the live tunnel was built for. */
 let browserProxyTarget: DesktopBrowserProxyTarget | undefined;
 let browserProxyOperation = Promise.resolve();
 // Automation needs a real laid-out window without taking focus from the work
@@ -443,19 +439,9 @@ function browserProxySerial<T>(work: () => Promise<T>): Promise<T> {
     return next;
 }
 
-/**
- * The daemon tunnel a browser tab's traffic goes through, opened on the Rig the
- * session belongs to.
- *
- * A session on a machine this host is peered with is tunnelled on that
- * machine's own client, so the page loads against that machine's network and
- * its checkout. The session is looked up there too, which is the point: a
- * session identity means something only on the Rig that minted it, and asking
- * the host for it would find some unrelated conversation of the same name or
- * nothing at all.
- */
+/** Opens the daemon tunnel a browser tab's traffic goes through. */
 function browserProxyOpen(target: DesktopBrowserProxyTarget): Promise<Duplex> {
-    return runtime.openHttpProxy(target.sessionId, target.nodeId);
+    return runtime.openHttpProxy(target.sessionId);
 }
 
 function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
@@ -465,7 +451,6 @@ function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
             throw new Error("The local Rig daemon is unavailable.");
         if (
             browserProxyTarget?.sessionId === target.sessionId &&
-            browserProxyTarget.nodeId === target.nodeId &&
             browserProxyConnectionId === snapshot.connectionId
         )
             return;
@@ -1486,20 +1471,6 @@ void app
                 throw new Error("That profile is invalid.");
             const profile = input as { readonly email: string; readonly name: string };
             return onboarding.profileCreate({ email: profile.email, name: profile.name });
-        });
-        ipcMain.handle(desktopIpc.onboardingMurmurChoose, (event, input: unknown) => {
-            onboardingSenderRequire(event.sender);
-            if (
-                !input ||
-                typeof input !== "object" ||
-                typeof (input as { enabled?: unknown }).enabled !== "boolean"
-            )
-                throw new Error("That Murmur choice is invalid.");
-            const choice = input as { readonly enabled: boolean; readonly profileId?: unknown };
-            if (!choice.enabled) return onboarding.murmurChoose({ enabled: false });
-            if (typeof choice.profileId !== "string")
-                throw new Error("Choose a profile for Murmur.");
-            return onboarding.murmurChoose({ enabled: true, profileId: choice.profileId });
         });
         ipcMain.handle(desktopIpc.runtimeStart, (_event, request: unknown) =>
             runtime.start(desktopStartRequestValidate(request)),

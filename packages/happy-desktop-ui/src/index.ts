@@ -78,13 +78,6 @@ export { Box, type BoxProps } from "./Box";
 export { DevBuildMenu, type DevBuildMenuProps } from "./DevBuildMenu";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { ChannelHeader, type ChannelHeaderProps, type ChannelMember } from "./ChannelHeader";
-export {
-    SlotEntries,
-    type SlotActionIntent,
-    type SlotEntriesPlacement,
-    type SlotEntriesProps,
-    type SlotVisualEntry,
-} from "./SlotEntries";
 export { PanelHeader, type PanelHeaderProps } from "./PanelHeader";
 export { AudienceToggle, type AudienceToggleProps, type AudienceValue } from "./AudienceToggle";
 export {
@@ -206,7 +199,6 @@ export {
     type SidebarReorder,
     type SidebarSection,
 } from "./Sidebar";
-export { SidebarNodes, type SidebarNode, type SidebarNodesProps } from "./SidebarNodes";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
 export {
     SIDEBAR_SPACES_BAR_HEIGHT,
@@ -224,21 +216,6 @@ export {
     type DesktopStartupValues,
 } from "./DesktopStartupScreen";
 export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnectionStatus";
-export {
-    RigPeerStatus,
-    rigPeerStatusLabel,
-    type RigPeerState,
-    type RigPeerStatusProps,
-} from "./RigPeerStatus";
-export {
-    RigPairing,
-    type RigPairingEmojis,
-    type RigPairingInvitationView,
-    type RigPairingPeer,
-    type RigPairingProgress,
-    type RigPairingProps,
-    type RigPairingRole,
-} from "./RigPairing";
 export {
     AgentActivityRow,
     type ActivityMotion,
@@ -297,24 +274,6 @@ export {
     type RigProjectComputeSection,
     type RigProjectSettingsDialogProps,
 } from "./RigProjectSettingsDialog";
-export {
-    RigFolderDialog,
-    RIG_FOLDER_DEFAULT_EMOJI,
-    RIG_FOLDER_EMOJI,
-    type RigFolderDialogProps,
-} from "./RigFolderDialog";
-export {
-    RigContactDialog,
-    type RigContactDialogProps,
-    type RigContactInvitationView,
-    type RigContactOutgoingView,
-    type RigContactRequestView,
-} from "./RigContactDialog";
-export {
-    RigFolderShareDialog,
-    type RigFolderShareContactView,
-    type RigFolderShareDialogProps,
-} from "./RigFolderShareDialog";
 export {
     RigCreateSessionDialog,
     type RigCreateSessionDestination,
@@ -527,14 +486,6 @@ export {
     type RigInstructionsSettingsProps,
 } from "./pages/settings/RigInstructionsSettings";
 export {
-    RigNodeSettings,
-    type RigNodeRouteRow,
-    type RigNodeRow,
-    type RigNodeSettingsProps,
-    type RigNodeState,
-    type RigNodeTransportRow,
-} from "./pages/settings/RigNodeSettings";
-export {
     RigProviderSettings,
     type RigProviderModelRow,
     type RigProviderRow,
@@ -547,19 +498,4 @@ export {
     type RigProfileRow,
     type RigProfilesSettingsProps,
 } from "./pages/settings/RigProfilesSettings";
-export {
-    RigMurmurSettings,
-    type RigMurmurConnection,
-    type RigMurmurContactRow,
-    type RigMurmurIncomingRequestRow,
-    type RigMurmurOutgoingRequestRow,
-    type RigMurmurSettingsProps,
-} from "./pages/settings/RigMurmurSettings";
-export {
-    RigSecretsSettings,
-    type RigSecretEditor,
-    type RigSecretRow,
-    type RigSecretVariableField,
-    type RigSecretsSettingsProps,
-} from "./pages/settings/RigSecretsSettings";
 export { RigUsageSettings, type RigUsageSettingsProps } from "./pages/settings/RigUsageSettings";

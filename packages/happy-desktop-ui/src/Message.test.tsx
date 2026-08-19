@@ -1782,9 +1782,8 @@ it("renders string bodies as safe streaming Markdown", async () => {
     expect(table?.querySelector("th")?.textContent).toBe("Check");
     expect(table?.querySelector("td")?.textContent).toBe("Compiler");
     expect(table?.querySelector("del")?.textContent).toBe("pending");
-    expect((table as HTMLElement).scrollWidth).toBeGreaterThanOrEqual(
-        (table as HTMLElement).clientWidth,
-    );
+    const tableScroll = view.$('[data-testid="md"] [data-happy-desktop-ui="message-table-scroll"]');
+    expect(tableScroll.element.scrollWidth).toBeGreaterThanOrEqual(tableScroll.element.clientWidth);
     /* ---- Multi-block stacking: 8px, or 12px around fenced code ----------- */
     /* The Markdown renderer emits every block as a direct body child, so the
        body's `> * + *` 8px rule is truthful, apart from the intentionally

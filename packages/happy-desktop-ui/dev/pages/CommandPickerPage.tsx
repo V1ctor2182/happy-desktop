@@ -15,10 +15,8 @@ const commands: ComposerCommand[] = [
     "agents",
     "goal",
     "ps",
-    "new",
     "compact",
     "abort",
-    "fork",
 ].map((id) => ({ id, label: `/${id}` }));
 
 const items = commandPickerItems(commands);
@@ -53,7 +51,7 @@ export function CommandPickerPage() {
             >
                 <div style={{ display: "flex", width: "420px" }}>
                     <CommandPicker
-                        activeId="fork"
+                        activeId="model"
                         items={items.filter((item) => item.slash.startsWith("/f"))}
                         onSelect={() => undefined}
                     />

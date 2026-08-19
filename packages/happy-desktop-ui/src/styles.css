@@ -12,7 +12,6 @@
 @import "./styles/title-bar.css";
 @import "./styles/rail.css";
 @import "./styles/sidebar.css";
-@import "./styles/sidebar-nodes.css";
 @import "./styles/sidebar-spaces.css";
 @import "./styles/app-shell.css";
 @import "./styles/channel-header.css";
@@ -84,7 +83,6 @@
 @import "./styles/changed-file-diff.css";
 @import "./styles/code-block.css";
 @import "./styles/code-editor.css";
-@import "./styles/documents-page.css";
 @import "./styles/document-surface.css";
 @import "./styles/notes-page.css";
 @import "./styles/media-gallery.css";
@@ -107,14 +105,11 @@
 @import "./styles/rig-client.css";
 @import "./styles/rig-chat.css";
 @import "./styles/rig-connection-status.css";
-@import "./styles/rig-pairing.css";
-@import "./styles/rig-peer-status.css";
 @import "./styles/agent-activity-row.css";
 @import "./styles/delegated-agent.css";
 @import "./styles/wait-ring.css";
 @import "./styles/tool-call-preview.css";
 @import "./styles/context-meter.css";
-@import "./styles/slot-entries.css";
 @import "./styles/conversation.css";
 @import "./styles/chat-conversation.css";
 @import "./styles/rig-usage.css";
@@ -124,8 +119,5 @@
 @import "./styles/rig-inbox.css";
 @import "./styles/rig-project-settings.css";
 @import "./styles/rig-create-session.css";
-@import "./styles/rig-folder-dialog.css";
-@import "./styles/rig-contact-dialog.css";
-@import "./styles/rig-folder-share-dialog.css";
 @import "./styles/rig-project-clone-dialog.css";
 @import "./styles/workspace-lifecycle-notice.css";

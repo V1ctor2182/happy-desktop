@@ -48,9 +48,7 @@ function healthReady(version: string) {
         status: "ready" as const,
         healthy: true,
         ready: true,
-        identity: { version },
-        catalog: { defaultModelId: "", defaultProviderId: "", models: [], providers: [] },
-        durableGlobalEventQueue: false,
+        version: { daemon: version, protocol: 17 },
     };
 }
 
@@ -60,9 +58,6 @@ function connectionWith(health: () => Promise<unknown>, close = vi.fn()): LocalR
         client: { health } as unknown as RigDaemonClient,
         protocolVersion: 17,
         version: "0.0.55",
-        rigInstallationInspect: async () => {
-            throw new Error("This fixture does not inspect the local Rig installation.");
-        },
         close,
     };
 }
@@ -108,7 +103,7 @@ describe("browserLocalRigPlugin", () => {
         const middleware = middlewareOf(browserLocalRigPlugin({ connect }));
 
         const failed = await health(middleware);
-        expect(failed.status).toBe(503);
+        expect(failed.status).toBe(401);
 
         const recovered = await health(middleware);
         expect(recovered.status).toBe(200);

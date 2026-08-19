@@ -28,7 +28,6 @@ export interface GymTargetCounts {
     readonly turns: number;
     /** Durable counts are observed, not host-snapshot invariants. */
     readonly messageRange: readonly [number, number];
-    readonly eventRange: readonly [number, number];
     readonly fileCount: number;
     readonly changedFileCount: number;
     readonly largeFileBytes: number;
@@ -52,7 +51,6 @@ export interface GymSeedPlan {
 
 export interface GymDurableHostSnapshot {
     readonly messages: number;
-    readonly events: number;
 }
 
 export interface GymManifest {
@@ -112,12 +110,8 @@ export interface GymCatalogSnapshot {
     readonly worktreeCount: number;
     readonly readyWorktreeCount: number;
     readonly archivedWorktreeCount: number;
-    /** Sessions visible through Rig's bounded catalog projection. */
+    /** Active Happy Agent conversations visible through desktop bootstrap. */
     readonly sessionCount: number;
-    /** The normal Rig session-summary SQL limit (500 for non-active lists). */
-    readonly sessionCatalogLimit: number;
-    /** True when durable sessions exceed the visible catalog projection. */
-    readonly sessionCatalogTruncated: boolean;
 }
 
 export interface GymFixtureCounts {
@@ -132,7 +126,6 @@ export interface GymFixtureCounts {
 }
 
 export interface GymDurableCounts {
-    readonly events: number;
     readonly messages: number;
     readonly sessions: number;
     readonly turns: number;

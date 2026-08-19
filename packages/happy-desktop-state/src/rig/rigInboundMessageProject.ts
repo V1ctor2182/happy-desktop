@@ -1,8 +1,8 @@
 /**
  * Classifies a user-slot message that may have been injected by Rig rather than written
- * by the owner. Both the modern transcript and the legacy remote fallback use
- * this one classifier so changing transport cannot change whether an event
- * reads as dialogue or as transport-only state.
+ * by the owner. Every Happy Agent transcript uses this one classifier so
+ * reconnecting cannot change whether an event reads as dialogue or as
+ * transport-only state.
  *
  * Classification uses structured evidence only. Rig's injected text is
  * model-facing prose it is free to reword, so matching sentences would silently
@@ -11,8 +11,7 @@
 export function rigInboundMessageOmit(input: {
     /**
      * The daemon marked this element as injected by Rig rather than typed by
-     * the owner. Available only on the modern live transcript; the legacy
-     * durable reader has no such field and passes `false`.
+     * the owner.
      */
     readonly notification: boolean;
     /**
@@ -37,8 +36,8 @@ export function rigInboundMessageOmit(input: {
     /*
      * A message another agent addressed to this one arrives here too, wrapped
      * in an addressing envelope written for the receiving model. `UserMessage`
-     * carries `provenance: "agent"` in the rig-connect protocol, but the
-     * connector drops it when building `ChatElement`, so this client has no
+     * carries structured provenance, but the transcript projection currently
+     * drops it when building `ChatElement`, so this client has no
      * marker separating that envelope from a message the owner typed. It
      * therefore renders normally, envelope and all, until the protocol exposes
      * the signal.

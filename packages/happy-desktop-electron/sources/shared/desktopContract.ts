@@ -242,8 +242,6 @@ export type LocalOnboardingStage =
     | "providersMissing"
     /** Rig requires a human identity before it can finish setup. */
     | "profileRequired"
-    /** The person must explicitly opt in to or out of Murmur sharing. */
-    | "murmurSetup"
     /** Rig Connect is resolving the daemon-owned onboarding status. */
     | "examining"
     /** Everything else is settled and this Rig is demonstrably unused. */
@@ -313,12 +311,6 @@ export interface LocalOnboardingSnapshot {
      * order it named them. Present only at `providersMissing`.
      */
     readonly providers?: readonly string[];
-    /** Profiles that can own Murmur identity, present at the Murmur step. */
-    readonly profiles?: readonly {
-        readonly email: string;
-        readonly id: string;
-        readonly name: string;
-    }[];
     /** An attempt to reach Rig is running, started from a failed stage. */
     readonly retrying?: boolean;
     readonly update?: DesktopUpdateSnapshot;
@@ -384,19 +376,8 @@ export interface DesktopBrowserStatus {
     readonly statusText: string;
 }
 
-/**
- * Which session's network a browser guest browses through, as a machine and a
- * session together.
- *
- * The Rig is named rather than assumed. Every session this window can open
- * belongs to some machine — this one, or one its host is peered with — and the
- * identity a session carries is only unique on the machine that made it. Naming
- * one half would leave the other to be guessed, and the guess would silently be
- * "this machine".
- */
+/** Which local session's network a browser guest browses through. */
 export interface DesktopBrowserProxyTarget {
-    /** The peered machine the session lives on, absent for this window's own. */
-    readonly nodeId?: string;
     readonly sessionId: string;
 }
 
@@ -464,16 +445,7 @@ export interface HappyDesktopBridge {
      * the application tree instead of independently following macOS.
      */
     appearanceSet(mode: DesktopAppearanceMode): void;
-    /**
-     * Points this window's browser guests at one Rig session's network
-     * boundary: the tunnel is rebuilt to that session's machine and reapplied
-     * to Chromium.
-     *
-     * The machine travels with the session because a session identity is
-     * unique only on the Rig that minted it. Without it a conversation on a
-     * peered machine would be tunnelled through this one, and whichever local
-     * session happened to share the name would answer.
-     */
+    /** Points this window's browser guests at one local Rig session's network boundary. */
     browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
@@ -543,9 +515,6 @@ export interface HappyDesktopBridge {
         readonly email: string;
         readonly name: string;
     }): Promise<void>;
-    onboardingMurmurChoose(
-        input: { readonly enabled: false } | { readonly enabled: true; readonly profileId: string },
-    ): Promise<void>;
     /**
      * Opens the native folder picker, requires a Git repository root, and opens
      * it as this Rig's first project. Picking, validating, and registering all
@@ -631,7 +600,6 @@ export const desktopIpc = {
     notesList: "happy2:notes:list",
     onboardingChanged: "happy2:onboarding:changed",
     onboardingGet: "happy2:onboarding:get",
-    onboardingMurmurChoose: "happy2:onboarding:murmur-choose",
     onboardingProfileCreate: "happy2:onboarding:profile-create",
     onboardingProjectChoose: "happy2:onboarding:project-choose",
     onboardingRigInstall: "happy2:onboarding:rig-install",

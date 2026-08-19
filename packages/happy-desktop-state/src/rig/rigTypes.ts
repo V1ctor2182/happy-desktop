@@ -1,18 +1,14 @@
 /**
  * Closed, serialization-safe product projections for the Rig chat surface. Every
- * type here is what application code and the UI actually render; the injected
- * transport maps the raw `@slopus/rig` protocol shapes into these projections so
- * this package never depends on wire types, tokens, or sockets.
+ * type here is what application code and the UI actually render. Happy Agent
+ * resources are projected explicitly at the state boundary, so application code
+ * never receives wire shapes, tokens, URLs, or sockets.
  */
 
 declare const rigSessionIdBrand: unique symbol;
-declare const rigEventIdBrand: unique symbol;
 declare const rigProjectIdBrand: unique symbol;
 declare const rigWorktreeIdBrand: unique symbol;
 declare const rigTerminalIdBrand: unique symbol;
-declare const rigFolderIdBrand: unique symbol;
-declare const rigFolderItemIdBrand: unique symbol;
-declare const rigDocumentIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type RigSessionId = string & { readonly [rigSessionIdBrand]: true };
@@ -30,45 +26,8 @@ export type RigWorktreeId = string & { readonly [rigWorktreeIdBrand]: true };
  */
 export type RigGroupId = RigProjectId | RigWorktreeId;
 
-/** Branded realtime event identifier used for ordering and backfill cursors. */
-export type RigEventId = string & { readonly [rigEventIdBrand]: true };
-
 /** Branded identifier of one interactive terminal the daemon runs for a session. */
 export type RigTerminalId = string & { readonly [rigTerminalIdBrand]: true };
-
-/**
- * Branded identifier of one folder in the Rig's virtual tree (CUID2 on the
- * wire). A folder is not a group: it holds chats rather than a checkout, so its
- * id is deliberately not interchangeable with a project's or a worktree's.
- */
-export type RigFolderId = string & { readonly [rigFolderIdBrand]: true };
-
-/**
- * Branded identifier of one link placing a project, workspace, or document in a
- * folder (CUID2 on the wire). The link is its own entity: it is what moves and
- * what is removed, while the thing it points at is untouched either way.
- */
-export type RigFolderItemId = string & { readonly [rigFolderItemIdBrand]: true };
-
-/** One identity in a folder's shared direct-child order. */
-export type RigFolderContentId = RigFolderId | RigFolderItemId;
-
-/**
- * Branded identifier of one document the Rig owns (CUID2 on the wire).
- * Documents belong to a Rig rather than to a project or a session.
- */
-export type RigDocumentId = string & { readonly [rigDocumentIdBrand]: true };
-
-/**
- * What one folder item points at.
- *
- * A folder holds links rather than the things themselves, so the same project
- * can sit in two folders and removing the link leaves the project alone.
- */
-export type RigFolderItemTarget =
-    | { readonly kind: "project"; readonly projectId: RigProjectId }
-    | { readonly kind: "workspace"; readonly workspaceId: RigWorktreeId }
-    | { readonly kind: "document"; readonly documentId: RigDocumentId };
 
 /** The one application collection containing a visible primary chat. */
 export type RigSessionScope =
@@ -77,9 +36,7 @@ export type RigSessionScope =
           readonly kind: "workspace";
           readonly projectId: RigProjectId;
           readonly worktreeId: RigWorktreeId;
-      }
-    | { readonly kind: "folder"; readonly folderId: RigFolderId }
-    | { readonly kind: "unsorted" };
+      };
 
 /**
  * One interactive terminal the daemon has started, as its create/stop actions
@@ -133,8 +90,6 @@ export type RigThinkingLevel =
 /** Happy's default reasoning level when the selected model offers it. */
 export const RIG_DEFAULT_THINKING_LEVEL: RigThinkingLevel = "medium";
 
-export type RigStopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
-
 /**
  * Both ends of the scheduled wait a session's agent is sitting inside, in epoch
  * milliseconds. Both travel together because either alone measures nothing:
@@ -148,15 +103,6 @@ export interface RigSessionWait {
 export type RigTaskStatus = "pending" | "in_progress" | "completed";
 
 export type RigGoalStatus = "active" | "blocked" | "complete" | "paused";
-
-/** JSON value type for opaque tool-call arguments; kept fully closed (no `unknown`/`any`). */
-export type RigJson =
-    | null
-    | boolean
-    | number
-    | string
-    | readonly RigJson[]
-    | { readonly [key: string]: RigJson };
 
 // ---------------------------------------------------------------------------
 // Model catalog
@@ -184,66 +130,6 @@ export interface RigModelCatalog {
     readonly providers: readonly RigModelProvider[];
 }
 
-// ---------------------------------------------------------------------------
-// Messages, blocks, and tool presentations
-// ---------------------------------------------------------------------------
-
-export type RigFileDiffKind = "add" | "delete" | "update";
-export type RigFileDiffLineKind = "add" | "context" | "delete";
-
-export interface RigFileDiffLine {
-    readonly kind: RigFileDiffLineKind;
-    readonly text: string;
-}
-
-export interface RigFileDiffHunk {
-    readonly oldStart: number;
-    readonly newStart: number;
-    readonly lines: readonly RigFileDiffLine[];
-}
-
-export interface RigFileDiff {
-    readonly path: string;
-    readonly kind: RigFileDiffKind;
-    readonly hunks: readonly RigFileDiffHunk[];
-    readonly language?: string;
-    readonly added?: number;
-    readonly deleted?: number;
-    readonly omittedLines?: number;
-}
-
-export type RigExplorationOperation =
-    | { readonly kind: "list"; readonly target: string }
-    | { readonly kind: "read"; readonly name: string }
-    | {
-          readonly kind: "search";
-          readonly command: string;
-          readonly path?: string;
-          readonly query?: string;
-      };
-
-export type RigToolPresentation =
-    | {
-          readonly type: "exploration";
-          readonly operations: readonly RigExplorationOperation[];
-      }
-    | {
-          readonly type: "fileDiff";
-          readonly files: readonly RigFileDiff[];
-          readonly omittedFiles?: number;
-      }
-    | { readonly type: "execCommand"; readonly command: string; readonly output: string }
-    | {
-          readonly type: "backgroundTerminalInteraction";
-          readonly command: string;
-          readonly input: string;
-      };
-
-export interface RigToolFailure {
-    readonly kind: "execution_failed" | "interrupted" | "invalid_arguments" | "tool_unavailable";
-    readonly message?: string;
-}
-
 /**
  * One image sent with a local user turn. A local session has no upload step, so
  * the bytes travel with the message; `data` is base64 without a data-URL prefix.
@@ -251,40 +137,6 @@ export interface RigToolFailure {
 export interface RigImageInput {
     readonly mediaType: string;
     readonly data: string;
-}
-
-export type RigBlock =
-    | { readonly type: "text"; readonly text: string }
-    | {
-          readonly type: "image";
-          readonly mediaType: string;
-          readonly data: string;
-          readonly detail?: "high" | "original";
-      }
-    | { readonly type: "thinking"; readonly thinking: string; readonly redacted: boolean }
-    | {
-          readonly type: "toolCall";
-          readonly id: string;
-          readonly name: string;
-          readonly arguments: RigJson;
-          readonly presentation?: RigToolPresentation;
-      }
-    | {
-          readonly type: "toolResult";
-          readonly toolCallId: string;
-          readonly toolName: string;
-          readonly display: string;
-          readonly failed: boolean;
-          readonly failure?: RigToolFailure;
-          readonly presentation?: RigToolPresentation;
-      };
-
-export interface RigMessage {
-    readonly id: string;
-    readonly role: "system" | "user" | "agent";
-    readonly blocks: readonly RigBlock[];
-    /** Model-facing bookkeeping messages that must never render as transcript content. */
-    readonly internal: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -442,18 +294,6 @@ export interface RigBackgroundProcess {
     readonly command: string;
     readonly cwd: string;
     readonly status: "running";
-}
-
-/** Terminal result of a composer shell-mode command run (`shellRun`). */
-export interface RigShellCommandResult {
-    readonly command: string;
-    readonly commandId: string;
-    readonly output: string;
-    readonly exitCode: number | null;
-    readonly timedOut: boolean;
-    readonly errorMessage?: string;
-    /** Background session id when the command detached into a background terminal. */
-    readonly backgroundProcessId?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -634,9 +474,8 @@ export interface RigChangedFileDocument {
     /** Working-tree identity, absent only when the file is deleted. */
     readonly hash?: string;
     /**
-     * Compact identity of the base content used by the diff. The daemon supplies
-     * this from its authoritative revision read; small legacy/fake documents
-     * may receive a renderer-local fallback.
+     * Compact identity of the base content used by the diff. When the revision
+     * response supplies only bytes, the state layer derives it locally.
      */
     readonly oldHash?: string;
 }
@@ -708,7 +547,6 @@ export interface RigSession {
     readonly recap?: string;
     readonly draft?: string;
     readonly draftUpdatedAt?: number;
-    readonly messages: readonly RigMessage[];
     /**
      * Steering messages queued to submit after the current tool call. Non-internal
      * user turns the runner has accepted but not yet started; the composer previews
@@ -722,46 +560,6 @@ export interface RigSession {
     readonly backgroundProcesses: readonly RigBackgroundProcess[];
     readonly createdAt: number;
     readonly updatedAt: number;
-    readonly lastEventId?: RigEventId;
-}
-
-// ---------------------------------------------------------------------------
-// Streaming / live tool execution
-// ---------------------------------------------------------------------------
-
-export type RigToolStatus = "running" | "awaiting_approval" | "success" | "failed" | "stopped";
-
-export interface RigPermissionReview {
-    readonly action: string;
-    readonly reason: string;
-    readonly decision: "allow" | "ask" | "deny";
-    readonly risk: "low" | "medium" | "high" | "critical";
-    readonly userAuthorization: "unknown" | "low" | "medium" | "high";
-}
-
-/** Live state of one tool call, merged from stream deltas and (once known) its result. */
-export interface RigToolEntry {
-    readonly toolCallId: string;
-    readonly toolName: string;
-    readonly arguments: RigJson;
-    readonly status: RigToolStatus;
-    readonly display?: string;
-    readonly failed: boolean;
-    readonly failure?: RigToolFailure;
-    readonly presentation?: RigToolPresentation;
-    readonly permissionReview?: RigPermissionReview;
-}
-
-export type RigStreamingBlock =
-    | { readonly kind: "text"; readonly text: string }
-    | { readonly kind: "thinking"; readonly text: string }
-    | { readonly kind: "tool"; readonly tool: RigToolEntry };
-
-/** One in-flight durable agent message, assembled from its `agent_event` deltas. */
-export interface RigStreamingMessage {
-    readonly runId: string;
-    readonly messageId: string;
-    readonly blocks: readonly RigStreamingBlock[];
 }
 
 // ---------------------------------------------------------------------------
@@ -885,10 +683,6 @@ export interface RigSessionCreateInput {
     readonly cwd: string;
     /** Files the session under one of the project's worktrees rather than its root. */
     readonly worktreeId?: RigWorktreeId;
-    /** Creates a non-code chat directly in a folder or in Unsorted. */
-    readonly scope?:
-        | { readonly kind: "folder"; readonly folderId: RigFolderId }
-        | { readonly kind: "unsorted" };
     readonly providerId?: string;
     readonly modelId?: string;
     readonly effort?: RigThinkingLevel;

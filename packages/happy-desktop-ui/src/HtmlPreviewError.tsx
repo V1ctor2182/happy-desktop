@@ -75,7 +75,7 @@ interface HtmlPreviewFailurePage {
  * Turn one host-reported failure into the page a person reads.
  *
  * Everything a preview serves is on this machine — a file in a checkout, a
- * applet folder — so the wording names the local thing that went wrong rather
+ * preview folder — so the wording names the local thing that went wrong rather
  * than borrowing a browser's language about sites and connections. The detail
  * line is the engine's own words, and it is omitted rather than invented when
  * the host reported none.

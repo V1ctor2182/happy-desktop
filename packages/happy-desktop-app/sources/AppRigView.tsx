@@ -12,16 +12,6 @@ import type {
     RigConnectionStore,
     RigConversationSnapshot,
     RigFileLayout,
-    RigFolder,
-    RigFolderContentId,
-    RigFolderId,
-    RigFolderItem,
-    RigFolderItemId,
-    RigFoldersSnapshot,
-    RigFoldersStore,
-    RigDocumentId,
-    RigDocumentStore,
-    RigDocumentsStore,
     RigWorkspaceFiles,
     RigFileScope,
     RigFileViewMode,
@@ -40,35 +30,20 @@ import type {
     RigPanelTabId,
     RigPanelTabSnapshot,
     RigPermissionMode,
+    RigProfilesStore,
     RigInboxItem,
     RigInboxSnapshot,
     RigInboxStore,
     RigInstructionsStore,
-    RigSecretsStore,
     RigSecurityPolicyStore,
-    RigNode,
-    RigNodesSnapshot,
-    RigNodeStatus,
-    RigNodesStore,
     RigAvailabilitySnapshot,
-    RigPairingStore,
-    RigProfilesStore,
     RigProviderUsageStore,
-    RigSharingStore,
-    RigFolderShare,
     RigGroupLifecycle,
     RigProjectGroup,
     RigProjectId,
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
-    RigSlotAction,
-    RigSlotEntry,
-    RigSlotEntryAuthor,
-    RigSlotName,
-    RigSlotsContext,
-    RigSlotsSnapshot,
-    RigSlotsStore,
     RigTerminalStore,
     RigThinkingLevel,
     TitleShimmerStore,
@@ -87,21 +62,8 @@ import {
     rigAvailabilityProject,
     rigNavigationOrderStoreNoop,
     rigSidebarCollapseStoreNoop,
-    folderFind,
-    rigFolderGroupId,
-    rigFolderGroupParse,
-    rigFoldersFlatten,
-    rigFoldersStoreNoop,
-    rigDocumentsStoreNoop,
     rigHumanMessageAuthor,
-    RIG_UNSORTED_GROUP_ID,
-    rigSessionScopeGroupId,
-    rigNodesStoreNoop,
-    rigProfilesStoreNoop,
-    rigSharingStoreNoop,
-    rigSlotEntriesInScope,
-    rigSlotEntryInScope,
-    rigSlotsStoreNoop,
+    rigSessionGroupIdOf,
     rigOwnerAuthor,
     rigWindowStoreNoop,
     titleShimmerStoreNoop,
@@ -127,7 +89,6 @@ import {
     ConversationDock,
     ConversationView,
     DeferredPane,
-    DocumentSurface,
     EmptyState,
     FileBrowser,
     FileEditor,
@@ -145,13 +106,9 @@ import {
     RigControlMenu,
     fileTreeBuild,
     fileTreeFlatten,
-    fileTreeVisibleFiles,
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     RigCreateSessionDialog,
-    RigFolderDialog,
-    RigFolderShareDialog,
-    RIG_FOLDER_DEFAULT_EMOJI,
     RigProjectCloneDialog,
     RigProjectSettingsDialog,
     RigSessionControls,
@@ -161,9 +118,6 @@ import {
     Sidebar,
     SidebarFooter,
     SidebarUpdateAction,
-    SlotEntries,
-    type SlotActionIntent,
-    type SlotVisualEntry,
     RigInboxPage,
     TabbedPane,
     TextField,
@@ -173,13 +127,10 @@ import {
     type TabTransferTarget,
     WindowDragRegion,
     rigComposerModelControlProps,
-    rigPeerStatusLabel,
     sidebarReorderMove,
     type MenuItem,
     type FileTreeNode,
-    type FileTreeSelectModifiers,
     type KeyboardShortcut,
-    type RigPeerState,
     type SidebarItem,
     type SidebarNumberShortcutTarget,
     type SidebarReorder,
@@ -201,38 +152,11 @@ export interface AppRigUpdate {
     readonly version?: string;
 }
 
-/**
- * One Rig this window works in: its host, or a machine the host is peered with
- * and has reached.
- *
- * There is an entry per machine, each with its own stores, because each
- * machine's work is its own — a node's projects and conversations arrive on
- * that node's connection rather than being handed on by the host. What the host
- * uniquely holds is the route to the others, and the facts about this account
- * and this machine that no node can answer for.
- */
+/** One Rig this window can address, with its own catalog and surface stores. */
 export interface AppRigEntry {
     readonly id: string;
     readonly label: string;
-    /**
-     * Set on a Rig reached through this window's host: the node identity the
-     * host published for it. It is what separates a machine's own work from the
-     * host's in the sidebar, and what keeps the two from being offered the same
-     * acts — adding a folder opens a picker on this machine's disk, which means
-     * nothing to a Rig running somewhere else.
-     */
-    readonly nodeId?: string;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
-    /**
-     * True when this Rig is reachable and is not sharing its API.
-     *
-     * It is not a failure and is deliberately not folded into `status`: the two
-     * daemons are peered and the link is up, and the machine has simply not
-     * been asked to expose its work. Reporting it as unreachable would send the
-     * reader looking for a fault that is not there — the setting is on the
-     * other machine, and turning it on is what makes the projects appear.
-     */
-    readonly accessRestricted?: boolean;
     readonly message?: string;
     readonly version?: string;
     readonly projects: readonly RigProjectGroup[];
@@ -254,8 +178,6 @@ export interface AppRigSession {
     /** This Rig's own model catalog, read by the settings window's pickers. */
     readonly models: RigModelStore;
     readonly workspace: RigWorkspaceStore;
-    /** Materializes this Rig's slot and applet catalogs, one surface per machine. */
-    readonly slots?: () => RigSlotsStore;
     /**
      * Every question this Rig's agents are waiting on. Absent when the machine
      * offers no question feed, which is why the inbox row is absent too rather
@@ -269,50 +191,12 @@ export interface AppRigSession {
      * mean nothing.
      */
     readonly providerUsage?: RigProviderUsageStore;
-    /**
-     * The machines this host Rig is peered with, and how each link is doing.
-     * Absent when the host does not peer, which is why the settings list can say
-     * so rather than showing an empty list that means the opposite.
-     */
-    readonly nodes?: RigNodesStore;
-    /**
-     * The virtual tree this Rig files its chats into. Absent when the machine
-     * offers no folder feed, which is why the Folders section is absent too
-     * rather than standing over a tree that is empty for the wrong reason.
-     */
-    readonly folders?: RigFoldersStore;
-    /** Names of the documents linked into this Rig's folders. */
-    readonly documents?: RigDocumentsStore;
-    /** Materializes one open document for the addressed route. */
-    readonly documentOpen?: (documentId: RigDocumentId) => RigDocumentStore | undefined;
-    /** Creates one empty collaborative Markdown document on this Rig. */
-    readonly documentCreate?: () => RigDocumentId | undefined;
-    /** Host-owned identities available for work sent through a remote Rig. */
+    /** Identities this Rig exposes in its profile settings. */
     readonly profiles?: () => RigProfilesStore | undefined;
-    /**
-     * Trusting a new machine, by comparing four emojis at both ends. Present
-     * only on the Rig that owns trust — this window's host — and only when its
-     * daemon carries pairing at all, which is why a surface can state that
-     * rather than drawing a control that would answer nothing.
-     */
-    readonly pairing?: RigPairingStore;
-    /**
-     * The people this account shares work with, and the requests waiting at
-     * either end. Present only on this window's host Rig: a node shares under
-     * the host's identity, so it has no contact list of its own and the Murmur
-     * section is absent rather than empty.
-     */
-    readonly sharing?: RigSharingStore;
     /** This Rig's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy. */
     readonly securityPolicy?: RigSecurityPolicyStore;
-    /**
-     * The secret bundles this Rig holds, as the settings window lists and
-     * writes them. Absent on a machine whose registry this window cannot read,
-     * which leaves that category saying so rather than claiming it holds none.
-     */
-    readonly secrets?: RigSecretsStore;
 }
 
 export interface AppRigDirectorySnapshot {
@@ -328,10 +212,7 @@ export interface AppRigDirectorySnapshot {
     readonly rigs: readonly AppRigEntry[];
 }
 
-/**
- * The Rig this window works in. There is nothing to add or remove here: the host
- * Rig owns which machines it is peered with, and the window only reads it.
- */
+/** The Rigs this window can address. */
 export interface AppRigDirectoryStore {
     get(): AppRigDirectorySnapshot;
     subscribe(listener: () => void): () => void;
@@ -428,8 +309,6 @@ export interface AppRigViewProps {
      */
     groupId?: string;
     chatId?: string;
-    /** The Rig document addressed by the route, when a folder document is open. */
-    documentId?: RigDocumentId;
     /**
      * Addresses a Rig, a group in it, and optionally one of that group's
      * sessions; no group means that Rig's list.
@@ -442,8 +321,6 @@ export interface AppRigViewProps {
     ): void;
     /** Opens the local settings destination from the pinned sidebar footer. */
     onSettingsOpen(): void;
-    /** Opens one folder document on its owning Rig. */
-    onDocumentOpen?(rigId: string, documentId: RigDocumentId): void;
     /** Whether the URL addresses the addressed Rig's inbox of agent questions. */
     inboxOpen?: boolean;
     /** Addresses that inbox. */
@@ -976,49 +853,8 @@ function documentLinkResolve(from: string, href: string): string {
 function openGroupFind(
     projects: readonly RigProjectGroup[],
     groupId: string | undefined,
-    folders?: RigFoldersSnapshot,
 ): OpenGroup | undefined {
     if (groupId === undefined) return undefined;
-    if (groupId === RIG_UNSORTED_GROUP_ID && folders) {
-        return {
-            id: RIG_UNSORTED_GROUP_ID,
-            name: "Unsorted",
-            home: false,
-            conversations: folders.unsorted,
-            changes: [],
-            path: "Unsorted",
-        };
-    }
-    // A folder is a place to work like any other: it owns a directory holding
-    // its files, so a chat started in it runs there. Its conversations come
-    // directly from the folder view, because project/workspace chats and folder
-    // chats are exclusive collections in Rig.
-    const folderId = rigFolderGroupParse(groupId);
-    if (folderId !== undefined) {
-        const folder = folderFind(folders?.folders ?? [], folderId);
-        if (!folder) return undefined;
-        return {
-            id: groupId as RigGroupId,
-            name: folder.name,
-            home: false,
-            conversations: folder.conversations,
-            // A folder is not a checkout, so there is no working tree to report
-            // on and nothing here is ever asked to draw one.
-            changes: [],
-            // Murmur folder groups carry the virtual folder tree only. Rig
-            // refuses chats inside any folder below a shared root, so a shared
-            // place has nothing honest to offer through the compose control.
-            ...(sharedFolderIds(folders?.folders ?? []).has(folder.id)
-                ? {}
-                : {
-                      create: {
-                          cwd: folder.path,
-                          scope: { kind: "folder" as const, folderId: folder.id },
-                      },
-                  }),
-            path: folder.path,
-        };
-    }
     for (const project of projects) {
         if (project.id === groupId)
             return {
@@ -1096,416 +932,13 @@ function pinnedArrange(rows: readonly SidebarItem[], order: readonly string[]): 
     });
 }
 
-/**
- * The folders block in the sidebar. One id, because the window always shows the
- * host Rig's tree rather than changing it with the addressed project or node.
- */
-const FOLDERS_SECTION = "folders";
-
-/**
- * Starts a folder inside this one. Nesting is stated here rather than by
- * dragging, because a drag that could both order a row and swallow it into its
- * neighbour makes every ordinary reordering a near miss.
- */
-const FOLDER_MENU_NEST = "folder-nest";
-/** Creates a document and links it directly into this folder. */
-const FOLDER_MENU_DOCUMENT_CREATE = "folder-document-create";
-/** Opens the folder's own surface: what it is called, and the mark it wears. */
-const FOLDER_MENU_EDIT = "folder-edit";
-/** Puts the folder away, and everything nested under it with it. */
-const FOLDER_MENU_ARCHIVE = "folder-archive";
-/** Creates a Murmur sharing group, or opens one that already exists. */
-const FOLDER_MENU_SHARE = "folder-share";
-
-/**
- * A folder's sidebar row, which is an ordinary Rig group row: a folder is a
- * place to work like a project or a worktree, so it is addressed the same way
- * and `rigFolderGroupId` is what keeps the three id spaces apart.
- */
-function folderRowId(rigId: string, folderId: RigFolderId): string {
-    return rigItemId(rigId, rigFolderGroupId(folderId));
-}
-
-/** The folder a sidebar row names, or undefined when it names something else. */
-function folderRowParse(value: string): RigFolderId | undefined {
-    return rigFolderGroupParse(rigItemParse(value).id);
-}
-
-/**
- * What marks a sidebar row as one folder item rather than a folder or a group.
- *
- * An item row stands for a link, not for the thing linked: two folders holding
- * the same project draw two rows, and each must be addressable on its own so
- * removing one leaves the other — and the project — alone.
- */
-const FOLDER_ITEM_ROW_PREFIX = "folder-item:";
-
-function folderItemRowId(rigId: string, itemId: RigFolderItemId): string {
-    return rigItemId(rigId, `${FOLDER_ITEM_ROW_PREFIX}${itemId}`);
-}
-
-/** The folder item a sidebar row names, or undefined when it names something else. */
-function folderItemRowParse(value: string): RigFolderItemId | undefined {
-    const { id } = rigItemParse(value);
-    if (!id.startsWith(FOLDER_ITEM_ROW_PREFIX)) return undefined;
-    const rest = id.slice(FOLDER_ITEM_ROW_PREFIX.length);
-    // A worktree drawn under a linked project is addressed by that link and the
-    // checkout together, so the link's own row is the one with no worktree on it.
-    const boundary = rest.indexOf("/");
-    return (boundary < 0 ? rest : rest.slice(0, boundary)) as RigFolderItemId;
-}
-
-/** The folder or link occupying one place in a folder's shared child order. */
-function folderContentRowParse(value: string): RigFolderContentId | undefined {
-    return folderRowParse(value) ?? folderItemRowParse(value);
-}
-
-/**
- * A row for one worktree of a linked project.
- *
- * The same checkout can appear under several folders that link its project, and
- * each of those rows has to be its own selectable thing — so the link is part of
- * the address rather than the worktree alone.
- */
-function folderItemWorktreeRowId(
-    rigId: string,
-    itemId: RigFolderItemId,
-    worktreeId: RigWorktreeId,
-): string {
-    return rigItemId(rigId, `${FOLDER_ITEM_ROW_PREFIX}${itemId}/${worktreeId}`);
-}
-
-/** The worktree a linked-project row names, when it names one rather than the link. */
-function folderItemWorktreeRowParse(value: string): RigWorktreeId | undefined {
-    const { id } = rigItemParse(value);
-    if (!id.startsWith(FOLDER_ITEM_ROW_PREFIX)) return undefined;
-    const boundary = id.indexOf("/");
-    return boundary < 0 ? undefined : (id.slice(boundary + 1) as RigWorktreeId);
-}
-
-/** Puts the link away. What it pointed at stays exactly where it was. */
-const FOLDER_ITEM_MENU_UNLINK = "folder-item-unlink";
-
-/**
- * Links the row's project or workspace into one folder. The folder is named in
- * the id because the menu is flat: one entry per folder is the whole picker.
- */
-const FOLDER_LINK_MENU_PREFIX = "folder-link:";
-
-/** One folder item anywhere in the tree, by id. */
-function folderItemFind(
-    folders: readonly RigFolder[],
-    itemId: RigFolderItemId,
-): RigFolderItem | undefined {
-    for (const { folder } of rigFoldersFlatten(folders)) {
-        const found = folder.items.find((candidate) => candidate.id === itemId);
-        if (found) return found;
-    }
-    return undefined;
-}
-
-/** The link row that exposes one document, wherever it sits in the tree. */
-function folderDocumentItemFind(
-    folders: readonly RigFolder[],
-    documentId: RigDocumentId,
-): RigFolderItem | undefined {
-    for (const { folder } of rigFoldersFlatten(folders)) {
-        const found = folder.items.find(
-            (item) => item.target.kind === "document" && item.target.documentId === documentId,
-        );
-        if (found) return found;
-    }
-    return undefined;
-}
-
-/** The group one folder item points at, as the sidebar addresses groups. */
-function folderItemGroupId(item: RigFolderItem): RigGroupId | undefined {
-    if (item.target.kind === "project") return item.target.projectId;
-    if (item.target.kind === "workspace") return item.target.workspaceId;
-    return undefined;
-}
-
-/**
- * The rows one folder item contributes, named and iconed from the catalog it
- * points into.
- *
- * A linked project brings its workspaces with it, nested under it exactly as
- * they are in the project section: a project in a folder is the project, and one
- * that showed its name but hid the checkouts its work actually happens in would
- * make the folder a worse place to work from than the list below it.
- *
- * A link whose target this Rig no longer lists draws nothing. The item names an
- * id and not a name, so a row for a project that has gone could only be labelled
- * by inventing one — and a folder quietly holding a row that says nothing true
- * is worse than a folder that has stopped showing it.
- */
-function folderItemRows(
-    rigId: string,
-    item: RigFolderItem,
-    depth: number,
-    projects: readonly RigProjectGroup[],
-    documentTitles: ReadonlyMap<RigDocumentId, string>,
-): SidebarItem[] {
-    const target = item.target;
-    if (target.kind === "project") {
-        const project = projects.find((candidate) => candidate.id === target.projectId);
-        if (!project) return [];
-        return [
-            {
-                depth,
-                id: folderItemRowId(rigId, item.id),
-                initials: project.name.slice(0, 1).toUpperCase(),
-                kind: "project",
-                label: project.name,
-                ...(project.kind === "home" ? { icon: "home" as const } : {}),
-                ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
-                ...(project.conversations.some((conversation) => conversation.unread)
-                    ? { unread: true }
-                    : {}),
-            },
-            ...project.worktrees.map((worktree) => ({
-                depth: depth + 1,
-                icon: "branch" as const,
-                id: folderItemWorktreeRowId(rigId, item.id, worktree.id),
-                kind: "workspace" as const,
-                label: worktree.name,
-                ...sidebarLifecycle(worktree.lifecycle),
-                ...(worktree.activity === "running"
-                    ? { status: "working" as const }
-                    : worktree.activity === "waiting"
-                      ? { status: "waiting" as const }
-                      : {}),
-                ...(worktree.conversations.some((conversation) => conversation.unread)
-                    ? { unread: true }
-                    : {}),
-            })),
-        ];
-    }
-    if (target.kind === "workspace") {
-        for (const project of projects) {
-            const worktree = project.worktrees.find(
-                (candidate) => candidate.id === target.workspaceId,
-            );
-            if (!worktree) continue;
-            return [
-                {
-                    depth,
-                    icon: "branch",
-                    id: folderItemRowId(rigId, item.id),
-                    kind: "workspace",
-                    label: worktree.name,
-                    ...sidebarLifecycle(worktree.lifecycle),
-                    ...(worktree.conversations.some((conversation) => conversation.unread)
-                        ? { unread: true }
-                        : {}),
-                },
-            ];
-        }
-        return [];
-    }
-    return [
-        {
-            depth,
-            icon: "doc",
-            id: folderItemRowId(rigId, item.id),
-            kind: "view",
-            label: documentTitles.get(target.documentId) || "Untitled document",
-        },
-    ];
-}
-
-/** One folder row followed by its folders and links in their shared order. */
-function folderRows(
-    rigId: string,
-    folder: RigFolder,
-    depth: number,
-    projects: readonly RigProjectGroup[],
-    documentTitles: ReadonlyMap<RigDocumentId, string>,
-    folderShares: readonly RigFolderShare[],
-): SidebarItem[] {
-    const folderShare = folderShares.find((share) => share.rootFolderId === folder.id);
-    const shareStatus = folderShare?.status ?? (folder.shared ? "synced" : undefined);
-    return [
-        {
-            depth,
-            emoji: folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
-            id: folderRowId(rigId, folder.id),
-            kind: "folder",
-            label: folder.name,
-            ...(shareStatus === undefined
-                ? {}
-                : {
-                      share: {
-                          status: shareStatus,
-                          label:
-                              shareStatus === "syncing"
-                                  ? `${folder.name} is syncing`
-                                  : shareStatus === "error"
-                                    ? `${folder.name}: ${folderShare?.error ?? "sync failed"}`
-                                    : `${folder.name} is shared`,
-                      },
-                  }),
-            ...(folder.conversations.some((conversation) => conversation.unread)
-                ? { unread: true }
-                : {}),
-        },
-        ...folder.contents.flatMap((entry) =>
-            entry.kind === "folder"
-                ? folderRows(rigId, entry.folder, depth + 1, projects, documentTitles, folderShares)
-                : folderItemRows(rigId, entry.item, depth + 1, projects, documentTitles),
-        ),
-    ];
-}
-
-/** Every folder contained by a shared root, including that root. */
-function sharedFolderIds(folders: readonly RigFolder[]): ReadonlySet<RigFolderId> {
-    const ids = new Set<RigFolderId>();
-    const visit = (folder: RigFolder, insideSharedRoot: boolean): void => {
-        const shared = insideSharedRoot || folder.shared;
-        if (shared) ids.add(folder.id);
-        for (const child of folder.children) visit(child, shared);
-    };
-    for (const folder of folders) visit(folder, false);
-    return ids;
-}
-
-/** Sharing accepts folder-only trees; chats and linked entities are private contents. */
-function folderTreeHasContents(folder: RigFolder): boolean {
-    return (
-        folder.conversations.length > 0 ||
-        folder.items.length > 0 ||
-        folder.children.some(folderTreeHasContents)
-    );
-}
-
-/**
- * The "put this in a folder" half of a project or workspace row's menu.
- *
- * One entry per folder rather than a submenu, because the menu is flat: the
- * whole picker is the list. A folder's own mark leads its entry so the choice
- * reads the way the sidebar does. Absent entirely when there is no folder to
- * choose or no host answering to store the link.
- */
-function folderLinkMenuItems(folders: RigFoldersSnapshot | undefined): MenuItem[] {
-    if (!folders) return [];
-    const shared = sharedFolderIds(folders.folders);
-    const rows = rigFoldersFlatten(folders.folders).filter((row) => !shared.has(row.folder.id));
-    if (rows.length === 0) return [];
-    return [
-        { kind: "separator" },
-        { kind: "label", label: "Add to folder" },
-        ...rows.map((row) => ({
-            kind: "item" as const,
-            id: `${FOLDER_LINK_MENU_PREFIX}${row.folder.id}`,
-            label: `${row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI}  ${row.folder.name}`,
-        })),
-    ];
-}
-
-/**
- * What the folder dialog calls the folder it is landing in, when it is landing
- * in one. Read from the tree rather than carried by the editor, because the name
- * is the tree's to state and the editor holds only what is being written.
- */
-function folderParentNameProps(folders: RigFoldersSnapshot): { parentName?: string } {
-    const parentId = folders.editor?.parentId;
-    if (parentId === undefined) return {};
-    const parent = folderFind(folders.folders, parentId);
-    return parent ? { parentName: parent.name } : {};
-}
-
-/**
- * The host Rig's folder tree, as one block above every Rig's projects.
- *
- * One machine's, not every machine's: folders are local window chrome, so
- * opening work on a node must not replace or move the tree.
- *
- * Every folder is drawn, however deep, with the tree's own nesting carried on
- * each row — agents create folders inside folders, and a tree that showed only
- * its top level would quietly lose them.
- *
- * A folder always wears a mark. One the reader chose is shown; one they have not
- * chosen shows the default, so the column reads as one family of rows rather
- * than as marked and unmarked halves.
- */
-function foldersSection(
-    rigId: string,
-    folders: RigFoldersSnapshot,
-    online: boolean,
-    projects: readonly RigProjectGroup[],
-    documentTitles: ReadonlyMap<RigDocumentId, string>,
-    folderShares: readonly RigFolderShare[],
-): SidebarSection[] {
-    const items: SidebarItem[] = [
-        ...(folders.unsorted.length === 0
-            ? []
-            : [
-                  {
-                      icon: "archive" as const,
-                      id: rigItemId(rigId, RIG_UNSORTED_GROUP_ID),
-                      kind: "folder" as const,
-                      label: "Unsorted",
-                      ...(folders.unsorted.some((conversation) => conversation.unread)
-                          ? { unread: true }
-                          : {}),
-                  },
-              ]),
-        // Every folder and link in the shared order the host published. Direct
-        // contents are one level in, so they read as belonging to their folder.
-        ...folders.folders.flatMap((folder) =>
-            folderRows(rigId, folder, 0, projects, documentTitles, folderShares),
-        ),
-    ];
-    // A refused act outranks a dropped feed: the tree on screen is still
-    // current, and what the reader needs told is that the thing they just did
-    // did not happen.
-    const error = folders.actionError ?? folders.error?.message;
-    return [
-        {
-            id: FOLDERS_SECTION,
-            items,
-            label: "Folders",
-            // Making a folder is what this block is for, so its control stands
-            // rather than waiting to be found — but only while the machine that
-            // would store it is answering.
-            ...(online
-                ? {
-                      action: {
-                          icon: "plus" as const,
-                          label: "New folder",
-                          reveal: "always" as const,
-                      },
-                  }
-                : {}),
-            ...(error === undefined ? {} : { error }),
-            // Nothing is claimed about a tree that has not arrived: a Rig still
-            // being asked has no folders yet in the sense of "not answered",
-            // which is not the same sentence as "none".
-            ...(items.length === 0 && !folders.loading
-                ? {
-                      empty: {
-                          description: "Group chats by what they are about.",
-                          icon: "archive" as const,
-                          title: "No folders yet",
-                          ...(online ? { actionLabel: "New folder" } : {}),
-                      },
-                  }
-                : {}),
-        },
-    ];
-}
-
 function rigSidebarItemAvailability(
     item: SidebarItem,
     rig: AppRigEntry,
-    selectedPeerProfileId: string | undefined,
-    peerProfilesLoading: boolean,
 ): Pick<SidebarItem, "action" | "secondaryAction"> {
     const disconnected = rig.status !== "connected";
-    const remoteWorkUnavailable =
-        rig.nodeId !== undefined && (peerProfilesLoading || selectedPeerProfileId === undefined);
     return {
-        ...(item.action && (disconnected || remoteWorkUnavailable)
+        ...(item.action && disconnected
             ? { action: { ...item.action, disabled: true } }
             : item.action
               ? { action: item.action }
@@ -1546,100 +979,59 @@ function sectionsCollapsed(
 
 function rigSections(
     directory: AppRigDirectorySnapshot,
-    nodes: RigNodesSnapshot,
     titleShimmerEnabled: boolean,
-    selectedPeerProfileId: string | undefined,
-    peerProfilesLoading: boolean,
     shortcutProject?: { readonly projectId: RigProjectId; readonly rigId: string },
 ): SidebarSection[] {
-    return [
-        ...directory.rigs.map((rig) => ({
-            id: `rig:${rig.id}`,
-            label: rig.label,
-            status: rigPeerState(rig),
-            items: rig.projects
-                .flatMap((project) =>
-                    sidebarItems(
-                        project,
-                        titleShimmerEnabled,
-                        shortcutProject?.rigId === rig.id &&
-                            shortcutProject.projectId === project.id,
-                    ),
-                )
-                .map((item) => ({
-                    ...item,
-                    id: rigItemId(rig.id, item.id),
-                    ...rigSidebarItemAvailability(
-                        item,
-                        rig,
-                        selectedPeerProfileId,
-                        peerProfilesLoading,
-                    ),
-                })),
-            // The local Rig adopts a folder chosen on this Mac. A peer instead
-            // clones a GitHub repository on its own machine. Both are ordinary
-            // project creation on the Rig named by this section.
-            ...(rig.status === "connected" && rig.session
-                ? {
-                      action: {
-                          busy: rig.nodeId === undefined && rig.projectAdd?.pending === true,
-                          icon: "plus" as const,
-                          label: rig.nodeId === undefined ? "Add project" : "Clone GitHub project",
-                          reveal: "always" as const,
-                      },
-                      ...(rig.nodeId === undefined && rig.projectAdd?.error !== undefined
-                          ? { error: rig.projectAdd.error }
-                          : {}),
-                      ...(rig.nodeId !== undefined &&
-                      !peerProfilesLoading &&
-                      selectedPeerProfileId === undefined
+    return directory.rigs.map((rig) => ({
+        id: `rig:${rig.id}`,
+        label: rig.label,
+        status: rigConnectionState(rig),
+        items: rig.projects
+            .flatMap((project) =>
+                sidebarItems(
+                    project,
+                    titleShimmerEnabled,
+                    shortcutProject?.rigId === rig.id && shortcutProject.projectId === project.id,
+                ),
+            )
+            .map((item) => ({
+                ...item,
+                id: rigItemId(rig.id, item.id),
+                ...rigSidebarItemAvailability(item, rig),
+            })),
+        // Project creation belongs to the Rig named by this section.
+        ...(rig.status === "connected" && rig.session
+            ? {
+                  action: {
+                      busy: rig.projectAdd?.pending === true,
+                      icon: "plus" as const,
+                      label: "Add project",
+                      reveal: "always" as const,
+                  },
+                  ...(rig.projectAdd?.error !== undefined ? { error: rig.projectAdd.error } : {}),
+              }
+            : {}),
+        // What a Rig said when it failed belongs under its own heading.
+        ...(rig.status === "error" && rig.message !== undefined ? { error: rig.message } : {}),
+        ...(rig.projects.length === 0
+            ? {
+                  empty:
+                      rig.status === "connected"
                           ? {
-                                error: "Choose a profile in Settings before creating work on another Rig.",
+                                actionLabel: "Add project",
+                                description: "Choose a repository folder on this Mac.",
+                                icon: "plus" as const,
+                                title: "No projects yet",
                             }
-                          : {}),
-                  }
-                : {}),
-            // What a machine said when it failed belongs under its own heading,
-            // in the tone of a fault. It is the machine's own sentence — a node
-            // that could not be reached through its host answers with the host's
-            // words for that — and it is repeated rather than reworded, because
-            // it is the only account of what went wrong that anyone has.
-            ...(rig.status === "error" && rig.message !== undefined ? { error: rig.message } : {}),
-            ...(rig.projects.length === 0
-                ? {
-                      empty:
-                          rig.status === "connected"
-                              ? {
-                                    actionLabel:
-                                        rig.nodeId === undefined
-                                            ? "Add project"
-                                            : "Clone from GitHub",
-                                    description:
-                                        rig.nodeId === undefined
-                                            ? "Choose a repository folder on this Mac."
-                                            : "Clone a GitHub repository onto this machine.",
-                                    icon: "plus" as const,
-                                    title: "No projects yet",
-                                }
-                              : {
-                                    description: rigEmptyDescription(rig),
-                                    icon: "link" as const,
-                                    title: rigStatusLabel(rig),
-                                    // Settings is where this machine's own
-                                    // connection is made, so the offer is real
-                                    // there. A node is joined by the host it is
-                                    // peered through, and settings only reports
-                                    // how that is going, so there is nothing to
-                                    // press.
-                                    ...(rig.nodeId === undefined
-                                        ? { actionLabel: "Open settings" }
-                                        : {}),
-                                },
-                  }
-                : {}),
-        })),
-        ...nodesSection(nodes, directory.rigs),
-    ];
+                          : {
+                                description: rigEmptyDescription(rig),
+                                icon: "link" as const,
+                                title: rigStatusLabel(rig),
+                                actionLabel: "Open settings",
+                            },
+              }
+            : {}),
+    }));
 }
 
 /**
@@ -1681,76 +1073,10 @@ function projectShortcutTargets(
 }
 
 /**
- * The machines this Rig is peered with that the window has no connection to,
- * reported under the projects.
- *
- * A node the window did reach is not here: it is one of the sections above,
- * with its own projects under its own name, because there is a real connection
- * behind it and opening its work is ordinary navigation. What is left are the
- * machines with nothing to open — still being dialled, unreachable, or not far
- * enough through their handshake to be addressed — and for those the only true
- * thing to show is where the link stands. So they are shown as status and
- * nothing else, rather than as rows that would go nowhere.
- *
- * A host peered with nothing, or peered only with machines already listed
- * above, contributes no block at all.
+ * One Rig's heading marker, projected from its connection state.
  */
-function nodesSection(nodes: RigNodesSnapshot, rigs: readonly AppRigEntry[]): SidebarSection[] {
-    const connected = new Set(
-        rigs.flatMap((rig) => (rig.nodeId === undefined ? [] : [rig.nodeId])),
-    );
-    const listed = nodes.nodes.filter(
-        (node) => node.peerId === undefined || !connected.has(node.peerId),
-    );
-    if (listed.length === 0) return [];
-    return [
-        {
-            id: "rig-nodes",
-            items: [],
-            label: "Nodes",
-            nodes: listed.map((node) => ({
-                // The machine's own key, which the store already made stable
-                // across the routes it is reached over. Addressing a row by one
-                // route's address would rename it the moment a second route
-                // appeared or the first one dropped.
-                id: `node:${node.key}`,
-                label: node.name ?? node.peerId ?? nodeAddress(node),
-                state: nodeState(node.status),
-                ...(node.name === undefined && node.peerId === undefined
-                    ? {}
-                    : { detail: nodeAddress(node) }),
-            })),
-        },
-    ];
-}
-
-/**
- * Where a machine is, in one line. Every route is named because a machine
- * reached two ways is still one machine, and the sidebar has to say which link
- * the status it shows is about.
- */
-function nodeAddress(node: RigNode): string {
-    return node.routes.map((route) => route.address).join(", ");
-}
-
-/** The host's word for a node's link, in the terms every peer marker uses. */
-function nodeState(status: RigNodeStatus): RigPeerState {
-    if (status === "connected") return "connected";
-    if (status === "connecting") return "connecting";
-    return "error";
-}
-
-/**
- * One Rig's heading marker: where its connection is, with access folded in.
- *
- * A machine that answered and declined to share its API is not disconnected and
- * not broken, so it gets its own state rather than being reported as either. It
- * only means anything on a connection that is otherwise up: a Rig still being
- * reached has not declined anything.
- */
-function rigPeerState(rig: AppRigEntry): RigPeerState {
-    if (rig.accessRestricted === true && rig.status !== "error") return "restricted";
-    return rig.status === "error" ? "error" : rig.status;
+function rigConnectionState(rig: AppRigEntry) {
+    return rig.status;
 }
 
 /** One directory entry's unified inner-health and outer-route availability. */
@@ -1762,18 +1088,9 @@ function rigEntryAvailability(rig: AppRigEntry): RigAvailabilitySnapshot | undef
     });
 }
 
-/**
- * The Rig this window is hosted by: the one it connects to directly, and the one
- * every other machine is reached through.
- *
- * It is found by not being a node rather than by name, because the name belongs
- * to the connection layer. It is deliberately not the Rig the window happens to
- * be addressing: this account's identity, the machines it peers with, and what
- * people are sharing with it are all facts about this machine, and reading them
- * off a node would answer for the wrong one.
- */
+/** The primary Rig backing window-wide settings and chrome. */
 export function hostRig(directory: AppRigDirectorySnapshot): AppRigEntry | undefined {
-    return directory.rigs.find((rig) => rig.nodeId === undefined);
+    return directory.rigs[0];
 }
 
 /**
@@ -1787,22 +1104,12 @@ export function hostRig(directory: AppRigDirectorySnapshot): AppRigEntry | undef
  * heading, and is not repeated here.
  */
 function rigEmptyDescription(rig: AppRigEntry): string {
-    // A machine that answered and declined to share is not being waited for.
-    // Saying "connecting…" would leave the reader watching a link that is
-    // already up for a setting that is on the other machine.
-    if (rigPeerState(rig) === "restricted")
-        return "This machine is not sharing its Rig API. Enable it there and its projects appear here.";
     if (rig.status === "connecting") return "Connecting to this machine…";
-    if (rig.status === "error")
-        return rig.nodeId === undefined
-            ? "Its projects will appear once it answers again."
-            : "Its projects will appear once this machine can be reached again.";
+    if (rig.status === "error") return "Its projects will appear once it answers again.";
     return "Connect this machine to see its projects.";
 }
 
 function rigStatusLabel(rig: AppRigEntry): string {
-    const state = rigPeerState(rig);
-    if (state === "restricted") return rigPeerStatusLabel(state);
     if (rig.status === "connected") return "Connected";
     if (rig.status === "connecting") return "Connecting…";
     return rig.status === "error" ? "Not reachable" : "Disconnected";
@@ -1815,138 +1122,6 @@ function rigStatusLabel(rig: AppRigEntry): string {
  * working through a queue rather than visiting a repository.
  */
 const INBOX_ITEM = "inbox";
-
-/**
- * What the window is addressing, read off the route: the open project, the
- * worktree inside it when the route names one, and the open conversation. A
- * worktree carries its project too, so a contribution addressed at a project is
- * in scope in every checkout of it.
- */
-function slotsContext(
-    projects: readonly RigProjectGroup[],
-    groupId: string | undefined,
-    sessionId: string | undefined,
-): RigSlotsContext {
-    for (const project of projects) {
-        if (project.id === groupId)
-            return {
-                projectId: project.id,
-                ...(sessionId ? { sessionId: sessionId as RigSessionId } : {}),
-            };
-        const workspace = project.worktrees.find((candidate) => candidate.id === groupId);
-        if (workspace)
-            return {
-                projectId: project.id,
-                workspaceId: workspace.id,
-                ...(sessionId ? { sessionId: sessionId as RigSessionId } : {}),
-            };
-    }
-    return sessionId ? { sessionId: sessionId as RigSessionId } : {};
-}
-
-function slotAuthor(projects: readonly RigProjectGroup[], author: RigSlotEntryAuthor): string {
-    if (!("sessionId" in author)) return "Agent";
-    for (const project of projects) {
-        const projectSession = project.conversations.find(
-            (conversation) => conversation.id === author.sessionId,
-        );
-        if (projectSession) return projectSession.title ?? "Agent session";
-        for (const worktree of project.worktrees) {
-            const session = worktree.conversations.find(
-                (conversation) => conversation.id === author.sessionId,
-            );
-            if (session) return session.title ?? "Agent session";
-        }
-    }
-    return `Agent ${author.sessionId.slice(0, 8)}`;
-}
-
-/**
- * Which of the four kinds of act a button performs, in the vocabulary the slot
- * component paints. Sending to this chat and sending to a named one are one
- * kind: the reader is told a message will be sent, and the details say where.
- */
-function slotActionIntent(action: RigSlotAction): SlotActionIntent {
-    switch (action.type) {
-        case "send-current-chat":
-        case "send-chat":
-            return "send";
-        case "draft-chat":
-            return "draft";
-        case "new-chat":
-            return "new-chat";
-        case "open-applet":
-            return "open";
-    }
-}
-
-/** Why an action cannot run in this context, or nothing when it can. */
-function slotUnavailable(
-    action: RigSlotAction,
-    applets: ReadonlySet<string>,
-    hasCurrentChat: boolean,
-    conversationRefusal: string | undefined,
-): string | undefined {
-    if (action.type === "send-current-chat" && !hasCurrentChat)
-        return "No chat is open here to send this message to.";
-    if (action.type === "open-applet" && !applets.has(action.applet))
-        return `This Rig is not serving a applet named “${action.applet}”.`;
-    // Sending, drafting into, and starting a chat all land in the addressed
-    // group, so they carry that group's own reason rather than a second sentence
-    // about the same thing. Opening a applet does not touch it.
-    if (action.type !== "open-applet") return conversationRefusal;
-    return undefined;
-}
-
-function slotVisualEntries(
-    entries: readonly RigSlotEntry[],
-    projects: readonly RigProjectGroup[],
-    applets: ReadonlySet<string>,
-    hasCurrentChat: boolean,
-    conversationRefusal?: string,
-): readonly SlotVisualEntry[] {
-    return entries.map((entry) => {
-        const unavailable =
-            entry.content.type === "button"
-                ? slotUnavailable(
-                      entry.content.action,
-                      applets,
-                      hasCurrentChat,
-                      conversationRefusal,
-                  )
-                : undefined;
-        return {
-            id: entry.id,
-            author: slotAuthor(projects, entry.author),
-            description: entry.description,
-            purpose: entry.purpose,
-            ...(unavailable ? { disabled: true, disabledReason: unavailable } : {}),
-            content:
-                entry.content.type === "text"
-                    ? { type: "text" as const, markdown: entry.content.markdown }
-                    : {
-                          type: "button" as const,
-                          label: entry.content.label,
-                          intent: slotActionIntent(entry.content.action),
-                      },
-        };
-    });
-}
-
-function slotActionRun(workspace: RigWorkspaceStore, action: RigSlotAction): Promise<void> {
-    switch (action.type) {
-        case "send-current-chat":
-            return workspace.messageSendCurrent(action.message);
-        case "send-chat":
-            return workspace.messageSend(action.sessionId, action.message);
-        case "draft-chat":
-            return workspace.draftUpdate(action.sessionId, action.message);
-        case "new-chat":
-            return workspace.chatStart(action);
-        case "open-applet":
-            return workspace.appletOpen(action.applet);
-    }
-}
 
 /**
  * The workspace window. It owns no product state: it subscribes to the directory
@@ -2003,23 +1178,8 @@ export function AppRigView(props: AppRigViewProps) {
     );
     const active =
         directory.rigs.find((rig) => rig.id === props.rigId) ?? directory.rigs[0] ?? undefined;
-    // A remote connection authors messages with a profile owned by this window's
-    // host Rig. The node deliberately has no profile store of its own, so using
-    // the active Rig here loses the selected identity and makes the reader's
-    // messages look incoming when their attributed transcript rows arrive.
-    const localRig = hostRig(directory);
-    const profilesStore = localRig?.session?.profiles?.() ?? rigProfilesStoreNoop;
-    const profiles = useSyncExternalStore(
-        profilesStore.subscribe,
-        profilesStore.get,
-        profilesStore.get,
-    );
-    const viewerId =
-        active?.nodeId === undefined
-            ? rigOwnerAuthor.id
-            : (profiles.selectedProfileId ?? rigOwnerAuthor.id);
+    const viewerId = rigOwnerAuthor.id;
     const activeAvailability = active ? rigEntryAvailability(active) : undefined;
-    const localAvailability = localRig ? rigEntryAvailability(localRig) : undefined;
     const addressedProject =
         active && props.groupId ? rowOwnerFind(active.projects, props.groupId)?.project : undefined;
     const shortcutProject = activeAvailability?.online ? addressedProject : undefined;
@@ -2033,10 +1193,6 @@ export function AppRigView(props: AppRigViewProps) {
             current.rigs.find((entry) => entry.id === props.rigId) ?? current.rigs[0] ?? undefined;
         return rig ? (rigEntryAvailability(rig)?.online ?? false) : false;
     };
-    const localRigOnline = (): boolean => {
-        const rig = hostRig(props.rigs.get());
-        return rig ? (rigEntryAvailability(rig)?.online ?? false) : false;
-    };
     const rigOf = (rigId: string) => directory.rigs.find((rig) => rig.id === rigId);
     // The pinned row carries a live count, so the window subscribes to the
     // addressed Rig's inbox whether or not the inbox itself is open: the point of
@@ -2044,177 +1200,6 @@ export function AppRigView(props: AppRigViewProps) {
     const inboxStore = active?.session?.inbox ?? rigInboxStoreNoop;
     const inbox = useSyncExternalStore(inboxStore.subscribe, inboxStore.get, inboxStore.get);
     const inboxPending = inbox.pending.length;
-    // The host answers for this account rather than whichever Rig the window is
-    // addressing: a node the reader has open is a different machine.
-    // The machines the host is peered with. The sidebar shows them whenever the
-    // window is open rather than only on a settings screen: a node going quiet
-    // is why work stops arriving, and that has to be visible where the work is.
-    // The host is asked because the host is the one that peers; a node reached
-    // through it does not answer for the network it is on.
-    const nodesStore = localRig?.session?.nodes ?? rigNodesStoreNoop;
-    const nodes = useSyncExternalStore(nodesStore.subscribe, nodesStore.get, nodesStore.get);
-    // Subscribed for the same reason usage is, and only while it is open: the
-    // subscription is what starts the daemon being asked about requests, and it
-    // has to stop the moment the reader looks elsewhere.
-    // The sidebar is local window chrome. Its slots and folders always come
-    // from the host Rig, even while the content surface addresses a node.
-    const localSlotsStore = localRig?.session?.slots?.() ?? rigSlotsStoreNoop;
-    const localSlots = useSyncExternalStore(
-        localSlotsStore.subscribe,
-        localSlotsStore.get,
-        localSlotsStore.get,
-    );
-    const localFoldersStore = localRig?.session?.folders ?? rigFoldersStoreNoop;
-    const localFolders = useSyncExternalStore(
-        localFoldersStore.subscribe,
-        localFoldersStore.get,
-        localFoldersStore.get,
-    );
-    // Folder-sharing status belongs to the host identity and remains live while
-    // the workspace is open. Contact management itself is rendered in Settings.
-    const localSharingStore = localRig?.session?.sharing ?? rigSharingStoreNoop;
-    const localSharing = useSyncExternalStore(
-        localSharingStore.subscribe,
-        localSharingStore.get,
-        localSharingStore.get,
-    );
-    const localDocumentsStore = localRig?.session?.documents ?? rigDocumentsStoreNoop;
-    const localDocuments = useSyncExternalStore(
-        localDocumentsStore.subscribe,
-        localDocumentsStore.get,
-        localDocumentsStore.get,
-    );
-    const selectedDocumentItem = props.documentId
-        ? folderDocumentItemFind(localFolders.folders, props.documentId)
-        : undefined;
-    const folderShareDraft = localSharing.folderShare;
-    const folderShareFolder =
-        folderShareDraft === undefined
-            ? undefined
-            : folderFind(localFolders.folders, folderShareDraft.folderId);
-    const folderShareStatus =
-        folderShareDraft === undefined
-            ? undefined
-            : localSharing.folderShares.find(
-                  (share) => share.rootFolderId === folderShareDraft.folderId,
-              );
-    const folderShareShared = folderShareFolder?.shared === true || folderShareStatus !== undefined;
-    const folderShareContactIdentities = folderShareShared
-        ? (folderShareStatus?.members.filter((identity) => identity !== localSharing.identity) ??
-          folderShareDraft?.selectedContactIdentities ??
-          [])
-        : localSharing.contacts
-              .filter((contact) => contact.status === "active")
-              .map((contact) => contact.identity);
-    const folderShareContacts = folderShareContactIdentities.map((identity) => {
-        const contact = localSharing.contacts.find((candidate) => candidate.identity === identity);
-        return {
-            identity,
-            name: contact?.profile?.name ?? identity,
-            ...(contact?.profile?.email === undefined ? {} : { email: contact.profile.email }),
-            ...(contact?.profile?.photo === undefined
-                ? {}
-                : { imageUrl: contact.profile.photo.imageUrl }),
-        };
-    });
-    // The other three slot placements and the workspace surface still belong to
-    // the addressed Rig. When it is the host, reuse the sidebar subscriptions so
-    // one materialized store has only one React subscriber in this surface.
-    const activeIsLocal = active !== undefined && active === localRig;
-    const addressedSlotsStore = activeIsLocal
-        ? rigSlotsStoreNoop
-        : (active?.session?.slots?.() ?? rigSlotsStoreNoop);
-    const addressedSlots = useSyncExternalStore(
-        addressedSlotsStore.subscribe,
-        addressedSlotsStore.get,
-        addressedSlotsStore.get,
-    );
-    const slots = activeIsLocal ? localSlots : addressedSlots;
-    const addressedFoldersStore = activeIsLocal
-        ? rigFoldersStoreNoop
-        : (active?.session?.folders ?? rigFoldersStoreNoop);
-    const addressedFolders = useSyncExternalStore(
-        addressedFoldersStore.subscribe,
-        addressedFoldersStore.get,
-        addressedFoldersStore.get,
-    );
-    const folders = activeIsLocal ? localFolders : addressedFolders;
-    const slotsScope = slotsContext(active?.projects ?? [], props.groupId, props.chatId);
-    const localWorkspaceSnapshot = localRig?.session?.workspace.get();
-    const localSlotsScope = slotsContext(
-        localRig?.projects ?? [],
-        localWorkspaceSnapshot?.address.groupId,
-        localWorkspaceSnapshot?.address.conversationId,
-    );
-    const localApplets = new Set(localSlots.applets.map((applet) => applet.name));
-    // A press is decided from current state, not from the render that drew it.
-    // Workspace placements target the addressed Rig; the sidebar targets the
-    // host. Either way the target's own workspace, catalog, and applets decide
-    // the action together, so one machine's entry cannot run on another.
-    //
-    // The whole resolution is a single synchronous pass with nothing awaited in
-    // it, so no address can move part way through, and what is performed is
-    // performed on the very workspace the decision was taken against. A
-    // contribution withdrawn, rewritten into text, pointing at an applet this
-    // Rig no longer serves, or scoped to somewhere the reader has left does
-    // nothing at all — the rule that decides what is shown decides what may run.
-    const slotActionAt = (
-        rigId: string | undefined,
-        entryId: string,
-        appletReveal?: (
-            rigId: string,
-            groupId: string | undefined,
-            conversationId: string | undefined,
-        ) => void,
-    ): void => {
-        const directoryNow = props.rigs.get();
-        const rigNow = directoryNow.rigs.find((rig) => rig.id === rigId);
-        const sessionNow = rigNow?.session;
-        if (!rigNow || !sessionNow?.slots) return;
-        if (rigEntryAvailability(rigNow)?.online !== true) return;
-        const workspaceNow = sessionNow.workspace;
-        const workspaceSnapshot = workspaceNow.get();
-        const scopeNow = slotsContext(
-            rigNow.projects,
-            workspaceSnapshot.address.groupId,
-            workspaceSnapshot.address.conversationId,
-        );
-        const catalogNow = sessionNow.slots().get();
-        const entry = catalogNow.entries.find((candidate) => candidate.id === entryId);
-        if (!entry || entry.content.type !== "button") return;
-        if (!rigSlotEntryInScope(entry, scopeNow)) return;
-        const served = new Set(catalogNow.applets.map((applet) => applet.name));
-        const openConversation = workspaceSnapshot.conversation.type !== "unloaded";
-        // Read from the store at invocation, not from the render this handler
-        // was made in: the checkout may have gone away since, and a retained
-        // handler must refuse on what is true now.
-        if (
-            slotUnavailable(
-                entry.content.action,
-                served,
-                openConversation,
-                workspaceSnapshot.groupAccess.writeRefusal,
-            )
-        )
-            return;
-        if (entry.content.action.type === "open-applet")
-            appletReveal?.(
-                rigNow.id,
-                workspaceSnapshot.address.groupId,
-                workspaceSnapshot.address.conversationId,
-            );
-        void slotActionRun(workspaceNow, entry.content.action).catch(() => undefined);
-    };
-    const slotAction = (entryId: string): void => {
-        const current = props.rigs.get();
-        slotActionAt(current.activeRigId, entryId);
-    };
-    const localSlotAction = (entryId: string): void => {
-        slotActionAt(hostRig(props.rigs.get())?.id, entryId, (rigId, groupId, conversationId) => {
-            if (props.rigs.get().activeRigId !== rigId)
-                props.onChatSelect(rigId, groupId, conversationId);
-        });
-    };
     const desktop = props.platform === "desktop";
     const sidebarUpdate = props.update ? (
         <SidebarUpdateAction
@@ -2228,22 +1213,21 @@ export function AppRigView(props: AppRigViewProps) {
     // The pinned rows as the window offers them. What the reader has made of
     // that order is applied below, so this list only ever states which rows this
     // window has and what each one is.
-    const pinnedOffered: SidebarItem[] = [
-        // The inbox belongs to the addressed machine, so it appears only
-        // while that machine is reachable: a queue of questions is
-        // meaningless from a Rig that cannot say what it is waiting on.
-        ...(experimental && active?.session?.inbox
+    // The inbox belongs to the addressed machine, so it appears only while that
+    // machine is reachable: a queue of questions is meaningless from a Rig that
+    // cannot say what it is waiting on.
+    const pinnedOffered: SidebarItem[] =
+        experimental && active?.session?.inbox
             ? [
                   {
                       badge: inboxPending,
-                      icon: "bell" as const,
+                      icon: "bell",
                       id: INBOX_ITEM,
-                      kind: "action" as const,
+                      kind: "action",
                       label: "Inbox",
                   },
               ]
-            : []),
-    ];
+            : [];
     const pinned = pinnedArrange(pinnedOffered, navigationOrder.order);
     const sidebar = (
         <Sidebar
@@ -2255,13 +1239,11 @@ export function AppRigView(props: AppRigViewProps) {
                 addressedProject?.id,
             )}
             activeItemId={
-                props.documentId && selectedDocumentItem && localRig
-                    ? folderItemRowId(localRig.id, selectedDocumentItem.id)
-                    : experimental && props.inboxOpen
-                      ? INBOX_ITEM
-                      : props.groupId
-                        ? rigItemId(props.rigId, props.groupId)
-                        : ""
+                experimental && props.inboxOpen
+                    ? INBOX_ITEM
+                    : props.groupId
+                      ? rigItemId(props.rigId, props.groupId)
+                      : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -2270,20 +1252,6 @@ export function AppRigView(props: AppRigViewProps) {
             // lane as the rows beneath it — rather than leaving the window's
             // top-left corner empty.
             brand={desktop ? windowState.fullScreen : true}
-            bodyAccessory={
-                <SlotEntries
-                    entries={slotVisualEntries(
-                        rigSlotEntriesInScope(localSlots.entries, "sidebar", localSlotsScope),
-                        localRig?.projects ?? [],
-                        localApplets,
-                        localWorkspaceSnapshot !== undefined &&
-                            localWorkspaceSnapshot.conversation.type !== "unloaded",
-                        localAvailability?.refusal,
-                    )}
-                    onAction={localSlotAction}
-                    placement="sidebar"
-                />
-            }
             composeLabel="Create"
             footer={
                 <SidebarFooter
@@ -2332,115 +1300,10 @@ export function AppRigView(props: AppRigViewProps) {
                 ) : undefined
             }
             itemMenuItems={(item) => {
-                // A folder is a group, but not one of the host's checkouts, so
-                // the acts on it are its own: the project menu below would offer
-                // to rename and archive a repository that is not there.
-                const menuFolderId = folderRowParse(item.id);
-                if (menuFolderId !== undefined) {
-                    if (!localRigOnline()) return [];
-                    const folder = folderFind(localFolders.folders, menuFolderId);
-                    if (!folder) return [];
-                    const insideSharedTree = sharedFolderIds(localFolders.folders).has(folder.id);
-                    const activeContactCount = localSharing.contacts.filter(
-                        (contact) => contact.status === "active",
-                    ).length;
-                    const shareLabel = folder.shared
-                        ? "Sharing details…"
-                        : folder.parentId !== undefined
-                          ? "Only root folders can be shared"
-                          : folderTreeHasContents(folder)
-                            ? "Move chats and links out to share"
-                            : activeContactCount === 0
-                              ? "Add a Murmur contact to share"
-                              : "Share folder…";
-                    const shareDisabled =
-                        !folder.shared &&
-                        (folder.parentId !== undefined ||
-                            folderTreeHasContents(folder) ||
-                            activeContactCount === 0);
-                    return [
-                        {
-                            icon: "plus",
-                            id: FOLDER_MENU_NEST,
-                            kind: "item",
-                            label: "New folder inside…",
-                        },
-                        ...(insideSharedTree
-                            ? []
-                            : [
-                                  {
-                                      icon: "doc" as const,
-                                      id: FOLDER_MENU_DOCUMENT_CREATE,
-                                      kind: "item" as const,
-                                      label: "New document",
-                                  },
-                              ]),
-                        { kind: "separator" },
-                        {
-                            icon: "edit",
-                            id: FOLDER_MENU_EDIT,
-                            kind: "item",
-                            label: "Rename and mark…",
-                        },
-                        {
-                            disabled: shareDisabled,
-                            icon: "link",
-                            id: FOLDER_MENU_SHARE,
-                            kind: "item",
-                            label: shareLabel,
-                        },
-                        ...(folder.shared
-                            ? []
-                            : [
-                                  { kind: "separator" as const },
-                                  {
-                                      danger: true,
-                                      icon: "archive" as const,
-                                      id: FOLDER_MENU_ARCHIVE,
-                                      kind: "item" as const,
-                                      label: "Archive folder",
-                                  },
-                              ]),
-                    ];
-                }
-                // A link row stands for the link, not for the project behind
-                // it, so the only act on it is removing the link. Renaming or
-                // archiving here would reach past the folder and change the
-                // project itself, which is not what this row is.
-                if (folderItemRowParse(item.id) !== undefined)
-                    // A worktree shown under a linked project is not itself
-                    // linked: it is there because its project is. Offering to
-                    // remove it would take the whole project out of the folder,
-                    // so only the link's own row carries the act.
-                    return localRigOnline() && folderItemWorktreeRowParse(item.id) === undefined
-                        ? [
-                              {
-                                  danger: true,
-                                  icon: "unlink" as const,
-                                  id: FOLDER_ITEM_MENU_UNLINK,
-                                  kind: "item" as const,
-                                  label: "Remove from folder",
-                              },
-                          ]
-                        : [];
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
                 if (rig?.status !== "connected") return [];
-                return [
-                    ...rowMenuItems(rig.projects, { ...item, id: row.id }),
-                    // Folders belong to the host Rig, so only its own projects
-                    // and workspaces can be put in one. The picker is a flat
-                    // list of folders because the menu has no submenus, and it
-                    // is offered only when there is a folder to choose and the
-                    // unfinished folder feature is enabled.
-                    ...folderLinkMenuItems(
-                        experimental &&
-                            rigItemParse(item.id).rigId === localRig?.id &&
-                            localRigOnline()
-                            ? localFolders
-                            : undefined,
-                    ),
-                ];
+                return rowMenuItems(rig.projects, { ...item, id: row.id });
             }}
             // Create is the window's, not a screen's: the dialog is mounted
             // beside whatever is showing, so this row answers from every route.
@@ -2449,18 +1312,8 @@ export function AppRigView(props: AppRigViewProps) {
             {...(activeAvailability?.online === true && active?.session?.workspace
                 ? { onCompose: () => active.session?.workspace.createOpen() }
                 : {})}
-            // Two acts on one machine's section. Its heading adds a folder on
-            // that machine as a project; a section with nothing in it offers the
-            // one act that would fill it instead — starting work here, or
-            // connecting the machine that holds it.
+            // The section action adds a project to the Rig named by that section.
             onSectionAction={(sectionId) => {
-                // Both of the folder block's controls do the same thing, because
-                // there is only one act it offers: the heading's plus and the
-                // button an empty block shows instead both make a folder.
-                if (sectionId === FOLDERS_SECTION) {
-                    if (localRigOnline()) localFoldersStore.folderCreateOpen();
-                    return;
-                }
                 const rig = rigOf(sectionId.slice("rig:".length));
                 if (rig?.status !== "connected") {
                     props.onSettingsOpen();
@@ -2468,57 +1321,9 @@ export function AppRigView(props: AppRigViewProps) {
                 }
                 const workspace = rig.session?.workspace;
                 if (!workspace) return;
-                if (rig.nodeId === undefined) {
-                    workspace.projectAdd();
-                    return;
-                }
-                // The dialog belongs to the peer whose checkout will receive the
-                // clone, so address that Rig before opening its window-level draft.
-                if (rig.id !== active?.id) props.onChatSelect(rig.id, undefined);
-                workspace.projectCloneOpen();
+                workspace.projectAdd();
             }}
             onItemMenuSelect={(item, actionId) => {
-                const folderId = folderRowParse(item.id);
-                if (folderId !== undefined) {
-                    if (!localRigOnline()) return;
-                    const currentFolder = folderFind(localFoldersStore.get().folders, folderId);
-                    if (!currentFolder) return;
-                    if (actionId === FOLDER_MENU_NEST) localFoldersStore.folderCreateOpen(folderId);
-                    else if (actionId === FOLDER_MENU_DOCUMENT_CREATE) {
-                        if (sharedFolderIds(localFoldersStore.get().folders).has(folderId)) return;
-                        const documentId = localRig?.session?.documentCreate?.();
-                        if (!documentId || !localRig) return;
-                        void localFoldersStore.folderItemLink(folderId, {
-                            kind: "document",
-                            documentId,
-                        });
-                        props.onDocumentOpen?.(localRig.id, documentId);
-                    } else if (actionId === FOLDER_MENU_EDIT)
-                        localFoldersStore.folderEditOpen(folderId);
-                    else if (
-                        actionId === FOLDER_MENU_SHARE &&
-                        (currentFolder.shared ||
-                            (currentFolder.parentId === undefined &&
-                                !folderTreeHasContents(currentFolder) &&
-                                localSharingStore
-                                    .get()
-                                    .contacts.some((contact) => contact.status === "active")))
-                    )
-                        localSharingStore.folderShareOpen(folderId);
-                    // Deliberately no confirmation. A folder is now the chats'
-                    // canonical scope, so archiving it also archives the chats
-                    // contained by that branch.
-                    else if (actionId === FOLDER_MENU_ARCHIVE && !currentFolder.shared)
-                        void localFoldersStore.folderArchive(folderId);
-                    return;
-                }
-                const itemId = folderItemRowParse(item.id);
-                if (itemId !== undefined) {
-                    if (actionId !== FOLDER_ITEM_MENU_UNLINK || !localRigOnline()) return;
-                    if (folderItemWorktreeRowParse(item.id) !== undefined) return;
-                    void localFoldersStore.folderItemUnlink(itemId);
-                    return;
-                }
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
@@ -2526,23 +1331,6 @@ export function AppRigView(props: AppRigViewProps) {
                 const workspace = rig.session?.workspace;
                 const owner = rowOwnerFind(rig.projects, row.id);
                 if (!owner || !workspace) return;
-                // Linking is the host's act on its own tree, so it is decided
-                // from the folder named in the entry and the row's own target
-                // rather than from anything the addressed Rig is doing.
-                if (actionId.startsWith(FOLDER_LINK_MENU_PREFIX)) {
-                    if (rig.id !== localRig?.id || !localRigOnline()) return;
-                    const destinationId = actionId.slice(
-                        FOLDER_LINK_MENU_PREFIX.length,
-                    ) as RigFolderId;
-                    if (sharedFolderIds(localFoldersStore.get().folders).has(destinationId)) return;
-                    void localFoldersStore.folderItemLink(
-                        destinationId,
-                        owner.worktreeId
-                            ? { kind: "workspace", workspaceId: owner.worktreeId }
-                            : { kind: "project", projectId: owner.project.id },
-                    );
-                    return;
-                }
                 if (actionId === ROW_MENU_RENAME) {
                     workspace.renameOpen(owner.project.id, owner.worktreeId);
                     return;
@@ -2569,30 +1357,7 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onInboxOpen?.();
                     return;
                 }
-                // A link row opens what it points at, exactly as that thing's
-                // own row does. The link is where the reader found it, not a
-                // different place to be — so it resolves to the target's group
-                // and then takes the ordinary path.
-                const itemRowId = folderItemRowParse(id);
-                const linked =
-                    itemRowId === undefined
-                        ? undefined
-                        : folderItemFind(localFolders.folders, itemRowId);
-                if (linked?.target.kind === "document") {
-                    props.onDocumentOpen?.(rigItemParse(id).rigId, linked.target.documentId);
-                    return;
-                }
-                // A worktree drawn under a linked project opens that checkout,
-                // not the project holding it: the row names the work, and the
-                // link is only how the reader arrived at it.
-                const linkedWorktree = folderItemWorktreeRowParse(id);
-                const row = linked
-                    ? {
-                          id: linkedWorktree ?? folderItemGroupId(linked) ?? "",
-                          rigId: rigItemParse(id).rigId,
-                      }
-                    : rigItemParse(id);
-                if (linked && row.id === "") return;
+                const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
                 const groupId = row.id as RigGroupId;
@@ -2603,8 +1368,7 @@ export function AppRigView(props: AppRigViewProps) {
                     // left falls back to its most recent conversation, which is
                     // also what a workspace without the memory at all does.
                     rig.session?.workspace.get().groupResume?.get(groupId) ??
-                        openGroupFind(rig.projects, row.id, rig.session?.folders?.get())
-                            ?.conversations[0]?.id,
+                        openGroupFind(rig.projects, row.id)?.conversations[0]?.id,
                 );
             }}
             onItemAction={(id) => {
@@ -2647,74 +1411,6 @@ export function AppRigView(props: AppRigViewProps) {
                   }
                 : {})}
             onItemReorder={(sectionId, move) => {
-                if (sectionId === FOLDERS_SECTION) {
-                    // A link is dragged between and within folders, never to the
-                    // root: an item is something a folder holds, so a drop with
-                    // no folder around it names nowhere to put it and is refused
-                    // rather than quietly landing somewhere else.
-                    const movedItem = folderItemRowParse(move.id);
-                    if (movedItem !== undefined) {
-                        if (!localRigOnline()) return;
-                        // A worktree shown under a linked project is dragged
-                        // among that project's checkouts, not among the folder's
-                        // links: it is the same checkout the project section
-                        // lists, so it reorders on the host exactly as it would
-                        // there and the new order arrives on both at once.
-                        const movedWorktree = folderItemWorktreeRowParse(move.id);
-                        if (movedWorktree !== undefined) {
-                            const linkedItem = folderItemFind(localFolders.folders, movedItem);
-                            const owner =
-                                linkedItem?.target.kind === "project"
-                                    ? linkedItem.target.projectId
-                                    : undefined;
-                            const localWorkspace = localRig?.session?.workspace;
-                            if (owner === undefined || !localWorkspace) return;
-                            void localWorkspace
-                                .worktreeReorder(
-                                    owner,
-                                    movedWorktree,
-                                    move.afterId === null
-                                        ? null
-                                        : (folderItemWorktreeRowParse(move.afterId) ?? null),
-                                )
-                                .catch(() => undefined);
-                            return;
-                        }
-                        const parent =
-                            move.parentId === undefined ? undefined : folderRowParse(move.parentId);
-                        if (parent === undefined) return;
-                        if (sharedFolderIds(localFoldersStore.get().folders).has(parent)) return;
-                        void localFoldersStore.folderItemMove(
-                            movedItem,
-                            parent,
-                            move.afterId === null
-                                ? null
-                                : (folderContentRowParse(move.afterId) ?? null),
-                        );
-                        return;
-                    }
-                    const moved = folderRowParse(move.id);
-                    if (moved === undefined || !localRigOnline()) return;
-                    const targetParent =
-                        move.parentId === undefined
-                            ? null
-                            : (folderRowParse(move.parentId) ?? null);
-                    const movedFolder = folderFind(localFoldersStore.get().folders, moved);
-                    if (!movedFolder || (movedFolder.shared && targetParent !== null)) return;
-                    // The drop names where the folder landed, not an order key:
-                    // the parent it was dragged inside — the root when it was
-                    // dragged at the top level — and the sibling it now follows.
-                    // Rig derives the key from that pair, which is why nothing
-                    // is predicted here and the moved tree arrives on the feed.
-                    void localFoldersStore.folderMove(
-                        moved,
-                        targetParent,
-                        move.afterId === null
-                            ? null
-                            : (folderContentRowParse(move.afterId) ?? null),
-                    );
-                    return;
-                }
                 const rig = rigOf(sectionId.slice("rig:".length));
                 if (rig?.status !== "connected") return;
                 const workspace = rig?.session?.workspace;
@@ -2745,29 +1441,8 @@ export function AppRigView(props: AppRigViewProps) {
                       },
                   }
                 : {})}
-            // Local folders first: remote navigation changes the content surface
-            // and project sections below, never this window-owned tree.
             sections={sectionsCollapsed(
-                [
-                    ...(experimental && localRig?.session?.folders
-                        ? foldersSection(
-                              localRig.id,
-                              localFolders,
-                              localAvailability?.online === true,
-                              localRig.projects,
-                              localDocuments.titles,
-                              localSharing.folderShares,
-                          )
-                        : []),
-                    ...rigSections(
-                        directory,
-                        nodes,
-                        titleShimmerEnabled,
-                        profiles.selectedProfileId,
-                        profiles.loading,
-                        workspaceCreateTarget,
-                    ),
-                ],
+                rigSections(directory, titleShimmerEnabled, workspaceCreateTarget),
                 sidebarCollapse.collapsed,
             )}
         />
@@ -2778,18 +1453,6 @@ export function AppRigView(props: AppRigViewProps) {
     // surface that answers on one route and not another is not a window-level
     // surface at all.
     const routeContent = (): ReactNode => {
-        if (props.documentId && active?.session?.documentOpen)
-            return (
-                <>
-                    {desktop ? <WindowDragRegion /> : null}
-                    <RigDocumentSurface
-                        documentId={props.documentId}
-                        documentOpen={active.session.documentOpen}
-                        theme={appearance.appearance}
-                    />
-                </>
-            );
-
         // The workbench belongs to no machine and needs no connection: it renders the
         // component pages themselves, so it is independent of every Rig.
         if (props.blueprintOpen)
@@ -2807,7 +1470,6 @@ export function AppRigView(props: AppRigViewProps) {
                 <>
                     {desktop ? <WindowDragRegion /> : null}
                     <RigInboxSurface
-                        folders={folders}
                         onOpenSession={(rigId, groupId, chatId) =>
                             props.onChatSelect(rigId, groupId, chatId)
                         }
@@ -2826,7 +1488,6 @@ export function AppRigView(props: AppRigViewProps) {
         if (active?.session)
             return (
                 <RigWorkspaceSurface
-                    folders={folders}
                     availability={
                         activeAvailability ??
                         rigAvailabilityProject(active.session.connection.get(), true, {
@@ -2836,12 +1497,6 @@ export function AppRigView(props: AppRigViewProps) {
                     }
                     appearance={props.appearance}
                     browserContent={props.browserContent}
-                    // Which machine this workspace's browser tabs browse from.
-                    // It travels with the session all the way to the tunnel,
-                    // because a session identity is only unique on the Rig that
-                    // minted it and the host would otherwise answer for a name
-                    // that is not its.
-                    {...(active.nodeId === undefined ? {} : { nodeId: active.nodeId })}
                     htmlPreview={props.htmlPreview}
                     mediaWindow={props.mediaWindow}
                     chatId={props.chatId}
@@ -2855,9 +1510,6 @@ export function AppRigView(props: AppRigViewProps) {
                     platform={props.platform}
                     projects={active.projects}
                     rigOnline={activeRigOnline}
-                    slots={slots}
-                    slotsScope={slotsScope}
-                    slotAction={slotAction}
                     titleShimmerEnabled={titleShimmerEnabled}
                     viewerId={viewerId}
                     workspace={active.session.workspace}
@@ -2917,57 +1569,6 @@ export function AppRigView(props: AppRigViewProps) {
                 answered on the workspace and did nothing on the inbox would not
                 be a control. Being outside the screen is also what lets a task
                 being written survive the route notifications underneath it. */}
-            {/* Naming a folder and choosing its mark. Mounted here for the same
-                reason the workspace dialogs are: the sidebar is on every route,
-                so the surface its rows open has to answer from every route too.
-                The draft lives in the local folders store rather than here, so
-                an edit in flight survives the tree being republished — which
-                happens whenever any folder anywhere changes, not only this one. */}
-            {experimental && localFolders.editor ? (
-                <RigFolderDialog
-                    mode={localFolders.editor.mode}
-                    name={localFolders.editor.name}
-                    onClose={() => localFoldersStore.folderEditorCancel()}
-                    onEmojiChange={(value) => localFoldersStore.folderEmojiUpdate(value)}
-                    onNameChange={(value) => localFoldersStore.folderNameUpdate(value)}
-                    onSubmit={() => void localFoldersStore.folderEditorSubmit()}
-                    submitting={localFolders.editor.submitting}
-                    {...(localFolders.editor.emoji === undefined
-                        ? {}
-                        : { emoji: localFolders.editor.emoji })}
-                    {...folderParentNameProps(localFolders)}
-                    {...(localFolders.editor.error === undefined
-                        ? {}
-                        : { error: localFolders.editor.error })}
-                />
-            ) : null}
-            {/* A folder share belongs to the same window-owned tree and the
-                host's Murmur identity. The store keeps the selected contacts
-                and submission lifetime stable while either live feed changes
-                underneath it; the dialog only projects that one draft. */}
-            {experimental && folderShareDraft && folderShareFolder ? (
-                <RigFolderShareDialog
-                    contacts={folderShareContacts}
-                    folderName={folderShareFolder.name}
-                    onClose={() => localSharingStore.folderShareClose()}
-                    onSelectionChange={(identity) =>
-                        localSharingStore.folderShareContactToggle(identity)
-                    }
-                    onSubmit={() => localSharingStore.folderShareSubmit()}
-                    selectedContactIdentities={folderShareDraft.selectedContactIdentities}
-                    shared={folderShareShared}
-                    submitting={folderShareDraft.submitting}
-                    {...(folderShareStatus?.status === undefined
-                        ? {}
-                        : { status: folderShareStatus.status })}
-                    {...(folderShareStatus?.lastSyncedAt === undefined
-                        ? {}
-                        : { lastSyncedAt: folderShareStatus.lastSyncedAt })}
-                    {...((folderShareStatus?.error ?? folderShareDraft.error) === undefined
-                        ? {}
-                        : { error: folderShareStatus?.error ?? folderShareDraft.error })}
-                />
-            ) : null}
             {active?.session?.workspace ? (
                 <RigWindowDialogs
                     projects={active.projects}
@@ -2982,47 +1583,6 @@ export function AppRigView(props: AppRigViewProps) {
     );
 }
 
-const emptyDocumentSubscribe = () => () => undefined;
-const emptyDocumentSnapshot = () => undefined;
-
-/** One Rig-backed collaborative document, opened for exactly this route lifetime. */
-function RigDocumentSurface(props: {
-    documentId: RigDocumentId;
-    documentOpen(documentId: RigDocumentId): RigDocumentStore | undefined;
-    theme: "dark" | "light";
-}) {
-    const store = useMemo(
-        () => props.documentOpen(props.documentId),
-        [props.documentId, props.documentOpen],
-    );
-    const snapshot = useSyncExternalStore(
-        store?.subscribe ?? emptyDocumentSubscribe,
-        store?.get ?? emptyDocumentSnapshot,
-        store?.get ?? emptyDocumentSnapshot,
-    );
-    if (!store || !snapshot)
-        return (
-            <EmptyState
-                description="This Rig cannot open documents."
-                icon="doc"
-                title="Document unavailable"
-            />
-        );
-    return (
-        <DocumentSurface
-            blockDragEnabled={false}
-            error={snapshot.status === "error" ? snapshot.error : undefined}
-            loading={snapshot.status === "loading"}
-            saveError={snapshot.saveError}
-            saveState={snapshot.saveState}
-            theme={props.theme}
-            title={snapshot.title}
-            user={{ name: "You", color: "#0a7c72" }}
-            ydoc={snapshot.ydoc}
-        />
-    );
-}
-
 /**
  * One Rig's inbox inside the window's shell. It subscribes to nothing: the
  * window already reads this store for the sidebar count, so the queue and the
@@ -3034,7 +1594,6 @@ function RigDocumentSurface(props: {
  * questions, the window decides where they came from and where they lead.
  */
 function RigInboxSurface(props: {
-    folders: RigFoldersSnapshot;
     onOpenSession(rigId: string, groupId: string, chatId: string): void;
     projects: readonly RigProjectGroup[];
     rigId: string;
@@ -3046,8 +1605,6 @@ function RigInboxSurface(props: {
     const locate = (item: RigInboxItem) => {
         const scope = item.scope;
         if (!scope) return undefined;
-        if (scope.kind === "unsorted") return "Unsorted";
-        if (scope.kind === "folder") return folderFind(props.folders.folders, scope.folderId)?.name;
         const project = props.projects.find((candidate) => candidate.id === scope.projectId);
         if (!project) return undefined;
         if (scope.kind === "project") return project.name;
@@ -3077,11 +1634,7 @@ function RigInboxSurface(props: {
             selections={props.snapshot.selections}
             onOpenSession={(item) => {
                 if (!item.scope) return;
-                props.onOpenSession(
-                    props.rigId,
-                    rigSessionScopeGroupId(item.scope),
-                    item.sessionId,
-                );
+                props.onOpenSession(props.rigId, rigSessionGroupIdOf(item.scope), item.sessionId);
             }}
             pending={props.snapshot.pending}
             submissions={props.snapshot.submissions}
@@ -3108,13 +1661,6 @@ interface RigWorkspaceSurfaceProps {
     /** Joined conversation-list + active-conversation product store. */
     workspace: RigWorkspaceStore;
     /**
-     * The Rig's folder tree, because a folder is one of the places this surface
-     * can be open on. It comes in already read rather than subscribed to here:
-     * the sidebar beside this surface is reading the same store, and one
-     * subscription per materialized store is the contract.
-     */
-    folders: RigFoldersSnapshot;
-    /**
      * The Rig's projects, for the surfaces that address a project the window is
      * not currently open on — the settings dialog reached from any row.
      */
@@ -3124,18 +1670,8 @@ interface RigWorkspaceSurfaceProps {
     appearance: AppearanceStore;
     platform?: "desktop" | "web";
     browserContent?: BrowserContentRenderer;
-    /**
-     * The machine this workspace's Rig is, when it is not the one this window
-     * runs on. It addresses the browser tunnel: a session identity belongs to
-     * the Rig that minted it, so the machine travels with it.
-     */
-    nodeId?: string;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
-    slots: RigSlotsSnapshot;
-    /** What this window addresses, against which a scoped entry is resolved. */
-    slotsScope: RigSlotsContext;
-    slotAction(entryId: string): void;
     /** Whether active session titles shimmer in the tab strip. */
     titleShimmerEnabled: boolean;
     /** Identity of the human reading and writing this Rig. */
@@ -3147,12 +1683,6 @@ interface RigWorkspaceSurfaceProps {
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
 }
 
-interface RigSlotViews {
-    readonly statusLine: readonly SlotVisualEntry[];
-    readonly aboveComposer: readonly SlotVisualEntry[];
-    readonly title: readonly SlotVisualEntry[];
-}
-
 /**
  * One Rig's workspace. It subscribes once each to that Rig's connection,
  * workspace, panel, clock, and appearance stores (no local React state) and
@@ -3160,7 +1690,7 @@ interface RigSlotViews {
  * for the selected conversation and the desktop affordances (the model and
  * effort pickers beneath the composer, the settings
  * dialog holding the view toggles and access pickers, and the usage and activity
- * panels) passed into that surface's slots.
+ * panels) passed into that surface.
  *
  * The right panel is the workspace's tool column: terminals now, other kinds of
  * tab later. It is a second subscription rather than part of the workspace
@@ -3211,7 +1741,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
 
     const projects = workspace.list.projects;
     const rows = projects.type === "ready" ? projects.value : [];
-    const applets = new Set(props.slots.applets.map((applet) => applet.name));
     // What may be done in the addressed checkout, as the state decided it.
     // Connection health stays separate: each control combines the relevant
     // durable refusal with connection state at the boundary where it acts.
@@ -3219,22 +1748,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // Why a chat cannot be started here or sent to. A workspace whose checkout
     // Rig is still preparing refuses the second and not the first, so the two
     // reasons are kept apart all the way down to the controls: a composer reads
-    // this one, a file save and a shell read the one above it.
+    // this one, while file and terminal actions read the write refusal above it.
     const openGroupChatRefusal = access.conversationRefusal;
-    const slotPlacement = (slot: RigSlotName): readonly SlotVisualEntry[] =>
-        slotVisualEntries(
-            rigSlotEntriesInScope(props.slots.entries, slot, props.slotsScope),
-            rows,
-            applets,
-            props.chatId !== undefined,
-            connectionRefusal ?? openGroupChatRefusal,
-        );
-    const slotViews: RigSlotViews = {
-        statusLine: slotPlacement("status-line"),
-        aboveComposer: slotPlacement("above-composer"),
-        title: slotPlacement("title"),
-    };
-    const openGroup = openGroupFind(rows, props.groupId, props.folders);
+    const openGroup = openGroupFind(rows, props.groupId);
     const sessionCreateAvailable =
         openGroup?.create !== undefined &&
         connectionRefusal === undefined &&
@@ -3381,7 +1897,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         const current = props.workspace.get();
         const currentRows =
             current.list.projects.type === "ready" ? current.list.projects.value : [];
-        const currentGroup = openGroupFind(currentRows, current.address.groupId, props.folders);
+        const currentGroup = openGroupFind(currentRows, current.address.groupId);
         if (!currentGroup) return;
         const panelNow = props.workspace.panel.get();
         const online = rigOnline();
@@ -3477,8 +1993,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 {...(conversationReadOnlyReason === undefined
                     ? {}
                     : { readOnlyReason: conversationReadOnlyReason })}
-                slotAction={props.slotAction}
-                slots={slotViews}
                 workspace={props.workspace}
             />
         ) : undefined;
@@ -3545,8 +2059,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 groupId={openGroup.id}
                 groupName={openGroup.name}
                 rigOnline={rigOnline}
-                slotAction={props.slotAction}
-                slots={slotViews}
                 {...(connectionRefusal === undefined ? {} : { unavailable: connectionRefusal })}
                 workspace={props.workspace}
             />
@@ -3580,8 +2092,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 {...(connectionRefusal === undefined && openGroupChatRefusal === undefined
                     ? {}
                     : { writeRefusal: connectionRefusal ?? openGroupChatRefusal })}
-                slotAction={props.slotAction}
-                slots={slotViews}
                 viewerId={props.viewerId}
                 workspace={props.workspace}
             />
@@ -3616,7 +2126,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         activity={conversation.type === "ready" ? conversation.value : undefined}
                         canStartTerminal={availability.online && props.chatId !== undefined}
                         browserContent={props.browserContent}
-                        {...(props.nodeId === undefined ? {} : { nodeId: props.nodeId })}
                         htmlPreview={props.htmlPreview}
                         mediaWindow={props.mediaWindow}
                         sessionId={props.chatId}
@@ -3624,24 +2133,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         expanded={workspace.fileTreeExpanded}
                         collapsed={workspace.fileTreeCollapsed}
                         layout={workspace.fileLayout}
-                        // A plain click still opens the file and makes it the
-                        // only thing picked; the modifier clicks build a set to
-                        // act on and deliberately open nothing, since picking
-                        // eleven files should not open eleven tabs. Only the
-                        // changed listing has anything to do with a set, so the
-                        // whole checkout ignores the modifiers entirely rather
-                        // than quietly collecting an invisible selection.
-                        onFileSelect={(path, modifiers, orderedPaths) => {
-                            const picking = workspace.fileScope === "changed";
-                            if (picking && modifiers.extend) {
-                                props.workspace.fileSelectionExtend(path, orderedPaths);
-                                return;
-                            }
-                            if (picking && modifiers.toggle) {
-                                props.workspace.fileSelectionToggle(path);
-                                return;
-                            }
-                            if (picking) props.workspace.fileSelectionReplace(path);
+                        onFileSelect={(path) => {
                             if (openGroup && rigOnline())
                                 props.workspace.filePreview(
                                     openGroup.id,
@@ -3649,9 +2141,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     fileTabKind(path, workspace.fileScope),
                                 );
                         }}
-                        {...(availability.online && access.canWrite
-                            ? { onRevert: () => props.workspace.fileRevertPromptOpen() }
-                            : {})}
                         onFileOpen={(path) => {
                             if (openGroup && rigOnline())
                                 props.workspace.fileOpen(
@@ -3714,19 +2203,10 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                   rigAvailabilityReason: availability.message,
                               })}
                         scope={workspace.fileScope}
-                        selection={workspace.fileSelection}
                         selectedPath={activeFile?.path}
                         store={props.workspace.panel}
                         workspaceFiles={workspace.workspaceFiles}
                         workspaceFilesLoading={workspace.workspaceFilesLoading}
-                        appletRevisions={
-                            new Map(
-                                props.slots.applets.map((applet) => [
-                                    applet.name,
-                                    applet.currentVersion,
-                                ]),
-                            )
-                        }
                     />
                 ) : undefined
             }
@@ -3829,13 +2309,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
-                        titleAccessory={
-                            <SlotEntries
-                                entries={slotViews.title}
-                                onAction={props.slotAction}
-                                placement="title"
-                            />
-                        }
                     />
                     {availability.online ? null : (
                         <Banner
@@ -3961,8 +2434,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             groupId={openGroup.id}
                             groupName={openGroup.name}
                             rigOnline={rigOnline}
-                            slotAction={props.slotAction}
-                            slots={slotViews}
                             {...(connectionRefusal === undefined
                                 ? {}
                                 : { unavailable: connectionRefusal })}
@@ -4149,12 +2620,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             {...(props.browserContent
                                                 ? { browserContent: props.browserContent }
                                                 : {})}
-                                            {...(props.nodeId === undefined
-                                                ? {}
-                                                : { nodeId: props.nodeId })}
-                                            {...(props.htmlPreview
-                                                ? { htmlPreview: props.htmlPreview }
-                                                : {})}
                                             {...(props.chatId ? { sessionId: props.chatId } : {})}
                                             store={props.workspace.panel}
                                             tabs={mainTools}
@@ -4164,14 +2629,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                                       rigAvailability: terminalRigAvailability,
                                                       rigAvailabilityReason: availability.message,
                                                   })}
-                                            appletRevisions={
-                                                new Map(
-                                                    props.slots.applets.map((applet) => [
-                                                        applet.name,
-                                                        applet.currentVersion,
-                                                    ]),
-                                                )
-                                            }
                                         />
                                     }
                                 />
@@ -4237,68 +2694,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     )}
                 </>
             )}
-            {/* Reverting is the one act in the file panel that destroys work
-                nothing else can give back, so what is about to happen is said
-                in full — how many files, and that HEAD is where they land —
-                before it happens. */}
-            {workspace.fileRevert && openGroup ? (
-                <ModalOverlay onDismiss={() => props.workspace.fileRevertPromptClose()}>
-                    <Modal
-                        footer={
-                            <>
-                                <Button
-                                    disabled={workspace.fileRevert.submitting}
-                                    onClick={() => props.workspace.fileRevertPromptClose()}
-                                    variant="ghost"
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    disabled={
-                                        workspace.fileRevert.submitting || !availability.online
-                                    }
-                                    onClick={() => {
-                                        if (!rigOnline()) return;
-                                        void props.workspace
-                                            .fileRevertConfirm(openGroup.id)
-                                            .catch(() => undefined);
-                                    }}
-                                    variant="danger"
-                                >
-                                    Revert
-                                </Button>
-                            </>
-                        }
-                        icon="trash"
-                        onClose={() => props.workspace.fileRevertPromptClose()}
-                        size="small"
-                        title={
-                            workspace.fileRevert.paths.length === 1
-                                ? "Revert 1 file"
-                                : `Revert ${String(workspace.fileRevert.paths.length)} files`
-                        }
-                    >
-                        <div className="happy2-rig-revert">
-                            <p className="happy2-rig-revert__text">
-                                Their changes are discarded and each file returns to what HEAD
-                                holds. This cannot be undone.
-                            </p>
-                            <ul className="happy2-rig-revert__paths">
-                                {workspace.fileRevert.paths.map((path) => (
-                                    <li className="happy2-rig-revert__path" key={path}>
-                                        {path}
-                                    </li>
-                                ))}
-                            </ul>
-                            {workspace.fileRevert.error ? (
-                                <p className="happy2-rig-revert__error" role="alert">
-                                    {workspace.fileRevert.error}
-                                </p>
-                            ) : null}
-                        </div>
-                    </Modal>
-                </ModalOverlay>
-            ) : null}
         </AppShell>
     );
 }
@@ -4668,8 +3063,6 @@ function RigGroupComposer(props: {
     groupName: string;
     /** Reads current transport health when a Rig-backed action is invoked. */
     rigOnline: () => boolean;
-    slotAction(entryId: string): void;
-    slots: RigSlotViews;
     /** Why this Rig cannot accept network actions while the local draft remains editable. */
     unavailable?: string;
     workspace: RigWorkspaceStore;
@@ -4680,13 +3073,6 @@ function RigGroupComposer(props: {
         <ConversationView
             agentAuthor={rigAgentAuthor}
             composer={props.composer}
-            composerAboveControl={
-                <SlotEntries
-                    entries={props.slots.aboveComposer}
-                    onAction={props.slotAction}
-                    placement="above-composer"
-                />
-            }
             composerFocusOnType={props.focusOnType}
             // Only the composer that claims stray typing takes the caret, so the
             // dock over an expanded panel cannot pull it out from under the one
@@ -4714,36 +3100,27 @@ function RigGroupComposer(props: {
                 ) : undefined
             }
             composerFooterControl={
-                draftMenus || props.slots.statusLine.length > 0 ? (
+                draftMenus ? (
                     <ComposerFooterBar
                         leading={
-                            <>
-                                {draftMenus ? (
-                                    <RigSessionControls
-                                        fields={["permission", "tier"]}
-                                        menuPlacement="above"
-                                        variant="ghost"
-                                        menus={draftMenus}
-                                        onEffortChange={(effort?: RigThinkingLevel) =>
-                                            workspace.sessionEffortUpdate(effort)
-                                        }
-                                        onModelChange={(selection: RigModelSelection) =>
-                                            workspace.sessionModelUpdate(selection)
-                                        }
-                                        onPermissionModeChange={(mode: RigPermissionMode) =>
-                                            workspace.sessionPermissionModeUpdate(mode)
-                                        }
-                                        onServiceTierChange={(tier?: RigServiceTier) =>
-                                            workspace.sessionServiceTierUpdate(tier)
-                                        }
-                                    />
-                                ) : null}
-                                <SlotEntries
-                                    entries={props.slots.statusLine}
-                                    onAction={props.slotAction}
-                                    placement="status-line"
-                                />
-                            </>
+                            <RigSessionControls
+                                fields={["permission", "tier"]}
+                                menuPlacement="above"
+                                variant="ghost"
+                                menus={draftMenus}
+                                onEffortChange={(effort?: RigThinkingLevel) =>
+                                    workspace.sessionEffortUpdate(effort)
+                                }
+                                onModelChange={(selection: RigModelSelection) =>
+                                    workspace.sessionModelUpdate(selection)
+                                }
+                                onPermissionModeChange={(mode: RigPermissionMode) =>
+                                    workspace.sessionPermissionModeUpdate(mode)
+                                }
+                                onServiceTierChange={(tier?: RigServiceTier) =>
+                                    workspace.sessionServiceTierUpdate(tier)
+                                }
+                            />
                         }
                     />
                 ) : undefined
@@ -4798,8 +3175,6 @@ function RigConversationBody(props: {
     canAbort: boolean;
     /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
-    slotAction(entryId: string): void;
-    slots: RigSlotViews;
     viewerId: string;
     workspace: RigWorkspaceStore;
 }) {
@@ -4824,8 +3199,6 @@ function RigConversationBody(props: {
                     ? {}
                     : { readOnlyReason: props.readOnlyReason })}
                 {...(props.writeRefusal === undefined ? {} : { writeRefusal: props.writeRefusal })}
-                slotAction={props.slotAction}
-                slots={props.slots}
                 viewerId={props.viewerId}
                 workspace={props.workspace}
             />
@@ -4941,8 +3314,6 @@ function RigConversationSurface(props: {
     canAbort: boolean;
     /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
-    slotAction(entryId: string): void;
-    slots: RigSlotViews;
     viewerId: string;
     workspace: RigWorkspaceStore;
 }) {
@@ -5006,11 +3377,6 @@ function RigConversationSurface(props: {
                             />
                         </ComposerPanel>
                     ) : null}
-                    <SlotEntries
-                        entries={props.slots.aboveComposer}
-                        onAction={props.slotAction}
-                        placement="above-composer"
-                    />
                 </>
             }
             composerDisabled={props.readOnly}
@@ -5095,11 +3461,6 @@ function RigConversationSurface(props: {
                                     if (props.rigOnline()) workspace.sessionServiceTierUpdate(tier);
                                 }}
                             />
-                            <SlotEntries
-                                entries={props.slots.statusLine}
-                                onAction={props.slotAction}
-                                placement="status-line"
-                            />
                         </>
                     }
                     /* How much of the window this session has spent, at the far
@@ -5150,17 +3511,6 @@ function RigConversationSurface(props: {
                 if (props.rigOnline()) workspace.imageOpen(messageId, attachmentId);
             }}
             onAttachmentOpen={(attachment) => {
-                if (attachment.attachmentKind === "applet" && attachment.applet) {
-                    if (!props.rigOnline()) return;
-                    swallow(
-                        workspace.appletOpen(
-                            attachment.applet,
-                            attachment.appletPath,
-                            attachment.appletQuery,
-                        ),
-                    );
-                    return;
-                }
                 // An attached document is a page, not a file to save. When it
                 // lives in a checkout this workspace reads, it opens the way a
                 // document in the file list does — rendered, served from its own
@@ -5304,8 +3654,6 @@ function RigPanelComposer(props: {
     canAbort: boolean;
     /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
-    slotAction(entryId: string): void;
-    slots: RigSlotViews;
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
@@ -5314,15 +3662,6 @@ function RigPanelComposer(props: {
         <FloatingConversationDock placement="footer">
             <ConversationDock
                 composer={conversation.composer}
-                composerAboveControl={
-                    <>
-                        <SlotEntries
-                            entries={props.slots.aboveComposer}
-                            onAction={props.slotAction}
-                            placement="above-composer"
-                        />
-                    </>
-                }
                 disabled={props.readOnly}
                 submitDisabled={props.unavailable !== undefined}
                 {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
@@ -5358,36 +3697,26 @@ function RigPanelComposer(props: {
                 composerFooterControl={
                     <ComposerFooterBar
                         leading={
-                            <>
-                                <RigSessionControls
-                                    disabled={props.readOnly || props.unavailable !== undefined}
-                                    fields={["permission", "tier"]}
-                                    menuPlacement="above"
-                                    variant="ghost"
-                                    menus={conversation.menus}
-                                    onEffortChange={(effort?: RigThinkingLevel) => {
-                                        if (props.rigOnline())
-                                            workspace.sessionEffortUpdate(effort);
-                                    }}
-                                    onModelChange={(selection: RigModelSelection) => {
-                                        if (props.rigOnline())
-                                            workspace.sessionModelUpdate(selection);
-                                    }}
-                                    onPermissionModeChange={(mode: RigPermissionMode) => {
-                                        if (props.rigOnline())
-                                            workspace.sessionPermissionModeUpdate(mode);
-                                    }}
-                                    onServiceTierChange={(tier?: RigServiceTier) => {
-                                        if (props.rigOnline())
-                                            workspace.sessionServiceTierUpdate(tier);
-                                    }}
-                                />
-                                <SlotEntries
-                                    entries={props.slots.statusLine}
-                                    onAction={props.slotAction}
-                                    placement="status-line"
-                                />
-                            </>
+                            <RigSessionControls
+                                disabled={props.readOnly || props.unavailable !== undefined}
+                                fields={["permission", "tier"]}
+                                menuPlacement="above"
+                                variant="ghost"
+                                menus={conversation.menus}
+                                onEffortChange={(effort?: RigThinkingLevel) => {
+                                    if (props.rigOnline()) workspace.sessionEffortUpdate(effort);
+                                }}
+                                onModelChange={(selection: RigModelSelection) => {
+                                    if (props.rigOnline()) workspace.sessionModelUpdate(selection);
+                                }}
+                                onPermissionModeChange={(mode: RigPermissionMode) => {
+                                    if (props.rigOnline())
+                                        workspace.sessionPermissionModeUpdate(mode);
+                                }}
+                                onServiceTierChange={(tier?: RigServiceTier) => {
+                                    if (props.rigOnline()) workspace.sessionServiceTierUpdate(tier);
+                                }}
+                            />
                         }
                         trailing={
                             <>
@@ -5774,8 +4103,6 @@ function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
 function RigPanelBody(props: {
     activity?: RigConversationSnapshot;
     browserContent?: BrowserContentRenderer;
-    /** The machine the open session belongs to, absent on this window's own. */
-    nodeId?: string;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     canStartTerminal: boolean;
@@ -5793,12 +4120,7 @@ function RigPanelBody(props: {
     /** Opens one delegated child session from the Activity tab. */
     onSubagentSelect?: (sessionId: string) => void;
     onFileOpen: (path: string) => void;
-    onFileSelect: (
-        path: string,
-        modifiers: FileTreeSelectModifiers,
-        orderedPaths: readonly string[],
-    ) => void;
-    onRevert?: () => void;
+    onFileSelect: (path: string) => void;
     onLayoutChange: (layout: RigFileLayout) => void;
     onPanelClose: () => void;
     /** The file the viewer tab is on, read out of the transcript beside it. */
@@ -5818,14 +4140,11 @@ function RigPanelBody(props: {
     rigAvailability?: "reconnecting" | "unavailable";
     rigAvailabilityReason?: string;
     scope: RigFileScope;
-    selection: ReadonlySet<string>;
     sessionId?: string;
     selectedPath?: string;
     store: RigPanelStore;
     workspaceFiles?: RigWorkspaceFiles;
     workspaceFilesLoading: boolean;
-    /** Current version per imported applet, used to live-reload an already open page. */
-    appletRevisions: ReadonlyMap<string, number>;
 }) {
     const all = props.scope === "all";
     // A checkout can hold twenty thousand paths, and putting them in reading
@@ -6008,8 +4327,6 @@ function RigPanelBody(props: {
                     <RigToolBodies
                         activeId={props.panel.activeViewId}
                         {...(props.browserContent ? { browserContent: props.browserContent } : {})}
-                        {...(props.nodeId === undefined ? {} : { nodeId: props.nodeId })}
-                        {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
                         {...(props.sessionId ? { sessionId: props.sessionId } : {})}
                         store={props.store}
                         tabs={panelTools}
@@ -6021,7 +4338,6 @@ function RigPanelBody(props: {
                                       ? {}
                                       : { rigAvailabilityReason: props.rigAvailabilityReason }),
                               })}
-                        appletRevisions={props.appletRevisions}
                     />
                     {props.panel.activeViewId === "files" ? (
                         <FileBrowser
@@ -6060,17 +4376,10 @@ function RigPanelBody(props: {
                                           all: allFilesUnavailable,
                                       },
                                   })}
-                            {...(props.onRevert ? { onRevert: props.onRevert } : {})}
-                            onSelect={(path: string, modifiers: FileTreeSelectModifiers) =>
-                                props.onFileSelect(path, modifiers, fileTreeVisibleFiles(nodes))
-                            }
+                            onSelect={(path: string) => props.onFileSelect(path)}
                             onToggle={props.onToggle}
                             scope={props.scope}
                             selectedId={props.selectedPath}
-                            // Picking files is what the changed listing is for: the
-                            // whole checkout has nothing to revert to and no bulk
-                            // act to offer, so it is left as the plain listing.
-                            {...(all ? {} : { selectedIds: props.selection })}
                         />
                     ) : props.panel.activeViewId === "activity" ? (
                         props.activity ? (
@@ -6241,11 +4550,10 @@ function RigPanelFileView(props: {
  * and rendered by whichever side is currently holding them: moving a tab across
  * the window changes which strip draws it and nothing about what it is.
  *
- * Pages are all mounted together and only one is shown, because a page that
+ * Browser pages are all mounted together and only one is shown, because a page that
  * stopped being looked at is still loaded and unmounting it would throw the
- * session away; a terminal and a applet are drawn only while they are on
- * screen, and a terminal's process outlives its view because the store, not
- * this component, is what holds it.
+ * session away; a terminal is drawn only while it is on screen, and its process
+ * outlives its view because the store, not this component, is what holds it.
  *
  * Moving a terminal across the window therefore costs it nothing: the view is
  * rebuilt on the other side and attaches to the same running shell. A page
@@ -6260,15 +4568,10 @@ function RigToolBodies(props: {
     activeId: string | undefined;
     store: RigPanelStore;
     browserContent?: BrowserContentRenderer;
-    /** The machine the session below browses from, absent on this window's own. */
-    nodeId?: string;
-    htmlPreview?: HtmlPreviewRenderer;
     /** Owning Rig availability applied to retained terminal tabs. */
     rigAvailability?: "reconnecting" | "unavailable";
     rigAvailabilityReason?: string;
     sessionId?: string;
-    /** Current version per imported applet, used to live-reload an already open page. */
-    appletRevisions: ReadonlyMap<string, number>;
 }) {
     const active = props.tabs.find((tab) => tab.id === props.activeId);
     return (
@@ -6294,12 +4597,6 @@ function RigToolBodies(props: {
                                 ? (browserProps) =>
                                       props.browserContent!({
                                           ...browserProps,
-                                          // Both halves of the address, bound
-                                          // here where the Rig behind this
-                                          // workspace is still known.
-                                          ...(props.nodeId === undefined
-                                              ? {}
-                                              : { nodeId: props.nodeId }),
                                           sessionId: props.sessionId,
                                       })
                                 : undefined
@@ -6319,12 +4616,6 @@ function RigToolBodies(props: {
                                   ? {}
                                   : { rigAvailabilityReason: props.rigAvailabilityReason }),
                           })}
-                />
-            ) : active?.kind === "applet" ? (
-                <HtmlPreviewFrame
-                    {...(props.htmlPreview ? { renderContent: props.htmlPreview } : {})}
-                    revision={String(props.appletRevisions.get(active.label) ?? 0)}
-                    source={active.url}
                 />
             ) : null}
         </>

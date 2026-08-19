@@ -117,10 +117,6 @@ export function SidebarSpaces(props: SidebarSpacesProps) {
      * arrives; a gesture, which sets nothing here, reports as it goes.
      */
     const settling = useRef<number | undefined>(undefined);
-    const index = () => {
-        const found = local.spaces.findIndex((space) => space.id === local.activeSpaceId);
-        return found < 0 ? 0 : found;
-    };
     const hasBodies = () => local.spaces.some((space) => space.content !== undefined);
     const select = (id: string) => {
         if (id === local.activeSpaceId) return;

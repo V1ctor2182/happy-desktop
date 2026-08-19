@@ -3,7 +3,7 @@ import { useId, type CSSProperties } from "react";
 import { Checkbox } from "./Checkbox";
 export type PermissionChecklistOption = {
     id: string;
-    /** Short human name of the capability, e.g. "Manage secrets". */
+    /** Short human name of the capability, e.g. "Write files". */
     label: string;
     /** One-line explanation of what the capability allows. */
     description?: string;

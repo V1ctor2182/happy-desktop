@@ -13,7 +13,6 @@ export interface LocalOnboardingViewSnapshot {
     readonly failure?: string;
     readonly profileName: string;
     readonly profileEmail: string;
-    readonly selectedProfileId?: string;
 }
 
 export interface LocalOnboardingStore {
@@ -27,8 +26,6 @@ export interface LocalOnboardingStore {
     profileNameUpdate(value: string): void;
     profileEmailUpdate(value: string): void;
     profileCreate(): void;
-    profileSelect(profileId: string): void;
-    murmurChoose(enabled: boolean): void;
 }
 
 const DEFAULT_COLS = 80;
@@ -107,17 +104,6 @@ export function localOnboardingStoreCreate(
             ...snapshot,
             ...(ended ? { terminal: undefined } : {}),
             onboarding: next,
-            ...(next.stage === "murmurSetup"
-                ? {
-                      selectedProfileId:
-                          next.profiles?.some(({ id }) => id === snapshot.selectedProfileId) ===
-                          true
-                              ? snapshot.selectedProfileId
-                              : next.profiles?.length === 1
-                                ? next.profiles[0]?.id
-                                : undefined,
-                  }
-                : {}),
         });
     };
     const emulatorEnsure = (id: string): Promise<TerminalEmulator> => {
@@ -267,22 +253,6 @@ export function localOnboardingStoreCreate(
                 "Happy could not create that profile.",
             );
         },
-        profileSelect(profileId) {
-            if (!snapshot.onboarding?.profiles?.some(({ id }) => id === profileId)) return;
-            publish({ ...snapshot, selectedProfileId: profileId });
-        },
-        murmurChoose(enabled) {
-            if (snapshot.pending) return;
-            const profileId = snapshot.selectedProfileId ?? snapshot.onboarding?.profiles?.[0]?.id;
-            attempt(
-                enabled
-                    ? profileId
-                        ? bridge.onboardingMurmurChoose({ enabled: true, profileId })
-                        : Promise.reject(new Error("Create a profile before enabling Murmur."))
-                    : bridge.onboardingMurmurChoose({ enabled: false }),
-                "Happy could not save that Murmur choice.",
-            );
-        },
     };
 }
 
@@ -356,16 +326,6 @@ export function localOnboardingView(
                 name: snapshot.profileName,
                 ...(message ? { message } : {}),
             };
-        case "murmurSetup":
-            return {
-                busy,
-                kind: "murmur-setup",
-                profiles: onboarding.profiles ?? [],
-                ...(snapshot.selectedProfileId
-                    ? { selectedProfileId: snapshot.selectedProfileId }
-                    : {}),
-                ...(message ? { message } : {}),
-            };
         case "examining":
             return { kind: "examining" };
         case "project":
@@ -373,6 +333,7 @@ export function localOnboardingView(
         case "complete":
             return undefined;
     }
+    return undefined;
 }
 
 function errorMessage(error: unknown): string {

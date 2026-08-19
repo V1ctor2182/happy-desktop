@@ -134,7 +134,6 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.invoke(desktopIpc.onboardingRigInstall, cols, rows),
     onboardingProfileCreate: (input) =>
         ipcRenderer.invoke(desktopIpc.onboardingProfileCreate, input),
-    onboardingMurmurChoose: (input) => ipcRenderer.invoke(desktopIpc.onboardingMurmurChoose, input),
     onboardingProjectChoose: () => ipcRenderer.invoke(desktopIpc.onboardingProjectChoose),
     runtimeGet: () => ipcRenderer.invoke(desktopIpc.runtimeGet),
     runtimeReset: () => ipcRenderer.invoke(desktopIpc.runtimeReset),

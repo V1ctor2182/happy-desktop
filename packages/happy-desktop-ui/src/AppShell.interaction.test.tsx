@@ -370,7 +370,9 @@ it("keeps both resized sidebars fully reachable at the minimum desktop width", a
 
     expect(sidebar.width).toBe(220);
     expect(workspace.width).toBe(140);
-    expect(panel.width).toBe(280);
+    // The rail leaves 656px for content. After preserving the sidebar and
+    // workspace minimums, the panel owns the remaining 296px.
+    expect(panel.width).toBe(296);
     expect(sidebar.x).toBe(main.x);
     expect(panel.x + panel.width).toBe(content.x + content.width);
 });

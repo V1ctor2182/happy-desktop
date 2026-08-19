@@ -108,8 +108,6 @@ export type Mentionable = {
     description?: string;
     id: string;
     initials: string;
-    /** Documents render under their own subsection with a doc glyph. */
-    kind?: "person" | "document";
     name: string;
     status?: "ready" | "working";
     tone?: ToneName;
@@ -126,33 +124,21 @@ export type MentionPickerProps = {
     query: string;
     style?: CSSProperties;
 };
-/*
- * People always precede documents so the flat keyboard-navigation order in the
- * composer matches the picker's grouped rendering exactly.
- */
 function filterMentions(mentions: Mentionable[], query: string) {
     const needle = query.trim().toLowerCase();
-    const matched = needle
+    return needle
         ? mentions.filter((mention) => mention.name.toLowerCase().includes(needle))
         : mentions;
-    return [
-        ...matched.filter((mention) => mention.kind !== "document"),
-        ...matched.filter((mention) => mention.kind === "document"),
-    ];
 }
 /**
  * Raised popover listing mention candidates, filtered by `query`. It spans the
  * composer it belongs to and wears the command picker's geometry — quiet
  * section headings over one-line 32px rows — so `@` and `/` are one surface.
- * People render first under the primary heading; document candidates follow
- * under their own "Documents" subsection with a doc glyph instead of an avatar.
  */
 export function MentionPicker(props: MentionPickerProps) {
     const candidates = () => props.mentions ?? [];
     const filtered = () => filterMentions(candidates(), props.query);
     const activeId = () => props.activeId ?? filtered()[0]?.id;
-    const people = () => filtered().filter((mention) => mention.kind !== "document");
-    const documents = () => filtered().filter((mention) => mention.kind === "document");
     const row = (mention: Mentionable) => (
         <button
             aria-selected={mention.id === activeId() ? "true" : "false"}
@@ -165,16 +151,7 @@ export function MentionPicker(props: MentionPickerProps) {
             role="option"
             type="button"
         >
-            {mention.kind === "document" ? (
-                <span
-                    className="happy2-mention-picker__doc-glyph"
-                    data-happy-desktop-ui="mention-picker-doc-glyph"
-                >
-                    <Icon name="doc" size={16} />
-                </span>
-            ) : (
-                <Avatar initials={mention.initials} size="xs" tone={mention.tone} type="agent" />
-            )}
+            <Avatar initials={mention.initials} size="xs" tone={mention.tone} type="agent" />
             <span
                 className="happy2-mention-picker__meta"
                 data-happy-desktop-ui="mention-picker-meta"
@@ -214,30 +191,14 @@ export function MentionPicker(props: MentionPickerProps) {
             role="listbox"
             style={props.style}
         >
-            {/* The primary heading labels the people beneath it, so it is
-                withheld when every candidate is a document and "Documents"
-                is about to say the same thing one row lower. */}
-            {people().length > 0 || filtered().length === 0 ? (
-                <div
-                    className="happy2-mention-picker__header"
-                    data-happy-desktop-ui="mention-picker-header"
-                >
-                    {props.label ?? "Mentions"}
-                </div>
-            ) : null}
+            <div
+                className="happy2-mention-picker__header"
+                data-happy-desktop-ui="mention-picker-header"
+            >
+                {props.label ?? "Mentions"}
+            </div>
             {filtered().length > 0 ? (
-                <>
-                    {people().map(row)}
-                    {documents().length > 0 ? (
-                        <div
-                            className="happy2-mention-picker__header"
-                            data-happy-desktop-ui="mention-picker-documents-header"
-                        >
-                            Documents
-                        </div>
-                    ) : null}
-                    {documents().map(row)}
-                </>
+                filtered().map(row)
             ) : (
                 <div
                     className="happy2-mention-picker__empty"

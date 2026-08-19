@@ -3,8 +3,8 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promis
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
+import type { GymHappyAgentClient, HappyAgentWorkspace } from "./happyAgentProtocol.js";
 import type { GymFixtureCounts, GymManifest, GymProject, GymRunPaths } from "./types.js";
-import type { RigProtocolClient, RigWorkspace } from "./rigProtocol.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -39,7 +39,7 @@ export interface GitFixturesResult {
 export async function gitFixturesCreate(
     paths: GymRunPaths,
     manifest: GymManifest,
-    client: RigProtocolClient,
+    client: GymHappyAgentClient,
 ): Promise<GitFixturesResult> {
     const distribution = manifest.seed.projectWorktreeDistribution;
     if (distribution.length !== manifest.target.regularProjects) {
@@ -68,7 +68,7 @@ export async function gitFixturesCreate(
     const projects: GymProject[] = [];
     const createdWorktrees: Array<{
         readonly projectId: string;
-        readonly workspace: RigWorkspace;
+        readonly workspace: HappyAgentWorkspace;
     }> = [];
     for (const repository of repositories) {
         // Registering after this mutation lets Rig's initial project scan expose
@@ -76,19 +76,15 @@ export async function gitFixturesCreate(
         // worktrees are updated below once their paths exist.
         await workingTreeChangesApply(repository.path, manifest);
         const result = await client.registerProject(repository.path);
+        await client.waitForWorkspace(result.project.id, "ready", 90_000);
         const worktreeCount = manifest.seed.projectWorktreeDistribution[repository.index] ?? 0;
-        const worktrees: RigWorkspace[] = [];
+        const worktrees: HappyAgentWorkspace[] = [];
         for (let index = 0; index < worktreeCount; index += 1) {
             const created = await client.createWorkspace(
                 result.project.id,
                 `${repository.name}-work-${String(index + 1).padStart(2, "0")}`,
             );
-            const ready = await client.waitForWorkspace(
-                result.project.id,
-                created.workspace.id,
-                "ready",
-                90_000,
-            );
+            const ready = await client.waitForWorkspace(created.workspace.id, "ready", 90_000);
             worktrees.push(ready);
             createdWorktrees.push({ projectId: result.project.id, workspace: ready });
         }
@@ -104,8 +100,8 @@ export async function gitFixturesCreate(
         createdWorktrees.slice(0, archivedCount).map((entry) => entry.workspace.id),
     );
     for (const entry of createdWorktrees.slice(0, archivedCount)) {
-        await client.archiveWorkspace(entry.projectId, entry.workspace);
-        await client.waitForWorkspace(entry.projectId, entry.workspace.id, "archived", 90_000);
+        await client.archiveWorkspace(entry.workspace);
+        await client.waitForWorkspace(entry.workspace.id, "archived", 90_000);
     }
 
     await Promise.all(

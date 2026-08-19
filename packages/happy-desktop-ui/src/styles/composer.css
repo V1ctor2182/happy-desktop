@@ -528,8 +528,8 @@
 /*
  * The mention popover is the command picker in another key: same card on the
  * composer's own surface with no drop, same 6px pad, same 24px section headings
- * and 32px one-line rows. Only the leading lane differs — an xs agent avatar or a document glyph where the command
- * picker paints its icon.
+ * and 32px one-line rows. Its leading lane uses the same xs agent avatar as the
+ * rest of the composer.
  */
 
 .happy2-mention-picker {
@@ -555,16 +555,6 @@
     font-size: 13px;
     font-weight: 400;
     line-height: 16px;
-}
-
-.happy2-mention-picker__doc-glyph {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    width: 20px;
-    height: 20px;
-    color: var(--text-secondary);
 }
 
 .happy2-mention-picker__row {

@@ -11,15 +11,6 @@ import {
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
 import {
-    folderFind,
-    RIG_UNSORTED_GROUP_ID,
-    rigFolderGroupId,
-    rigFolderGroupParse,
-    rigFoldersFlatten,
-    type RigFolder,
-    type RigFoldersSnapshot,
-} from "./rigFoldersStore.js";
-import {
     RIG_VIEW_PREFERENCES_EMPTY,
     rigViewPreferencesParse,
     rigViewPreferencesUpdate,
@@ -107,10 +98,8 @@ export const rigComposerCommands: readonly ComposerCommand[] = [
     { id: "agents", label: "/agents", description: "Monitor delegated subagents." },
     { id: "goal", label: "/goal", description: "Show the session goal." },
     { id: "ps", label: "/ps", description: "List background terminals." },
-    { id: "new", label: "/new", description: "Start a fresh session context." },
     { id: "compact", label: "/compact", description: "Compact the conversation." },
     { id: "abort", label: "/abort", description: "Stop the current run." },
-    { id: "fork", label: "/fork", description: "Fork this session." },
     { id: "clear", label: "/clear", description: "Clear the visible conversation." },
 ];
 
@@ -337,7 +326,7 @@ const RIG_READY_DOCUMENT_CACHE_MAX_WEIGHT = 16 * 1024 * 1024;
 const RIG_PANEL_FILE_LOAD_OWNER = "\u0000panel-file";
 /**
  * The renderer/UI uses the same ceiling when deciding whether to retain a
- * Pierre AST. A legacy changed document at or above it must already carry the
+ * Pierre AST. A changed document at or above it must already carry the
  * daemon's authoritative base hash; it is never scanned just to make a cache
  * key.
  */
@@ -348,13 +337,12 @@ function rigFileCacheKind(kind: RigFileCacheKind): RigFileTabKind {
 }
 
 /**
- * Produces a compact deterministic fallback identity for small legacy/fake
- * changed documents. Real daemon responses carry `oldHash` and never enter
- * this function. Two independent 32-bit lanes avoid wide-integer allocations
- * and keep this compatibility path cheap.
+ * Produces a compact deterministic identity for small changed documents whose
+ * revision response omitted `oldHash`. Two independent 32-bit lanes avoid
+ * wide-integer allocations.
  */
 function rigCompactContentHash(content: string): string {
-    // Include the UTF-16 length before scanning the small legacy fallback, so
+    // Include the UTF-16 length before scanning the small local value, so
     // equal prefixes of different lengths cannot share the same hash state
     // without bringing back the wide-integer work that made large reads costly.
     let left = Math.imul(0x811c9dc5 ^ content.length, 0x01000193);
@@ -574,14 +562,6 @@ export interface RigWorkspaceSnapshot {
     /** Directories the reader closed, including ones that open on their own. */
     readonly fileTreeCollapsed: ReadonlySet<string>;
     /**
-     * Changed files picked for one act on all of them at once. A listing is
-     * where a reader decides that four of these eleven files were a mistake, so
-     * the decision is held here rather than being re-made file by file.
-     */
-    readonly fileSelection: ReadonlySet<string>;
-    /** The revert confirmation, while it is open. */
-    readonly fileRevert?: RigFileRevertSnapshot;
-    /**
      * Every file in the open group's checkout, once it has been asked for.
      * Absent until then, which is what "All files" is loading.
      */
@@ -697,21 +677,6 @@ export interface RigCreateGroupOption {
     readonly parentLabel?: string;
     /** Where a session started here runs, as the host presents the path. */
     readonly displayPath: string;
-}
-
-/**
- * A revert the reader has asked for but not yet confirmed. Discarding work is
- * the one act in this panel that cannot be undone by doing it again, so the
- * paths are captured when the dialog opens: what is confirmed is what was read,
- * even if the selection or the checkout moves underneath it.
- */
-export interface RigFileRevertSnapshot {
-    /** The paths that will be returned to what HEAD holds. */
-    readonly paths: readonly string[];
-    /** True while the checkout is being changed; the dialog stays up and inert. */
-    readonly submitting: boolean;
-    /** A failed revert, said in the dialog rather than thrown away. */
-    readonly error?: string;
 }
 
 /** Which files the panel lists. */
@@ -916,19 +881,12 @@ export interface RigWorkspaceStore {
     draftUpdate(sessionId: RigSessionId, message: string): Promise<void>;
     /** Starts the new conversation described by a slot action and optionally submits its prompt. */
     chatStart(input: RigWorkspaceNewChatInput): Promise<void>;
-    /** Opens one imported Rig applet in the addressed group's isolated panel. */
-    appletOpen(
-        name: string,
-        path?: string,
-        query?: Readonly<Record<string, string>>,
-    ): Promise<void>;
     /**
      * Starts a conversation in the named group. The group is named rather than
      * inferred: `input.worktreeId` is absent for a project-root session, and an
      * absent id identifies nothing, so it can neither be checked nor refused.
      */
     conversationCreate(groupId: RigGroupId, input: RigSessionCreateInput): Promise<void>;
-    conversationFork(conversationId: RigSessionId): Promise<void>;
     /**
      * Closes a conversation: it leaves the list durably without ending the
      * session. The caller addresses somewhere else first when the closed
@@ -1019,7 +977,7 @@ export interface RigWorkspaceStore {
     /**
      * Moves one view to the other side of the workspace: the panel's file viewer
      * into a main-content tab, a file tab into the panel's viewer, or a live
-     * terminal, page, or applet between the two strips.
+     * terminal or browser page between the two strips.
      *
      * This is a change of placement and nothing else. A file keeps its identity,
      * so a file moved into the main content is the tab it would already have
@@ -1066,33 +1024,6 @@ export interface RigWorkspaceStore {
      * decides what has not been spoken for — and the store does not build one.
      */
     fileTreeExpandedUpdate(path: string, expanded: boolean): void;
-    /**
-     * Picks one changed file, replacing whatever was picked before, and makes it
-     * the row a later range extends from. This is the plain click, so a listing
-     * with nothing chosen behaves exactly as it always did.
-     */
-    fileSelectionReplace(path: string): void;
-    /** Adds or removes one changed file, leaving the rest of the selection alone. */
-    fileSelectionToggle(path: string): void;
-    /**
-     * Extends the selection from the row it was anchored on through `path`.
-     * `orderedPaths` is the listing in the order it is drawn, because which
-     * files lie between two rows is a question only the visible arrangement can
-     * answer — a tree and a flat list disagree about it.
-     */
-    fileSelectionExtend(path: string, orderedPaths: readonly string[]): void;
-    /** Drops the whole selection. */
-    fileSelectionClear(): void;
-    /** Asks to discard the selected files' changes, opening the confirmation. */
-    fileRevertPromptOpen(): void;
-    /** Closes that confirmation without touching the checkout. */
-    fileRevertPromptClose(): void;
-    /**
-     * Discards the confirmed files' working-tree changes. The listing is not
-     * updated from here: the checkout's Git state is reported by the daemon, so
-     * the panel learns what actually happened rather than what was asked for.
-     */
-    fileRevertConfirm(groupId: RigGroupId): Promise<void>;
     /** Records an unsaved edit to one file's working-tree text. */
     fileDraftUpdate(tabId: string, draft: string): void;
     /** Discards one file's unsaved edit and returns to its last loaded text. */
@@ -1142,8 +1073,6 @@ export interface RigWorkspaceStore {
         answers: Readonly<Record<string, readonly string[]>>,
     ): void;
     compact(): Promise<void>;
-    rewind(messageId: string): Promise<void>;
-    conversationReset(): Promise<void>;
     /** Loads the next page before the active conversation's current window. */
     historyLoadMore(): void;
     /** Requests termination of one background terminal in the active session (`/stop`). */
@@ -1315,7 +1244,6 @@ export function rigWorkspaceStoreCreate(
     deps: RigWorkspaceDeps = {},
 ): RigWorkspaceStore {
     const list: RigSessionListStore = client.sessionList();
-    const folders = client.folders();
     const output = deps.output ?? (() => undefined);
     const draftOrigin = `happy2_${Math.random().toString(36).slice(2)}`;
     let draftUpdatedAt = 0;
@@ -1333,7 +1261,6 @@ export function rigWorkspaceStoreCreate(
     let active = false;
     let disposed = false;
     let unsubscribeList: (() => void) | undefined;
-    let unsubscribeFolders: (() => void) | undefined;
 
     // Open conversation lease. `acquisitionGeneration` invalidates an in-flight
     // acquisition when the addressed conversation changes or the store stops.
@@ -1404,22 +1331,6 @@ export function rigWorkspaceStoreCreate(
     let catalogRevisionSeen = -1;
     /** The addressed group as of the last authoritative read that still held it. */
     let addressedGroupSeen: RigGroupId | undefined;
-    /**
-     * A folder-owned address replaced after its optimistic row disappeared.
-     *
-     * Rig Connect reports rejection but not acceptance for queued folder
-     * mutations. The row therefore leaves immediately; if the prediction is
-     * rolled back, this is the exact address restored for the reader.
-     */
-    let pendingFolderRemoval:
-        | {
-              readonly address: RigWorkspaceAddress;
-              readonly groupId: RigGroupId;
-              readonly replacementAddress?: RigWorkspaceAddress;
-          }
-        | undefined;
-    let restoredGroupRejectionRevisionSeen = folders?.get().restoredGroupRejection?.revision ?? 0;
-    let rejectedRestoredGroupIds: ReadonlySet<RigGroupId> = new Set();
     /** Every group id the last authoritative read listed: projects and their worktrees. */
     let authoritativeGroupIds: ReadonlySet<string> = new Set();
     let fileViewMode: RigFileViewMode = "unified";
@@ -1464,10 +1375,6 @@ export function rigWorkspaceStoreCreate(
     };
     let fileTreeExpanded: ReadonlySet<string> = new Set();
     let fileTreeCollapsed: ReadonlySet<string> = new Set();
-    let fileSelection: ReadonlySet<string> = new Set();
-    /** The row a range extends from: the last one picked without extending. */
-    let fileSelectionAnchor: string | undefined;
-    let fileRevert: RigFileRevertSnapshot | undefined;
     let create: RigCreateSnapshot | undefined;
     /**
      * Where adding a folder as a project stands. One value for the workspace
@@ -1690,7 +1597,6 @@ export function rigWorkspaceStoreCreate(
     // change where a group resumes, and resolving every group's history on every
     // one of them would spend the whole list's projection to learn nothing.
     let groupResumeList: RigSessionListSnapshot | undefined;
-    let groupResumeFolders: RigFoldersSnapshot | undefined;
     let groupResumeRevision = -1;
     let memoryRevision = 0;
     let snapshot: RigWorkspaceSnapshot = {
@@ -1707,7 +1613,6 @@ export function rigWorkspaceStoreCreate(
         fileLayout: "flat",
         fileTreeExpanded,
         fileTreeCollapsed,
-        fileSelection,
         workspaceFilesLoading,
         projectAdd,
         ...(projectClone ? { projectClone } : {}),
@@ -1792,22 +1697,8 @@ export function rigWorkspaceStoreCreate(
         };
     };
 
-    const folderGroupConversations = (
-        groupId: RigGroupId,
-    ): readonly ConversationSummary[] | undefined => {
-        const snapshot = folders?.get();
-        if (!snapshot) return undefined;
-        if (groupId === RIG_UNSORTED_GROUP_ID) return snapshot.unsorted;
-        const folderId = rigFolderGroupParse(groupId);
-        return folderId === undefined
-            ? undefined
-            : folderFind(snapshot.folders, folderId)?.conversations;
-    };
-
     /** The sessions a group holds right now, in list order, or none while it is not ready. */
     const groupConversationIdList = (groupId: RigGroupId): readonly string[] => {
-        const folderConversations = folderGroupConversations(groupId);
-        if (folderConversations) return folderConversations.map((summary) => summary.id);
         const projects = list.get().projects;
         if (projects.type !== "ready") return [];
         for (const project of projects.value) {
@@ -1868,15 +1759,9 @@ export function rigWorkspaceStoreCreate(
      */
     const groupResumeCompute = (): ReadonlyMap<RigGroupId, RigSessionId> => {
         const listSnapshot = list.get();
-        const foldersSnapshot = folders?.get();
-        if (
-            groupResumeList === listSnapshot &&
-            groupResumeFolders === foldersSnapshot &&
-            groupResumeRevision === memoryRevision
-        )
+        if (groupResumeList === listSnapshot && groupResumeRevision === memoryRevision)
             return groupResume;
         groupResumeList = listSnapshot;
-        groupResumeFolders = foldersSnapshot;
         groupResumeRevision = memoryRevision;
         const projects = listSnapshot.projects;
         const next = new Map<RigGroupId, RigSessionId>();
@@ -1902,17 +1787,6 @@ export function rigWorkspaceStoreCreate(
                         new Set(worktree.conversations.map((summary) => summary.id)),
                     );
             }
-        }
-        if (foldersSnapshot) {
-            resolve(
-                RIG_UNSORTED_GROUP_ID,
-                new Set(foldersSnapshot.unsorted.map((summary) => summary.id)),
-            );
-            for (const { folder } of rigFoldersFlatten(foldersSnapshot.folders))
-                resolve(
-                    rigFolderGroupId(folder.id),
-                    new Set(folder.conversations.map((summary) => summary.id)),
-                );
         }
         if (
             next.size === groupResume.size &&
@@ -2092,8 +1966,6 @@ export function rigWorkspaceStoreCreate(
             snapshot.panelWidth === nextPanelWidth &&
             snapshot.fileTreeExpanded === fileTreeExpanded &&
             snapshot.fileTreeCollapsed === fileTreeCollapsed &&
-            snapshot.fileSelection === fileSelection &&
-            snapshot.fileRevert === fileRevert &&
             snapshot.workspaceFiles === workspaceFiles &&
             snapshot.workspaceFilesLoading === workspaceFilesLoading &&
             snapshot.create === create &&
@@ -2116,8 +1988,6 @@ export function rigWorkspaceStoreCreate(
             ...(nextPanelWidth === undefined ? {} : { panelWidth: nextPanelWidth }),
             fileTreeExpanded,
             fileTreeCollapsed,
-            fileSelection,
-            ...(fileRevert ? { fileRevert } : {}),
             ...(workspaceFiles ? { workspaceFiles } : {}),
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
@@ -2168,18 +2038,6 @@ export function rigWorkspaceStoreCreate(
         }
         recompute();
     });
-
-    /**
-     * Forgets what was picked in the changed listing. A path only means anything
-     * inside the checkout it came from, so leaving that checkout — or leaving the
-     * listing itself — has to leave the selection behind rather than carry it
-     * onto rows in another repository that happen to share a name.
-     */
-    const fileSelectionReset = (): void => {
-        fileSelection = new Set();
-        fileSelectionAnchor = undefined;
-        fileRevert = undefined;
-    };
 
     /**
      * Forgets which directories were opened and which were closed. These are
@@ -2943,9 +2801,6 @@ export function rigWorkspaceStoreCreate(
         // prepared takes them and the host runs them when it is ready.
         const refused = openGroupConversationRefusal() !== undefined;
         switch (commandId) {
-            case "new":
-                if (!refused) swallow(store.sessionReset());
-                return;
             case "compact":
                 if (!refused) swallow(store.compact());
                 return;
@@ -2965,9 +2820,6 @@ export function rigWorkspaceStoreCreate(
             case "ps":
                 store.activityPanelShow();
                 panel.activitySelect();
-                return;
-            case "fork":
-                if (openId && !refused) swallow(list.sessionFork(openId).then(openRequest));
                 return;
         }
     };
@@ -3031,14 +2883,6 @@ export function rigWorkspaceStoreCreate(
      * it was delegated inside, which is the group the reader has open.
      */
     const conversationGroupId = (conversationId: RigSessionId): RigGroupId | undefined => {
-        const folderSnapshot = folders?.get();
-        if (folderSnapshot) {
-            if (folderSnapshot.unsorted.some((summary) => summary.id === conversationId))
-                return RIG_UNSORTED_GROUP_ID;
-            for (const { folder } of rigFoldersFlatten(folderSnapshot.folders))
-                if (folder.conversations.some((summary) => summary.id === conversationId))
-                    return rigFolderGroupId(folder.id);
-        }
         const projects = list.get().projects;
         if (projects.type === "ready")
             for (const project of projects.value) {
@@ -3054,17 +2898,6 @@ export function rigWorkspaceStoreCreate(
     const conversationSummaryFind = (
         conversationId: RigSessionId,
     ): ConversationSummary | undefined => {
-        const folderSnapshot = folders?.get();
-        if (folderSnapshot) {
-            const unsorted = folderSnapshot.unsorted.find(
-                (summary) => summary.id === conversationId,
-            );
-            if (unsorted) return unsorted;
-            for (const { folder } of rigFoldersFlatten(folderSnapshot.folders)) {
-                const found = folder.conversations.find((summary) => summary.id === conversationId);
-                if (found) return found;
-            }
-        }
         const projects = list.get().projects;
         if (projects.type !== "ready") return undefined;
         for (const project of projects.value) {
@@ -3082,7 +2915,7 @@ export function rigWorkspaceStoreCreate(
 
     const composerCreate = (conversationId: RigSessionId): ComposerStore => {
         const created: ComposerStore = composerStoreCreate(conversationId, {
-            capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
+            capabilities: { shellMode: false, commands: rigComposerCommands, mentions: true },
             attachments: conversationAttachments.get(conversationId) ?? [],
             output: (event) => {
                 switch (event.type) {
@@ -3118,15 +2951,6 @@ export function rigWorkspaceStoreCreate(
                                 conversationAttachments.delete(conversationId);
                             },
                             event.attachments,
-                        );
-                        return;
-                    case "shellCommandSubmitted":
-                        // A shell command is the most direct write there is: it
-                        // runs in the checkout itself.
-                        submitting(created, event.revision, () =>
-                            writeGuard(sessionWorkRefusal(conversationId), () =>
-                                withChatStore((store) => store.shellRun(event.command)),
-                            ),
                         );
                         return;
                     case "commandInvoked":
@@ -3339,11 +3163,6 @@ export function rigWorkspaceStoreCreate(
      */
     const groupConversationRefusalFind = (groupId: RigGroupId | undefined): string | undefined => {
         if (groupId === undefined) return RIG_GROUP_UNLISTED_REFUSAL;
-        // A folder is not a checkout, so none of the reasons a checkout refuses
-        // work apply to it: there is no branch being prepared and no directory
-        // that might have gone. A folder the tree still holds can always take a
-        // chat, and one it no longer holds is unlisted like any other group.
-        if (folderGroupFind(groupId) || groupId === RIG_UNSORTED_GROUP_ID) return undefined;
         return list.groupConversationRefusal(groupId);
     };
 
@@ -3353,9 +3172,6 @@ export function rigWorkspaceStoreCreate(
      * effect would land. A detached subagent resolves to the addressed group,
      * since that is the checkout it runs in too.
      */
-    const sessionWorkRefusal = (sessionId: RigSessionId): string | undefined =>
-        groupWorkRefusalFind(conversationGroupId(sessionId));
-
     /** The same, for an operation that speaks to one session rather than its checkout. */
     const sessionConversationRefusal = (sessionId: RigSessionId): string | undefined =>
         groupConversationRefusalFind(conversationGroupId(sessionId));
@@ -3392,20 +3208,6 @@ export function rigWorkspaceStoreCreate(
      * anything, so this value is never the address a session is actually made
      * against.
      */
-    /**
-     * The folder a group id names, when it names one.
-     *
-     * A folder takes a row in the same list projects and worktrees do, so it is
-     * addressed the same way: the id is the group. Nothing here predicts a
-     * folder — the tree is whatever the connection last published.
-     */
-    const folderGroupFind = (groupId: RigGroupId): RigFolder | undefined => {
-        const folderId = rigFolderGroupParse(groupId);
-        return folderId === undefined
-            ? undefined
-            : folderFind(folders?.get().folders ?? [], folderId);
-    };
-
     const groupStartFind = (
         groupId: RigGroupId,
     ):
@@ -3414,18 +3216,6 @@ export function rigWorkspaceStoreCreate(
               readonly worktreeId?: RigWorktreeId;
           }
         | undefined => {
-        // A folder is a place to work like any other: it owns a directory
-        // holding its files, and a chat started in one runs there and is filed
-        // into it. It is asked first because a folder id can never be a project
-        // or worktree id, and because a folder needs no catalog to have arrived.
-        const folder = folderGroupFind(groupId);
-        if (folder)
-            return {
-                create: {
-                    cwd: folder.path,
-                    scope: { kind: "folder", folderId: folder.id },
-                },
-            };
         const projects = list.get().projects;
         if (projects.type !== "ready") return undefined;
         for (const project of projects.value) {
@@ -3745,93 +3535,6 @@ export function rigWorkspaceStoreCreate(
                 : undefined;
     };
 
-    const addressSame = (left: RigWorkspaceAddress, right: RigWorkspaceAddress): boolean =>
-        left.groupId === right.groupId && left.conversationId === right.conversationId;
-
-    /**
-     * Keeps a rejected folder prediction restorable across the one route
-     * replacement caused by that prediction. A later, different navigation is
-     * the reader choosing somewhere else and retires the restoration.
-     */
-    const pendingFolderRemovalAddressApply = (next: RigWorkspaceAddress): void => {
-        const pending = pendingFolderRemoval;
-        if (!pending || addressSame(next, pending.address)) return;
-        if (pending.replacementAddress === undefined) {
-            pendingFolderRemoval = { ...pending, replacementAddress: next };
-            return;
-        }
-        if (!addressSame(pending.replacementAddress, next)) pendingFolderRemoval = undefined;
-    };
-
-    const rejectedFolderAddressRestore = (groupId: RigGroupId): void => {
-        const pending = pendingFolderRemoval;
-        if (!pending || pending.groupId !== groupId) return;
-        pendingFolderRemoval = undefined;
-        if (addressSame(address, pending.address)) return;
-        if (pending.address.conversationId !== undefined) {
-            output({
-                type: "conversationOpenRequested",
-                location: {
-                    groupId,
-                    sessionId: pending.address.conversationId,
-                },
-            });
-            return;
-        }
-        output({ type: "groupOpenRequested", groupId });
-    };
-
-    const folderSnapshotGroupListed = (
-        folderSnapshot: RigFoldersSnapshot,
-        groupId: RigGroupId,
-    ): boolean => {
-        if (groupId === RIG_UNSORTED_GROUP_ID) return folderSnapshot.unsorted.length > 0;
-        const folderId = rigFolderGroupParse(groupId);
-        return folderId !== undefined && folderFind(folderSnapshot.folders, folderId) !== undefined;
-    };
-
-    /**
-     * Reconciles folder and Unsorted addressing against their owning surface.
-     *
-     * Those groups do not belong to the project catalog. Their FolderView is
-     * the complete membership source, so a row disappearing there is the event
-     * that makes the currently addressed group no longer addressable.
-     */
-    const addressedFolderGroupApply = (): boolean => {
-        const folderSnapshot = folders?.get();
-        if (!folderSnapshot || folderSnapshot.loading) return false;
-        const rejection = folderSnapshot.restoredGroupRejection;
-        if (rejection && rejection.revision !== restoredGroupRejectionRevisionSeen) {
-            restoredGroupRejectionRevisionSeen = rejection.revision;
-            rejectedRestoredGroupIds =
-                pendingFolderRemoval === undefined ? new Set() : new Set(rejection.groupIds);
-        }
-        const pending = pendingFolderRemoval;
-        if (
-            pending &&
-            rejectedRestoredGroupIds.has(pending.groupId) &&
-            folderSnapshotGroupListed(folderSnapshot, pending.groupId)
-        ) {
-            rejectedRestoredGroupIds = new Set();
-            rejectedFolderAddressRestore(pending.groupId);
-        }
-        const groupId = addressedGroupId;
-        if (
-            groupId === undefined ||
-            (rigFolderGroupParse(groupId) === undefined && groupId !== RIG_UNSORTED_GROUP_ID)
-        )
-            return false;
-        const listed = folderSnapshotGroupListed(folderSnapshot, groupId);
-        if (listed) {
-            addressedGroupSeen = groupId;
-        } else if (addressedGroupSeen === groupId) {
-            addressedGroupSeen = undefined;
-            pendingFolderRemoval = { address, groupId };
-            output({ type: "addressedGroupRemoved", groupId });
-        }
-        return true;
-    };
-
     /**
      * What the host's own answer means for this workspace's addressing and for a
      * destructive intent the reader is holding. It runs only when the list
@@ -3859,11 +3562,7 @@ export function rigWorkspaceStoreCreate(
             for (const worktree of project.worktrees) listedIds.add(worktree.id);
         }
         authoritativeGroupIds = listedIds;
-        if (
-            addressedGroupId !== undefined &&
-            rigFolderGroupParse(addressedGroupId) === undefined &&
-            addressedGroupId !== RIG_UNSORTED_GROUP_ID
-        ) {
+        if (addressedGroupId !== undefined) {
             const listed = listedIds.has(addressedGroupId);
             // Removed means it was here and is not any more. A group the host
             // has never confirmed is a group still arriving — a worktree just
@@ -3952,13 +3651,6 @@ export function rigWorkspaceStoreCreate(
             catalogAuthoritativeApply();
             recompute();
         });
-        unsubscribeFolders = folders?.subscribe(() => {
-            if (openId) list.sessionRead(openId, conversationSummaryFind(openId)?.unread);
-            if (addressedGroupId !== undefined) groupRestore(addressedGroupId);
-            fileTabsReconcile();
-            addressedFolderGroupApply();
-            recompute();
-        });
         // The addressed conversation survives losing every subscriber (the URL
         // still names it), so remounting re-acquires it rather than opening
         // nothing.
@@ -3989,17 +3681,12 @@ export function rigWorkspaceStoreCreate(
         acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
-        unsubscribeFolders?.();
-        unsubscribeFolders = undefined;
         // The catalog is no longer being watched, so what was last known about
         // it is no longer a basis for reporting anything. Confirmation is
         // rebuilt from the reads taken after this store is on screen again,
         // which is what keeps a removal that happened while nobody was looking
         // from being announced as if the reader had just watched it.
         addressedGroupSeen = undefined;
-        pendingFolderRemoval = undefined;
-        rejectedRestoredGroupIds = new Set();
-        restoredGroupRejectionRevisionSeen = folders?.get().restoredGroupRejection?.revision ?? 0;
         authoritativeGroupIds = new Set();
         catalogRevisionSeen = -1;
         for (const tab of fileTabs) fileTabCacheStore(tab);
@@ -4046,8 +3733,6 @@ export function rigWorkspaceStoreCreate(
             fileLayout: "flat",
             fileTreeExpanded,
             fileTreeCollapsed,
-            fileSelection,
-            ...(fileRevert ? { fileRevert } : {}),
             ...(workspaceFiles ? { workspaceFiles } : {}),
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
@@ -4247,14 +3932,9 @@ export function rigWorkspaceStoreCreate(
         },
 
         conversationOpen: (conversationId, groupId) => {
-            pendingFolderRemovalAddressApply({
-                ...(groupId === undefined ? {} : { groupId }),
-                conversationId,
-            });
             addressApply(groupId, conversationId);
             if (groupId !== addressedGroupId) {
                 displayedMainViewId = undefined;
-                fileSelectionReset();
                 fileTreeExpansionReset();
             }
             releaseGroup();
@@ -4262,7 +3942,7 @@ export function rigWorkspaceStoreCreate(
                 workspaceFilesEnsure(groupId);
             if (groupId !== undefined) {
                 addressedGroupId = groupId;
-                if (!addressedFolderGroupApply()) addressedGroupSeenUpdate();
+                addressedGroupSeenUpdate();
                 groupRestore(groupId);
                 // A restored file tab is what this group was left showing, so it
                 // stays on screen and stays the tab this group resumes on.
@@ -4275,17 +3955,15 @@ export function rigWorkspaceStoreCreate(
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
-            pendingFolderRemovalAddressApply({ groupId });
             addressApply(groupId, undefined);
             if (groupId !== addressedGroupId) {
                 displayedMainViewId = undefined;
-                fileSelectionReset();
                 fileTreeExpansionReset();
             }
             // The panel belongs to this group, so it learns the address before
             // the conversation is released rather than after.
             addressedGroupId = groupId;
-            if (!addressedFolderGroupApply()) addressedGroupSeenUpdate();
+            addressedGroupSeenUpdate();
             openConversation(undefined);
             groupRestore(groupId);
             // The scope belongs to this checkout, so a group left listing every
@@ -4345,7 +4023,6 @@ export function rigWorkspaceStoreCreate(
             recompute();
         },
         conversationClose: () => {
-            pendingFolderRemovalAddressApply(ADDRESS_NOWHERE);
             addressApply(undefined, undefined);
             releaseGroup();
             // Addressing the Rig's list addresses no group, so the identity a
@@ -4407,35 +4084,6 @@ export function rigWorkspaceStoreCreate(
                 );
             }
         },
-        async appletOpen(name, path, query) {
-            const previewUrl = await client.appletPreviewOpen(name);
-            const url = new URL(previewUrl);
-            if (path) {
-                const basePath = url.pathname.endsWith("/")
-                    ? url.pathname.slice(0, -1)
-                    : url.pathname;
-                url.pathname = `${basePath}/${path.replace(/^\/+/u, "")}`;
-            }
-            if (query)
-                for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
-            panel.appletOpen(name, url.href);
-            // The panel brings the page forward when it is the side holding it.
-            // When the reader has moved that page into the main content, this is
-            // the half that can bring it forward instead.
-            const opened = panel
-                .get()
-                .tabs.find(
-                    (tab) =>
-                        tab.kind === "applet" && tab.label === name && tab.placement === "main",
-                );
-            if (opened) {
-                activeMainViewId = opened.id;
-                displayedMainViewId = opened.id;
-                activeMainViewGroupId = addressedGroupId;
-                if (addressedGroupId !== undefined) groupTabRemember(addressedGroupId, opened.id);
-                recompute();
-            }
-        },
         // Anything the caller names wins over the connection's last selection.
         conversationCreate: (groupId, input) => {
             const refusal = groupConversationRefusalFind(groupId);
@@ -4454,12 +4102,6 @@ export function rigWorkspaceStoreCreate(
                     : list.worktreeSessionStart(worktreeId, create)
             ).then(openRequest);
         },
-        // A fork starts a second session in the same checkout, so it needs that
-        // checkout as much as the first one did.
-        conversationFork: (conversationId) =>
-            writeGuard(sessionWorkRefusal(conversationId), () =>
-                list.sessionFork(conversationId).then(openRequest),
-            ),
         conversationArchive: async (conversationId) => {
             await list.sessionArchive(conversationId);
             client.chatArchive(conversationId);
@@ -4751,9 +4393,6 @@ export function rigWorkspaceStoreCreate(
             if (scope === "all") workspaceFilesEnsure(groupId);
             if (fileScopeOf(groupId) === scope) return;
             viewPreferencesWrite(groupId, { fileScope: scope });
-            // Picking files to revert is something only the changed listing
-            // offers, so leaving the listing drops what was picked in it.
-            fileSelectionReset();
             recompute();
         },
         fileLayoutUpdate(groupId, layout) {
@@ -4784,82 +4423,6 @@ export function rigWorkspaceStoreCreate(
             }
             fileTreeExpanded = opened;
             fileTreeCollapsed = closed;
-            recompute();
-        },
-        fileSelectionReplace(path) {
-            fileSelection = new Set([path]);
-            fileSelectionAnchor = path;
-            recompute();
-        },
-        fileSelectionToggle(path) {
-            const next = new Set(fileSelection);
-            if (!next.delete(path)) next.add(path);
-            fileSelection = next;
-            // The row just acted on is where a range starts from next, whether
-            // it was added or removed: it is the last place the reader pointed.
-            fileSelectionAnchor = path;
-            recompute();
-        },
-        fileSelectionExtend(path, orderedPaths) {
-            const anchor = fileSelectionAnchor ?? path;
-            const from = orderedPaths.indexOf(anchor);
-            const to = orderedPaths.indexOf(path);
-            // An anchor the listing no longer holds — the file was reverted, or
-            // the scope changed under it — leaves the clicked row as the whole
-            // selection rather than guessing at a range with one end missing.
-            if (from === -1 || to === -1) {
-                fileSelection = new Set([path]);
-                fileSelectionAnchor = path;
-                recompute();
-                return;
-            }
-            const [start, end] = from <= to ? [from, to] : [to, from];
-            fileSelection = new Set(orderedPaths.slice(start, end + 1));
-            recompute();
-        },
-        fileSelectionClear() {
-            if (fileSelection.size === 0) return;
-            fileSelection = new Set();
-            fileSelectionAnchor = undefined;
-            recompute();
-        },
-        fileRevertPromptOpen() {
-            if (fileSelection.size === 0 || fileRevert) return;
-            fileRevert = { paths: [...fileSelection], submitting: false };
-            recompute();
-        },
-        fileRevertPromptClose() {
-            if (!fileRevert || fileRevert.submitting) return;
-            fileRevert = undefined;
-            recompute();
-        },
-        async fileRevertConfirm(groupId) {
-            const pending = fileRevert;
-            if (!pending || pending.submitting) return;
-            const refusal = groupWorkRefusalFind(groupId);
-            if (refusal) throw new Error(refusal);
-            fileRevert = { ...pending, submitting: true };
-            recompute();
-            try {
-                await client.changedFilesRevert(groupId, pending.paths);
-            } catch (error) {
-                fileRevert = {
-                    ...pending,
-                    submitting: false,
-                    error: error instanceof Error ? error.message : "That revert did not happen.",
-                };
-                recompute();
-                return;
-            }
-            fileRevert = undefined;
-            // The files are gone from the listing, so a selection naming them is
-            // gone with them; anything else the reader had picked stays picked.
-            const kept = new Set(
-                [...fileSelection].filter((path) => !pending.paths.includes(path)),
-            );
-            fileSelection = kept;
-            if (fileSelectionAnchor !== undefined && !kept.has(fileSelectionAnchor))
-                fileSelectionAnchor = undefined;
             recompute();
         },
         fileDraftUpdate(tabId, draft) {
@@ -4982,14 +4545,6 @@ export function rigWorkspaceStoreCreate(
             ),
         compact: () =>
             writeGuard(openGroupConversationRefusal(), () => withChat((store) => store.compact())),
-        rewind: (messageId) =>
-            writeGuard(openGroupConversationRefusal(), () =>
-                withChat((store) => store.rewind(messageId)),
-            ),
-        conversationReset: () =>
-            writeGuard(openGroupConversationRefusal(), () =>
-                withChat((store) => store.sessionReset()),
-            ),
         historyLoadMore: () => chatStore?.historyLoadMore(),
         usageGet: () => withChat((store) => store.usageGet()),
         usagePanelOpen: () => {

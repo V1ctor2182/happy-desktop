@@ -15,7 +15,6 @@ import {
 import type {
     AppearanceStore,
     ExperimentsStore,
-    RigDocumentId,
     RigGroupId,
     RigNavigationOrderStore,
     RigSidebarCollapseStore,
@@ -116,8 +115,8 @@ const rootRoute = createRootRouteWithContext<RigRouterContext>()({
  * machine this window runs on. The default is read rather than written down so
  * this file never names one Rig as special.
  */
-function rigDefaultId(context: RigRouterContext): string {
-    return context.rigs.get().rigs[0]?.id ?? "local";
+function rigDefaultId(context: RigRouterContext | undefined): string {
+    return context?.rigs?.get().rigs[0]?.id ?? "local";
 }
 
 /**
@@ -199,13 +198,6 @@ const chatRoute = createRoute({
     path: "/chats/$rigId/$groupId/$chatId",
 });
 
-/** One document owned by one Rig, reached through a link in that Rig's folders. */
-const documentRoute = createRoute({
-    component: RigWorkspaceLayout,
-    getParentRoute: () => workspaceRoute,
-    path: "/documents/$rigId/$documentId",
-});
-
 /**
  * One machine's inbox of agent questions. The Rig is in the address because the
  * queue is that machine's — its agents are the ones waiting — so the window's
@@ -263,7 +255,7 @@ const settingsSectionRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     indexRoute,
     chatsRootRoute,
-    workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute, documentRoute]),
+    workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
     inboxRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
@@ -310,7 +302,6 @@ function RigWorkspaceLayout(
         rigId?: string;
         groupId?: string;
         chatId?: string;
-        documentId?: string;
     };
     // The router is constructed before RouterProvider supplies the real context,
     // so the very first render of a deep-linked URL can arrive with an empty
@@ -324,7 +315,6 @@ function RigWorkspaceLayout(
             htmlPreview={context.htmlPreview}
             mediaWindow={context.mediaWindow}
             chatId={params.chatId}
-            documentId={params.documentId as RigDocumentId | undefined}
             groupId={params.groupId}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
@@ -341,12 +331,6 @@ function RigWorkspaceLayout(
                 void navigate({
                     params: { rigId: params.rigId ?? rigDefaultId(context) },
                     to: "/inbox/$rigId",
-                })
-            }
-            onDocumentOpen={(rigId, documentId) =>
-                void navigate({
-                    params: { documentId, rigId },
-                    to: "/documents/$rigId/$documentId",
                 })
             }
             onUpdateApply={context.onUpdateApply}
@@ -479,7 +463,7 @@ export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: st
  * removal of its own group whether or not the window is currently showing it, so
  * the current address is what decides: only a route naming this exact Rig and
  * this exact group is replaced. Everything else — another project, the Rig's own
- * list, a document, or settings — is already a valid address, and a removal elsewhere
+ * list or settings — is already a valid address, and a removal elsewhere
  * is inert against it.
  *
  * Replace rather than push: the entry being left names a row that is gone, so

@@ -9,14 +9,12 @@ export interface HtmlPreviewProxyHandle {
     readonly username: string;
     readonly password: string;
     /**
-     * Opens previews backed by one Rig. The returned function names the site a
-     * document is served as; the client it closes over is what every asset of
-     * that site is read through, so a file the host reaches through one of its
-     * nodes previews exactly like one on this machine's own disk.
+     * Opens previews backed by one Happy Agent connection. The returned function
+     * names the site a document is served as; the client it closes over reads
+     * every asset through the workspace-rooted `/v0` file API.
      */
     register(client: RigProxyClient): {
-        readonly workspace: (groupId: string, filePath: string) => string;
-        readonly applet: (name: string) => string;
+        readonly workspace: (workspaceId: string, filePath: string) => string;
     };
     close(): void;
 }
@@ -84,19 +82,12 @@ const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
  */
 const PREVIEW_SITE_LIMIT = 32;
 
-/** One isolated preview origin, backed by a workspace folder or a Rig applet. */
-type PreviewSite =
-    | {
-          readonly kind: "workspace";
-          readonly client: RigProxyClient;
-          readonly groupId: string;
-          readonly directory: string;
-      }
-    | {
-          readonly kind: "applet";
-          readonly client: RigProxyClient;
-          readonly name: string;
-      };
+/** One isolated preview origin backed by a Happy Agent workspace folder. */
+interface PreviewSite {
+    readonly client: RigProxyClient;
+    readonly workspaceId: string;
+    readonly directory: string;
+}
 
 /**
  * Serves a workspace document as a site of its own.
@@ -178,8 +169,8 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                 username,
                 password,
                 register: (client) => {
-                    // The registration separates identically named projects and
-                    // applets reached through different Rig proxy clients.
+                    // The registration separates identically named workspaces
+                    // reached through different daemon connections.
                     const registration = randomBytes(16).toString("hex");
                     const remember = (name: string, site: PreviewSite): void => {
                         // Re-inserted so insertion order stays use order and the
@@ -192,18 +183,17 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                         }
                     };
                     return {
-                        workspace: (groupId, filePath) => {
+                        workspace: (workspaceId, filePath) => {
                             const site = previewSite(filePath);
                             const name = siteName(
                                 registration,
                                 "workspace",
-                                groupId,
+                                workspaceId,
                                 site.directory,
                             );
                             remember(name, {
-                                kind: "workspace",
                                 client,
-                                groupId,
+                                workspaceId,
                                 directory: site.directory,
                             });
                             const page = site.name
@@ -211,11 +201,6 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                                 .map((segment) => encodeURIComponent(segment))
                                 .join("/");
                             return `http://${name}.localhost/${page}`;
-                        },
-                        applet: (appletName) => {
-                            const name = siteName(registration, "applet", appletName);
-                            remember(name, { kind: "applet", client, name: appletName });
-                            return `http://${name}.localhost/`;
                         },
                     };
                 },
@@ -285,13 +270,9 @@ async function serve(
     }
     let bytes: Buffer;
     try {
-        if (site.kind === "applet") {
-            bytes = (await site.client.getAppletFile(site.name, within)).bytes;
-        } else {
-            const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
-            const file = await workspaceFileLoad(site.client, site.groupId, filePath);
-            bytes = Buffer.from(file.content, "base64");
-        }
+        const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
+        const file = await workspaceFileLoad(site.client, site.workspaceId, filePath);
+        bytes = Buffer.from(file.content, "base64");
     } catch {
         // A file the checkout no longer holds and a file this page may not
         // read are the same answer: it is not there.

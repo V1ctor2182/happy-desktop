@@ -109,44 +109,6 @@
     gap: 6px;
 }
 
-/* Takes the place of the diff totals while a selection exists, in the primary
-   colour: what is picked is the live fact in this row. */
-.happy2-file-browser__picked {
-    display: block;
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text);
-    text-overflow: ellipsis;
-}
-
-/* Flat like every other control in this row, and destructive in colour because
-   it throws work away. It appears only with a selection behind it, so the row's
-   two switches keep their places and nothing shifts when it comes and goes —
-   the summary between them gives up the width. */
-.happy2-file-browser__revert {
-    display: flex;
-    flex: none;
-    align-items: center;
-    height: var(--happy2-subheader-control-height);
-    margin: 0;
-    padding: 0 6px;
-    border: none;
-    border-radius: var(--happy2-radius-sm);
-    background: transparent;
-    color: var(--text-destructive);
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 16px;
-    letter-spacing: -0.01em;
-    cursor: pointer;
-}
-
-.happy2-file-browser__revert:hover {
-    background: var(--surface-ripple);
-}
-
 .happy2-file-browser__added {
     display: block;
     flex: none;

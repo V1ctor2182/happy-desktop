@@ -2,7 +2,6 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, createWebSocketStream } from "ws";
 import { RIG_TERMINAL_MAX_WIRE_BYTES, type RigDaemonClient } from "./rigDaemonClient";
-import { rigNodeRouteMatch } from "./rigNodeRoute";
 
 /**
  * The subprotocol a renderer must ask for to reach a terminal. It is the same
@@ -16,18 +15,8 @@ export const RIG_TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy2-capability.";
 export type RigTerminalClient = Pick<RigDaemonClient, "attachTerminal">;
 
 export interface RigTerminalBridgeOptions {
-    /**
-     * Resolves the daemon client to attach through, per upgrade: this bridge's
-     * own host when the path named no machine, and otherwise the machine the
-     * host published under that identity.
-     *
-     * Asked for rather than chosen here because the bridge holds no clients of
-     * its own; it knows which machine the reader addressed and nothing about how
-     * either host reaches one. Rejecting is the answer for a machine this Rig is
-     * not peered with — never the host's client, which would open a shell here
-     * under a name the reader believes belongs to the other machine.
-     */
-    readonly client: (nodeId: string | undefined) => Promise<RigTerminalClient>;
+    /** Resolves the local daemon client to attach through, per upgrade. */
+    readonly client: () => Promise<RigTerminalClient>;
     /** Opaque authority advertised only to the trusted renderer. */
     readonly capability?: string;
     /** Exact HTTP Host accepted by the separately-bound packaged proxy. */
@@ -59,25 +48,8 @@ export interface RigTerminalBridge {
 }
 
 interface TerminalRoute {
-    readonly sessionId: string;
+    readonly workspaceId: string;
     readonly terminalId: string;
-}
-
-/**
- * What this bridge makes of one upgrade path.
- *
- * A node's base belongs to this bridge entirely — nothing else in either host is
- * served under it — so an upgrade there is claimed even when it names no
- * terminal, and refused here rather than left to a listener that would ignore it
- * or, worse, answer it with this machine's own Rig. A path with no node in it is
- * claimed only when it actually names a terminal, because the bridge shares that
- * space with its host's other upgrades — Vite's HMR socket above all.
- */
-interface TerminalClaim {
-    /** The machine addressed, absent when the path named this bridge's own host. */
-    readonly nodeId?: string;
-    /** The terminal named, absent when a node's base carried no terminal route. */
-    readonly route?: TerminalRoute;
 }
 
 /**
@@ -126,14 +98,9 @@ export function rigTerminalBridgeCreate(options: RigTerminalBridgeOptions): RigT
                 upgradeReject(socket, 400, "Bad Request");
                 return true;
             }
-            const route = claim.route;
-            if (!route) {
-                upgradeReject(socket, 404, "Not Found");
-                return true;
-            }
             void (async () => {
-                const client = await options.client(claim.nodeId);
-                const daemon = await client.attachTerminal(route.sessionId, route.terminalId);
+                const client = await options.client();
+                const daemon = await client.attachTerminal(claim.workspaceId, claim.terminalId);
                 if (socket.destroyed) {
                     daemon.destroy();
                     return;
@@ -164,13 +131,11 @@ export function rigTerminalBridgeCreate(options: RigTerminalBridgeOptions): RigT
 /**
  * Reads one upgrade path as this bridge's business, or not.
  *
- * The machine is taken off the front and the rest is the same route it has
- * always been, because that is exactly what a node is here: the ordinary
- * addresses under a different base. A query string is refused rather than
- * ignored — nothing in this route takes one, so its presence means the caller
- * expected behavior this bridge does not have.
+ * A query string is refused rather than ignored — nothing in this route takes
+ * one, so its presence means the caller expected behavior this bridge does not
+ * have.
  */
-function terminalClaim(prefix: string, requestUrl: string | undefined): TerminalClaim | undefined {
+function terminalClaim(prefix: string, requestUrl: string | undefined): TerminalRoute | undefined {
     let path: string;
     try {
         const url = new URL(requestUrl ?? "/", "http://127.0.0.1");
@@ -181,26 +146,28 @@ function terminalClaim(prefix: string, requestUrl: string | undefined): Terminal
     }
     if (!path.startsWith(prefix)) return undefined;
     const remainder = path.slice(prefix.length) || "/";
-    const node = rigNodeRouteMatch(remainder);
-    const route = terminalRoute(node ? node.path : remainder);
-    if (!node) return route ? { route } : undefined;
-    return { nodeId: node.nodeId, ...(route ? { route } : {}) };
+    return terminalRoute(remainder);
 }
 
-/** Matches `/sessions/:sessionId/terminals/:terminalId/attach` exactly. */
+/** Matches `/v0/workspaces/:workspaceId/terminals/:terminalId/attach` exactly. */
 function terminalRoute(path: string): TerminalRoute | undefined {
     const parts = path.split("/").filter((part) => part.length > 0);
     if (
-        parts.length !== 5 ||
-        parts[0] !== "sessions" ||
-        parts[2] !== "terminals" ||
-        parts[4] !== "attach"
+        parts.length !== 6 ||
+        parts[0] !== "v0" ||
+        parts[1] !== "workspaces" ||
+        parts[3] !== "terminals" ||
+        parts[5] !== "attach"
     )
         return undefined;
-    const sessionId = decodeURIComponent(parts[1]!);
-    const terminalId = decodeURIComponent(parts[3]!);
-    if (!sessionId || !terminalId) return undefined;
-    return { sessionId, terminalId };
+    try {
+        const workspaceId = decodeURIComponent(parts[2]!);
+        const terminalId = decodeURIComponent(parts[4]!);
+        if (!workspaceId || !terminalId) return undefined;
+        return { workspaceId, terminalId };
+    } catch {
+        return undefined;
+    }
 }
 
 /**

@@ -14,9 +14,9 @@ describe("authenticated Rig loopback proxy", () => {
     afterEach(() => proxy?.close());
 
     it("rejects hostile origins, DNS-rebinding Hosts, text/plain mutations, and bad capabilities", async () => {
-        const runShellCommand = vi.fn();
-        proxy = await rigHttpProxyCreate({ client: { runShellCommand } as never });
-        const target = `${proxy.url}/sessions/session-1/shell`;
+        const getWorkspace = vi.fn();
+        proxy = await rigHttpProxyCreate({ client: { getWorkspace } as never });
+        const target = `${proxy.url}/open-in`;
         const expectedHost = new URL(proxy.url).host;
 
         const hostile = await fetch(target, {
@@ -52,7 +52,7 @@ describe("authenticated Rig loopback proxy", () => {
             body: "{}",
         });
         expect(unauthorized.status).toBe(403);
-        expect(runShellCommand).not.toHaveBeenCalled();
+        expect(getWorkspace).not.toHaveBeenCalled();
     });
 
     it("rejects terminal upgrades with weak origins or missing/wrong capabilities", async () => {
@@ -60,7 +60,10 @@ describe("authenticated Rig loopback proxy", () => {
         proxy = await rigHttpProxyCreate({ client: { attachTerminal } as never });
         const base = new URL(proxy.url);
         const capability = base.pathname.slice(1);
-        const socketUrl = `${proxy.url.replace(/^http/, "ws")}/sessions/s/terminals/t/attach`;
+        const socketUrl = `${proxy.url.replace(
+            /^http/,
+            "ws",
+        )}/v0/workspaces/workspace/terminals/terminal/attach`;
         const capabilityProtocol = `${RIG_TERMINAL_CAPABILITY_PROTOCOL_PREFIX}${capability}`;
 
         for (const origin of [undefined, "null", "file://", `http://${base.host}`]) {
@@ -86,6 +89,7 @@ describe("authenticated Rig loopback proxy", () => {
         });
         connected.close();
         expect(attachTerminal).toHaveBeenCalledOnce();
+        expect(attachTerminal).toHaveBeenCalledWith("workspace", "terminal");
     });
 });
 

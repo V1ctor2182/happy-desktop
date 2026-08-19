@@ -80,7 +80,6 @@ function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
         id: candidate.id,
         name: candidate.label,
         initials: candidate.label.slice(0, 1).toUpperCase(),
-        kind: "document",
         ...(candidate.detail ? { description: candidate.detail } : {}),
     }));
 }
@@ -219,7 +218,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     {...(props.composerFocusKey === undefined
                         ? {}
                         : { focusKey: props.composerFocusKey })}
-                    hint={composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"}
+                    hint="Enter to send"
                     mentions={mentionsOf(composer)}
                     footerControl={props.composerFooterControl}
                     modelControl={props.composerControls}

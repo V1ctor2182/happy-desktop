@@ -270,33 +270,6 @@ export function FileBrowserPage() {
                 )}
             </Specimen>
 
-            <Specimen
-                detail="A picked set replaces the totals with its count and the act on it"
-                label="Selection"
-                number="05"
-                stage="surface"
-            >
-                {panelFrame(
-                    <FileBrowser
-                        addedLines={totals.added}
-                        count={changed.length}
-                        deletedLines={totals.deleted}
-                        layout="flat"
-                        nodes={fileTreeFlatten(changed)}
-                        onRevert={() => undefined}
-                        scope="changed"
-                        selectedId="packages/happy-desktop-ui/src/FileTree.tsx"
-                        selectedIds={
-                            new Set([
-                                "packages/happy-desktop-ui/src/FileTree.tsx",
-                                "packages/happy-desktop-ui/src/styles/file-tree.css",
-                                "docs/notes/file-viewer.md",
-                            ])
-                        }
-                    />,
-                )}
-            </Specimen>
-
             <Specimen detail="Loading and empty" label="States" number="06" stage="surface">
                 <div style={{ display: "flex", gap: "12px" }}>
                     {panelFrame(

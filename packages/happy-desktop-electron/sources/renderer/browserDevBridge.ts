@@ -129,7 +129,6 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         onboardingSubscribe: () => () => undefined,
         onboardingRigInstall: async () => undefined,
         onboardingProfileCreate: async () => undefined,
-        onboardingMurmurChoose: async () => undefined,
         onboardingProjectChoose: async () => undefined,
         runtimeGet: async () => {
             const snapshot = await request<DesktopRuntimeSnapshot>("runtimeGet");

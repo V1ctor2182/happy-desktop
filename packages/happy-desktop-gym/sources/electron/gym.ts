@@ -282,15 +282,6 @@ function validateCatalog(manifest: GymManifest, catalog: GymCatalogSnapshot): vo
             `visibleSessions=${catalog.sessionCount}, durableTarget=${expected.sessions}`,
         );
     }
-    if (catalog.sessionCatalogLimit !== 500) {
-        failures.push(`sessionCatalogLimit=${catalog.sessionCatalogLimit}, expectedRigLimit=500`);
-    }
-    if (catalog.sessionCatalogTruncated !== catalog.sessionCount < expected.sessions) {
-        failures.push(
-            `sessionCatalogTruncated=${String(catalog.sessionCatalogTruncated)}, ` +
-                `expected=${String(catalog.sessionCount < expected.sessions)}`,
-        );
-    }
     if (failures.length > 0) {
         throw new Error(`Gym catalog did not match its versioned manifest: ${failures.join("; ")}`);
     }
@@ -300,7 +291,6 @@ function validateDurableCounts(manifest: GymManifest, achieved: GymDurableCounts
     const expected = manifest.target;
     const failures: string[] = [];
     const minimumMessages = expected.turns * 2;
-    const minimumEvents = expected.turns * 6;
     for (const field of ["sessions", "turns"] as const) {
         if (achieved[field] !== expected[field])
             failures.push(`${field}=${achieved[field]}, expected=${expected[field]}`);
@@ -310,16 +300,10 @@ function validateDurableCounts(manifest: GymManifest, achieved: GymDurableCounts
             `messageRangeMin=${expected.messageRange[0]}, expectedAtLeast=${minimumMessages}`,
         );
     }
-    if (expected.eventRange[0] < minimumEvents) {
-        failures.push(`eventRangeMin=${expected.eventRange[0]}, expectedAtLeast=${minimumEvents}`);
-    }
     if (!rangeContains(expected.messageRange, achieved.messages)) {
         failures.push(
             `messages=${achieved.messages}, expectedRange=${expected.messageRange.join("..")}`,
         );
-    }
-    if (!rangeContains(expected.eventRange, achieved.events)) {
-        failures.push(`events=${achieved.events}, expectedRange=${expected.eventRange.join("..")}`);
     }
     if (failures.length > 0) {
         throw new Error(

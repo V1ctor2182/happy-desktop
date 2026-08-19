@@ -10,34 +10,30 @@ import {
 } from "./rigDaemonClient";
 
 describe("rigDaemonPathsResolve", () => {
-    it("matches Rig's default and environment-overridden daemon paths", () => {
-        const emptyEnvironmentTemporaryDirectory =
-            process.platform === "win32" ? join("C:\\Windows", "temp") : "/tmp";
-        expect(rigDaemonPathsResolve({}, 42)).toEqual({
-            socketPath: join(emptyEnvironmentTemporaryDirectory, "rig-42", "server.sock"),
-            tokenPath: join(emptyEnvironmentTemporaryDirectory, "rig-42", "token"),
+    it("matches Happy Agent's default and environment-overridden daemon paths", () => {
+        const homeDirectory =
+            process.platform === "win32" ? join("C:\\Users", "steve") : "/Users/steve";
+        expect(rigDaemonPathsResolve({}, homeDirectory)).toEqual({
+            socketPath: join(homeDirectory, ".happy", "agent", "server.sock"),
+            tokenPath: join(homeDirectory, ".happy", "agent", "token"),
         });
-        const shellTemporaryDirectory =
-            process.platform === "win32" ? "C:\\shell tmp" : "/private/shell tmp";
-        const shellEnvironment =
-            process.platform === "win32"
-                ? { TEMP: `${shellTemporaryDirectory}\\` }
-                : { TMPDIR: `${shellTemporaryDirectory}/` };
-        expect(rigDaemonPathsResolve(shellEnvironment, 42)).toEqual({
-            socketPath: join(shellTemporaryDirectory, "rig-42", "server.sock"),
-            tokenPath: join(shellTemporaryDirectory, "rig-42", "token"),
+        const configuredHome =
+            process.platform === "win32" ? "C:\\private happy" : "/private/happy";
+        expect(rigDaemonPathsResolve({ HAPPY_HOME_DIR: configuredHome }, homeDirectory)).toEqual({
+            socketPath: join(configuredHome, "agent", "server.sock"),
+            tokenPath: join(configuredHome, "agent", "token"),
         });
         expect(
             rigDaemonPathsResolve(
                 {
-                    RIG_SERVER_DIRECTORY: "/var/run/custom-rig",
                     RIG_SERVER_SOCKET_PATH: "/tmp/override.sock",
+                    RIG_SERVER_TOKEN_PATH: "/tmp/override.token",
                 },
-                42,
+                homeDirectory,
             ),
         ).toEqual({
             socketPath: "/tmp/override.sock",
-            tokenPath: "/var/run/custom-rig/token",
+            tokenPath: "/tmp/override.token",
         });
     });
 });

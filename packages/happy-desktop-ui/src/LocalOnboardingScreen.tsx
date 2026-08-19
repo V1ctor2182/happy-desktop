@@ -3,7 +3,6 @@ import { SetupChoice } from "./SetupChoice";
 import { SetupPage } from "./SetupPage";
 import { TerminalPanel } from "./TerminalPanel";
 import { TextField } from "./TextField";
-import { Select } from "./Select";
 
 export interface LocalOnboardingTerminal {
     readonly grid?: TerminalGridSnapshot;
@@ -42,17 +41,6 @@ export type LocalOnboardingView =
           readonly message?: string;
           readonly name: string;
       }
-    | {
-          readonly busy: boolean;
-          readonly kind: "murmur-setup";
-          readonly message?: string;
-          readonly profiles: readonly {
-              readonly email: string;
-              readonly id: string;
-              readonly name: string;
-          }[];
-          readonly selectedProfileId?: string;
-      }
     | { readonly kind: "project"; readonly busy: boolean; readonly message?: string };
 
 export interface LocalOnboardingScreenProps {
@@ -65,8 +53,6 @@ export interface LocalOnboardingScreenProps {
     onProfileNameChange(value: string): void;
     onProfileEmailChange(value: string): void;
     onProfileCreate(): void;
-    onProfileSelect(profileId: string): void;
-    onMurmurChoose(enabled: boolean): void;
     onHappyUpdateInstall(): void;
     /**
      * Goes on without installing anything, using only what this app carries.
@@ -267,57 +253,6 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 </div>
             </SetupPage>
         );
-
-    if (view.kind === "murmur-setup") {
-        const profile = view.profiles.find(({ id }) => id === view.selectedProfileId);
-        return (
-            <SetupPage
-                copy={
-                    view.message ??
-                    `Murmur gives ${profile?.name ?? "your profile"} a private identity for secure sharing between Rigs. You can enable it now or continue without it.`
-                }
-                data-testid="local-onboarding-screen"
-                title="Connect with Murmur?"
-            >
-                {view.profiles.length > 1 ? (
-                    <Select
-                        fullWidth
-                        label="Murmur profile"
-                        onValueChange={props.onProfileSelect}
-                        options={view.profiles.map(({ email, id, name }) => ({
-                            label: `${name} · ${email}`,
-                            value: id,
-                        }))}
-                        placeholder="Choose a profile"
-                        value={view.selectedProfileId}
-                    />
-                ) : null}
-                <SetupChoice
-                    onSelect={(id) => props.onMurmurChoose(id === "enable")}
-                    options={[
-                        {
-                            actionLabel: "Not now",
-                            description:
-                                "Finish setup without creating Murmur keys. You can opt in later.",
-                            id: "skip",
-                            scene: "owl",
-                            title: "Keep it local",
-                        },
-                        {
-                            actionLabel: "Enable Murmur",
-                            actionVariant: "primary",
-                            disabled: !view.selectedProfileId,
-                            description:
-                                "Create a private identity for secure contacts and sharing between your Rigs.",
-                            id: "enable",
-                            scene: "sparkles",
-                            title: "Connect my profile",
-                        },
-                    ]}
-                />
-            </SetupPage>
-        );
-    }
 
     if (view.kind === "connect-failed")
         return (

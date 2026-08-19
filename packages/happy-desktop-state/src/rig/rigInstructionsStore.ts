@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla";
 import type { Loadable } from "../conversation/loadable.js";
+import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import type { UserError } from "../types.js";
-import type { RigTransport } from "./rigTransport.js";
 import { rigUserError } from "./rigSupport.js";
 
 /**
@@ -10,7 +10,7 @@ import { rigUserError } from "./rigSupport.js";
  * number here is only so an editor can say how much room is left before
  * someone runs out of it.
  */
-export const RIG_INSTRUCTIONS_MAX_BYTES = 32 * 1024;
+export const RIG_INSTRUCTIONS_MAX_BYTES = 256 * 1024;
 
 export interface RigGlobalDocumentSnapshot {
     /** The document as this Rig last confirmed it. */
@@ -47,7 +47,7 @@ export interface RigGlobalDocumentStore {
 }
 
 export interface RigInstructionsStoreDeps {
-    readonly transport: Pick<RigTransport, "globalInstructionsRead" | "globalInstructionsWrite">;
+    readonly client: Pick<HappyAgentClient, "getInstructions" | "putInstructions">;
 }
 
 export type RigInstructionsSnapshot = RigGlobalDocumentSnapshot;
@@ -73,8 +73,8 @@ function byteLength(text: string): number {
 
 export function rigInstructionsStoreCreate(deps: RigInstructionsStoreDeps): RigInstructionsStore {
     return rigGlobalDocumentStoreCreate({
-        read: (signal) => deps.transport.globalInstructionsRead(signal),
-        write: (value) => deps.transport.globalInstructionsWrite(value),
+        read: async (signal) => (await deps.client.getInstructions({ signal })).instructions,
+        write: async (value) => (await deps.client.putInstructions(value)).instructions,
     });
 }
 

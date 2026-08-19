@@ -3,10 +3,11 @@ import type {
     TerminalDriverCreate,
     TerminalGridSnapshot,
 } from "../modules/terminal/terminalState.js";
+import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import { UserError } from "../types.js";
+import type { RigHostServices } from "./rigHostServices.js";
 import { rigUserError } from "./rigSupport.js";
-import type { RigTransport } from "./rigTransport.js";
-import type { RigSessionId, RigTerminalId } from "./rigTypes.js";
+import type { RigGroupId, RigSessionId, RigTerminalId } from "./rigTypes.js";
 
 /**
  * One local terminal as a surface renders it. The grid is the whole visible
@@ -39,7 +40,8 @@ export interface RigTerminalStore {
 export interface RigTerminalHandle extends RigTerminalStore, Disposable {}
 
 export interface RigTerminalDeps {
-    readonly transport: RigTransport;
+    readonly client: Pick<HappyAgentClient, "getAgent" | "openTerminal" | "stopTerminal">;
+    readonly hostServices: Pick<RigHostServices, "terminalConnect">;
     /**
      * Builds the driver that owns the terminal protocol and the VT emulator. It is
      * injected because that machinery is a browser/Node concern living in the app
@@ -55,7 +57,7 @@ const DEFAULT_ROWS = 24;
 /**
  * Opens one interactive terminal in a local session's working directory, running
  * the user's own login shell. Creating and stopping the terminal are ordinary
- * transport actions; the live screen, input, resize, and reconnect all ride an
+ * Happy Agent actions; the live screen, input, resize, and reconnect all ride an
  * injected driver over a byte channel this store never inspects.
  *
  * The store is deliberately the only thing that knows the terminal exists on the
@@ -74,6 +76,7 @@ export function rigTerminalOpen(
     let disposed = false;
     let stopRequested = false;
     let terminalId: RigTerminalId | undefined;
+    let workspaceId: RigGroupId | undefined;
     let driver: TerminalDriver | undefined;
     let requestedSize = { cols, rows };
     const pendingWrites: string[] = [];
@@ -99,9 +102,9 @@ export function rigTerminalOpen(
         stopRequested = true;
         driver?.close();
         driver = undefined;
-        if (!terminalId) return;
+        if (!terminalId || !workspaceId) return;
         const stopping = terminalId;
-        void deps.transport.terminalStop(sessionId, stopping).catch(() => undefined);
+        void deps.client.stopTerminal(workspaceId, stopping).catch(() => undefined);
     };
 
     const store: RigTerminalHandle = {
@@ -145,48 +148,61 @@ export function rigTerminalOpen(
         return store;
     }
 
-    void deps.transport.terminalCreate(sessionId, cols, rows).then(
-        (terminal) => {
-            if (disposed || stopRequested) {
-                void deps.transport.terminalStop(sessionId, terminal.id).catch(() => undefined);
-                return;
-            }
-            terminalId = terminal.id;
-            set({ exitCode: terminal.exitCode, cols: terminal.cols, rows: terminal.rows });
-            driver = driverCreate({
-                connect: () => deps.transport.terminalConnect(sessionId, terminal.id),
-                // Seeded from the size the PTY was actually given rather than the
-                // latest request, so the driver's idea of the applied size matches
-                // the daemon's; a resize that raced create is replayed below
-                // instead of collapsing into a no-op against a size never applied.
-                cols: terminal.cols,
-                rows: terminal.rows,
-                replica: {
-                    statusUpdate: (status) => {
-                        if (!disposed && snapshot.status !== "exited")
-                            set({ status, error: undefined });
+    void deps.client
+        .getAgent(sessionId)
+        .then(({ agent }) => {
+            workspaceId = agent.workspaceId as RigGroupId;
+            return deps.client.openTerminal(agent.workspaceId, { cols, rows });
+        })
+        .then(
+            ({ terminal }) => {
+                if (disposed || stopRequested) {
+                    if (workspaceId)
+                        void deps.client
+                            .stopTerminal(workspaceId, terminal.id)
+                            .catch(() => undefined);
+                    return;
+                }
+                terminalId = terminal.id as RigTerminalId;
+                set({ exitCode: terminal.exitCode, cols: terminal.cols, rows: terminal.rows });
+                driver = driverCreate({
+                    connect: () =>
+                        deps.hostServices.terminalConnect(
+                            workspaceId!,
+                            terminal.id as RigTerminalId,
+                        ),
+                    // Seeded from the size the PTY was actually given rather than the
+                    // latest request, so the driver's idea of the applied size matches
+                    // the daemon's; a resize that raced create is replayed below
+                    // instead of collapsing into a no-op against a size never applied.
+                    cols: terminal.cols,
+                    rows: terminal.rows,
+                    replica: {
+                        statusUpdate: (status) => {
+                            if (!disposed && snapshot.status !== "exited")
+                                set({ status, error: undefined });
+                        },
+                        gridUpdate: (grid) => {
+                            if (disposed) return;
+                            set({ grid, title: grid.title, cols: grid.cols, rows: grid.rows });
+                        },
+                        exit: (exitCode) => {
+                            if (!disposed) set({ status: "exited", exitCode });
+                        },
+                        error: (message) => {
+                            if (!disposed && snapshot.status !== "exited")
+                                set({ status: "disconnected", error: new UserError(message) });
+                        },
                     },
-                    gridUpdate: (grid) => {
-                        if (disposed) return;
-                        set({ grid, title: grid.title, cols: grid.cols, rows: grid.rows });
-                    },
-                    exit: (exitCode) => {
-                        if (!disposed) set({ status: "exited", exitCode });
-                    },
-                    error: (message) => {
-                        if (!disposed && snapshot.status !== "exited")
-                            set({ status: "disconnected", error: new UserError(message) });
-                    },
-                },
-            });
-            for (const data of pendingWrites.splice(0)) driver.write(data);
-            if (requestedSize.cols !== terminal.cols || requestedSize.rows !== terminal.rows)
-                driver.resize(requestedSize.cols, requestedSize.rows);
-        },
-        (error: unknown) => {
-            if (!disposed) set({ status: "error", error: rigUserError(error) });
-        },
-    );
+                });
+                for (const data of pendingWrites.splice(0)) driver.write(data);
+                if (requestedSize.cols !== terminal.cols || requestedSize.rows !== terminal.rows)
+                    driver.resize(requestedSize.cols, requestedSize.rows);
+            },
+            (error: unknown) => {
+                if (!disposed) set({ status: "error", error: rigUserError(error) });
+            },
+        );
 
     return store;
 }

@@ -126,7 +126,7 @@ it("renders a grouped activity reading with the compact transcript row grammar",
             '[data-happy-desktop-ui="rig-activity-panel"] > [data-happy-desktop-ui]',
         ),
     );
-    expect(sections).toHaveLength(4);
+    expect(sections).toHaveLength(3);
     for (let index = 1; index < sections.length; index += 1) {
         const previous = sections[index - 1]!.getBoundingClientRect();
         const current = sections[index]!.getBoundingClientRect();

@@ -1,4 +1,4 @@
-import type { RigTransport } from "./rigTransport.js";
+import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import {
     rigGlobalDocumentStoreCreate,
     type RigGlobalDocumentSnapshot,
@@ -12,10 +12,7 @@ export type RigSecurityPolicySnapshot = RigGlobalDocumentSnapshot;
 export type RigSecurityPolicyStore = RigGlobalDocumentStore;
 
 export interface RigSecurityPolicyStoreDeps {
-    readonly transport: Pick<
-        RigTransport,
-        "globalSecurityPolicyRead" | "globalSecurityPolicyWrite"
-    >;
+    readonly client: Pick<HappyAgentClient, "getSecurityPolicy" | "putSecurityPolicy">;
 }
 
 /** Creates the editor store for the policy used when this Rig reviews permission requests. */
@@ -23,7 +20,7 @@ export function rigSecurityPolicyStoreCreate(
     deps: RigSecurityPolicyStoreDeps,
 ): RigSecurityPolicyStore {
     return rigGlobalDocumentStoreCreate({
-        read: (signal) => deps.transport.globalSecurityPolicyRead(signal),
-        write: (value) => deps.transport.globalSecurityPolicyWrite(value),
+        read: async (signal) => (await deps.client.getSecurityPolicy({ signal })).policy,
+        write: async (value) => (await deps.client.putSecurityPolicy(value)).policy,
     });
 }

@@ -23,6 +23,9 @@
         "format:check": "oxfmt --check .",
         "lint": "oxlint ."
     },
+    "dependencies": {
+        "@slopus/happy-agent-client": "0.0.1"
+    },
     "devDependencies": {
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@types/node": "^26.1.1",

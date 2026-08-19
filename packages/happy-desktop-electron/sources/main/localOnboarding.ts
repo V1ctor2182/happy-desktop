@@ -1,11 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
-import {
-    ProjectRegistrationError,
-    type RigOnboardingState,
-    type RigProfile,
-} from "@slopus/rig-connect";
+import { ProjectRegistrationError } from "happy-desktop-state";
 import type {
     DesktopRuntimeSnapshot,
     LocalOnboardingFreshness,
@@ -16,6 +12,27 @@ import { localRuntimeProbe, type LocalRuntimeProbe } from "./localRig";
 import { rigInstallCommand } from "./rigInstallTerminal";
 
 const recordVersion = 3;
+
+export type LocalRigOnboardingState =
+    | { readonly state: "complete" | "profile_required" | "provider_setup" }
+    | {
+          readonly installedVersion?: string;
+          readonly maximumSupportedProtocolVersion: number;
+          readonly minimumSupportedProtocolVersion: number;
+          readonly protocolVersion: number;
+          readonly reason: "protocol";
+          readonly source: "daemon";
+          readonly state: "version_mismatch";
+          readonly upgrade: "happy" | "rig";
+      }
+    | { readonly message: string; readonly state: "rig_unreachable" };
+
+export interface LocalRigProfile {
+    readonly email: string | null;
+    readonly name: string | null;
+    readonly updatedAt: number;
+    readonly version: string;
+}
 /**
  * How often the machine is re-examined while setup is waiting on something the
  * person does outside Happy — installing Node, installing Rig themselves after
@@ -159,16 +176,11 @@ export interface LocalOnboardingRuntime {
     get(): DesktopRuntimeSnapshot;
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void;
     retry(): Promise<void>;
-    localOnboardingResolve(connectionId: number): Promise<RigOnboardingState>;
+    localOnboardingResolve(connectionId: number): Promise<LocalRigOnboardingState>;
     localOnboardingProfileCreate(
         connectionId: number,
         input: { readonly email: string; readonly name: string },
-    ): Promise<RigProfile>;
-    localOnboardingProfiles(connectionId: number): Promise<readonly RigProfile[]>;
-    localOnboardingMurmurChoose(
-        connectionId: number,
-        input: { readonly enabled: false } | { readonly enabled: true; readonly profileId: string },
-    ): Promise<void>;
+    ): Promise<LocalRigProfile>;
     localOnboardingFreshness(connectionId: number): Promise<"fresh" | "used">;
     localOnboardingProjectAdd(
         connectionId: number,
@@ -253,8 +265,7 @@ export class LocalOnboarding implements Disposable {
     private probeEpoch = 0;
     private probeRunId = 0;
     private freshness: LocalOnboardingFreshness = "checking";
-    private rigOnboarding?: RigOnboardingState;
-    private onboardingProfiles: readonly RigProfile[] = [];
+    private rigOnboarding?: LocalRigOnboardingState;
     /** The runtime connection the current freshness answer was read from. */
     private freshnessConnection?: number;
     /**
@@ -515,21 +526,6 @@ export class LocalOnboarding implements Disposable {
         );
     }
 
-    async murmurChoose(
-        input: { readonly enabled: false } | { readonly enabled: true; readonly profileId: string },
-    ): Promise<void> {
-        const connection = this.freshnessConnection;
-        await this.durable(
-            "Happy could not save that Murmur choice",
-            ["murmurSetup"],
-            async (working) => {
-                if (connection === undefined) throw new Error("The local Rig changed.");
-                await this.options.runtime.localOnboardingMurmurChoose(connection, input);
-                if (working.current()) this.freshnessInvalidate();
-            },
-        );
-    }
-
     [Symbol.dispose](): void {
         if (this.closed) return;
         this.closed = true;
@@ -720,7 +716,6 @@ export class LocalOnboarding implements Disposable {
     private freshnessInvalidate(): void {
         this.freshness = "checking";
         this.rigOnboarding = undefined;
-        this.onboardingProfiles = [];
         this.freshnessConnection = undefined;
         this.freshnessSynchronize(this.options.runtime.get());
     }
@@ -780,7 +775,6 @@ export class LocalOnboarding implements Disposable {
         if (runtime.phase !== "ready" || runtime.mode !== "local") {
             this.freshness = "checking";
             this.rigOnboarding = undefined;
-            this.onboardingProfiles = [];
             this.freshnessConnection = undefined;
             return;
         }
@@ -798,12 +792,9 @@ export class LocalOnboarding implements Disposable {
      */
     private async freshnessRead(connectionId: number): Promise<void> {
         let freshness: LocalOnboardingFreshness;
-        let onboarding: RigOnboardingState | undefined;
-        let profiles: readonly RigProfile[] = [];
+        let onboarding: LocalRigOnboardingState | undefined;
         try {
             onboarding = await this.options.runtime.localOnboardingResolve(connectionId);
-            if (onboarding.state === "murmur_setup")
-                profiles = await this.options.runtime.localOnboardingProfiles(connectionId);
             freshness =
                 onboarding.state === "complete"
                     ? await this.options.runtime.localOnboardingFreshness(connectionId)
@@ -811,13 +802,11 @@ export class LocalOnboarding implements Disposable {
         } catch (error) {
             freshness = "error";
             onboarding = undefined;
-            profiles = [];
             this.message = displayError(error);
         }
         if (this.closed || this.freshnessConnection !== connectionId) return;
         this.freshness = freshness;
         this.rigOnboarding = onboarding;
-        this.onboardingProfiles = profiles;
         if (onboarding) this.message = undefined;
         // Rig has now said what happened — used, fresh, or unreadable — so a
         // message that existed only to say it was being asked has nothing left
@@ -887,15 +876,6 @@ export class LocalOnboarding implements Disposable {
             ...(this.install ? { install: this.installSnapshot(this.install) } : {}),
             ...(message ? { message } : {}),
             ...(providers ? { providers } : {}),
-            ...(stage === "murmurSetup"
-                ? {
-                      profiles: this.onboardingProfiles.map(({ email, id, name }) => ({
-                          email,
-                          id,
-                          name,
-                      })),
-                  }
-                : {}),
             ...(retrying ? { retrying } : {}),
             ...(node ? { node } : {}),
             ...(this.record.projectPath ? { projectPath: this.record.projectPath } : {}),
@@ -938,8 +918,6 @@ export class LocalOnboarding implements Disposable {
                 return "providersMissing";
             case "profile_required":
                 return "profileRequired";
-            case "murmur_setup":
-                return "murmurSetup";
             default:
                 if (onboarding.state === "version_mismatch")
                     return onboarding.upgrade === "happy"
@@ -1047,15 +1025,13 @@ function installFailureMessage(message: string | undefined): string {
         : `The installation ended without a usable \`rig\` command. Install it yourself with \`${rigInstallCommand}\` in a terminal, then Happy will pick it up.`;
 }
 
-function onboardingFailureMessage(state: RigOnboardingState | undefined): string | undefined {
+function onboardingFailureMessage(state: LocalRigOnboardingState | undefined): string | undefined {
     if (!state) return undefined;
     if ("message" in state && state.message) return state.message;
     if (state.state === "version_mismatch")
         return state.upgrade === "happy"
             ? "This Rig needs a newer version of Happy."
             : "Update Rig before continuing setup.";
-    if (state.state === "rig_not_installed") return "Rig is not installed.";
-    if (state.state === "rig_not_running") return "Rig is not running.";
     return undefined;
 }
 

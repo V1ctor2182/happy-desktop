@@ -913,7 +913,8 @@ export function MessageList(props: MessageListProps) {
         panelAnchorRestoring.current = false;
     };
     const parkedItemSizeAdjustment = (item: VirtualItem) =>
-        panelAnchor.current?.node.isConnected !== true &&
+        panelAnchor.current !== undefined &&
+        !panelAnchor.current.node.isConnected &&
         item.end <= (list.current?.scrollTop ?? 0);
     const estimateItemSize = (index: number, rowWidth: number) =>
         index === footerIndex
@@ -1161,14 +1162,11 @@ export function MessageList(props: MessageListProps) {
         };
         let viewportHeight = element.clientHeight;
         let previousScrollTop = element.scrollTop;
-        let previousScrollHeight = element.scrollHeight;
         const onScroll = () => {
-            const currentScrollHeight = element.scrollHeight;
             const expected = expectedScrollTop.current;
             if (expected !== undefined && Math.abs(element.scrollTop - expected) <= 1) {
                 expectedScrollTop.current = undefined;
                 previousScrollTop = element.scrollTop;
-                previousScrollHeight = currentScrollHeight;
                 positionReport();
                 return;
             }
@@ -1180,13 +1178,11 @@ export function MessageList(props: MessageListProps) {
              */
             if (element.clientHeight !== viewportHeight) {
                 previousScrollTop = element.scrollTop;
-                previousScrollHeight = currentScrollHeight;
                 return;
             }
             if (panelResizing.current) {
                 panelAnchorRestore();
                 previousScrollTop = element.scrollTop;
-                previousScrollHeight = currentScrollHeight;
                 positionReport();
                 return;
             }
@@ -1195,15 +1191,9 @@ export function MessageList(props: MessageListProps) {
                 element.scrollHeight - element.scrollTop - viewportHeight,
             );
             const scrollDelta = element.scrollTop - previousScrollTop;
-            const contentHeightChanged = Math.abs(currentScrollHeight - previousScrollHeight) > 1;
             previousScrollTop = element.scrollTop;
-            previousScrollHeight = currentScrollHeight;
             if (scrollDelta < 0) escapedFromFollow.current = true;
-            else if (
-                scrollDelta > 0 &&
-                !contentHeightChanged &&
-                bottomOffset <= FOLLOW_BOTTOM_THRESHOLD
-            )
+            else if (scrollDelta > 0 && bottomOffset <= FOLLOW_BOTTOM_THRESHOLD)
                 escapedFromFollow.current = false;
             following.current =
                 !escapedFromFollow.current && bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;

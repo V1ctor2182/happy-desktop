@@ -13,12 +13,6 @@ export default defineConfig({
         __HAPPY2_LOCAL_WEB_ORIGIN__: JSON.stringify(localWebOrigin),
     },
     publicDir: false,
-    ssr: {
-        // The packaged ASAR contains the main bundle, not the workspace's
-        // node_modules. Keep rig-connect inside main.js so daemon connectivity does
-        // not leave a runtime package import Electron cannot resolve.
-        noExternal: ["@slopus/rig-connect"],
-    },
     build: {
         ssr: true,
         emptyOutDir: false,

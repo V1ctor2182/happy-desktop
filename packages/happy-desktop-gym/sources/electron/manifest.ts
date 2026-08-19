@@ -2,7 +2,6 @@ import type { GymManifest, GymProfile } from "./types.js";
 
 const measuredBaselineHostSnapshot = {
     messages: 55_890,
-    events: 295_712,
 } as const;
 
 const measuredBaseline = {
@@ -16,10 +15,7 @@ const measuredBaseline = {
     subagentShapedSessions: 373,
     turns: 1_411,
     // A seeded turn must persist both its user prompt and agent response.
-    // Events keep a conservative six-entry lifecycle floor per turn
-    // (submission, start, agent activity/message, finish, and one transition).
     messageRange: [2 * 1_411, 55_890],
-    eventRange: [6 * 1_411, 295_712],
     fileCount: 2_800,
     changedFileCount: 336,
     largeFileBytes: 26_395_200,
@@ -38,7 +34,7 @@ const manifests: Readonly<Record<GymProfile, GymManifest>> = {
         datasetVersion: "electron-performance-v1-smoke",
         profile: "smoke",
         label: "Small deterministic launch and warm-cache lane",
-        hostSnapshot: { messages: 60, events: 267 },
+        hostSnapshot: { messages: 60 },
         target: {
             totalProjects: 2,
             regularProjects: 1,
@@ -49,10 +45,7 @@ const manifests: Readonly<Record<GymProfile, GymManifest>> = {
             primarySessions: 6,
             subagentShapedSessions: 3,
             turns: 30,
-            // One supported compaction checkpoint is part of the smoke seed;
-            // it adds durable lifecycle records above the two-per-turn floor.
             messageRange: [60, 64],
-            eventRange: [266, 280],
             fileCount: 38,
             changedFileCount: 9,
             largeFileBytes: 101_280,
@@ -100,7 +93,7 @@ const manifests: Readonly<Record<GymProfile, GymManifest>> = {
         datasetVersion: "electron-performance-v1-stress",
         profile: "stress",
         label: "Oversized catalog and transcript retention lane",
-        hostSnapshot: { messages: 110_000, events: 600_000 },
+        hostSnapshot: { messages: 110_000 },
         target: {
             totalProjects: 24,
             regularProjects: 23,
@@ -112,7 +105,6 @@ const manifests: Readonly<Record<GymProfile, GymManifest>> = {
             subagentShapedSessions: 700,
             turns: 3_000,
             messageRange: [2 * 3_000, 110_000],
-            eventRange: [6 * 3_000, 600_000],
             fileCount: 8_901,
             changedFileCount: 851,
             largeFileBytes: 120_957_000,

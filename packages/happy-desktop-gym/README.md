@@ -1,31 +1,22 @@
 # happy-desktop-gym
 
 `happy-desktop-gym` contains the reusable browser-rendering harness and an
-isolated, host-native Electron performance gym for Happy and Rig.
+isolated, host-native Electron performance gym for Happy Agent.
 
-## Electron/Rig gym
+## Electron Happy Agent gym
 
 The gym creates a disposable run under
 `.context/happy-desktop-gym/runs/<profile>-<uuid>` by default. It writes an
 ownership marker, temporary `HOME`/`TMPDIR`/Rig server directory/Electron
 user-data directory, deterministic Git repositories and real Rig worktrees,
-then seeds sessions and history through Rig's HTTP API. It never writes Rig's
-SQLite database directly. The realistic manifest reflects the measured local
-shape (17 projects including Home, 45 worktrees with 8 ready and 37 archived,
-and 524 session rows); Rig 0.2.0 has no public subagent-manufacturing endpoint,
-so the subagent-shaped portion is represented by supported primary sessions
-with long, tool-heavy Gym responses and is labeled in the manifest.
-Preparation proves the exact project/worktree catalog, durable session, and
-seeded-turn invariants through Rig APIs. Rig's normal session-summary
-projection is intentionally bounded at 500 rows, so `catalog.sessionCount`
-records the visible count and `sessionCatalogTruncated` labels when more
-durable sessions exist; every seeded session is also re-read by ID. Messages and events are observed durable counts checked
-against each profile's declared range, whose non-smoke minima enforce at least
-two persisted messages and six lifecycle events per seeded turn; the measured
-host snapshot is informational until a real prepare observes it. The run root retains
-`achieved.json` before validation, including failed realistic/stress
-preparations, so no unprepared host snapshot is claimed as seeded history. The
-fixture manifest also validates the regular-repository shape:
+then seeds agents and durable transcripts through the Happy Agent `/v0` API.
+It never writes daemon storage directly. Preparation proves the exact
+project/worktree catalog, durable agent transcript, and seeded-turn invariants
+through that public API. The live event journal drives the streaming workloads;
+it is intentionally treated as bounded delivery, not durable history. The run
+root retains `achieved.json` before validation, including failed
+realistic/stress preparations, so no unprepared host snapshot is claimed as
+seeded history. The fixture manifest also validates the regular-repository shape:
 smoke is 38 files with 9 changed records, 1,120 large-text lines, and 101,280
 large-text bytes; realistic and stress scale those same nested modified,
 added, renamed, and deleted paths to their declared file/byte/line targets.
@@ -63,15 +54,15 @@ the capability honestly.
 
 `mixed-replay` is the end-to-end lane. It reads the existing
 `gold-five-minute-session.v1.json` recording for its real submitted-message
-patterns, submits those prompts concurrently to several durable Rig sessions,
+patterns, submits those prompts concurrently to several durable Happy Agent conversations,
 and starts one real isolated `exec_command` turn that appends deterministic
 large-file lines through the mounted fixture checkout. A single promise-
 coordinated UI lane then switches repeatedly among foreground sessions while
 all streams and the Git watcher are live, scrolls a virtualized long transcript
 through large jumps, and exercises changed-file, document, and syntax
-A→B→A sequences. Rig event history, the exact virtual changed-file row/stat
-pair for `src/changes/modified/deep/large-modified.md`, and a host-side fixture
-read are durable/event/UI barriers; the row is remounted after the real tool
+A→B→A sequences. The live Happy Agent event stream, the exact virtual
+changed-file row/stat pair for `src/changes/modified/deep/large-modified.md`,
+and a host-side fixture read are the event/UI barriers; the row is remounted after the real tool
 completes and must report the profile's expected insertions plus `−16`
 deletions. The lane does not use fixed sleeps as stream or file-arrival
 barriers; the selection diagnostic deliberately holds a native range for two
@@ -113,7 +104,7 @@ remains rigid. A sixth response applies a trusted 4px upward wheel gesture durin
 active SSE. That smallest possible escape must take ownership immediately; raw
 scrollTop, the first visible row, and every stable visible-row pair must then remain
 fixed while the transcript continues growing below the reader.
-Rig 0.2.0's JustBash gym mount is the
+The Happy Agent JustBash gym mount is the
 actual ready managed worktree at `/workspace`; the live tool mutates that same
 worktree while clustered sessions stream and switch in the same run. The
 changed-file lane establishes a native browser text range only after the
@@ -151,23 +142,6 @@ pnpm --dir packages/happy-desktop-gym gym:electron clean --root /absolute/run/ro
 `clean` refuses paths without the Gym ownership marker and refuses broad source
 directories. Keep a run for inspection, or clean it explicitly after collecting
 the artifacts.
-
-## Local Rig availability
-
-The bundled Rig daemon requires an authenticated inference provider. CI and
-release validation deliberately have no provider credentials, so scenarios that
-launch the real daemon should use the exported gate:
-
-```ts
-import { localRigIsUnavailable } from "happy-desktop-gym";
-
-it.skipIf(localRigIsUnavailable)("starts the bundled Rig daemon", async () => {
-    // ...
-});
-```
-
-The gate is on whenever `CI` is set or
-`HAPPY_DESKTOP_SKIP_LOCAL_RIG_TESTS=1`.
 
 ## Browser rendering harness
 

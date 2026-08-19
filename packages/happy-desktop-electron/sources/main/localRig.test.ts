@@ -203,7 +203,7 @@ describe("normal Rig discovery", () => {
         );
     });
 
-    it("attaches to a running shared daemon before discovering or starting Rig", async () => {
+    it("connects to an exact daemon named by RIG_SERVER_SOCKET_PATH and RIG_SERVER_TOKEN_PATH, never discovering or starting Rig", async () => {
         const root = await mkdtemp(join(tmpdir(), "happy2-local-rig-"));
         directories.push(root);
         const tokenPath = join(root, "token");
@@ -218,14 +218,7 @@ describe("normal Rig discovery", () => {
             status: "ready",
             healthy: true,
             ready: true,
-            identity: { version: "0.2.19" },
-            catalog: {
-                defaultModelId: "model",
-                defaultProviderId: "provider",
-                models: [],
-                providers: [],
-            },
-            durableGlobalEventQueue: true,
+            version: { daemon: "0.2.19", protocol: 17 },
         });
         const clientCreate = vi.fn(() => ({ health }) as unknown as RigDaemonClient);
         const wait = vi.fn(async () => undefined);
@@ -283,18 +276,11 @@ describe("normal Rig discovery", () => {
             status: "ready",
             healthy: true,
             ready: true,
-            identity: { version: "0.0.45" },
-            catalog: {
-                defaultModelId: "model",
-                defaultProviderId: "provider",
-                models: [],
-                providers: [],
-            },
-            durableGlobalEventQueue: true,
+            version: { daemon: "0.0.45", protocol: 17 },
         });
         const connector = localRigConnectorCreate({
             host,
-            environment: { SHELL: "/bin/zsh" },
+            environment: { HAPPY_HOME_DIR: join(root, "happy-home"), SHELL: "/bin/zsh" },
             configuredShell: "/bin/zsh",
             wait: async () => undefined,
             clientCreate: () => ({ health }) as unknown as RigDaemonClient,
@@ -311,14 +297,7 @@ describe("normal Rig discovery", () => {
             status: "ready",
             healthy: true,
             ready: true,
-            identity: { version: "0.0.45" },
-            catalog: {
-                defaultModelId: "model",
-                defaultProviderId: "provider",
-                models: [],
-                providers: [],
-            },
-            durableGlobalEventQueue: true,
+            version: { daemon: "0.0.45", protocol: 17 },
         });
         await connector.connect();
         expect(
@@ -337,14 +316,7 @@ describe("normal Rig discovery", () => {
             status: "ready",
             healthy: true,
             ready: true,
-            identity: { version: "0.0.32" },
-            catalog: {
-                defaultModelId: "model",
-                defaultProviderId: "provider",
-                models: [],
-                providers: [],
-            },
-            durableGlobalEventQueue: true,
+            version: { daemon: "0.0.32", protocol: 17 },
         });
         expect((await connector.connect()).version).toBe("0.0.32");
     });

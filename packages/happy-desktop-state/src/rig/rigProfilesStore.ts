@@ -8,8 +8,8 @@ export interface RigProfile {
     readonly email: string;
     readonly name: string;
     readonly parentInstanceId: string;
-    readonly version: number;
-    readonly createdAt: number;
+    readonly version: string;
+    readonly createdAt?: number;
     readonly updatedAt: number;
     readonly photo?: {
         readonly imageUrl: string;

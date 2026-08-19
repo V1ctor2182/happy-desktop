@@ -12,7 +12,7 @@ import { gymGoldReplayMaterialRead, type GymGoldReplayMaterial } from "./goldRep
 import { gymLiveToolMutationLineCount } from "./inferenceServer.js";
 import { electronEntrypointResolve } from "./paths.js";
 import { gymProfilerArtifactReferenceRead } from "./profilerArtifacts.js";
-import type { RigSessionStreamEvent, RigSessionStreamHandle } from "./rigProtocol.js";
+import type { HappyAgentJournalEvent, HappyAgentStreamHandle } from "./happyAgentProtocol.js";
 import type { StartedRigRuntime } from "./rigRuntime.js";
 import type {
     ElectronRunResult,
@@ -66,6 +66,7 @@ interface MixedSubmission {
     readonly baselineEventCount: number;
     readonly liveTool?: boolean;
     readonly marker: string;
+    readonly messageId: string;
     readonly prompt: string;
     readonly route: string;
     readonly baselineCursor?: string;
@@ -85,18 +86,18 @@ interface SessionRunBarrier {
 }
 
 type SessionRunEventObserver = (
-    event: Record<string, unknown>,
+    event: HappyAgentJournalEvent,
     observedAt: string,
 ) => void | Promise<void>;
 
 interface PreAttachedSessionStream {
-    readonly events: readonly RigSessionStreamEvent[];
-    readonly handle: RigSessionStreamHandle;
+    readonly events: readonly HappyAgentJournalEvent[];
+    readonly handle: HappyAgentStreamHandle;
     readonly ready: Promise<void>;
     cursorCreate(): SessionStreamCursor;
 }
 
-interface SessionStreamCursor extends AsyncIterableIterator<RigSessionStreamEvent> {
+interface SessionStreamCursor extends AsyncIterableIterator<HappyAgentJournalEvent> {
     close(): void;
 }
 
@@ -1528,7 +1529,7 @@ async function concurrentSubmissions(
     readonly submissions: readonly MixedSubmission[];
 }> {
     const baselineResults = await Promise.all(
-        targets.map(async (target) => (await client.events(target.id)).events),
+        targets.map(async (target) => (await client.agentEvents(target.id)).events),
     );
     const collectors = new Map<string, PreAttachedSessionStream>();
     await Promise.all(
@@ -1536,7 +1537,7 @@ async function concurrentSubmissions(
             const baseline = baselineResults[index] ?? [];
             collectors.set(
                 target.id,
-                await sessionStreamCollectorCreate(
+                await agentStreamCollectorCreate(
                     client,
                     target.id,
                     eventCursorRead(baseline.at(-1)),
@@ -1553,14 +1554,12 @@ async function concurrentSubmissions(
             const marker = `gym-${label}-${String(index + 1)}-${target.id.slice(-6)}-e${baselineEventCount}`;
             const prompt = `${materialMessage.text}\n\n[${marker}]`;
             const submittedAt = new Date().toISOString();
-            const submitted = await client.submitMessage(target.id, prompt);
-            if (submitted.runId === undefined) {
-                throw new Error(`Rig did not return a run id for ${label} session ${target.id}.`);
-            }
+            const submitted = await client.sendMessage(target.id, prompt);
             return {
                 baselineEventCount,
                 baselineCursor: eventCursorRead(baseline.at(-1)),
                 marker,
+                messageId: submitted.messageId,
                 prompt,
                 route: target.route,
                 runId: submitted.runId,
@@ -1572,14 +1571,14 @@ async function concurrentSubmissions(
     return { collectors, durationMs: performance.now() - started, submissions };
 }
 
-async function sessionStreamCollectorCreate(
+async function agentStreamCollectorCreate(
     client: StartedRigRuntime["client"],
     sessionId: string,
     after: string | undefined,
 ): Promise<PreAttachedSessionStream> {
-    const events: RigSessionStreamEvent[] = [];
+    const events: HappyAgentJournalEvent[] = [];
     const cursorWakeups = new Set<() => void>();
-    const handle = client.sessionStream(sessionId, after, async (event) => {
+    const handle = client.agentStream(sessionId, after, async (event) => {
         events.push(event);
         for (const wake of cursorWakeups) wake();
     });
@@ -1603,7 +1602,7 @@ async function sessionStreamCollectorCreate(
             notify();
         };
         const cursor: SessionStreamCursor = {
-            async next(): Promise<IteratorResult<RigSessionStreamEvent>> {
+            async next(): Promise<IteratorResult<HappyAgentJournalEvent>> {
                 if (index < events.length) {
                     return { done: false, value: events[index++]! };
                 }
@@ -1613,7 +1612,7 @@ async function sessionStreamCollectorCreate(
                 });
                 return this.next();
             },
-            async return(): Promise<IteratorResult<RigSessionStreamEvent>> {
+            async return(): Promise<IteratorResult<HappyAgentJournalEvent>> {
                 close();
                 return { done: true, value: undefined };
             },
@@ -3500,7 +3499,7 @@ async function mixedReplayRun(
     await mark("session-baselines-captured");
     await Promise.all(
         targets.map(async (target) => {
-            const events = (await options.runtime.client.events(target.id)).events;
+            const events = (await options.runtime.client.agentEvents(target.id)).events;
             baselineEvents.set(target.id, events.length);
             baselineCursors.set(target.id, eventCursorRead(events.at(-1)));
         }),
@@ -3510,7 +3509,7 @@ async function mixedReplayRun(
         targets.map(async (target) => {
             collectors.set(
                 target.id,
-                await sessionStreamCollectorCreate(
+                await agentStreamCollectorCreate(
                     options.runtime.client,
                     target.id,
                     baselineCursors.get(target.id),
@@ -3537,9 +3536,7 @@ async function mixedReplayRun(
     if (liveToolTarget.workspaceId === undefined || liveToolProjectId === undefined) {
         throw new Error("Mixed replay target is not a managed workspace with a project owner.");
     }
-    const watchedBefore = await options.runtime.client.gitWatch([
-        { projectId: liveToolProjectId, workspaceId: liveToolTarget.workspaceId },
-    ]);
+    const watchedBefore = await options.runtime.client.watchGit([liveToolTarget.workspaceId]);
     overlapEvent("git-watch-registered", {
         phase: "before-tool",
         projectId: liveToolProjectId,
@@ -3574,17 +3571,13 @@ async function mixedReplayRun(
             const prompt =
                 `${materialMessage.text}\n\n[${marker}]` +
                 (liveTool ? "\n\n[gym-mixed-replay-live-tool]" : "");
-            const submitted = await options.runtime.client.submitMessage(target.id, prompt);
-            if (submitted.runId === undefined) {
-                throw new Error(
-                    `Rig did not return a run id for mixed replay session ${target.id}.`,
-                );
-            }
+            const submitted = await options.runtime.client.sendMessage(target.id, prompt);
             return {
                 baselineEventCount,
                 baselineCursor: baselineCursors.get(target.id),
                 liveTool,
                 marker,
+                messageId: submitted.messageId,
                 prompt,
                 route: target.route,
                 runId: submitted.runId,
@@ -3615,32 +3608,26 @@ async function mixedReplayRun(
             options.runtime.client,
             submission,
             async (event, observedAt) => {
-                const eventId =
-                    typeof event.eventId === "string"
-                        ? event.eventId
-                        : `${submission.runId}:${JSON.stringify(event)}`;
+                const eventId = event.cursor;
                 if (seenRunEvents.has(eventId)) return;
                 seenRunEvents.add(eventId);
-                const eventData = isRecord(event.data) ? event.data : undefined;
-                const nested = isRecord(eventData?.event) ? eventData.event : undefined;
                 await appendFile(
                     options.paths.streamLog,
                     `${JSON.stringify({
                         kind: "session-event",
-                        event,
+                        event: event.event,
                         eventId,
                         observedAt,
                         runId: submission.runId,
                         sessionId: submission.sessionId,
-                        sessionEventTimestamp: event.createdAt,
+                        sessionEventTimestamp: event.event.occurredAt,
                     })}\n`,
                     "utf8",
                 );
                 overlapEvent("stream-event", {
-                    createdAt: event.createdAt,
-                    eventId: typeof event.eventId === "string" ? event.eventId : undefined,
-                    eventType: typeof event.type === "string" ? event.type : "unknown",
-                    nestedType: typeof nested?.type === "string" ? nested.type : undefined,
+                    createdAt: event.event.occurredAt,
+                    eventId,
+                    eventType: event.event.type,
                     observedAt,
                     runId: submission.runId,
                     sessionId: submission.sessionId,
@@ -3915,9 +3902,7 @@ async function mixedReplayRun(
                 `path=${liveFilePath} lines=${liveFileLines} expected=${expectedChangedLines}`,
         );
     }
-    const watchedAfter = await options.runtime.client.gitWatch([
-        { projectId: liveToolProjectId, workspaceId: liveToolTarget.workspaceId },
-    ]);
+    const watchedAfter = await options.runtime.client.watchGit([liveToolTarget.workspaceId]);
     overlapEvent("git-watch-registered", {
         phase: "after-tool",
         projectId: liveToolProjectId,
@@ -4006,8 +3991,8 @@ async function mixedSessionTargetsRead(
 ): Promise<readonly MixedSessionTarget[]> {
     const targets = await Promise.all(
         sessionIds.map(async (id): Promise<MixedSessionTarget | undefined> => {
-            const session = (await runtime.client.getSession(id)).session;
-            const location = sessionLocation(session);
+            const agent = (await runtime.client.getAgent(id)).agent;
+            const location = agentLocation(agent);
             return location === undefined
                 ? undefined
                 : {
@@ -4034,11 +4019,7 @@ async function sessionRunBarrierWait(
     const started = performance.now();
     const collector =
         preAttached ??
-        (await sessionStreamCollectorCreate(
-            client,
-            submission.sessionId,
-            submission.baselineCursor,
-        ));
+        (await agentStreamCollectorCreate(client, submission.sessionId, submission.baselineCursor));
     const cursor = collector.cursorCreate();
     let eventCount = 0;
     let streamObserved = false;
@@ -4050,47 +4031,42 @@ async function sessionRunBarrierWait(
     let settled = false;
     const seenEventIds = new Set<string>();
     const barrier = new Promise<SessionRunBarrier>((resolve, reject) => {
-        const processEvent = async (streamEvent: RigSessionStreamEvent): Promise<void> => {
+        const processEvent = async (streamEvent: HappyAgentJournalEvent): Promise<void> => {
             if (settled) return;
-            const eventId =
-                streamEvent.id ?? `${submission.sessionId}:${JSON.stringify(streamEvent.data)}`;
+            const eventId = streamEvent.cursor;
             if (seenEventIds.has(eventId)) return;
             seenEventIds.add(eventId);
-            const event: Record<string, unknown> = {
-                ...streamEvent.data,
-                ...(streamEvent.id === undefined
-                    ? {}
-                    : { eventId: streamEvent.id, id: streamEvent.id }),
-            };
+            const event = streamEvent.event;
             if (eventRunId(event) !== submission.runId) return;
             eventCount += 1;
-            const type = typeof event.type === "string" ? event.type : "unknown";
-            const eventData = isRecord(event.data) ? event.data : undefined;
-            const nestedEvent = isRecord(eventData?.event) ? eventData.event : undefined;
-            const nestedType = typeof nestedEvent?.type === "string" ? nestedEvent.type : undefined;
+            const type = event.type;
             eventTypes.add(type);
-            if (type === "message_submitted") messageSubmittedSeen = true;
-            if (type === "run_started") runStartedSeen = true;
-            if (type === "agent_event" || type === "agent_message") {
+            if (
+                type === "run.started" &&
+                event.payload.acceptedMessageIds.includes(submission.messageId)
+            ) {
+                messageSubmittedSeen = true;
+                runStartedSeen = true;
+            }
+            if (
+                type === "run.boundary" &&
+                event.payload.acceptedMessageIds.includes(submission.messageId)
+            ) {
+                messageSubmittedSeen = true;
+                runStartedSeen = true;
+            }
+            if (
+                (type === "message.created" || type === "message.updated") &&
+                event.payload.message.role === "agent"
+            ) {
                 firstAgentEventSeen = true;
                 streamObserved = true;
             }
-            if (
-                type === "tool_call" ||
-                type === "tool_result" ||
-                (type === "agent_event" &&
-                    (nestedType === "toolcall_start" ||
-                        nestedType === "toolcall_delta" ||
-                        nestedType === "toolcall_end" ||
-                        nestedType === "tool_execution_start" ||
-                        nestedType === "tool_execution_progress" ||
-                        nestedType === "tool_execution_status" ||
-                        nestedType === "tool_execution_end"))
-            ) {
+            if (eventToolCallHas(event)) {
                 toolCallObserved = true;
             }
-            await onEvent?.(event, streamEvent.receivedAt);
-            if (type === "run_error") {
+            await onEvent?.(streamEvent, streamEvent.receivedAt);
+            if (type === "run.finished" && event.payload.run.status === "failed") {
                 settled = true;
                 reject(
                     new Error(
@@ -4100,7 +4076,7 @@ async function sessionRunBarrierWait(
                 collector.handle.close();
                 return;
             }
-            if (type === "run_finished") {
+            if (type === "run.finished") {
                 settled = true;
                 if (!messageSubmittedSeen || !runStartedSeen || !firstAgentEventSeen) {
                     reject(
@@ -4237,17 +4213,32 @@ async function waitForReplayMarker(page: Page, marker: string): Promise<void> {
     }
 }
 
-function eventRunId(event: Record<string, unknown>): string | undefined {
-    const data = event.data;
-    if (data === null || typeof data !== "object" || Array.isArray(data)) return undefined;
-    const runId = (data as Record<string, unknown>).runId;
-    return typeof runId === "string" ? runId : undefined;
+function eventRunId(event: HappyAgentJournalEvent["event"]): string | undefined {
+    switch (event.type) {
+        case "run.started":
+            return event.payload.run.id;
+        case "run.boundary":
+            return event.payload.startedRun.id;
+        case "run.finished":
+            return event.payload.run.id;
+        case "message.created":
+        case "message.updated":
+            return event.payload.runId ?? undefined;
+        case "message.delta":
+        case "message.deleted":
+            return event.payload.runId;
+        default:
+            return undefined;
+    }
 }
 
-function eventCursorRead(event: Record<string, unknown> | undefined): string | undefined {
-    if (event === undefined) return undefined;
-    const id = event.id ?? event.eventId;
-    return typeof id === "string" ? id : undefined;
+function eventToolCallHas(event: HappyAgentJournalEvent["event"]): boolean {
+    if (event.type !== "message.created" && event.type !== "message.updated") return false;
+    return event.payload.message.content.some((block) => block.type === "tool_call");
+}
+
+function eventCursorRead(event: HappyAgentJournalEvent | undefined): string | undefined {
+    return event?.cursor;
 }
 
 function cacheEvidence(name: string, sequence: FileSequenceMeasurement): Record<string, unknown> {
@@ -4364,42 +4355,32 @@ async function firstSessionLocation(
 ): Promise<{ readonly route: string; readonly sessionId: string } | undefined> {
     const ids = preferWorkspace ? [...sessionIds.slice(1), ...sessionIds.slice(0, 1)] : sessionIds;
     for (const id of ids) {
-        const session = (await runtime.client.getSession(id)).session;
-        const location = sessionLocation(session);
+        const agent = (await runtime.client.getAgent(id)).agent;
+        const location = agentLocation(agent);
         if (location === undefined) continue;
         if (!preferWorkspace || location.workspace) return { route: location.route, sessionId: id };
     }
     return undefined;
 }
 
-function sessionLocation(session: { readonly id: string; readonly scope?: unknown }):
-    | {
-          readonly projectId?: string;
-          readonly route: string;
-          readonly scopeRoute: string;
-          readonly workspace: boolean;
-          readonly workspaceId?: string;
-      }
-    | undefined {
-    const scope = isRecord(session.scope) ? session.scope : undefined;
-    if (scope?.kind === "workspace" && typeof scope.workspaceId === "string") {
-        return {
-            route: `/chats/local/${scope.workspaceId}/${session.id}`,
-            scopeRoute: `/chats/local/${scope.workspaceId}`,
-            projectId: typeof scope.projectId === "string" ? scope.projectId : undefined,
-            workspaceId: scope.workspaceId,
-            workspace: true,
-        };
-    }
-    if (scope?.kind === "project" && typeof scope.projectId === "string") {
-        return {
-            route: `/chats/local/${scope.projectId}/${session.id}`,
-            scopeRoute: `/chats/local/${scope.projectId}`,
-            projectId: scope.projectId,
-            workspace: false,
-        };
-    }
-    return undefined;
+function agentLocation(agent: {
+    readonly id: string;
+    readonly projectId: string;
+    readonly workspaceId: string;
+}): {
+    readonly projectId: string;
+    readonly route: string;
+    readonly scopeRoute: string;
+    readonly workspace: boolean;
+    readonly workspaceId: string;
+} {
+    return {
+        projectId: agent.projectId,
+        route: `/chats/local/${agent.workspaceId}/${agent.id}`,
+        scopeRoute: `/chats/local/${agent.workspaceId}`,
+        workspace: agent.workspaceId !== agent.projectId,
+        workspaceId: agent.workspaceId,
+    };
 }
 
 async function navigateRoute(page: Page, path: string): Promise<void> {
@@ -4479,10 +4460,6 @@ async function scenarioMark(
             performance.mark(markName);
         }, name)
         .catch(() => undefined);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 async function waitForFileMutation(

@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useRef, useSyncExternalStore } from "react";
+import { type CSSProperties, type ReactNode, useMemo, useSyncExternalStore } from "react";
 import type {
     ComposerSnapshot,
     ConversationAuthor,
@@ -286,14 +286,20 @@ export function ConversationView(props: ConversationViewProps) {
         messageTextLayoutFontGenerationGet,
         messageTextLayoutFontGenerationGet,
     );
-    const rowHeightCaches = useRef<
-        Record<string, ReturnType<typeof conversationRowHeightCacheCreate> | undefined>
-    >(Object.create(null) as Record<string, ReturnType<typeof conversationRowHeightCacheCreate>>);
     const conversationCacheKey =
         props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
-    const rowHeightCache =
-        rowHeightCaches.current[conversationCacheKey] ??
-        (rowHeightCaches.current[conversationCacheKey] = conversationRowHeightCacheCreate());
+    /*
+     * MessageList's estimator mutates this measurement cache, so its identity
+     * must survive ordinary transcript renders and change only at the
+     * conversation lifetime boundary that also remounts the list below.
+     */
+    const rowHeightCache = useMemo(
+        () => ({
+            conversationCacheKey,
+            value: conversationRowHeightCacheCreate(),
+        }),
+        [conversationCacheKey],
+    ).value;
     const { transcript, queued } = conversationPendingSteering(props.entries);
     const awaitingInput = transcript.some(
         (entry) =>

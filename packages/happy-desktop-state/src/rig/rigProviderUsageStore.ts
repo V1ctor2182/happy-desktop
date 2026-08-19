@@ -25,18 +25,38 @@ export interface RigProviderUsageCredits {
     readonly usedPercent?: number;
 }
 
-/** One reading of one account's plan, as the daemon normalized it across vendors. */
+/** One provider reading, carrying plan quota or absolute token usage when reported. */
 export interface RigProviderUsageReading {
-    readonly vendor: RigProviderVendor;
+    readonly vendor?: RigProviderVendor;
     /** When the daemon took this reading, in milliseconds. */
     readonly capturedAt: number;
     readonly planName?: string;
     /** True when every window this account has is spent. */
-    readonly exhausted: boolean;
+    readonly exhausted?: boolean;
     readonly fiveHour?: RigProviderUsageWindow;
     readonly weekly?: RigProviderUsageWindow;
     readonly monthly?: RigProviderUsageWindow;
     readonly credits?: RigProviderUsageCredits;
+    /**
+     * Absolute token counts reported by Happy Agent. These stay separated by
+     * model because tokens from different models are not comparable.
+     */
+    readonly models?: readonly RigProviderModelTokenUsage[];
+}
+
+export interface RigProviderTokenCounts {
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly cacheReadTokens: number;
+    readonly cacheWriteTokens: number;
+}
+
+export interface RigProviderModelTokenUsage {
+    readonly modelId: string;
+    readonly hour?: RigProviderTokenCounts;
+    readonly day?: RigProviderTokenCounts;
+    readonly week?: RigProviderTokenCounts;
+    readonly month?: RigProviderTokenCounts;
 }
 
 /**

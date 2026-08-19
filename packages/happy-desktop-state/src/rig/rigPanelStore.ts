@@ -8,7 +8,7 @@ declare const rigPanelTabIdBrand: unique symbol;
 export type RigPanelTabId = string & { readonly [rigPanelTabIdBrand]: true };
 
 /** What a panel tab holds beside the conversation. */
-export type RigPanelTabKind = "terminal" | "browser" | "applet";
+export type RigPanelTabKind = "terminal" | "browser";
 
 /**
  * Which of the workspace's two tab strips a view is being shown in.
@@ -36,11 +36,6 @@ export type RigPanelTabSnapshot =
     | (RigPanelTabSnapshotBase & {
           readonly kind: "browser";
           /** Last committed main-frame location, restored if the surface remounts. */
-          readonly url: string;
-      })
-    | (RigPanelTabSnapshotBase & {
-          readonly kind: "applet";
-          /** Isolated preview origin of the applet's current version. */
           readonly url: string;
       });
 
@@ -143,8 +138,6 @@ export interface RigPanelStore {
     terminalAdd(): void;
     /** Adds a browser tab to the open group, optionally at one safe web URL, and selects it. */
     browserAdd(url?: string): void;
-    /** Opens a named Rig applet in the open group's isolated preview surface. */
-    appletOpen(name: string, url: string): void;
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
     browserUpdate(tabId: RigPanelTabId, update: RigBrowserUpdate): void;
     tabSelect(tabId: RigPanelTabId): void;
@@ -292,7 +285,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             open,
             tabs: visible.map(
                 (tab): RigPanelTabSnapshot =>
-                    tab.kind === "browser" || tab.kind === "applet"
+                    tab.kind === "browser"
                         ? {
                               id: tab.id,
                               kind: tab.kind,
@@ -400,28 +393,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             placement: "panel",
             url,
         });
-        activeByGroup.set(group, id);
-        activeViewId = id;
-    };
-
-    const appletTabOpen = (group: RigGroupId, name: string, url: string): void => {
-        const existing = tabs.find(
-            (tab) => tab.groupId === group && tab.kind === "applet" && tab.label === name,
-        );
-        if (existing) {
-            existing.url = url;
-            // Reopening a page the reader moved into the main content brings it
-            // forward there, not here: pointing the panel at a tab it no longer
-            // draws would leave the panel showing nothing at all.
-            if (existing.placement === "panel") {
-                activeByGroup.set(group, existing.id);
-                activeViewId = existing.id;
-            }
-            return;
-        }
-        const id = `tab_${nextTabNumber}` as RigPanelTabId;
-        nextTabNumber += 1;
-        tabs.push({ id, kind: "applet", label: name, groupId: group, placement: "panel", url });
         activeByGroup.set(group, id);
         activeViewId = id;
     };
@@ -575,13 +546,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         browserAdd(url) {
             if (disposed || !groupId) return;
             browserTabAdd(groupId, url);
-            open = true;
-            remember();
-            recompute();
-        },
-        appletOpen(name, url) {
-            if (disposed || !groupId) return;
-            appletTabOpen(groupId, name, url);
             open = true;
             remember();
             recompute();

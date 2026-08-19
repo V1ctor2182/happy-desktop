@@ -313,11 +313,9 @@ function DesktopOnboardingGate(props: {
             onAppOnlyChoose={() => undefined}
             onConnectRetry={() => props.store.connectRetry()}
             onHappyUpdateInstall={() => desktopAction(props.bridge.updateInstall())}
-            onMurmurChoose={(enabled) => props.store.murmurChoose(enabled)}
             onProfileCreate={() => props.store.profileCreate()}
             onProfileEmailChange={(value) => props.store.profileEmailUpdate(value)}
             onProfileNameChange={(value) => props.store.profileNameUpdate(value)}
-            onProfileSelect={(profileId) => props.store.profileSelect(profileId)}
             onProjectChoose={() => props.store.projectChoose()}
             onRigInstall={() => props.store.rigInstall()}
             onTerminalInput={(data) => props.store.terminalInput(data)}
@@ -675,8 +673,8 @@ if (mediaPreviewBridge) {
         // Those rows are window chrome whether or not any machine is reachable,
         // so the arrangement must outlive every connection this window makes.
         const navigationOrder = rigNavigationOrderStoreCreate(desktopNavigationOrderPersistence());
-        // Which projects and folders the reader folded shut, kept beside that
-        // arrangement and for the same reason: a fold is about this window's
+        // Which projects the reader folded shut, kept beside that arrangement
+        // and for the same reason: a fold is about this window's
         // sidebar, so no machine coming or going may undo it.
         const sidebarCollapse = rigSidebarCollapseStoreCreate(desktopSidebarCollapsePersistence());
         // Whether this window offers the features that are not finished yet. It

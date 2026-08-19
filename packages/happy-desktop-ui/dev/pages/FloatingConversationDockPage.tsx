@@ -31,7 +31,7 @@ function composer(overrides: Partial<ComposerSnapshot> = {}): ComposerSnapshot {
         revision: 0,
         submission: { status: "idle" },
         focused: false,
-        capabilities: { shellMode: true, commands, mentions: true },
+        capabilities: { shellMode: false, commands, mentions: true },
         mentionCandidates: [],
         agentUserIds: [],
         ...overrides,

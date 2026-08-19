@@ -198,7 +198,9 @@
 .happy2-spinner[data-variant="circle"] .happy2-spinner__glyph {
     width: 81.25%;
     height: 81.25%;
-    border: calc(var(--happy2-spinner-size) / 16) solid currentcolor;
+    border-width: calc(var(--happy2-spinner-size) / 16);
+    border-style: solid;
+    border-color: currentcolor;
     border-radius: var(--happy2-radius-pill);
     background-image: linear-gradient(90deg, currentcolor 50%, transparent 50%);
     animation-name: happy2-spinner-turn;

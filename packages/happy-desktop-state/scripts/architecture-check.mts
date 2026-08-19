@@ -5,20 +5,21 @@ import { moduleSpecifiersParse } from "./moduleSpecifiersParse.mjs";
 const root = new URL("../src/", import.meta.url).pathname;
 const files = walk(root).filter((path) => path.endsWith(".ts"));
 const failures: string[] = [];
-// yjs is the framework-independent CRDT value type collaborative documents are
-// made of; rig-connect is the framework-independent local product-state authority.
+// Happy Agent Client declares the transport contract; Yjs is the
+// framework-independent value type used by Notes.
 const allowedExternalSpecifiers = new Set([
-    "@slopus/rig-connect",
+    "@slopus/happy-agent-client",
     "vitest",
     "zustand/vanilla",
     "yjs",
 ]);
+const testOnlyExternalSpecifiers = new Set(["node:sqlite"]);
 
 for (const directory of readdirSync(join(root, "modules"))) {
     const moduleDirectory = join(root, "modules", directory);
     if (!statSync(moduleDirectory).isDirectory()) continue;
     const implementationFiles = readdirSync(moduleDirectory).filter(
-        (entry) => entry.endsWith(".ts") && entry !== "module.test.ts",
+        (entry) => entry.endsWith(".ts") && !entry.endsWith(".test.ts"),
     );
     if (implementationFiles.length !== 1 || !implementationFiles[0]!.endsWith("State.ts"))
         failures.push(
@@ -29,9 +30,13 @@ for (const directory of readdirSync(join(root, "modules"))) {
 for (const file of files) {
     const source = readFileSync(file, "utf8");
     const name = relative(root, file);
+    const testFile = file.endsWith(".test.ts");
     for (const specifier of moduleSpecifiersParse(source, file)) {
         if (specifier.startsWith(".") || specifier.startsWith("/")) continue;
-        if (!allowedExternalSpecifiers.has(specifier))
+        if (
+            !allowedExternalSpecifiers.has(specifier) &&
+            !(testFile && testOnlyExternalSpecifiers.has(specifier))
+        )
             failures.push(`${name}: external package ${specifier} is not allowed in state core`);
     }
     if (/\b(?:getField|setField|updateField)\b/.test(source))

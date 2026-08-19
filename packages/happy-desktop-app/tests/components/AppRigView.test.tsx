@@ -77,6 +77,7 @@ function workspace(): RigWorkspaceStore {
                         displayPath: "~/happy2",
                         name: "happy2",
                         kind: "regular" as const,
+                        lifecycle: { phase: "ready" as const },
                         worktrees: [],
                         activity: "idle" as const,
                         updatedAt: 1_763_999_000_000,

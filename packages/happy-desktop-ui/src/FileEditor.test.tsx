@@ -5,16 +5,17 @@ import "./styles/icon.css";
 import "./styles/vector-icon.css";
 import "./styles/button.css";
 import "./styles/file-editor.css";
+import "./styles/file-path-label.css";
 import "./styles/code-editor.css";
 import { FileEditor } from "./FileEditor";
 import { createRenderer } from "./testing";
 
 /*
- * FileEditor owns the editor surface contract: a 56px header (name + directory
- * subtitle + unsaved marker + Save/Revert/Close), a monospace code body on the
- * code surface, and a hairline status bar. Buttons and Icon are primitives
- * tuned in their own tests, so this file asserts layout, computed tokens, the
- * dirty/read-only affordances, and the intent callbacks.
+ * FileEditor owns the editor surface contract: a compact 32px diff-style path
+ * row, a monospace code body on the code surface, no Save button or bottom
+ * path, and Command-S persistence. The owning tab carries the file name and
+ * unsaved marker. Buttons and icons are primitives tuned in their own tests,
+ * so this file asserts layout, computed tokens, and intent callbacks.
  */
 
 const fontUi = "happy2 Figtree, system-ui, sans-serif";
@@ -33,7 +34,7 @@ function actionLabels(view: ReturnType<typeof createRenderer>, actionsSelector: 
     );
 }
 
-it("holds FileEditor header, code body, status bar, and dirty affordances", async () => {
+it("holds FileEditor path row, code body, and tab-owned dirty affordances", async () => {
     const view = createRenderer();
 
     view.render(
@@ -81,24 +82,27 @@ it("holds FileEditor header, code body, status bar, and dirty affordances", asyn
     });
 
     const header = view.$('[data-testid="clean"] [data-happy-desktop-ui="file-editor-header"]');
-    expect(header.bounds().height).toBe(56);
+    expect(header.bounds().height).toBe(32);
 
-    const name = view.$('[data-testid="clean"] [data-happy-desktop-ui="file-editor-name"]');
+    const name = view.$('[data-testid="clean"] [data-happy-desktop-ui="file-path-label-name"]');
     const nameMetrics = name.textMetrics();
     expect(nameMetrics.text).toBe("model.ts");
     expect(nameMetrics.font.family).toBe(fontUi);
-    expect(nameMetrics.font.size).toBe(14);
-    expect(nameMetrics.font.weight).toBe("600");
+    expect(nameMetrics.font.size).toBe(12);
+    expect(nameMetrics.font.weight).toBe("400");
     expect(name.computedStyle("color")).toBe("rgb(0, 0, 0)");
 
-    const subtitle = view.$('[data-testid="clean"] [data-happy-desktop-ui="file-editor-subtitle"]');
-    expect(subtitle.element.textContent).toBe("src/");
-    expect(subtitle.textMetrics().font.family).toBe(fontMono);
-    expect(subtitle.computedStyle("color")).toBe("rgb(73, 69, 79)");
+    const directory = view.$(
+        '[data-testid="clean"] [data-happy-desktop-ui="file-path-label-directory"]',
+    );
+    expect(directory.element.textContent).toBe("src/");
+    expect(directory.textMetrics().font.family).toBe(fontUi);
+    expect(directory.computedStyle("color")).toBe("rgb(0, 0, 0)");
 
     /* ---- Code body: monospace ink on the code surface ------------------- */
 
     const area = view.$('[data-testid="clean"] [data-happy-desktop-ui="code-editor"]');
+    expect(area.bounds().height).toBe(328);
     expect(area.element.textContent).toContain(content.split("\n")[0]);
     /* Writing happens on the surface itself, not on a tinted code panel. */
     expect(area.computedStyle("background-color")).toBe("rgb(255, 255, 255)");
@@ -111,16 +115,24 @@ it("holds FileEditor header, code body, status bar, and dirty affordances", asyn
         "line-height": "20px",
     });
 
-    /* ---- Status bar ----------------------------------------------------- */
+    /* ---- Compact status + no retired bottom bar ------------------------- */
 
-    const path = view.$('[data-testid="clean"] [data-happy-desktop-ui="file-editor-path"]');
-    expect(path.element.textContent).toBe("src/model.ts");
     expect(
-        view.$('[data-testid="clean"] [data-happy-desktop-ui="file-editor-status-text"]').element
+        view.$('[data-testid="clean"] [data-happy-desktop-ui="file-editor-status"]').element
             .textContent,
     ).toBe("1.0 KB");
+    expect(
+        view.container.querySelector(
+            '[data-testid="clean"] [data-happy-desktop-ui="file-editor-path"]',
+        ),
+    ).toBeNull();
+    expect(
+        view.container.querySelector(
+            '[data-testid="clean"] [data-happy-desktop-ui="file-editor-status-text"]',
+        ),
+    ).toBeNull();
 
-    /* ---- Clean vs dirty: marker + Save/Revert --------------------------- */
+    /* ---- Clean vs dirty: the tab owns the dot; Command-S owns Save ------- */
 
     expect(root.element.getAttribute("data-dirty")).toBeNull();
     expect(
@@ -129,38 +141,25 @@ it("holds FileEditor header, code body, status bar, and dirty affordances", asyn
         ),
     ).toBeNull();
     const cleanActions = '[data-testid="clean"] [data-happy-desktop-ui="file-editor-actions"]';
-    const cleanSave = view.$(`${cleanActions} [data-happy-desktop-ui="button"]`);
-    expect(cleanSave.element.textContent).toBe("Save");
-    expect((cleanSave.element as HTMLButtonElement).disabled).toBe(true);
-    /* Clean state offers no Revert. */
-    expect(actionLabels(view, cleanActions)).toEqual(["Save", ""]);
+    expect(actionLabels(view, cleanActions)).toEqual([""]);
 
     const dirtyRoot = view.$('[data-testid="dirty"]');
     expect(dirtyRoot.element.getAttribute("data-dirty")).toBe("");
-    const marker = view.$('[data-testid="dirty"] [data-happy-desktop-ui="file-editor-marker"]');
-    expect(marker.bounds().width).toBe(8);
-    expect(marker.bounds().height).toBe(8);
-    expect(marker.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
-    expect((await marker.visibleMetrics()).pixelCount).toBeGreaterThan(0);
+    expect(
+        view.container.querySelector(
+            '[data-testid="dirty"] [data-happy-desktop-ui="file-editor-marker"]',
+        ),
+    ).toBeNull();
 
     const dirtyActions = '[data-testid="dirty"] [data-happy-desktop-ui="file-editor-actions"]';
-    expect(actionLabels(view, dirtyActions)).toEqual(["Revert", "Save", ""]);
-    const dirtySave = Array.from(
-        view.container.querySelectorAll<HTMLButtonElement>(
-            `${dirtyActions} [data-happy-desktop-ui="button"]`,
-        ),
-    ).find(
-        (button) =>
-            button.querySelector('[data-happy-desktop-ui="button-label"]')?.textContent === "Save",
-    )!;
-    expect(dirtySave.disabled).toBe(false);
+    expect(actionLabels(view, dirtyActions)).toEqual(["Revert", ""]);
 
     window.scrollTo(0, 0);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await view.screenshot("FileEditor.test");
 }, 120_000);
 
-it("routes edit, save, revert, and close intents and respects read-only", async () => {
+it("routes edit, Command-S, revert, and close intents and respects read-only", async () => {
     const changes: string[] = [];
     let saves = 0;
     let reverts = 0;
@@ -201,20 +200,20 @@ it("routes edit, save, revert, and close intents and respects read-only", async 
                 `[data-testid="${testid}"] [data-happy-desktop-ui="file-editor-actions"] [data-happy-desktop-ui="button"]`,
             ),
         ).find((element) => element.textContent === label);
-    button("live", "Save")!.click();
     button("live", "Revert")!.click();
     view.$(
         '[data-testid="live"] [data-happy-desktop-ui="file-editor-actions"] [aria-label="Close file"]',
     ).element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(saves).toBe(1);
+    expect(saves).toBe(0);
     expect(reverts).toBe(1);
     expect(closes).toBe(1);
 
-    /* Cmd/Ctrl+S saves without leaving the keyboard. */
+    /* Cmd/Ctrl+S is the only save control and keeps keyboard focus in place. */
+    expect(button("live", "Save")).toBeUndefined();
     view.$('[data-testid="live"]').element.dispatchEvent(
         new KeyboardEvent("keydown", { key: "s", metaKey: true, bubbles: true }),
     );
-    expect(saves).toBe(2);
+    expect(saves).toBe(1);
 
     /* Read-only: the editor refuses edits and no Save/Revert render. */
     const readOnly = view.$('[data-testid="ro"] [data-happy-desktop-ui="code-editor"]');

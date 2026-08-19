@@ -1,4 +1,4 @@
-import { ChatStore, type ChatElement } from "@slopus/rig-connect";
+import { ChatStore, type ChatElement } from "../happyAgentConnection/index.js";
 import { expect, it } from "vitest";
 import { detachedProcessIdsUpdate } from "./rigChatStore.js";
 
@@ -26,15 +26,9 @@ const fullSession = {
     pendingExternalToolCalls: [],
     pendingSteeringMessages: [],
     pendingUserInputs: [],
-    permissionReviews: [],
     permissionMode: "auto",
     scope: { kind: "unsorted" },
-    projectSecretIds: [],
     providerId: "provider",
-    secretIds: [],
-    scheduledMessages: [],
-    sessionSecretIds: [],
-    shellCommands: [],
     skills: [],
     snapshot: { messages: [] },
     status: "idle",
@@ -49,8 +43,6 @@ const fullSession = {
     ],
     tasks: [{ id: "task-1", subject: "Keep it", status: "completed" }],
     titleStatus: "idle",
-    workflows: [],
-    workflowsEnabled: false,
     goal: {
         objective: "Keep the activity history",
         status: "complete",
@@ -77,20 +69,12 @@ it("preserves omitted activity collections while allowing explicit clears", () =
         pendingExternalToolCalls: [],
         pendingSteeringMessages: [],
         pendingUserInputs: [],
-        permissionReviews: [],
         permissionMode: "auto",
         scope: { kind: "unsorted" },
-        projectSecretIds: [],
         providerId: "provider",
-        secretIds: [],
-        scheduledMessages: [],
-        sessionSecretIds: [],
-        shellCommands: [],
         skills: [],
         status: "completed",
         titleStatus: "idle",
-        workflows: [],
-        workflowsEnabled: false,
     } as unknown as ProtocolSession;
 
     store.applySessionSnapshot(sparseSession);
@@ -135,10 +119,10 @@ it("keeps detached terminals outside the transcript while excluding foreground c
     ] as const;
 
     const activeTurn = { runId: "run-1", startedAt: 1 };
-    expect(detachedProcessIdsUpdate(new Set(), foreground, processes, [], activeTurn)).toEqual(
+    expect(detachedProcessIdsUpdate(new Set(), foreground, processes, activeTurn)).toEqual(
         new Set(),
     );
-    expect(detachedProcessIdsUpdate(new Set(), detached, processes, [], activeTurn)).toEqual(
+    expect(detachedProcessIdsUpdate(new Set(), detached, processes, activeTurn)).toEqual(
         new Set([7]),
     );
     expect(
@@ -146,7 +130,6 @@ it("keeps detached terminals outside the transcript while excluding foreground c
             new Set(),
             [],
             [{ command: "sleep 120", cwd: "/workspace", sessionId: 9, status: "running" }],
-            [],
             undefined,
         ),
     ).toEqual(new Set([9]));

@@ -15,14 +15,15 @@ import {
     sep,
 } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LocalRigOnboardingInspection } from "@slopus/rig-connect";
-import type { HealthResponse } from "@slopus/rig/types";
+import type { happyAgentProtocol } from "happy-desktop-state";
 import {
     RigDaemonClient,
     rigDaemonPathsResolve,
     rigDaemonTokenRead,
     type RigDaemonPaths,
 } from "./rigDaemonClient";
+
+type HealthResponse = happyAgentProtocol.HealthResponse;
 
 const discoveryMarker = "__HAPPY2_RIG_PATH__=";
 const nodePathMarker = "__HAPPY2_NODE_PATH__=";
@@ -66,47 +67,7 @@ export interface LocalRigConnection {
     /** Protocol reported by the connected daemon's ready health response. */
     readonly protocolVersion: number;
     readonly version: string;
-    rigInstallationInspect(signal: AbortSignal): Promise<LocalRigOnboardingInspection>;
     close(): void;
-}
-
-/**
- * Runs Rig's read-only native installation inspection for the onboarding
- * resolver. Exit status 2 is still a completed inspection: Rig uses it for an
- * incompatible or unavailable data directory while keeping JSON on stdout.
- */
-function rigInstallationInspect(
-    launch: RigLaunchContext,
-    signal: AbortSignal,
-): Promise<LocalRigOnboardingInspection> {
-    return new Promise((resolvePromise, reject) => {
-        execFileCallback(
-            launch.executablePath,
-            ["inspect", "--json"],
-            {
-                encoding: "utf8",
-                env: launch.environment,
-                maxBuffer: maximumOutputBytes,
-                signal,
-                timeout: 30_000,
-            },
-            (error, stdout) => {
-                if (error && error.code !== 2) {
-                    reject(error);
-                    return;
-                }
-                try {
-                    resolvePromise(JSON.parse(stdout) as LocalRigOnboardingInspection);
-                } catch (parseError) {
-                    reject(
-                        new Error("The discovered rig command returned an invalid inspection.", {
-                            cause: parseError,
-                        }),
-                    );
-                }
-            },
-        );
-    });
 }
 
 export interface LocalRigConnector {
@@ -353,16 +314,14 @@ export function localRigConnectorCreate(
         readonly environment?: NodeJS.ProcessEnv;
         readonly configuredShell?: string;
         readonly wait?: (milliseconds: number) => Promise<void>;
-        readonly clientCreate?: (input: {
-            readonly socketPath: string;
-            readonly token: string;
-        }) => RigDaemonClient;
+        readonly clientCreate?: RigDaemonClientCreate;
     } = {},
 ): LocalRigConnector {
     const host = options.host ?? defaultProcessHost;
     const wait = options.wait ?? delay;
     const baseEnvironment = options.environment ?? process.env;
-    const clientCreate = options.clientCreate ?? ((input) => new RigDaemonClient(input));
+    const clientCreate: RigDaemonClientCreate =
+        options.clientCreate ?? ((input) => new RigDaemonClient(input));
     const debug = options.debug ?? (() => undefined);
     const launchDiscover = async (): Promise<RigLaunchContext> => {
         const launch = await rigLoginEnvironmentDiscover(
@@ -375,14 +334,24 @@ export function localRigConnectorCreate(
     };
     return {
         async connect(): Promise<LocalRigConnection> {
-            const defaultDaemonPaths = rigDaemonPathsResolve(baseEnvironment);
-            const runningDaemon = await sharedDaemonAttach(defaultDaemonPaths, clientCreate, wait);
-            if (runningDaemon)
-                return localRigConnectionCreate(
-                    runningDaemon,
-                    launchContextLazy(launchDiscover),
+            const explicitSocketPath = baseEnvironment.RIG_SERVER_SOCKET_PATH?.trim();
+            const explicitTokenPath = baseEnvironment.RIG_SERVER_TOKEN_PATH?.trim();
+            if (explicitSocketPath && explicitTokenPath) {
+                // Both paths named exactly, rather than derived from a shared
+                // directory, mean the caller picked one specific daemon — a
+                // custom Rig checkout's, say — not "whatever the shared daemon
+                // happens to be". Attaching to anything else defeats the point
+                // of naming it, so this never falls through to discovery.
+                debug(`Rig daemon: exact connection at ${explicitSocketPath}`);
+                return exactDaemonConnect(
+                    { socketPath: explicitSocketPath, tokenPath: explicitTokenPath },
+                    clientCreate,
                     wait,
                 );
+            }
+            const defaultDaemonPaths = rigDaemonPathsResolve(baseEnvironment);
+            const runningDaemon = await sharedDaemonAttach(defaultDaemonPaths, clientCreate, wait);
+            if (runningDaemon) return localRigConnectionCreate(runningDaemon, wait);
 
             const launch = await launchDiscover();
             const discoveredDaemonPaths = rigDaemonPathsResolve(launch.environment);
@@ -419,7 +388,7 @@ export function localRigConnectorCreate(
                     );
                 }
             }
-            return localRigConnectionCreate(daemon, async () => launch, wait);
+            return localRigConnectionCreate(daemon, wait);
         },
     };
 }
@@ -633,6 +602,11 @@ function minimalShellEnvironment(environment: NodeJS.ProcessEnv): NodeJS.Process
     };
 }
 
+type RigDaemonClientCreate = (input: {
+    readonly socketPath: string;
+    readonly token: string;
+}) => RigDaemonClient;
+
 interface RigDaemonAttachment {
     readonly client: RigDaemonClient;
     readonly health: HealthResponse;
@@ -640,7 +614,6 @@ interface RigDaemonAttachment {
 
 async function localRigConnectionCreate(
     daemon: RigDaemonAttachment,
-    launchContextGet: () => Promise<RigLaunchContext>,
     wait: (milliseconds: number) => Promise<void>,
 ): Promise<LocalRigConnection> {
     // The daemon owns its own lifecycle and may legitimately outlive an
@@ -649,29 +622,49 @@ async function localRigConnectionCreate(
     const health = await readyHealthWait(daemon.client, daemon.health, wait);
     return {
         client: daemon.client,
-        protocolVersion: health.protocolVersion,
-        version: health.identity.version,
-        rigInstallationInspect: async (signal) =>
-            rigInstallationInspect(await launchContextGet(), signal),
-        // ProtocolHttpClient is request-scoped and owns no persistent socket.
+        protocolVersion: health.version.protocol,
+        version: health.version.daemon,
+        // The Happy Agent HTTP client is request-scoped and owns no persistent socket.
         // Stream and terminal leases are closed by their IPC owners, so closing
         // the connection deliberately does not stop the normal user daemon.
         close: () => undefined,
     };
 }
 
-function launchContextLazy(
-    discover: () => Promise<RigLaunchContext>,
-): () => Promise<RigLaunchContext> {
-    let task: Promise<RigLaunchContext> | undefined;
-    return async () => {
-        const activeTask = (task ??= discover());
-        try {
-            return await activeTask;
-        } catch (error) {
-            if (task === activeTask) task = undefined;
-            throw error;
-        }
+/**
+ * Connects to exactly the daemon named by `paths`, over its `/v0` routes, and
+ * nothing else. Unlike the shared-daemon flow this never discovers or starts a
+ * Rig — a missing token or an unhealthy daemon is the answer, not a reason to
+ * look elsewhere.
+ */
+async function exactDaemonConnect(
+    paths: { readonly socketPath: string; readonly tokenPath: string },
+    clientCreate: RigDaemonClientCreate,
+    wait: (milliseconds: number) => Promise<void>,
+): Promise<LocalRigConnection> {
+    const token = await rigDaemonTokenRead(paths.tokenPath);
+    if (!token)
+        throw new Error(
+            `No Rig daemon token was found at ${paths.tokenPath}. RIG_SERVER_SOCKET_PATH and RIG_SERVER_TOKEN_PATH name one exact daemon, so Happy will not fall back to another one.`,
+        );
+    const client = clientCreate({
+        socketPath: paths.socketPath,
+        token,
+    });
+    let health: HealthResponse;
+    try {
+        health = await client.health();
+    } catch (error) {
+        throw new Error(`Could not reach the Rig daemon at ${paths.socketPath}.`, {
+            cause: error,
+        });
+    }
+    const readyHealth = await readyHealthWait(client, health, wait);
+    return {
+        client,
+        protocolVersion: readyHealth.version.protocol,
+        version: readyHealth.version.daemon,
+        close: () => undefined,
     };
 }
 
@@ -683,7 +676,7 @@ function launchContextLazy(
  */
 async function sharedDaemonAttach(
     paths: RigDaemonPaths,
-    create: (input: { readonly socketPath: string; readonly token: string }) => RigDaemonClient,
+    create: RigDaemonClientCreate,
     wait: (milliseconds: number) => Promise<void>,
     timeoutMilliseconds = 0,
 ): Promise<RigDaemonAttachment | undefined> {
@@ -710,15 +703,13 @@ async function readyHealthWait(
     client: RigDaemonClient,
     initialHealth: HealthResponse,
     wait: (milliseconds: number) => Promise<void>,
-): Promise<Extract<HealthResponse, { readonly status: "ready" }>> {
+): Promise<HealthResponse> {
     const deadline = Date.now() + 10_000;
     let knownHealth: HealthResponse | undefined = initialHealth;
     while (Date.now() < deadline) {
         const health = knownHealth ?? (await client.health());
         knownHealth = undefined;
         if (health.status === "ready") return health;
-        if (health.status === "error")
-            throw new Error(`Rig daemon could not start: ${health.error}`);
         await wait(50);
     }
     throw new Error("The shared Rig daemon did not become ready.");

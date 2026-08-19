@@ -18,9 +18,6 @@ describe("confirmed Rig installation terminal", () => {
                 client: {} as RigDaemonClient,
                 protocolVersion: 17,
                 version: "0.0.45",
-                rigInstallationInspect: async () => {
-                    throw new Error("This fixture does not inspect the local Rig installation.");
-                },
                 close: vi.fn(),
             })),
         };
@@ -120,9 +117,6 @@ describe("confirmed Rig installation terminal", () => {
             client: {} as RigDaemonClient,
             protocolVersion: 17,
             version: "0.0.45",
-            rigInstallationInspect: async () => {
-                throw new Error("This fixture does not inspect the local Rig installation.");
-            },
             close: connectionClose,
         });
         await vi.waitFor(() => expect(connectionClose).toHaveBeenCalledOnce());

@@ -2,19 +2,13 @@ import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
     ExperimentsStore,
-    RigNodesSnapshot,
-    RigPairingSnapshot,
     RigInstructionsSnapshot,
-    RigSecretsSnapshot,
     RigSecurityPolicySnapshot,
     RigModelCatalog,
     RigModelKey,
     RigPermissionMode,
     RigProfilesStore,
-    RigSharingSnapshot,
-    RigSharingStore,
     RigSettingsSnapshot,
-    RigSecretsStore,
     RigSettingsStore,
     RigThinkingLevel,
     RigWindowStore,
@@ -28,12 +22,8 @@ import {
     rigThinkingLabel,
     experimentsStoreNoop,
     rigAvailabilityProject,
-    rigNodesStoreNoop,
-    rigPairingStoreNoop,
     rigProfilesStoreNoop,
     rigProviderUsageStoreNoop,
-    rigSecretsStoreNoop,
-    rigSharingStoreNoop,
     rigWindowStoreNoop,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
@@ -41,37 +31,24 @@ import {
     RigGeneralSettings,
     RigDebugSettings,
     RigInstructionsSettings,
-    RigMurmurSettings,
-    RigNodeSettings,
-    RigPairing,
-    RigContactDialog,
     RigProviderSettings,
     RigProfilerSettings,
     RigProfilesSettings,
-    RigSecretsSettings,
     RigSettingsShell,
     RigUsageSettings,
-    type RigNodeRow,
-    type RigNodeTransportRow,
-    type RigPairingProgress,
     type RigProviderRow,
-    type RigSecretEditor,
-    type RigSecretRow,
     type RigSettingsCategory,
 } from "happy-desktop-ui";
 import type { SelectOption } from "happy-desktop-ui";
-import { hostRig, type AppRigDirectorySnapshot, type AppRigDirectoryStore } from "../AppRigView";
+import { hostRig, type AppRigDirectoryStore } from "../AppRigView";
 
 /** The categories the local settings window offers, in the order they are listed. */
 export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "code", id: "debug", label: "Dev Tools" },
     { icon: "users", id: "profiles", label: "Profiles" },
-    { icon: "link", id: "murmur", label: "Murmur" },
     { icon: "doc", id: "instructions", label: "Instructions" },
-    { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
-    { icon: "lock", id: "secrets", label: "Secrets" },
     // Usage sits after Providers because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
     { icon: "zap", id: "usage", label: "Usage" },
@@ -150,12 +127,9 @@ export interface AppRigProfilerStore {
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     debug: "Inspect Happy and Rig with live debugger endpoints and renderer profiles",
     general: "How this window looks and what a new session starts with",
-    profiles: "Who this host says is sending work to another Rig",
-    murmur: "Trusted contacts and the network used to share folders",
+    profiles: "The identities available for agent work",
     instructions: "Machine-wide agent guidance and permission-review policy",
-    nodes: "Machines this Rig is peered with, and how it reaches them",
     providers: "Every model provider this Rig daemon knows about",
-    secrets: "Environment values this machine gives to the commands its agents run",
     usage: "How much of each provider account's plan this machine has spent",
 };
 
@@ -173,7 +147,7 @@ export interface AppRigSettingsViewProps {
      * in a host that remembers no such choice, which withholds them.
      */
     experiments?: ExperimentsStore;
-    /** Every Rig in this window: the Machines category, and whose catalog is read. */
+    /** Every Rig in this window, including the one whose catalog is read. */
     debug?: AppRigDebugStore;
     profiler?: AppRigProfilerStore;
     rigs: AppRigDirectoryStore;
@@ -255,16 +229,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         profilesStore.get,
         profilesStore.get,
     );
-    // Murmur is a settings surface now, so its live feed starts only while that
-    // category is open. The same session-owned store also backs folder sharing
-    // in the workspace; this route creates no second contact state.
-    const sharingStore =
-        (props.section === "murmur" ? host?.session?.sharing : undefined) ?? rigSharingStoreNoop;
-    const sharing = useSyncExternalStore(
-        sharingStore.subscribe,
-        sharingStore.get,
-        sharingStore.get,
-    );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
     const instructionsStore = host?.session?.instructions;
@@ -279,20 +243,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         securityPolicyStore?.get ?? securityPolicyUnavailable,
         securityPolicyStore?.get ?? securityPolicyUnavailable,
     );
-    // The host's peering, subscribed only while this window is open: subscribing
-    // is what opens the status stream, and it closes again when the window does.
-    const nodesStore = host?.session?.nodes ?? rigNodesStoreNoop;
-    const nodes = useSyncExternalStore(nodesStore.subscribe, nodesStore.get, nodesStore.get);
-    // Pairing belongs to the host as well, and only to it: a node is reached
-    // because the host already trusts it. Following a pairing lasts exactly as
-    // long as this subscription, so leaving the window stops asking about one.
-    const pairingStore = host?.session?.pairing ?? rigPairingStoreNoop;
-    const pairing = useSyncExternalStore(
-        pairingStore.subscribe,
-        pairingStore.get,
-        pairingStore.get,
-    );
-    const pairingProgressView = pairingProgress(pairing);
     // The Usage category is the only thing that reads these, and subscribing is
     // what starts the work: the daemon is asked what its accounts have spent,
     // and the clock ticks the time left until each reset, only while that
@@ -306,16 +256,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         clockStore?.subscribe ?? noSubscribe,
         clockStore?.get ?? clockStopped,
         clockStore?.get ?? clockStopped,
-    );
-    // The registry is read while this category is the one on screen and not
-    // otherwise: subscribing is what starts the reading cycle, and leaving the
-    // category stops it.
-    const secretsStore =
-        (props.section === "secrets" ? host?.session?.secrets : undefined) ?? rigSecretsStoreNoop;
-    const secrets = useSyncExternalStore(
-        secretsStore.subscribe,
-        secretsStore.get,
-        secretsStore.get,
     );
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
@@ -408,62 +348,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     {...(profiles.actionError ? { actionError: profiles.actionError } : {})}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
-            ) : props.section === "murmur" ? (
-                <>
-                    <RigMurmurSettings
-                        connection={sharing.connection}
-                        contacts={sharing.contacts.map((contact) => ({
-                            identity: contact.identity,
-                            name: contact.profile?.name ?? contact.identity,
-                            removing: contact.status === "removing",
-                            ...(contact.profile?.email === undefined
-                                ? {}
-                                : { email: contact.profile.email }),
-                            ...(contact.profile?.photo === undefined
-                                ? {}
-                                : { imageUrl: contact.profile.photo.imageUrl }),
-                        }))}
-                        enabled={sharing.profileId !== undefined}
-                        incomingRequests={sharing.incomingRequests.map((request) => ({
-                            id: request.id,
-                            identity: request.identity,
-                            name: request.profile?.name ?? request.identity,
-                            answering: sharing.answering.has(request.id),
-                            ...(request.profile?.email === undefined
-                                ? {}
-                                : { email: request.profile.email }),
-                            ...(request.profile?.photo === undefined
-                                ? {}
-                                : { imageUrl: request.profile.photo.imageUrl }),
-                        }))}
-                        loading={sharing.loading}
-                        onAddContact={() => sharingStore.contactAddOpen()}
-                        onContactRemove={(identity) => {
-                            if (rigOnline()) sharingStore.contactRemove(identity);
-                        }}
-                        onRequestAccept={(requestId) => {
-                            if (rigOnline()) sharingStore.requestAccept(requestId);
-                        }}
-                        onRequestReject={(requestId) => {
-                            if (rigOnline()) sharingStore.requestReject(requestId);
-                        }}
-                        onResetCancel={() => sharingStore.resetCancel()}
-                        onResetConfirm={() => {
-                            if (rigOnline()) sharingStore.resetConfirm();
-                        }}
-                        onResetOpen={() => sharingStore.resetOpen()}
-                        outgoingRequests={sharing.outgoingRequests}
-                        resetConfirming={sharing.resetConfirming}
-                        resetting={sharing.resetting}
-                        {...(sharing.identity === undefined ? {} : { identity: sharing.identity })}
-                        {...(sharing.error === undefined ? {} : { error: sharing.error.message })}
-                        {...(sharing.actionError === undefined
-                            ? {}
-                            : { actionError: sharing.actionError })}
-                        {...(unavailable === undefined ? {} : { unavailable })}
-                    />
-                    {sharing.addOpen ? contactDialog(sharing, sharingStore) : null}
-                </>
             ) : props.section === "instructions" ? (
                 <RigInstructionsSettings
                     documents={[
@@ -523,50 +407,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                         },
                     ]}
                 />
-            ) : props.section === "nodes" ? (
-                <RigNodeSettings
-                    loading={nodes.loading}
-                    nodes={nodeRows(nodes, directory)}
-                    pairing={
-                        <RigPairing
-                            answering={pairing.answering}
-                            available={pairing.available}
-                            creating={pairing.creating}
-                            joining={pairing.join.submitting}
-                            joinValue={pairing.join.invitation}
-                            onInvitationCreate={() => {
-                                if (rigOnline()) pairingStore.invitationCreate();
-                            }}
-                            onJoinSubmit={() => {
-                                if (rigOnline()) pairingStore.joinSubmit();
-                            }}
-                            onJoinValueChange={(value) => pairingStore.joinInvitationUpdate(value)}
-                            onReset={() => pairingStore.pairingReset()}
-                            onVerificationAccept={() => {
-                                if (rigOnline()) pairingStore.verificationAnswer(true);
-                            }}
-                            onVerificationReject={() => {
-                                if (rigOnline()) pairingStore.verificationAnswer(false);
-                            }}
-                            {...(unavailable === undefined ? {} : { disabledReason: unavailable })}
-                            {...(pairing.error ? { error: pairing.error.message } : {})}
-                            {...(pairing.invitation
-                                ? {
-                                      invitation: {
-                                          command: pairing.invitation.command,
-                                          invitation: pairing.invitation.invitation,
-                                      },
-                                  }
-                                : {})}
-                            {...(pairingProgressView ? { progress: pairingProgressView } : {})}
-                        />
-                    }
-                    transports={transportRows(nodes)}
-                    {...(nodes.instanceId ? { hostId: nodes.instanceId } : {})}
-                    {...(nodes.name ? { hostName: nodes.name } : {})}
-                    {...(nodes.publicKey ? { hostPublicKey: nodes.publicKey } : {})}
-                    {...(nodes.error ? { error: nodes.error.message } : {})}
-                />
             ) : props.section === "providers" ? (
                 <RigProviderSettings
                     error={models.type === "error" ? models.error.message : undefined}
@@ -577,30 +417,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                             : undefined
                     }
                     providers={providerRows(catalog, settings, selection)}
-                    {...(unavailable === undefined ? {} : { unavailable })}
-                />
-            ) : props.section === "secrets" ? (
-                <RigSecretsSettings
-                    onSecretCreate={() => {
-                        secretsStore.secretCreateStart();
-                    }}
-                    onSecretEdit={(id) => {
-                        secretsStore.secretEditStart(id);
-                    }}
-                    onSecretRemoveCancel={() => {
-                        secretsStore.secretRemoveCancel();
-                    }}
-                    onSecretRemoveConfirm={() => {
-                        if (rigOnline()) secretsStore.secretRemoveConfirm();
-                    }}
-                    onSecretRemoveStart={(id) => {
-                        secretsStore.secretRemoveStart(id);
-                    }}
-                    loading={secrets.loading}
-                    secrets={secretRows(secrets)}
-                    {...(secrets.editor ? { editor: secretEditor(secretsStore) } : {})}
-                    {...(secrets.error ? { error: secrets.error.message } : {})}
-                    {...(secrets.removeError ? { removeError: secrets.removeError.message } : {})}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
             ) : props.section === "usage" ? (
@@ -667,42 +483,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     );
 }
 
-/** The existing two-way Murmur handshake dialog, bound to the settings store. */
-function contactDialog(sharing: RigSharingSnapshot, store: RigSharingStore) {
-    return (
-        <RigContactDialog
-            creating={sharing.creating}
-            incoming={sharing.incomingRequests.map((request) => ({
-                id: request.id,
-                identity: request.identity,
-                answering: sharing.answering.has(request.id),
-                ...(request.profile === undefined
-                    ? {}
-                    : {
-                          name: request.profile.name,
-                          email: request.profile.email,
-                          ...(request.profile.photo === undefined
-                              ? {}
-                              : { imageUrl: request.profile.photo.imageUrl }),
-                      }),
-            }))}
-            onClose={() => store.contactAddClose()}
-            onInvitationCreate={() => store.invitationCreate()}
-            onRequestAccept={(requestId) => store.requestAccept(requestId)}
-            onRequestReject={(requestId) => store.requestReject(requestId)}
-            onRequestSubmit={() => store.requestSubmit()}
-            onRequestValueChange={(value) => store.requestInvitationUpdate(value)}
-            outgoing={sharing.outgoingRequests}
-            requesting={sharing.request.submitting}
-            requestValue={sharing.request.invitation}
-            {...(sharing.invitation === undefined
-                ? {}
-                : { invitation: { invitation: sharing.invitation.invitation } })}
-            {...(sharing.actionError === undefined ? {} : { error: sharing.actionError })}
-        />
-    );
-}
-
 function profileEditor(store: RigProfilesStore) {
     const editor = store.get().editor;
     return {
@@ -718,168 +498,6 @@ function profileEditor(store: RigProfilesStore) {
         onCancel: () => store.profileEditorCancel(),
         ...(editor?.error === undefined ? {} : { error: editor.error }),
     };
-}
-
-/** Every secret bundle this Rig holds, with whichever row is being removed. */
-function secretRows(secrets: RigSecretsSnapshot): readonly RigSecretRow[] {
-    return secrets.secrets.map((secret) => ({
-        id: secret.id,
-        description: secret.description,
-        variables: secret.environmentVariables,
-        ...(secrets.removingId === secret.id
-            ? { confirmingRemove: true, removing: secrets.removing }
-            : {}),
-    }));
-}
-
-/**
- * The open form, bound to the store that holds it. Read from the store's
- * current snapshot rather than from the one this render closed over, so a
- * handler kept from an earlier render still acts on what the form now says.
- */
-function secretEditor(store: RigSecretsStore): RigSecretEditor {
-    const editor = store.get().editor;
-    return {
-        mode: editor?.mode ?? "create",
-        secretId: editor?.secretId ?? "",
-        description: editor?.description ?? "",
-        variables: editor?.variables ?? [],
-        saving: editor?.saving ?? false,
-        onIdChange: (value) => {
-            store.secretIdUpdate(value);
-        },
-        onDescriptionChange: (value) => {
-            store.secretDescriptionUpdate(value);
-        },
-        onVariableNameChange: (key, value) => {
-            store.secretVariableNameUpdate(key, value);
-        },
-        onVariableValueChange: (key, value) => {
-            store.secretVariableValueUpdate(key, value);
-        },
-        onVariableRemove: (key) => {
-            store.secretVariableRemove(key);
-        },
-        onVariableAdd: () => {
-            store.secretVariableAdd();
-        },
-        onSave: () => {
-            store.secretSave();
-        },
-        onCancel: () => {
-            store.secretEditCancel();
-        },
-        ...(editor?.saveError ? { error: editor.saveError.message } : {}),
-    };
-}
-
-/** Every node the host reports, in the order the host reports them. */
-function nodeRows(
-    nodes: RigNodesSnapshot,
-    directory: AppRigDirectorySnapshot,
-): readonly RigNodeRow[] {
-    // A node whose work this window actually holds is one of the Rigs in the
-    // directory, addressed by the identity the host published for it.
-    const open = new Set(
-        directory.rigs.flatMap((rig) =>
-            rig.nodeId !== undefined && rig.session ? [rig.nodeId] : [],
-        ),
-    );
-    // A machine that answered and declined to share its API said so on its own
-    // connection, so that fact is read off the Rig the window opened for it
-    // rather than off the host's peer status, which cannot know it.
-    const restricted = new Set(
-        directory.rigs.flatMap((rig) =>
-            rig.nodeId !== undefined && rig.accessRestricted === true ? [rig.nodeId] : [],
-        ),
-    );
-    // The host's peer status carries the name it pinned when the two were
-    // paired, which a machine renamed since then has outgrown and a machine
-    // paired before it had a name never had. The Rig opened for that machine
-    // carries what the machine itself last said, so it answers first.
-    const named = new Map(
-        directory.rigs.flatMap((rig) =>
-            rig.nodeId !== undefined && rig.label !== rig.nodeId ? [[rig.nodeId, rig.label]] : [],
-        ),
-    );
-    return nodes.nodes.map((node) => ({
-        id: node.key,
-        // What the machine calls itself, then what it proved it is, then where
-        // it was dialled: a node still being reached has told the host nothing
-        // but an address, and pretending otherwise would name it wrongly.
-        name:
-            (node.peerId === undefined ? undefined : named.get(node.peerId)) ??
-            node.name ??
-            node.peerId ??
-            node.routes[0]?.address ??
-            node.key,
-        routes: node.routes.map((route) => ({
-            address: route.address,
-            state: route.status,
-            transport: route.transport,
-        })),
-        state: node.status,
-        ...(node.error ? { message: node.error } : {}),
-        ...(node.peerId ? { peerId: node.peerId } : {}),
-        ...(node.rttMs === undefined ? {} : { rttMs: node.rttMs }),
-        ...(node.peerId !== undefined && open.has(node.peerId) ? { workOpen: true } : {}),
-        ...(node.peerId !== undefined && restricted.has(node.peerId)
-            ? { accessRestricted: true }
-            : {}),
-    }));
-}
-
-/**
- * The pairing under way, in the terms the surface draws.
- *
- * The store's state carries a couple of things the surface has no use for — the
- * pairing's own id and when it expires — so this narrows rather than passes the
- * object through, and the phases stay a closed union on both sides.
- */
-function pairingProgress(pairing: RigPairingSnapshot): RigPairingProgress | undefined {
-    const state = pairing.state;
-    if (!state) return undefined;
-    switch (state.phase) {
-        case "connecting":
-        case "waiting":
-            return { phase: state.phase, role: state.role };
-        case "verifying":
-            return {
-                emojis: state.emojis,
-                peer: { instanceId: state.peer.instanceId, name: state.peer.name },
-                phase: "verifying",
-                role: state.role,
-            };
-        case "connected":
-            return {
-                peer: { instanceId: state.peer.instanceId, name: state.peer.name },
-                phase: "connected",
-                role: state.role,
-            };
-        default:
-            return {
-                phase: state.phase,
-                role: state.role,
-                ...(state.error === undefined ? {} : { message: state.error }),
-            };
-    }
-}
-
-/** Each transport the host runs, so an absent node list can explain itself. */
-function transportRows(nodes: RigNodesSnapshot): readonly RigNodeTransportRow[] {
-    return nodes.transports.map((transport) =>
-        transport.state === "ready"
-            ? {
-                  localAddress: transport.localAddress,
-                  state: "ready" as const,
-                  transport: transport.transport,
-              }
-            : {
-                  message: transport.error,
-                  state: "unavailable" as const,
-                  transport: transport.transport,
-              },
-    );
 }
 
 /**
