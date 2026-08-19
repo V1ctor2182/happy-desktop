@@ -7,12 +7,6 @@ export type LocalOnboardingView =
     | { readonly kind: "rig-missing"; readonly message?: string }
     | { readonly kind: "connecting" }
     | { readonly kind: "connect-failed"; readonly message: string; readonly retrying: boolean }
-    | { readonly kind: "rig-update-required"; readonly message: string }
-    | {
-          readonly downloaded: boolean;
-          readonly kind: "happy-update-required";
-          readonly message: string;
-      }
     | {
           readonly kind: "providers-missing";
           /** The assistants Rig looked for, in the order it named them. */
@@ -36,7 +30,6 @@ export interface LocalOnboardingScreenProps {
     onProfileNameChange(value: string): void;
     onProfileEmailChange(value: string): void;
     onProfileCreate(): void;
-    onHappyUpdateInstall(): void;
 }
 
 /** What a reader is told to run when Happy cannot start their Rig itself. */
@@ -200,34 +193,6 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 data-testid="local-onboarding-screen"
                 scene="owl"
                 title="Happy could not reach Rig."
-            />
-        );
-
-    if (view.kind === "rig-update-required")
-        return (
-            <SetupPage
-                copy={view.message}
-                data-testid="local-onboarding-screen"
-                scene="owl"
-                title="Rig needs an update."
-            />
-        );
-
-    if (view.kind === "happy-update-required")
-        return (
-            <SetupPage
-                {...(view.downloaded
-                    ? {
-                          action: {
-                              label: "Install update and restart",
-                              onSelect: props.onHappyUpdateInstall,
-                          },
-                      }
-                    : {})}
-                copy={view.message}
-                data-testid="local-onboarding-screen"
-                scene="owl"
-                title="Happy needs an update."
             />
         );
 

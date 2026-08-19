@@ -25,7 +25,6 @@ import {
     type LocalRigConnector,
 } from "./localRig";
 import { HappyAgentClient } from "@slopus/happy-agent-client";
-import { serverCompatibility, type ServerCompatibility } from "happy-desktop-state";
 import type { LocalRigOnboardingState, LocalRigProfile } from "./localOnboarding";
 import {
     rigDaemonConnectionUnavailable,
@@ -182,11 +181,7 @@ export class DesktopRuntime implements AsyncDisposable {
         const connection = this.localConnectionRequire(expectedConnectionId);
         const client = this.localHappyAgentClient();
         if (!client) throw new Error("The local Rig daemon is unavailable.");
-        const state = await connectedRigOnboardingResolve(
-            connection.protocolVersion,
-            connection.version,
-            client,
-        );
+        const state = await connectedRigOnboardingResolve(client);
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.connectionId !== expectedConnectionId ||
@@ -572,21 +567,14 @@ function displayError(error: unknown): string {
 /**
  * Resolves onboarding from the daemon Happy has already authenticated.
  *
- * Offline `rig inspect` is for installation and repair while no daemon can
- * answer. Once a daemon is serving the shared endpoint, a separately resolved
- * CLI may be older, newer, or belong to another checkout; it must not veto that
- * live connection. The daemon's ready health response already carries the
- * protocol version, so that connected fact gates onboarding without another
- * executable lookup or installation-schema request.
+ * The shell owns native setup work, but it does not interpret the Happy Agent
+ * protocol version. The hosted renderer can move independently of the packaged
+ * shell, so compatibility belongs to the renderer connection that actually
+ * consumes the protocol. Main asks only for daemon-owned onboarding state.
  */
 async function connectedRigOnboardingResolve(
-    protocolVersion: number,
-    installedVersion: string,
     client: HappyAgentClient,
 ): Promise<LocalRigOnboardingState> {
-    const compatibility = serverCompatibility(protocolVersion);
-    if (compatibility.status !== "compatible")
-        return daemonProtocolMismatchState(compatibility, installedVersion);
     try {
         const state = await client.getOnboarding({
             signal: AbortSignal.timeout(onboardingRequestTimeoutMs),
@@ -597,22 +585,6 @@ async function connectedRigOnboardingResolve(
     } catch (error) {
         return rigUnreachableState(error);
     }
-}
-
-function daemonProtocolMismatchState(
-    compatibility: Exclude<ServerCompatibility, { status: "checking" } | { status: "compatible" }>,
-    installedVersion: string,
-): LocalRigOnboardingState {
-    return {
-        installedVersion: installedVersion.slice(0, 256),
-        maximumSupportedProtocolVersion: compatibility.maximumSupportedProtocolVersion,
-        minimumSupportedProtocolVersion: compatibility.minimumSupportedProtocolVersion,
-        protocolVersion: compatibility.serverProtocolVersion,
-        reason: "protocol",
-        source: "daemon",
-        state: "version_mismatch",
-        upgrade: compatibility.status === "client_outdated" ? "happy" : "rig",
-    };
 }
 
 function rigUnreachableState(error: unknown): LocalRigOnboardingState {

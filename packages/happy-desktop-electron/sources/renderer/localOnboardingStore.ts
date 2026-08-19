@@ -164,17 +164,6 @@ export function localOnboardingView(
                 message: message ?? "Happy could not reach your Rig daemon.",
                 retrying: onboarding.retrying === true,
             };
-        case "rigUpdateRequired":
-            return {
-                kind: "rig-update-required",
-                message: message ?? "Update Rig before continuing setup.",
-            };
-        case "happyUpdateRequired":
-            return {
-                downloaded: onboarding.update?.status === "downloaded",
-                kind: "happy-update-required",
-                message: message ?? "Update Happy before continuing setup.",
-            };
         case "providersMissing":
             return {
                 kind: "providers-missing",

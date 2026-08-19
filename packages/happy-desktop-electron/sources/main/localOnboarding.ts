@@ -13,16 +13,6 @@ const recordVersion = 3;
 
 export type LocalRigOnboardingState =
     | { readonly state: "complete" | "profile_required" | "provider_setup" }
-    | {
-          readonly installedVersion?: string;
-          readonly maximumSupportedProtocolVersion: number;
-          readonly minimumSupportedProtocolVersion: number;
-          readonly protocolVersion: number;
-          readonly reason: "protocol";
-          readonly source: "daemon";
-          readonly state: "version_mismatch";
-          readonly upgrade: "happy" | "rig";
-      }
     | { readonly message: string; readonly state: "rig_unreachable" };
 
 export interface LocalRigProfile {
@@ -726,7 +716,6 @@ export class LocalOnboarding implements Disposable {
             ...(this.record.projectPath ? { projectPath: this.record.projectPath } : {}),
             ...(rig ? { rig } : {}),
             stage,
-            update: runtime.update,
         };
     }
 
@@ -759,11 +748,7 @@ export class LocalOnboarding implements Disposable {
                 return "providersMissing";
             case "profile_required":
                 return "profileRequired";
-            default:
-                if (onboarding.state === "version_mismatch")
-                    return onboarding.upgrade === "happy"
-                        ? "happyUpdateRequired"
-                        : "rigUpdateRequired";
+            case "rig_unreachable":
                 return "connectFailed";
         }
     }
@@ -775,12 +760,7 @@ export class LocalOnboarding implements Disposable {
         if (this.message) return this.message;
         if (stage === "checking") return this.probeMessage;
         if (stage === "connectFailed" && runtime.phase === "error") return runtime.message;
-        if (
-            stage === "connectFailed" ||
-            stage === "rigUpdateRequired" ||
-            stage === "happyUpdateRequired"
-        )
-            return onboardingFailureMessage(this.rigOnboarding);
+        if (stage === "connectFailed") return onboardingFailureMessage(this.rigOnboarding);
         return undefined;
     }
 
@@ -850,10 +830,6 @@ function runtimeLocal(runtime: DesktopRuntimeSnapshot): boolean {
 function onboardingFailureMessage(state: LocalRigOnboardingState | undefined): string | undefined {
     if (!state) return undefined;
     if ("message" in state && state.message) return state.message;
-    if (state.state === "version_mismatch")
-        return state.upgrade === "happy"
-            ? "This Rig needs a newer version of Happy."
-            : "Update Rig before continuing setup.";
     return undefined;
 }
 

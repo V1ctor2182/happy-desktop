@@ -56,8 +56,6 @@ export interface RigLaunchContext {
 
 export interface LocalRigConnection {
     readonly client: RigDaemonClient;
-    /** Protocol reported by the connected daemon's ready health response. */
-    readonly protocolVersion: number;
     readonly version: string;
     close(): void;
 }
@@ -490,7 +488,6 @@ async function localRigConnectionCreate(
     const health = await readyHealthWait(daemon.client, daemon.health, wait);
     return {
         client: daemon.client,
-        protocolVersion: health.version.protocol,
         version: health.version.daemon,
         // The Happy Agent HTTP client is request-scoped and owns no persistent socket.
         // Stream and terminal leases are closed by their IPC owners, so closing
@@ -530,7 +527,6 @@ async function exactDaemonConnect(
     const readyHealth = await readyHealthWait(client, health, wait);
     return {
         client,
-        protocolVersion: readyHealth.version.protocol,
         version: readyHealth.version.daemon,
         close: () => undefined,
     };

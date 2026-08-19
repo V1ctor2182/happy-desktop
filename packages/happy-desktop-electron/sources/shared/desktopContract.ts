@@ -204,10 +204,6 @@ export type LocalOnboardingStage =
     | "connecting"
     /** The daemon could not be reached; the desktop runtime carries the reason. */
     | "connectFailed"
-    /** The installed Rig CLI or daemon is older than Happy's supported protocol. */
-    | "rigUpdateRequired"
-    /** The installed Rig protocol is newer than this Happy build. */
-    | "happyUpdateRequired"
     /**
      * Rig is installed and working, but no coding assistant on this machine is
      * signed in, so it has nothing to run a session with. Kept apart from
@@ -279,7 +275,6 @@ export interface LocalOnboardingSnapshot {
     readonly providers?: readonly string[];
     /** An attempt to reach Rig is running, started from a failed stage. */
     readonly retrying?: boolean;
-    readonly update?: DesktopUpdateSnapshot;
 }
 
 /**

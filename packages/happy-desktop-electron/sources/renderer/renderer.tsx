@@ -269,7 +269,6 @@ function RigBoundary(props: {
  */
 function DesktopOnboardingGate(props: {
     appearance: AppearanceStore;
-    bridge: HappyDesktopBridge;
     children: ReactNode;
     store: LocalOnboardingStore;
     welcome: WelcomeStore;
@@ -307,7 +306,6 @@ function DesktopOnboardingGate(props: {
     return (
         <LocalOnboardingScreen
             onConnectRetry={() => props.store.connectRetry()}
-            onHappyUpdateInstall={() => desktopAction(props.bridge.updateInstall())}
             onProfileCreate={() => props.store.profileCreate()}
             onProfileEmailChange={(value) => props.store.profileEmailUpdate(value)}
             onProfileNameChange={(value) => props.store.profileNameUpdate(value)}
@@ -429,7 +427,6 @@ function DesktopScreens(props: DesktopRendererProps) {
     return (
         <DesktopOnboardingGate
             appearance={props.appearance}
-            bridge={props.bridge}
             store={props.onboarding}
             welcome={props.welcome}
         >
