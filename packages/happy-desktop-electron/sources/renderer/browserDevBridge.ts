@@ -7,7 +7,6 @@ import type {
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
     HappyDesktopBridge,
-    RigInstallTerminalEvent,
 } from "../shared/desktopContract";
 import type {
     DesktopProfilerRequest,
@@ -127,7 +126,6 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // truthfully perform.
         onboardingGet: async () => ({ busy: false, freshness: "used", stage: "complete" }) as const,
         onboardingSubscribe: () => () => undefined,
-        onboardingRigInstall: async () => undefined,
         onboardingProfileCreate: async () => undefined,
         onboardingProjectChoose: async () => undefined,
         runtimeGet: async () => {
@@ -148,11 +146,6 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         runtimeReset: async () => undefined,
         runtimeRetry: async () => undefined,
         runtimeStart: async (_request: DesktopStartRequest) => undefined,
-        rigInstallOpen: () => request("unsupported"),
-        rigInstallConfirm: async () => undefined,
-        rigInstallInput: async () => undefined,
-        rigInstallResize: async () => undefined,
-        rigInstallClose: async () => undefined,
         topologySelect: async () => undefined,
         updateInstall: async () => undefined,
         // A browser tab has no native window chrome to reserve a lane for, so it
@@ -160,9 +153,6 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         windowStateGet: async () => ({ fullScreen: false }),
         windowStateSubscribe: () => () => undefined,
         subscribe(_listener: (snapshot: DesktopRuntimeSnapshot) => void) {
-            return () => undefined;
-        },
-        rigInstallSubscribe(_listener: (event: RigInstallTerminalEvent) => void) {
             return () => undefined;
         },
     };

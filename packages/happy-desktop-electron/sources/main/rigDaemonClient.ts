@@ -3,7 +3,19 @@ import { request as httpRequest, type IncomingHttpHeaders, type IncomingMessage 
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { Duplex } from "node:stream";
-import type { happyAgentProtocol } from "happy-desktop-state";
+import {
+    HappyAgentApiError,
+    HappyAgentClient,
+    type AgentResponse,
+    type Cuid2,
+    type FileContentResponse,
+    type HealthResponse,
+    type InspectorStartedResponse,
+    type InspectorStoppedResponse,
+    type WorkspaceResponse,
+    type WriteFileRequest,
+    type WriteFileResponse,
+} from "@slopus/happy-agent-client";
 import { WebSocket, createWebSocketStream } from "ws";
 
 /**
@@ -32,10 +44,10 @@ export interface RigDaemonRawResponse {
 }
 
 /** Where a debugger attaches once Happy Agent's inspector is listening. */
-export type RigDaemonInspectorResponse = happyAgentProtocol.InspectorStartedResponse;
+export type RigDaemonInspectorResponse = InspectorStartedResponse;
 
 /** Whether an inspector was listening before the stop request. */
-export type RigDaemonInspectorStopResponse = happyAgentProtocol.InspectorStoppedResponse;
+export type RigDaemonInspectorStopResponse = InspectorStoppedResponse;
 
 /**
  * Authenticated Unix-socket boundary for Happy Agent.
@@ -49,69 +61,59 @@ export type RigDaemonInspectorStopResponse = happyAgentProtocol.InspectorStopped
 export class RigDaemonClient {
     readonly socketPath: string;
     readonly #token: string;
+    readonly #client: HappyAgentClient;
 
     constructor(options: RigDaemonClientOptions) {
         this.socketPath = options.socketPath;
         this.#token = options.token;
+        this.#client = new HappyAgentClient({
+            endpoint: "http://happy-agent/",
+            token: options.token,
+            fetch: (input, init) => unixSocketFetch(options.socketPath, input, init),
+        });
     }
 
-    health(signal?: AbortSignal): Promise<happyAgentProtocol.HealthResponse> {
-        return this.#requestJson("GET", "/v0/health", undefined, signal);
+    health(signal?: AbortSignal): Promise<HealthResponse> {
+        return this.#client.getHealth(signal ? { signal } : undefined);
     }
 
     startInspector(signal?: AbortSignal): Promise<RigDaemonInspectorResponse> {
-        return this.#requestJson("POST", "/v0/debug/inspector", undefined, signal);
+        return this.#client.startInspector(signal ? { signal } : undefined);
     }
 
     stopInspector(signal?: AbortSignal): Promise<RigDaemonInspectorStopResponse> {
-        return this.#requestJson("DELETE", "/v0/debug/inspector", undefined, signal);
+        return this.#client.stopInspector(signal ? { signal } : undefined);
     }
 
-    getAgent(agentId: string, signal?: AbortSignal): Promise<happyAgentProtocol.AgentResponse> {
-        return this.#requestJson(
-            "GET",
-            `/v0/agents/${encodeURIComponent(agentId)}`,
-            undefined,
-            signal,
-        );
+    getAgent(agentId: string, signal?: AbortSignal): Promise<AgentResponse> {
+        return this.#client.getAgent(agentId as Cuid2, signal ? { signal } : undefined);
     }
 
-    getWorkspace(
-        workspaceId: string,
-        signal?: AbortSignal,
-    ): Promise<happyAgentProtocol.WorkspaceResponse> {
-        return this.#requestJson(
-            "GET",
-            `/v0/workspaces/${encodeURIComponent(workspaceId)}`,
-            undefined,
-            signal,
-        );
+    getWorkspace(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceResponse> {
+        return this.#client.getWorkspace(workspaceId as Cuid2, signal ? { signal } : undefined);
     }
 
     readWorkspaceFile(
         workspaceId: string,
         filePath: string,
         signal?: AbortSignal,
-    ): Promise<happyAgentProtocol.FileContentResponse> {
-        const query = new URLSearchParams({ path: filePath });
-        return this.#requestJson(
-            "GET",
-            `/v0/workspaces/${encodeURIComponent(workspaceId)}/file?${query.toString()}`,
-            undefined,
-            signal,
+    ): Promise<FileContentResponse> {
+        return this.#client.readFile(
+            workspaceId as Cuid2,
+            filePath,
+            signal ? { signal } : undefined,
         );
     }
 
     writeWorkspaceFile(
         workspaceId: string,
-        request: happyAgentProtocol.WriteFileRequest,
+        request: WriteFileRequest,
         signal?: AbortSignal,
-    ): Promise<happyAgentProtocol.WriteFileResponse> {
-        return this.#requestJson(
-            "PUT",
-            `/v0/workspaces/${encodeURIComponent(workspaceId)}/file`,
+    ): Promise<WriteFileResponse> {
+        return this.#client.writeFile(
+            workspaceId as Cuid2,
             request,
-            signal,
+            signal ? { signal } : undefined,
         );
     }
 
@@ -266,39 +268,6 @@ export class RigDaemonClient {
             });
         });
     }
-
-    async #requestJson<TResult>(
-        method: string,
-        path: string,
-        body?: unknown,
-        signal?: AbortSignal,
-    ): Promise<TResult> {
-        const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
-        const response = await this.rawRequest({
-            method,
-            path,
-            ...(payload === undefined ? {} : { body: payload }),
-            ...(payload === undefined
-                ? {}
-                : { headers: { "content-type": "application/json; charset=utf-8" } }),
-            ...(signal === undefined ? {} : { signal }),
-        });
-        const chunks: Buffer[] = [];
-        for await (const chunk of response.body) {
-            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-        }
-        const text = Buffer.concat(chunks).toString("utf8");
-        if (response.statusCode >= 400)
-            throw new RigDaemonHttpError(
-                response.statusCode,
-                failureMessage(text, response.statusCode),
-            );
-        try {
-            return (text.length === 0 ? {} : JSON.parse(text)) as TResult;
-        } catch (error) {
-            throw new Error("Happy Agent returned invalid JSON.", { cause: error });
-        }
-    }
 }
 
 /** Resolves the standard Happy Agent daemon endpoint and optional exact overrides. */
@@ -349,6 +318,8 @@ export function rigDaemonConnectionUnavailable(error: unknown): boolean {
     let current: unknown = error;
     for (let depth = 0; current && depth < 4; depth += 1) {
         if (typeof current !== "object") return false;
+        if (current instanceof HappyAgentApiError)
+            return current.status === 401 || current.status === 403;
         if (current instanceof RigDaemonHttpError)
             return current.statusCode === 401 || current.statusCode === 403;
         const value = current as { readonly cause?: unknown; readonly code?: unknown };
@@ -383,22 +354,55 @@ function abortedError(): Error {
     return new Error("The Happy Agent request was aborted.");
 }
 
-function failureMessage(body: string, statusCode: number): string {
-    if (body.length === 0) return `Happy Agent HTTP ${String(statusCode)}`;
-    try {
-        const parsed = JSON.parse(body) as {
-            readonly error?: string | { readonly message?: unknown };
-        };
-        if (typeof parsed.error === "string" && parsed.error.length > 0) return parsed.error;
-        if (
-            parsed.error !== null &&
-            typeof parsed.error === "object" &&
-            typeof parsed.error.message === "string" &&
-            parsed.error.message.length > 0
-        )
-            return parsed.error.message;
-    } catch {
-        // Non-JSON error bodies are already displayable.
-    }
-    return body;
+async function unixSocketFetch(
+    socketPath: string,
+    input: RequestInfo | URL,
+    init?: RequestInit,
+): Promise<Response> {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    const body = request.body ? Buffer.from(await request.arrayBuffer()) : undefined;
+    return new Promise((resolvePromise, reject) => {
+        if (request.signal.aborted) {
+            reject(abortedError());
+            return;
+        }
+        const outgoing = httpRequest(
+            {
+                headers: Object.fromEntries(request.headers.entries()),
+                method: request.method,
+                path: `${url.pathname}${url.search}`,
+                socketPath,
+            },
+            (incoming) => {
+                const chunks: Buffer[] = [];
+                incoming.on("data", (chunk: Buffer | string) =>
+                    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
+                );
+                incoming.once("error", reject);
+                incoming.once("end", () => {
+                    const headers = new Headers();
+                    for (const [name, value] of Object.entries(incoming.headers)) {
+                        if (Array.isArray(value))
+                            for (const item of value) headers.append(name, item);
+                        else if (value !== undefined) headers.set(name, value);
+                    }
+                    const payload = Buffer.concat(chunks);
+                    resolvePromise(
+                        new Response(payload.length === 0 ? null : new Uint8Array(payload), {
+                            headers,
+                            status: incoming.statusCode ?? 500,
+                            statusText: incoming.statusMessage,
+                        }),
+                    );
+                });
+            },
+        );
+        const abort = () => outgoing.destroy(abortedError());
+        const cleanup = () => request.signal.removeEventListener("abort", abort);
+        request.signal.addEventListener("abort", abort, { once: true });
+        outgoing.once("close", cleanup);
+        outgoing.once("error", reject);
+        outgoing.end(body);
+    });
 }

@@ -1,7 +1,6 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { constants, existsSync } from "node:fs";
 import { access, realpath, stat } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { userInfo } from "node:os";
 import {
     basename,
@@ -34,9 +33,6 @@ const discoveryCommand =
     `printf '${nodeVersionMarker}%s\\0' "$(node --version 2>/dev/null)"; ` +
     `/usr/bin/env -0`;
 const maximumOutputBytes = 1024 * 1024;
-const bundledRigSpecifier = "@slopus/rig/dist/main.js";
-const bundledRigRelativePath = join("node_modules", "@slopus", "rig", "dist", "main.js");
-const packageRequire = createRequire(import.meta.url);
 
 /**
  * How the probe runs the user's shell: as a login shell *and* an interactive
@@ -48,16 +44,12 @@ const packageRequire = createRequire(import.meta.url);
  */
 const discoveryShellArguments = ["-l", "-i", "-c", discoveryCommand] as const;
 
-export type RigExecutableSource = "global" | "bundled";
-
 export interface RigExecutableSelection {
     readonly executablePath: string;
-    readonly source: RigExecutableSource;
 }
 
 export interface RigLaunchContext {
     readonly executablePath: string;
-    readonly executableSource: RigExecutableSource;
     readonly environment: NodeJS.ProcessEnv;
     readonly shell: string;
 }
@@ -76,9 +68,7 @@ export interface LocalRigConnector {
 
 export class RigCommandMissingError extends Error {
     constructor() {
-        super(
-            "Happy could not find an executable Rig command in the login shell or its bundled dependency.",
-        );
+        super("Happy could not find a global Rig command in the login shell.");
         this.name = "RigCommandMissingError";
     }
 }
@@ -127,13 +117,8 @@ const defaultProcessHost: RigProcessHost = {
 export async function rigExecutableFind(
     loginShellCommand: string | undefined,
     loginShellEnvironment: NodeJS.ProcessEnv,
-    bundledExecutableFind: () => string | undefined = rigBundledExecutableFind,
 ): Promise<RigExecutableSelection | undefined> {
-    const bundledExecutable = bundledExecutableFind();
-    const bundledCanonicalPath = bundledExecutable
-        ? await executableCanonicalPath(bundledExecutable)
-        : undefined;
-    const happyDependencyRoots = await happyDependencyRootsFind(bundledExecutable);
+    const happyDependencyRoots = await happyDependencyRootsFind();
 
     for (const candidatePath of rigExecutableCandidates(
         loginShellCommand,
@@ -145,50 +130,12 @@ export async function rigExecutableFind(
             !canonicalPath ||
             isCheckoutPackageBinExecutable(candidatePath) ||
             isCheckoutPackageBinExecutable(canonicalPath) ||
-            isHappyOwnedExecutable(
-                candidatePath,
-                canonicalPath,
-                bundledCanonicalPath,
-                happyDependencyRoots,
-            )
+            isHappyOwnedExecutable(candidatePath, canonicalPath, happyDependencyRoots)
         )
             continue;
-        return { executablePath: normalize(candidatePath), source: "global" };
+        return { executablePath: normalize(candidatePath) };
     }
-
-    if (bundledExecutable && bundledCanonicalPath)
-        return { executablePath: normalize(bundledExecutable), source: "bundled" };
     return undefined;
-}
-
-/**
- * Locates Happy Desktop's own Rig without consulting the user's PATH.
- *
- * Release builds put production dependencies under Resources, while the normal
- * Electron build puts the dependency in an unpacked ASAR tree. Development uses
- * the package resolver directly.
- */
-export function rigBundledExecutableFind(): string | undefined {
-    const resourcesPath = (process as NodeJS.Process & { readonly resourcesPath?: string })
-        .resourcesPath;
-    if (resourcesPath) {
-        const resourceExecutable = join(resourcesPath, bundledRigRelativePath);
-        if (existsSync(resourceExecutable)) return resourceExecutable;
-    }
-
-    try {
-        const resolvedExecutable = packageRequire.resolve(bundledRigSpecifier);
-        if (resolvedExecutable.includes(`${sep}app.asar${sep}`)) {
-            const unpackedExecutable = resolvedExecutable.replace(
-                `${sep}app.asar${sep}`,
-                `${sep}app.asar.unpacked${sep}`,
-            );
-            return existsSync(unpackedExecutable) ? unpackedExecutable : undefined;
-        }
-        return existsSync(resolvedExecutable) ? resolvedExecutable : undefined;
-    } catch {
-        return undefined;
-    }
 }
 
 /** Resolves Rig and its environment through the user's configured login shell. */
@@ -206,17 +153,14 @@ export async function rigLoginEnvironmentDiscover(
     if (!executable) throw new RigCommandMissingError();
     return {
         executablePath: executable.executablePath,
-        executableSource: executable.source,
         environment: parsed.environment,
         shell,
     };
 }
 
 /**
- * What local mode can use from the user's login shell and Happy's bundled
- * fallback, without deciding whether either installation is protocol-compatible.
- * Both may be absent: that is the answer first-run setup exists to act on, not a
- * failure.
+ * What local mode can use from the user's login shell. Rig may be absent; in
+ * that case Happy reports the missing prerequisite and waits for it to appear.
  */
 export interface LocalRuntimeProbe {
     readonly environment: NodeJS.ProcessEnv;
@@ -250,59 +194,6 @@ export async function localRuntimeProbe(
         ...(parsed.nodeVersion ? { nodeVersion: parsed.nodeVersion } : {}),
         ...(executable ? { rigCommand: executable.executablePath } : {}),
         shell,
-    };
-}
-
-/**
- * What one check of an installed Rig produced: the version it reported, and a
- * release for whatever the check had to hold open.
- */
-export interface RigInstallVerification {
-    readonly version: string;
-    close(): void;
-}
-
-/**
- * Proof that an executable global `rig` command exists, and nothing more than
- * that.
- * A finished installation is verified through this rather than through the
- * connector, because starting or connecting the user's daemon is the desktop
- * runtime's alone: two owners for one daemon is exactly the thing that produces
- * a second daemon, or a connection nobody closes.
- */
-export interface RigInstallVerifier {
-    connect(): Promise<RigInstallVerification>;
-}
-
-/**
- * Checks the login shell's `rig` and asks it for its version. It runs the
- * command and reads its output — it never starts a daemon, connects to one, or
- * writes anything.
- */
-export function rigInstallVerifierCreate(
-    options: {
-        readonly host?: RigProcessHost;
-        readonly environment?: NodeJS.ProcessEnv;
-        readonly configuredShell?: string;
-    } = {},
-): RigInstallVerifier {
-    const host = options.host ?? defaultProcessHost;
-    return {
-        async connect(): Promise<RigInstallVerification> {
-            const launch = await rigLoginEnvironmentDiscover(
-                host,
-                options.environment ?? process.env,
-                options.configuredShell,
-            );
-            if (launch.executableSource !== "global")
-                throw new Error(
-                    "The login shell still resolves Happy's bundled Rig; the global Rig installation was not found.",
-                );
-            const result = await host.execFile(launch.executablePath, ["--version"], {
-                env: launch.environment,
-            });
-            return { version: rigVersionParse(result.stdout), close: () => undefined };
-        },
     };
 }
 
@@ -463,23 +354,16 @@ async function isExecutableFile(executablePath: string): Promise<boolean> {
     }
 }
 
-async function happyDependencyRootsFind(
-    bundledExecutable: string | undefined,
-): Promise<readonly string[]> {
+async function happyDependencyRootsFind(): Promise<readonly string[]> {
     const roots = new Set<string>([join(happyPackageDirectoryFind(), "node_modules")]);
-    if (bundledExecutable) {
-        for (const root of nodeModulesRootsFind(bundledExecutable)) roots.add(root);
-    }
     return Promise.all([...roots].map((root) => pathCanonicalizeOrSelf(root)));
 }
 
 function isHappyOwnedExecutable(
     apparentPath: string,
     canonicalPath: string,
-    bundledCanonicalPath: string | undefined,
     happyDependencyRoots: readonly string[],
 ): boolean {
-    if (bundledCanonicalPath === canonicalPath) return true;
     return happyDependencyRoots.some(
         (root) => pathIsWithin(apparentPath, root) || pathIsWithin(canonicalPath, root),
     );
@@ -512,28 +396,12 @@ function happyPackageDirectoryFind(): string {
         : dirname(moduleDirectory);
 }
 
-function nodeModulesRootsFind(pathName: string): readonly string[] {
-    const segments = normalize(pathName).split(sep);
-    const roots: string[] = [];
-    for (const [index, segment] of segments.entries()) {
-        if (segment !== "node_modules") continue;
-        roots.push(segments.slice(0, index + 1).join(sep) || sep);
-    }
-    return roots;
-}
-
 function pathIsWithin(pathName: string, root: string): boolean {
     const relation = relative(root, pathName);
     return (
         relation === "" ||
         (relation !== ".." && !relation.startsWith(`..${sep}`) && !isAbsolute(relation))
     );
-}
-
-export function rigVersionParse(versionOutput: string): string {
-    const match = /^\s*Rig\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\s*$/u.exec(versionOutput);
-    if (!match?.[1]) throw new Error("The discovered rig command returned an invalid version.");
-    return match[1];
 }
 
 export function discoveryOutputParse(shellOutput: string): {

@@ -398,7 +398,6 @@ export {
 export {
     LocalOnboardingScreen,
     type LocalOnboardingScreenProps,
-    type LocalOnboardingTerminal,
     type LocalOnboardingView,
 } from "./LocalOnboardingScreen";
 export {

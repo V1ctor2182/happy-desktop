@@ -16,7 +16,6 @@ import {
     type HappyDesktopBridge,
     type HappyMediaPreviewBridge,
     type LocalOnboardingSnapshot,
-    type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
 import type {
     DesktopProfilerRequest,
@@ -130,8 +129,6 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.onboardingChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.onboardingChanged, receive);
     },
-    onboardingRigInstall: (cols: number, rows: number) =>
-        ipcRenderer.invoke(desktopIpc.onboardingRigInstall, cols, rows),
     onboardingProfileCreate: (input) =>
         ipcRenderer.invoke(desktopIpc.onboardingProfileCreate, input),
     onboardingProjectChoose: () => ipcRenderer.invoke(desktopIpc.onboardingProjectChoose),
@@ -140,14 +137,6 @@ const bridge: HappyDesktopBridge = {
     runtimeRetry: () => ipcRenderer.invoke(desktopIpc.runtimeRetry),
     runtimeStart: (request: DesktopStartRequest) =>
         ipcRenderer.invoke(desktopIpc.runtimeStart, request),
-    rigInstallOpen: () => ipcRenderer.invoke(desktopIpc.rigInstallOpen),
-    rigInstallConfirm: (terminalId, cols, rows) =>
-        ipcRenderer.invoke(desktopIpc.rigInstallConfirm, terminalId, cols, rows),
-    rigInstallInput: (terminalId, data) =>
-        ipcRenderer.invoke(desktopIpc.rigInstallInput, terminalId, data),
-    rigInstallResize: (terminalId, cols, rows) =>
-        ipcRenderer.invoke(desktopIpc.rigInstallResize, terminalId, cols, rows),
-    rigInstallClose: (terminalId) => ipcRenderer.invoke(desktopIpc.rigInstallClose, terminalId),
     topologySelect: (topologyId) => ipcRenderer.invoke(desktopIpc.topologySelect, topologyId),
     updateInstall: () => ipcRenderer.invoke(desktopIpc.updateInstall),
     windowStateGet: () => ipcRenderer.invoke(desktopIpc.windowStateGet),
@@ -162,12 +151,6 @@ const bridge: HappyDesktopBridge = {
             listener(snapshot);
         ipcRenderer.on(desktopIpc.runtimeChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.runtimeChanged, receive);
-    },
-    rigInstallSubscribe(listener: (event: RigInstallTerminalEvent) => void) {
-        const receive = (_event: Electron.IpcRendererEvent, event: RigInstallTerminalEvent) =>
-            listener(event);
-        ipcRenderer.on(desktopIpc.rigInstallEvent, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.rigInstallEvent, receive);
     },
 };
 

@@ -1,24 +1,10 @@
-import type { TerminalGridSnapshot } from "happy-desktop-state";
-import { SetupChoice } from "./SetupChoice";
 import { SetupPage } from "./SetupPage";
-import { TerminalPanel } from "./TerminalPanel";
 import { TextField } from "./TextField";
-
-export interface LocalOnboardingTerminal {
-    readonly grid?: TerminalGridSnapshot;
-    readonly running: boolean;
-}
 
 export type LocalOnboardingView =
     | { readonly kind: "checking"; readonly message?: string }
     | { readonly kind: "node-missing" }
-    | { readonly kind: "rig-missing"; readonly nodeVersion: string; readonly message?: string }
-    | { readonly kind: "rig-installing"; readonly terminal: LocalOnboardingTerminal }
-    | {
-          readonly kind: "rig-install-failed";
-          readonly terminal: LocalOnboardingTerminal;
-          readonly message: string;
-      }
+    | { readonly kind: "rig-missing"; readonly message?: string }
     | { readonly kind: "connecting" }
     | { readonly kind: "connect-failed"; readonly message: string; readonly retrying: boolean }
     | { readonly kind: "rig-update-required"; readonly message: string }
@@ -45,23 +31,12 @@ export type LocalOnboardingView =
 
 export interface LocalOnboardingScreenProps {
     readonly view: LocalOnboardingView;
-    onRigInstall(): void;
-    onTerminalInput(data: string): void;
-    onTerminalResize(cols: number, rows: number): void;
     onConnectRetry(): void;
     onProjectChoose(): void;
     onProfileNameChange(value: string): void;
     onProfileEmailChange(value: string): void;
     onProfileCreate(): void;
     onHappyUpdateInstall(): void;
-    /**
-     * Goes on without installing anything, using only what this app carries.
-     * Offered beside the install because Rig is a command line tool and a
-     * background service on the person's own machine — a real thing to put
-     * there — and someone who only wants to try Happy should not have to agree
-     * to that before seeing it.
-     */
-    onAppOnlyChoose(): void;
 }
 
 /** What a reader is told to run when Happy cannot start their Rig itself. */
@@ -142,60 +117,15 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
 
     if (view.kind === "rig-missing")
         return (
-            <SetupPage data-testid="local-onboarding-screen" title="How should Happy run?">
-                <SetupChoice
-                    onSelect={(id) =>
-                        id === "rig" ? props.onRigInstall() : props.onAppOnlyChoose()
-                    }
-                    options={[
-                        {
-                            actionLabel: "Stay in the app",
-                            description:
-                                "Everything happens in this window. Nothing is added to your machine, and you can install the tools whenever you want them.",
-                            id: "app",
-                            scene: "sparkles",
-                            title: "Just the app",
-                        },
-                        {
-                            actionLabel: "Install the CLI",
-                            actionVariant: "primary",
-                            description: `Rig is a coding agent you run from a terminal, always in sync with this app — start work in one and pick it up in the other, or on your phone. Uses the Node ${view.nodeVersion} already here.`,
-                            id: "rig",
-                            scene: "robot",
-                            title: "Install CLI tools",
-                        },
-                    ]}
-                />
-            </SetupPage>
-        );
-
-    if (view.kind === "rig-installing" || view.kind === "rig-install-failed")
-        return (
             <SetupPage
-                {...(view.kind === "rig-install-failed"
-                    ? { action: { label: "Try again", onSelect: props.onRigInstall } }
-                    : {})}
                 copy={
-                    view.kind === "rig-install-failed"
-                        ? view.message
-                        : "Installing the Rig tools. The output is here as it happens."
+                    view.message ??
+                    "Install Rig globally outside Happy. Happy will detect it and start its daemon automatically."
                 }
                 data-testid="local-onboarding-screen"
-                title={
-                    view.kind === "rig-install-failed"
-                        ? "That install did not finish."
-                        : "Installing Rig…"
-                }
-            >
-                <TerminalPanel
-                    {...(view.terminal.grid ? { grid: view.terminal.grid } : {})}
-                    height={320}
-                    onInput={props.onTerminalInput}
-                    onReconnect={() => undefined}
-                    onResize={props.onTerminalResize}
-                    status={view.terminal.running ? "connected" : "exited"}
-                />
-            </SetupPage>
+                scene="robot"
+                title="Rig is required."
+            />
         );
 
     if (view.kind === "providers-missing")
@@ -276,7 +206,6 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     if (view.kind === "rig-update-required")
         return (
             <SetupPage
-                command="npm install --global @slopus/rig@latest && rig daemon reload"
                 copy={view.message}
                 data-testid="local-onboarding-screen"
                 scene="owl"

@@ -6,10 +6,8 @@ import type {
     DesktopRuntimeSnapshot,
     LocalOnboardingFreshness,
     LocalOnboardingSnapshot,
-    RigInstallTerminalEvent,
 } from "../shared/desktopContract";
 import { localRuntimeProbe, type LocalRuntimeProbe } from "./localRig";
-import { rigInstallCommand } from "./rigInstallTerminal";
 
 const recordVersion = 3;
 
@@ -35,8 +33,8 @@ export interface LocalRigProfile {
 }
 /**
  * How often the machine is re-examined while setup is waiting on something the
- * person does outside Happy — installing Node, installing Rig themselves after
- * ours failed, or repairing a Rig that stopped answering. Rig's daemon has no
+ * person does outside Happy — installing Node or Rig, or repairing a Rig that
+ * stopped answering. Rig's daemon has no
  * channel for "a command appeared in your shell", so this is the stopgap poll
  * the reactivity rule allows; it runs only on those stages and stops the moment
  * setup moves past them.
@@ -188,20 +186,9 @@ export interface LocalOnboardingRuntime {
     ): Promise<{ readonly path: string }>;
 }
 
-/** The installation-terminal manager, reduced to what setup asks of it. */
-export interface LocalOnboardingInstaller {
-    open(
-        ownerId: number,
-        emit: (event: RigInstallTerminalEvent) => void,
-    ): { readonly terminalId: string };
-    confirm(ownerId: number, terminalId: string, cols: number, rows: number): void;
-    close(ownerId: number, terminalId: string): void;
-}
-
 export interface LocalOnboardingOptions {
     readonly recordPath: string;
     readonly runtime: LocalOnboardingRuntime;
-    readonly installer: LocalOnboardingInstaller;
     readonly probe?: () => Promise<LocalRuntimeProbe>;
     /** Opens the native folder picker; resolves to undefined when cancelled. */
     readonly directoryPick: () => Promise<string | undefined>;
@@ -224,13 +211,6 @@ interface LocalOnboardingWork {
     readonly generation: string;
 }
 
-interface InstallState {
-    readonly ownerId: number;
-    readonly terminalId: string;
-    running: boolean;
-    message?: string;
-}
-
 /**
  * Owns local first-run setup: what this machine has, what the person decided,
  * and which stage those two facts put setup in.
@@ -246,7 +226,6 @@ interface InstallState {
  */
 export class LocalOnboarding implements Disposable {
     private closed = false;
-    private install?: InstallState;
     private listeners = new Set<(snapshot: LocalOnboardingSnapshot) => void>();
     private busy = false;
     private message?: string;
@@ -274,7 +253,7 @@ export class LocalOnboarding implements Disposable {
      * rather than left standing over a step that has since moved on.
      */
     private messageAwaitsFreshness = false;
-    /** The discovered `rig` path a connection retry has already been asked for. */
+    /** The global `rig` path a connection retry has already been asked for. */
     private retryRequestedFor?: string;
     private runtimeKey?: string;
     /** Durable work runs one at a time, so two clicks cannot interleave writes. */
@@ -317,112 +296,6 @@ export class LocalOnboarding implements Disposable {
     subscribe(listener: (snapshot: LocalOnboardingSnapshot) => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
-    }
-
-    /**
-     * Runs the fixed global install in a real PTY after the person confirmed it.
-     * The command, the shell, and the process all stay in this process; the
-     * window receives output and reports the size it can draw.
-     *
-     * Opening and confirming are one step: a terminal that could not be spawned
-     * is closed again and reported as a failure the person can retry, never left
-     * behind as a running install with nothing behind it.
-     */
-    rigInstall(input: {
-        readonly ownerId: number;
-        readonly cols: number;
-        readonly rows: number;
-        readonly emit: (event: RigInstallTerminalEvent) => void;
-    }): void {
-        this.stageRequire("rigMissing", "rigInstallFailed");
-        if (this.install?.running) return;
-        // Who asked for this install, and against which runtime. Nothing here
-        // awaits, but the PTY is a real side effect on the machine and it is
-        // started only for the reader and the runtime that are current when it
-        // starts — never on behalf of a document that has already gone.
-        const generation = this.generation();
-        this.messageClear();
-        // The attempt being retried is over. Releasing it before opening another
-        // keeps one terminal per reader at a time, so "run it again" works as
-        // often as someone is willing to press it.
-        this.installRelease();
-        let terminalId: string;
-        try {
-            terminalId = this.options.installer.open(input.ownerId, (event) => {
-                input.emit(event);
-                if (event.type !== "exited" || this.install?.terminalId !== event.terminalId)
-                    return;
-                // A verified install has nothing left to show and nothing left
-                // to account for, so its record goes with it; a failed one keeps
-                // its reason on screen with the retry.
-                this.install = event.verified
-                    ? undefined
-                    : {
-                          ownerId: input.ownerId,
-                          terminalId: event.terminalId,
-                          running: false,
-                          message: installFailureMessage(event.message),
-                      };
-                // What the last probe found is exactly what this install set out
-                // to change, so it stops being an answer here — before the
-                // runtime is handed the news and before anything is drawn.
-                // Otherwise the moment between "installed" and "examined" reads
-                // as a machine with no Rig on it, and offers to install it again.
-                if (event.verified) this.probeInvalidate();
-                this.publish();
-                // The command may exist now, so the machine is examined again
-                // rather than assumed either way.
-                void this.probeRun();
-            }).terminalId;
-        } catch (error) {
-            this.installFailed(input.ownerId, undefined, displayError(error));
-            return;
-        }
-        this.install = { ownerId: input.ownerId, terminalId, running: true };
-        this.messageClear();
-        if (this.generation() !== generation) {
-            this.installRelease();
-            this.publish();
-            return;
-        }
-        try {
-            this.options.installer.confirm(input.ownerId, terminalId, input.cols, input.rows);
-        } catch (error) {
-            // Nothing was spawned, so the terminal is released rather than left
-            // as an installation this process would keep counting against the
-            // window's budget.
-            this.installerClose(input.ownerId, terminalId);
-            this.installFailed(input.ownerId, terminalId, displayError(error));
-            return;
-        }
-        this.publish();
-    }
-
-    /**
-     * The window that was watching an install is gone — reloaded, closed, or
-     * crashed — and its PTY went with it. Nothing is running, so setup says so
-     * and looks at the machine again rather than leaving a terminal on screen
-     * that no process is behind.
-     */
-    installAbandoned(ownerId: number): void {
-        if (this.closed || !this.install || this.install.ownerId !== ownerId) return;
-        this.installRelease();
-        void this.probeRun();
-    }
-
-    /** Lets go of the terminal setup is holding, if it is holding one. */
-    private installRelease(): void {
-        const install = this.install;
-        this.install = undefined;
-        if (install && !install.running) this.installerClose(install.ownerId, install.terminalId);
-    }
-
-    private installerClose(ownerId: number, terminalId: string): void {
-        try {
-            this.options.installer.close(ownerId, terminalId);
-        } catch {
-            // The manager already let go of it; there is nothing to release.
-        }
     }
 
     /**
@@ -612,19 +485,6 @@ export class LocalOnboarding implements Disposable {
     }
 
     /**
-     * An install that never started. A terminal that was opened is reported as a
-     * failed install so its step stays on screen with a retry; one that was never
-     * opened has nothing to show, so the reason belongs to the step that offered
-     * the install instead.
-     */
-    private installFailed(ownerId: number, terminalId: string | undefined, reason: string): void {
-        const message = installFailureMessage(reason.endsWith(".") ? reason : `${reason}.`);
-        this.install = terminalId ? { ownerId, terminalId, running: false, message } : undefined;
-        this.message = terminalId ? undefined : message;
-        this.publish();
-    }
-
-    /**
      * Re-examines the machine now; concurrent callers share one probe.
      *
      * A probe that was already in flight when its question stopped being the
@@ -662,20 +522,6 @@ export class LocalOnboarding implements Disposable {
         return this.probing;
     }
 
-    /**
-     * Drops what the machine was last known to be, and disowns the probe in
-     * flight so its answer to the old question cannot arrive as an answer to the
-     * new one. With no facts, no stage offers to change the machine.
-     */
-    private probeInvalidate(): void {
-        this.probeEpoch += 1;
-        this.probing = undefined;
-        this.probed = undefined;
-        this.probeMessage = undefined;
-        this.retryRequestedFor = undefined;
-        this.probeRetryStop();
-    }
-
     private refresh(): void {
         if (this.closed) return;
         const runtime = this.options.runtime.get();
@@ -699,7 +545,7 @@ export class LocalOnboarding implements Disposable {
             // the command is missing, and a connection that was replaced can each
             // mean a different `rig` than the one the last probe found.
             const arrived = previous === undefined || previous.startsWith("away:");
-            if (arrived || runtime.phase === "installRequired" || runtime.phase === "ready")
+            if (arrived || runtime.phase === "error" || runtime.phase === "ready")
                 void this.probeRun();
         }
         this.connectionNudge(runtime);
@@ -759,8 +605,8 @@ export class LocalOnboarding implements Disposable {
             this.retryRequestedFor = undefined;
             return;
         }
-        if (runtime.phase !== "installRequired" && runtime.phase !== "error") return;
-        if (this.install?.running || this.retryRequestedFor === command) return;
+        if (runtime.phase !== "error") return;
+        if (this.retryRequestedFor === command) return;
         this.retryRequestedFor = command;
         void this.options.runtime.retry().catch(() => undefined);
     }
@@ -873,7 +719,6 @@ export class LocalOnboarding implements Disposable {
         return {
             busy: this.busy || stage === "checking" || stage === "examining",
             freshness: this.freshness,
-            ...(this.install ? { install: this.installSnapshot(this.install) } : {}),
             ...(message ? { message } : {}),
             ...(providers ? { providers } : {}),
             ...(retrying ? { retrying } : {}),
@@ -896,11 +741,7 @@ export class LocalOnboarding implements Disposable {
         if (!facts.ready) {
             if (!facts.probed) return "checking";
             if (!facts.node) return "nodeMissing";
-            if (!facts.rig) {
-                if (this.install?.running) return "rigInstalling";
-                if (this.install) return "rigInstallFailed";
-                return "rigMissing";
-            }
+            if (!facts.rig) return "rigMissing";
             const runtime = this.options.runtime.get();
             if (runtime.phase !== "error") return "connecting";
             // A daemon that refuses only because no coding assistant is signed in
@@ -927,24 +768,12 @@ export class LocalOnboarding implements Disposable {
         }
     }
 
-    private installSnapshot(
-        install: InstallState,
-    ): NonNullable<LocalOnboardingSnapshot["install"]> {
-        return {
-            command: rigInstallCommand,
-            running: install.running,
-            terminalId: install.terminalId,
-            ...(install.message ? { message: install.message } : {}),
-        };
-    }
-
     private messageFor(
         stage: LocalOnboardingSnapshot["stage"],
         runtime: DesktopRuntimeSnapshot,
     ): string | undefined {
         if (this.message) return this.message;
         if (stage === "checking") return this.probeMessage;
-        if (stage === "rigInstallFailed") return this.install?.message;
         if (stage === "connectFailed" && runtime.phase === "error") return runtime.message;
         if (
             stage === "connectFailed" ||
@@ -966,7 +795,6 @@ export class LocalOnboarding implements Disposable {
         const waiting =
             stage === "nodeMissing" ||
             stage === "rigMissing" ||
-            stage === "rigInstallFailed" ||
             stage === "connectFailed" ||
             stage === "providersMissing";
         if (waiting && !this.poll) {
@@ -1017,12 +845,6 @@ function runtimeLocal(runtime: DesktopRuntimeSnapshot): boolean {
     if (runtime.phase === "choosing") return false;
     if (runtime.phase === "ready") return runtime.mode === "local";
     return runtime.request.mode === "local";
-}
-
-function installFailureMessage(message: string | undefined): string {
-    return message
-        ? `${message} Install Rig yourself with \`${rigInstallCommand}\` in a terminal, then Happy will pick it up.`
-        : `The installation ended without a usable \`rig\` command. Install it yourself with \`${rigInstallCommand}\` in a terminal, then Happy will pick it up.`;
 }
 
 function onboardingFailureMessage(state: LocalRigOnboardingState | undefined): string | undefined {

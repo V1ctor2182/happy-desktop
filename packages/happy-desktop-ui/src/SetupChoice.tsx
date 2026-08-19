@@ -11,7 +11,7 @@ export interface SetupChoiceOption {
     readonly scene: LottieSceneName;
     readonly title: string;
     readonly description: string;
-    /** What its button says. Names the act, not the option: "Install Rig". */
+    /** What its button says. Names the act, not the option: "Use this setup". */
     readonly actionLabel: string;
     /** Defaults to `secondary`, so a fork with no recommendation has none. */
     readonly actionVariant?: ButtonVariant;

@@ -24,7 +24,8 @@ import { join, resolve } from "node:path";
  * of the user's real login shell on purpose. `--no-rig` uses that rather than
  * fighting it: the profile takes Homebrew's bin off PATH and links `node` back
  * in, so the shell honestly answers that Rig is not installed while Node still
- * is — which is the state the install step exists for.
+ * is — which exercises the missing-global-prerequisite screen without letting
+ * Happy install anything.
  */
 
 const workspace = resolve(import.meta.dirname, "..");
@@ -98,7 +99,7 @@ if (options.noRig) {
 console.log("Happy Desktop development: Electron, sandboxed");
 console.log(`  home    ${home}`);
 console.log(`  socket  ${socketPath}`);
-if (options.noRig) console.log("  rig     hidden from the login shell (install step will run)");
+if (options.noRig) console.log("  rig     hidden from the login shell");
 
 const portless = join(workspace, "node_modules", ".bin", "portless");
 const portlessArguments = ["run", "--name", `happy-desktop-sandbox-${options.name}`];

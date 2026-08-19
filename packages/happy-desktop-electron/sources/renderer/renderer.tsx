@@ -307,19 +307,12 @@ function DesktopOnboardingGate(props: {
         );
     return (
         <LocalOnboardingScreen
-            // Nothing to run yet: choosing to stay in the app is a real product
-            // path that has no runtime behind it, so the option is on screen for
-            // the layout and does not pretend to do anything until it does.
-            onAppOnlyChoose={() => undefined}
             onConnectRetry={() => props.store.connectRetry()}
             onHappyUpdateInstall={() => desktopAction(props.bridge.updateInstall())}
             onProfileCreate={() => props.store.profileCreate()}
             onProfileEmailChange={(value) => props.store.profileEmailUpdate(value)}
             onProfileNameChange={(value) => props.store.profileNameUpdate(value)}
             onProjectChoose={() => props.store.projectChoose()}
-            onRigInstall={() => props.store.rigInstall()}
-            onTerminalInput={(data) => props.store.terminalInput(data)}
-            onTerminalResize={(cols, rows) => props.store.terminalResize(cols, rows)}
             view={view}
         />
     );
@@ -446,9 +439,6 @@ function DesktopScreens(props: DesktopRendererProps) {
     );
 }
 
-/** What someone is told to run to bring their own Rig up to this build. */
-const RIG_UPDATE_COMMAND = "npm install --global @slopus/rig";
-
 /**
  * The window when this build and the host's Rig cannot read each other.
  *
@@ -507,7 +497,6 @@ function DesktopProtocolGate(props: {
     // is a global npm package on this machine, so the command is the answer.
     return (
         <SetupPage
-            command={RIG_UPDATE_COMMAND}
             copy={`Rig on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy needs at least ${mismatch.supportedMinimum}. Update Rig, then start Happy again.`}
             data-testid="desktop-protocol-screen"
             scene="owl"
@@ -549,18 +538,6 @@ function DesktopRuntimeContent(
                 onInstallUpdate={() => desktopAction(props.bridge.updateInstall())}
                 onSubmit={() => undefined}
                 phase="starting"
-                update={snapshot.update}
-                values={desktopStartupValues(snapshot.request)}
-            />
-        );
-    if (snapshot.phase === "installRequired")
-        return (
-            <DesktopStartupScreen
-                error={`Rig is required for local mode. Install it with: ${snapshot.command}`}
-                onChange={() => undefined}
-                onRetry={() => desktopAction(props.bridge.runtimeRetry())}
-                onSubmit={() => undefined}
-                phase="error"
                 update={snapshot.update}
                 values={desktopStartupValues(snapshot.request)}
             />

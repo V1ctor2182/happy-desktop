@@ -21,15 +21,11 @@ import {
 } from "./runtimeValidation";
 import {
     localRigConnectorCreate,
-    RigCommandMissingError,
     type LocalRigConnection,
     type LocalRigConnector,
 } from "./localRig";
-import {
-    HappyAgentClient,
-    serverCompatibility,
-    type ServerCompatibility,
-} from "happy-desktop-state";
+import { HappyAgentClient } from "@slopus/happy-agent-client";
+import { serverCompatibility, type ServerCompatibility } from "happy-desktop-state";
 import type { LocalRigOnboardingState, LocalRigProfile } from "./localOnboarding";
 import {
     rigDaemonConnectionUnavailable,
@@ -38,7 +34,6 @@ import {
 } from "./rigDaemonClient";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
-import { rigInstallCommand } from "./rigInstallTerminal";
 import type { Duplex } from "node:stream";
 
 export type RigHttpProxyStart = (
@@ -514,17 +509,6 @@ export class DesktopRuntime implements AsyncDisposable {
         } catch (error) {
             this.localDispose();
             if (generation !== this.activationGeneration) return;
-            if (error instanceof RigCommandMissingError) {
-                this.publish({
-                    phase: "installRequired",
-                    command: rigInstallCommand,
-                    message: "Rig is required for local mode.",
-                    request: { mode: "local" },
-                    targets: this.targets(),
-                    update: this.snapshotValue.update,
-                });
-                return;
-            }
             this.publish({
                 phase: "error",
                 message: displayError(error),
@@ -578,7 +562,6 @@ export class DesktopRuntime implements AsyncDisposable {
  * rather than a moment, and repeating the question just delays saying so.
  */
 function connectAttemptRetryable(error: unknown): boolean {
-    if (error instanceof RigCommandMissingError) return false;
     return rigDaemonConnectionUnavailable(error);
 }
 

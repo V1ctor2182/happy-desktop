@@ -22,8 +22,6 @@ export default defineConfig({
                 main: resolve(import.meta.dirname, "sources/main/main.ts"),
             },
             external: [
-                /^@slopus\/rig(?:\/|$)/u,
-                "@lydell/node-pty",
                 "electron",
                 "electron-updater",
                 "ws",

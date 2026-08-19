@@ -254,7 +254,7 @@ export function rigDirectoryStoreCreate(
             const unavailable =
                 value?.phase === "starting"
                     ? { status: "connecting" as const, message: value.message }
-                    : value?.phase === "error" || value?.phase === "installRequired"
+                    : value?.phase === "error"
                       ? { status: "error" as const, message: value.message }
                       : {
                             status: rig.entry.session

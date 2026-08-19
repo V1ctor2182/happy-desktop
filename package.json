@@ -12,12 +12,10 @@
     "scripts": {
         "dev": "node scripts/dev-desktop.mjs",
         "dev:web": "PORTLESS_LAN=0 PORTLESS_LAN_IP= PORTLESS_TLD=localhost pnpm exec portless run --name happy-desktop-web node scripts/dev-web.mjs",
-        "dev:web:custom-rig": "node scripts/dev-web-custom-rig.mjs",
         "dev:desktop": "node scripts/dev-desktop.mjs",
         "dev:desktop:electron": "node scripts/dev-desktop.mjs",
         "dev:profile": "node scripts/dev-desktop.mjs --profile",
         "dev:sandbox": "node scripts/dev-desktop-sandbox.mjs",
-        "dev:custom-rig": "node scripts/dev-desktop-custom-rig.mjs",
         "desktop:assets": "node scripts/create-mac-icon.mjs",
         "desktop:update-manifest": "node scripts/create-mac-update-manifest.mjs standard",
         "desktop:mac:release": "node scripts/build-mac-apps.mjs",

@@ -97,9 +97,9 @@ How browser development works, and what to preserve when changing it:
 
 Keep the development and packaged paths behaviorally identical at that proxy
 boundary. A feature that works only in one of them is a bug. Native-only
-capabilities such as directory picking and in-app Rig installation are absent
-in browser-local mode by design; degrade gracefully rather than branching
-product behavior on the environment.
+capabilities such as directory picking are absent in browser-local mode by
+design; degrade gracefully rather than branching product behavior on the
+environment.
 
 `pnpm dev:desktop` and `pnpm dev:desktop:electron` remain aliases of the default
 Electron loop.

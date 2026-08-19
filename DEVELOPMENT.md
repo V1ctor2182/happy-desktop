@@ -7,6 +7,7 @@ Everything here runs from the repository root unless a path says otherwise.
 - macOS
 - Node.js 24 or newer
 - pnpm 10.28.1 or newer (the repository pins `pnpm@10.28.1` via `packageManager`)
+- a globally installed `rig` command
 
 ```sh
 pnpm install
@@ -38,32 +39,6 @@ Other entries:
 pnpm dev:web      # the same renderer in an ordinary browser, via Portless
 pnpm blueprint    # the happy-desktop-ui component blueprint
 ```
-
-## Running against a Rig checkout
-
-Both commands point the app at a specific Rig checkout instead of the global
-`rig` on your PATH. They start that checkout's own isolated daemon (its
-`pnpm dev daemon start`, under `<checkout>/.rig-dev/.happy`) so you always run
-against what the checkout currently builds.
-
-```sh
-pnpm dev:custom-rig <path-to-rig-checkout> [--debug] [--lan] [--profile]
-```
-
-Electron against the checkout's daemon. Any daemon already running for that
-checkout is stopped first, so a source change made since the last start is
-never silently ignored. Stop it later with
-`(cd <checkout> && pnpm dev daemon stop)`.
-
-```sh
-pnpm dev:web:custom-rig <path-to-rig-checkout> [--port <port>] [--keep-daemon]
-```
-
-The renderer in a normal browser at `http://127.0.0.1:<port>` (default 5174),
-reaching the daemon through the same-origin `/__happy2_local_rig` proxy — the
-same Happy Agent HTTP, SSE, and terminal code paths as Electron, without an
-Electron window. The checkout's daemon is stopped when the command exits unless
-you pass `--keep-daemon`.
 
 ## First-run sandbox
 
@@ -157,12 +132,3 @@ do not use a persistent proxy service. Run `portless service uninstall` once.
 **Switching between loopback and `--lan`.** Portless keeps one proxy running
 with the previous mode. Stop it first; Portless prints the exact
 `portless proxy stop` command when it matters.
-
-**`Not a Rig checkout`.** The custom-rig commands verify the path by looking
-for `packages/rig-dev/package.json` underneath it. Point them at the root of a
-Rig repository checkout.
-
-**`Rig daemon did not write its token`.** The checkout's daemon failed to
-start; its token should appear at `<checkout>/.rig-dev/.happy/agent/token`.
-Check the daemon output printed just above, and try
-`(cd <checkout> && pnpm dev daemon stop)` before rerunning.

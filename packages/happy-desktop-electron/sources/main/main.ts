@@ -57,7 +57,7 @@ import {
     mediaPreviewResolve,
     mediaPreviewTitle,
 } from "./mediaPreviewWindow";
-import { localRigConnectorCreate, rigInstallVerifierCreate } from "./localRig";
+import { localRigConnectorCreate } from "./localRig";
 import { LocalOnboarding } from "./localOnboarding";
 import { NotesStore } from "./notesStore";
 import {
@@ -66,12 +66,7 @@ import {
     noteTitleOptionalValidate,
     noteTitleValidate,
 } from "./notesIpcValidation";
-import {
-    desktopBrowserProxyTargetValidate,
-    rigTerminalInputValidate,
-    rigTerminalSizeValidate,
-} from "./rigIpcValidation";
-import { RigInstallTerminalManager } from "./rigInstallTerminal";
+import { desktopBrowserProxyTargetValidate } from "./rigIpcValidation";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
@@ -243,7 +238,6 @@ let desktopDebugController: DesktopDebugController | undefined;
 let desktopDebugDaemonAttemptedConnectionId: number | undefined;
 let desktopProfilerController: DesktopProfilerController;
 let desktopWindowStateStore: DesktopWindowStateStore;
-let rigInstallManager: RigInstallTerminalManager;
 let onboarding: LocalOnboarding;
 let notesStore: NotesStore;
 let quitting = false;
@@ -289,9 +283,6 @@ function desktopDebugRuntimeLog(snapshot: ReturnType<DesktopRuntime["get"]>): vo
             return;
         case "starting":
             desktopDebugLog(`runtime phase=starting: ${snapshot.message}`);
-            return;
-        case "installRequired":
-            desktopDebugLog(`runtime phase=installRequired: ${snapshot.message}`);
             return;
         case "error":
             desktopDebugError(`runtime phase=error: ${snapshot.message}`);
@@ -903,8 +894,6 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     const cleanup = () => {
         presentationAdvance();
         desktopProfilerController?.refresh();
-        rigInstallManager?.closeOwner(ownerId);
-        onboarding?.installAbandoned(ownerId);
         // The mark on the Dock belongs to the window that reported it. This one
         // is going away — reloaded, gone, or replaced — so it takes its own mark
         // with it, unless another window is already presenting and has set its
@@ -1241,18 +1230,11 @@ void app
             const window = windowLifecycle.get();
             if (window && !window.isDestroyed()) window.webContents.send(desktopIpc.notesChanged);
         });
-        // A finished install is checked by running the newly installed command,
-        // never by connecting: the runtime is the only owner of the user's
-        // daemon, and it is the one asked to try again once Rig is really there.
-        rigInstallManager = new RigInstallTerminalManager(rigInstallVerifierCreate(), {
-            verified: () => void runtime.retry().catch(() => undefined),
-        });
         // First-run setup follows the runtime rather than owning a connection of
         // its own: the daemon is started, connected, and left running by the
         // runtime alone, and setup only reads its state and asks it to try again.
         onboarding = await LocalOnboarding.create({
             directoryPick: () => directoryPickShow(windowLifecycle.get()),
-            installer: rigInstallManager,
             // Which window setup is working for. A native picker outlives the
             // window that opened it, so setup reads this again before it acts on
             // what came back.
@@ -1443,19 +1425,6 @@ void app
             onboardingSenderRequire(event.sender);
             return onboarding.get();
         });
-        ipcMain.handle(desktopIpc.onboardingRigInstall, (event, cols: unknown, rows: unknown) => {
-            onboardingSenderRequire(event.sender);
-            const size = rigTerminalSizeValidate(cols, rows);
-            onboarding.rigInstall({
-                cols: size.cols,
-                emit: (installEvent) => {
-                    if (!event.sender.isDestroyed())
-                        event.sender.send(desktopIpc.rigInstallEvent, installEvent);
-                },
-                ownerId: event.sender.id,
-                rows: size.rows,
-            });
-        });
         ipcMain.handle(desktopIpc.onboardingProjectChoose, (event) => {
             onboardingSenderRequire(event.sender);
             return onboarding.projectChoose();
@@ -1480,40 +1449,6 @@ void app
         ipcMain.handle(desktopIpc.topologySelect, (_event, topologyId: unknown) =>
             runtime.topologySelect(desktopTopologyIdValidate(topologyId)),
         );
-        ipcMain.handle(desktopIpc.rigInstallOpen, (event) =>
-            rigInstallManager.open(event.sender.id, (installEvent) => {
-                if (!event.sender.isDestroyed())
-                    event.sender.send(desktopIpc.rigInstallEvent, installEvent);
-            }),
-        );
-        ipcMain.handle(
-            desktopIpc.rigInstallConfirm,
-            (event, terminalId: unknown, cols: unknown, rows: unknown) => {
-                const size = rigTerminalSizeValidate(cols, rows);
-                if (typeof terminalId !== "string")
-                    throw new Error("The Rig installation terminal identity is invalid.");
-                rigInstallManager.confirm(event.sender.id, terminalId, size.cols, size.rows);
-            },
-        );
-        ipcMain.handle(desktopIpc.rigInstallInput, (event, terminalId: unknown, data: unknown) => {
-            if (typeof terminalId !== "string")
-                throw new Error("The Rig installation terminal identity is invalid.");
-            rigInstallManager.input(event.sender.id, terminalId, rigTerminalInputValidate(data));
-        });
-        ipcMain.handle(
-            desktopIpc.rigInstallResize,
-            (event, terminalId: unknown, cols: unknown, rows: unknown) => {
-                const size = rigTerminalSizeValidate(cols, rows);
-                if (typeof terminalId !== "string")
-                    throw new Error("The Rig installation terminal identity is invalid.");
-                rigInstallManager.resize(event.sender.id, terminalId, size.cols, size.rows);
-            },
-        );
-        ipcMain.handle(desktopIpc.rigInstallClose, (event, terminalId: unknown) => {
-            if (typeof terminalId !== "string")
-                throw new Error("The Rig installation terminal identity is invalid.");
-            rigInstallManager.close(event.sender.id, terminalId);
-        });
         ipcMain.handle(desktopIpc.updateInstall, () => updater.install());
         ipcMain.handle(desktopIpc.windowStateGet, (event) => ({
             fullScreen: BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false,
@@ -1559,7 +1494,6 @@ app.on("before-quit", (event) => {
         browserProxy = undefined;
         htmlPreviewProxy?.close();
         htmlPreviewProxy = undefined;
-        rigInstallManager?.[Symbol.dispose]();
         onboarding?.[Symbol.dispose]();
         // The preview window belongs to this application, not to the desktop, so
         // it goes when the application does rather than keeping it alive.

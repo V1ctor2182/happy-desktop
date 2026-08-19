@@ -91,14 +91,6 @@ export type DesktopRuntimeSnapshot =
           update: DesktopUpdateSnapshot;
       }
     | {
-          phase: "installRequired";
-          command: "npm install --global @slopus/rig";
-          message: string;
-          request: Extract<DesktopStartRequest, { readonly mode: "local" }>;
-          targets: readonly DesktopTopologyTarget[];
-          update: DesktopUpdateSnapshot;
-      }
-    | {
           phase: "ready";
           activeTarget: DesktopActiveTarget;
           activeTargetId: string;
@@ -187,22 +179,6 @@ export interface DesktopBuildIdentity {
 /** Launch argument prefix carrying `DesktopBuildIdentity` JSON into the preload. */
 export const buildIdentityArgument = "--happy2-build-identity=";
 
-export interface RigInstallTerminalOpenResponse {
-    readonly terminalId: string;
-    readonly command: "npm install --global @slopus/rig";
-    readonly status: "awaitingConfirmation" | "running" | "exited";
-}
-
-export type RigInstallTerminalEvent =
-    | { readonly type: "output"; readonly terminalId: string; readonly data: string }
-    | {
-          readonly type: "exited";
-          readonly terminalId: string;
-          readonly exitCode: number;
-          readonly verified: boolean;
-          readonly message?: string;
-      };
-
 /**
  * Where local first-run setup currently stands. The stage is always derived from
  * what this machine actually has — a Node runtime, the global `rig` command, a
@@ -218,12 +194,8 @@ export type LocalOnboardingStage =
     | "checking"
     /** No Node runtime; Happy cannot install one, so the person is asked to. */
     | "nodeMissing"
-    /** Node is present, `rig` is not, and no install has been confirmed yet. */
+    /** Node is present but the global `rig` command is unavailable. */
     | "rigMissing"
-    /** The confirmed `npm install --global @slopus/rig` is running in a real PTY. */
-    | "rigInstalling"
-    /** That install ended without a usable `rig`; its output stays on screen. */
-    | "rigInstallFailed"
     /** `rig` exists; the normal user daemon is being started or connected to. */
     | "connecting"
     /** The daemon could not be reached; the desktop runtime carries the reason. */
@@ -279,15 +251,6 @@ export interface LocalOnboardingRig {
     readonly version?: string;
 }
 
-/** The install terminal as the window is allowed to see it. */
-export interface LocalOnboardingInstall {
-    readonly terminalId: string;
-    readonly command: "npm install --global @slopus/rig";
-    readonly running: boolean;
-    /** Why the install ended unusable, once it has. */
-    readonly message?: string;
-}
-
 export interface LocalOnboardingSnapshot {
     readonly stage: LocalOnboardingStage;
     readonly node?: LocalOnboardingNode;
@@ -299,7 +262,6 @@ export interface LocalOnboardingSnapshot {
      * remembered one would let setup skip or repeat itself untruthfully.
      */
     readonly freshness: LocalOnboardingFreshness;
-    readonly install?: LocalOnboardingInstall;
     /** The Git folder most recently opened as a project, for display only. */
     readonly projectPath?: string;
     /** True while this process is doing the current stage's work. */
@@ -505,12 +467,6 @@ export interface HappyDesktopBridge {
     /** Where local first-run setup stands, without waiting for its next change. */
     onboardingGet(): Promise<LocalOnboardingSnapshot>;
     onboardingSubscribe(listener: (snapshot: LocalOnboardingSnapshot) => void): () => void;
-    /**
-     * The person's explicit confirmation to install Rig. This process opens the
-     * PTY and runs the fixed command; the window only draws it and forwards
-     * keystrokes through `rigInstallInput`/`rigInstallResize`.
-     */
-    onboardingRigInstall(cols: number, rows: number): Promise<void>;
     onboardingProfileCreate(input: {
         readonly email: string;
         readonly name: string;
@@ -526,17 +482,11 @@ export interface HappyDesktopBridge {
     runtimeReset(): Promise<void>;
     runtimeRetry(): Promise<void>;
     runtimeStart(request: DesktopStartRequest): Promise<void>;
-    rigInstallOpen(): Promise<RigInstallTerminalOpenResponse>;
-    rigInstallConfirm(terminalId: string, cols: number, rows: number): Promise<void>;
-    rigInstallInput(terminalId: string, data: string): Promise<void>;
-    rigInstallResize(terminalId: string, cols: number, rows: number): Promise<void>;
-    rigInstallClose(terminalId: string): Promise<void>;
     topologySelect(topologyId: string): Promise<void>;
     updateInstall(): Promise<void>;
     windowStateGet(): Promise<DesktopWindowState>;
     windowStateSubscribe(listener: (state: DesktopWindowState) => void): () => void;
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void;
-    rigInstallSubscribe(listener: (event: RigInstallTerminalEvent) => void): () => void;
 }
 
 /**
@@ -602,18 +552,11 @@ export const desktopIpc = {
     onboardingGet: "happy2:onboarding:get",
     onboardingProfileCreate: "happy2:onboarding:profile-create",
     onboardingProjectChoose: "happy2:onboarding:project-choose",
-    onboardingRigInstall: "happy2:onboarding:rig-install",
     runtimeChanged: "happy2:runtime:changed",
     runtimeGet: "happy2:runtime:get",
     runtimeReset: "happy2:runtime:reset",
     runtimeRetry: "happy2:runtime:retry",
     runtimeStart: "happy2:runtime:start",
-    rigInstallOpen: "happy2:rig-install:open",
-    rigInstallConfirm: "happy2:rig-install:confirm",
-    rigInstallInput: "happy2:rig-install:input",
-    rigInstallResize: "happy2:rig-install:resize",
-    rigInstallClose: "happy2:rig-install:close",
-    rigInstallEvent: "happy2:rig-install:event",
     topologySelect: "happy2:topology:select",
     updateInstall: "happy2:update:install",
     windowStateChanged: "happy2:window-state:changed",

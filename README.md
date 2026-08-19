@@ -44,7 +44,7 @@ running, come back later, and pick up exactly where it left off.
 
 Happy has no hosted account, no central service, and no telemetry. The app is
 an Electron shell that starts or attaches to your normal local Rig daemon and
-talks to it over an authenticated local boundary — the same vendored
+talks to it over an authenticated local boundary — the same
 `happy-agent-client` protocol throughout, whether the renderer runs in the
 desktop shell or in a browser during development.
 
@@ -70,5 +70,5 @@ pnpm dev
 ```
 
 That is the whole loop for most changes. Everything else — browser mode, the
-component blueprint, running against a Rig checkout, profiling, and
-validation — is in [DEVELOPMENT.md](./DEVELOPMENT.md).
+component blueprint, profiling, and validation — is in
+[DEVELOPMENT.md](./DEVELOPMENT.md).
