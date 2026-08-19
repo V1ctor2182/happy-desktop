@@ -3,6 +3,7 @@ import type {
     AppearanceStore,
     ExperimentsStore,
     RigInstructionsSnapshot,
+    RigDebugLogSnapshot,
     RigSecurityPolicySnapshot,
     RigModelCatalog,
     RigModelKey,
@@ -29,6 +30,7 @@ import {
 } from "happy-desktop-state";
 import {
     RigGeneralSettings,
+    RigDebugLogPanel,
     RigDebugSettings,
     RigInstructionsSettings,
     RigProviderSettings,
@@ -125,7 +127,7 @@ export interface AppRigProfilerStore {
 }
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
-    debug: "Inspect Happy and Rig with live debugger endpoints and renderer profiles",
+    debug: "Inspect live state, Happy and Rig debugger endpoints, and renderer profiles",
     general: "How this window looks and what a new session starts with",
     profiles: "The identities available for agent work",
     instructions: "Machine-wide agent guidance and permission-review policy",
@@ -265,6 +267,12 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     );
     const debugStore = (props.section === "debug" ? props.debug : undefined) ?? debugStoreNoop;
     const debug = useSyncExternalStore(debugStore.subscribe, debugStore.get, debugStore.get);
+    const debugLogStore = props.section === "debug" ? host?.session?.debugLog : undefined;
+    const debugLog = useSyncExternalStore(
+        debugLogStore?.subscribe ?? noSubscribe,
+        debugLogStore?.get ?? debugLogEmpty,
+        debugLogStore?.get ?? debugLogEmpty,
+    );
     const profilerStore =
         (props.section === "debug" ? props.profiler : undefined) ?? profilerStoreNoop;
     const profiler = useSyncExternalStore(
@@ -300,6 +308,10 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         >
             {props.section === "debug" ? (
                 <>
+                    <RigDebugLogPanel
+                        discardedEntries={debugLog.discardedEntries}
+                        entries={debugLog.entries}
+                    />
                     <RigDebugSettings
                         daemon={debug.daemon}
                         daemonConnected={debug.daemonConnected}
@@ -512,6 +524,8 @@ const UNLOADED = { type: "loading" } as const;
 const modelsUnloaded = () => UNLOADED;
 /** Stands in while no Rig on this machine is connected to read the time from. */
 const clockStopped = () => 0;
+const EMPTY_DEBUG_LOG: RigDebugLogSnapshot = { discardedEntries: 0, entries: [] };
+const debugLogEmpty = () => EMPTY_DEBUG_LOG;
 const debugStopped: AppRigDebugTargetSnapshot = { status: "stopped" };
 const debugUnavailable: AppRigDebugSnapshot = {
     daemon: debugStopped,

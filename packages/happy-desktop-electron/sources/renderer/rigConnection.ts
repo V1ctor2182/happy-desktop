@@ -6,6 +6,7 @@ import {
     rigClientCreate,
     rigClockStoreCreate,
     rigConnectionLoaderCreate,
+    rigDebugLogStoreCreate,
     rigWorkspaceStoreCreate,
     type MutationRejectedDelta,
     type RigClient,
@@ -13,6 +14,8 @@ import {
     type RigConnection,
     type RigConnectionStore,
     type RigDaemonHealth,
+    type RigDebugLogInput,
+    type RigDebugLogStore,
     type RigHost,
     type RigInstructionsStore,
     type RigModelPreferencePersistence,
@@ -80,6 +83,7 @@ function workspaceMemoryPersistence(rigId: string): RigWorkspaceMemoryPersistenc
 
 export interface RigSession {
     readonly connection: RigConnectionStore;
+    readonly debugLog: RigDebugLogStore;
     readonly host: RigHost;
     readonly models: RigModelStore;
     readonly profiles: () => RigProfilesStore | undefined;
@@ -132,6 +136,18 @@ export function rigConnectionOpen(input: {
     let retry: ReturnType<typeof setTimeout> | undefined;
     let compatibilityFailure: string | undefined;
     let catalogFailure: string | undefined;
+    const { store: debugLog, writer: debugLogWriter } = rigDebugLogStoreCreate();
+    const debugEntry = (entry: RigDebugLogInput): void => debugLogWriter.entryAppend(entry);
+    debugEntry({
+        detail: JSON.stringify(
+            { connectEndpoint: input.connectEndpoint, rigHttpUrl: input.rigHttpUrl },
+            null,
+            2,
+        ),
+        level: "info",
+        message: "Opening local Rig connection",
+        source: "connection",
+    });
     const directClient = new HappyAgentClient({
         endpoint: input.connectEndpoint,
         token: "happy2-local-capability",
@@ -142,6 +158,7 @@ export function rigConnectionOpen(input: {
         client: directClient,
         endpoint: input.connectEndpoint,
         token: "happy2-local-capability",
+        onDebugEntry: debugEntry,
         onMutationRejected: (rejection) => {
             for (const listener of mutationListeners) listener(rejection);
         },
@@ -175,13 +192,36 @@ export function rigConnectionOpen(input: {
     });
 
     const modelsLoad = (): void => {
+        debugEntry({
+            level: "info",
+            message: "Loading model catalog",
+            source: "catalog",
+        });
         void client.models.load().then(
-            () => {
+            (modelSnapshot) => {
                 if (disposed) return;
+                debugEntry({
+                    detail: JSON.stringify(
+                        {
+                            models: modelSnapshot.catalog.providers.reduce(
+                                (count, provider) => count + provider.models.length,
+                                0,
+                            ),
+                            providers: modelSnapshot.catalog.providers.length,
+                        },
+                        null,
+                        2,
+                    ),
+                    level: "info",
+                    message: "Model catalog loaded",
+                    source: "catalog",
+                });
                 session = {
                     connection: rigConnectionLoaderCreate({
+                        onDebugEntry: debugEntry,
                         probe: healthProbe(directClient),
                     }),
+                    debugLog,
                     host: input.host,
                     models: client.models,
                     profiles: () => client.profiles(),
@@ -207,11 +247,22 @@ export function rigConnectionOpen(input: {
                     securityPolicy: client.securityPolicy(),
                     clock: rigClockStoreCreate(),
                 };
+                debugEntry({
+                    level: "info",
+                    message: "Rig product stores materialized",
+                    source: "sync",
+                });
                 catalogFailure = undefined;
                 input.deps.changed();
             },
             (error: unknown) => {
                 if (disposed) return;
+                debugEntry({
+                    detail: error instanceof Error ? (error.stack ?? error.message) : String(error),
+                    level: "error",
+                    message: `Model catalog failed; retrying in ${RETRY_MS} ms`,
+                    source: "catalog",
+                });
                 catalogFailure =
                     error instanceof Error && error.message
                         ? error.message
@@ -229,6 +280,11 @@ export function rigConnectionOpen(input: {
         failure: () => compatibilityFailure ?? (session ? undefined : catalogFailure),
         dispose() {
             if (disposed) return;
+            debugEntry({
+                level: "info",
+                message: "Disposing local Rig connection",
+                source: "connection",
+            });
             disposed = true;
             if (retry) clearTimeout(retry);
             if (session) {

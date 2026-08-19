@@ -1,5 +1,6 @@
 import type { RigProviderUsageEntry } from "happy-desktop-state";
 import {
+    RigDebugLogPanel,
     RigDebugSettings,
     RigGeneralSettings,
     RigInstructionsSettings,
@@ -249,6 +250,53 @@ export function RigSettingsBlueprintPage() {
                     onClose={noop}
                     title="Dev Tools"
                 >
+                    <RigDebugLogPanel
+                        discardedEntries={7}
+                        entries={[
+                            {
+                                detail: JSON.stringify(
+                                    {
+                                        previous: "reconnecting",
+                                        next: "live",
+                                    },
+                                    null,
+                                    2,
+                                ),
+                                id: 1,
+                                level: "info",
+                                message: "Connection state changed: reconnecting → live",
+                                occurredAt: 1_700_000_000_000,
+                                source: "connection",
+                            },
+                            {
+                                detail: JSON.stringify(
+                                    {
+                                        cursor: "01HF7YAT00SQJZ6QH1Z2WQY7Q2",
+                                        type: "message.delta",
+                                        payload: {
+                                            agentId: "agent_01HF7Y9P3M",
+                                            delta: "Inspecting the workspace now.",
+                                        },
+                                    },
+                                    null,
+                                    2,
+                                ),
+                                id: 2,
+                                level: "info",
+                                message: "SSE event arrived: message.delta",
+                                occurredAt: 1_700_000_001_250,
+                                source: "sse",
+                            },
+                            {
+                                detail: "TypeError: fetch failed\n    at healthProbe (rigConnection.ts:112:18)",
+                                id: 3,
+                                level: "warning",
+                                message: "Health probe failed (attempt 1)",
+                                occurredAt: 1_700_000_003_500,
+                                source: "health",
+                            },
+                        ]}
+                    />
                     <RigDebugSettings
                         daemon={{
                             status: "running",

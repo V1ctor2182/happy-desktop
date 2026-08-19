@@ -10,6 +10,7 @@ import type {
     RigFileTabKind,
     RigFileTabSnapshot,
     RigConnectionStore,
+    RigDebugLogStore,
     RigConversationSnapshot,
     RigFileLayout,
     RigWorkspaceFiles,
@@ -174,6 +175,8 @@ export interface AppRigEntry {
 export interface AppRigSession {
     readonly clock: RigClockStore;
     readonly connection: RigConnectionStore;
+    /** This Rig's retained connection, reconciliation, and SSE diagnostics. */
+    readonly debugLog?: RigDebugLogStore;
     readonly host: RigHost;
     /** This Rig's own model catalog, read by the settings window's pickers. */
     readonly models: RigModelStore;

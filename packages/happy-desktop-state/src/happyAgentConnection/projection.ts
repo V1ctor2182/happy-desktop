@@ -548,6 +548,32 @@ function projectMessage(
                     ? {}
                     : { presentation: projectToolPresentation(block.presentation) }),
             });
+        } else if (block.type === "compaction") {
+            elements.push({
+                ...base,
+                id,
+                kind: "tool_call",
+                toolCallId: message.id,
+                name: "compact",
+                arguments: {
+                    trigger: block.trigger,
+                    replacedMessages: block.replacedMessageIds.length,
+                },
+                argumentsComplete: true,
+                status:
+                    block.status === "completed"
+                        ? "succeeded"
+                        : block.status === "failed"
+                          ? "failed"
+                          : "running",
+                presentation: {
+                    kind: "compaction",
+                    trigger: block.trigger,
+                    ...(block.tokensBefore === null ? {} : { tokensBefore: block.tokensBefore }),
+                    ...(block.tokensAfter === null ? {} : { tokensAfter: block.tokensAfter }),
+                    ...(block.status === "failed" ? { failureReason: block.failureReason } : {}),
+                },
+            });
         }
     }
     return elements;

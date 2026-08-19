@@ -725,6 +725,20 @@ function presentationProject(
     presentation: ToolPresentation,
 ): ConversationActivityPresentation | undefined {
     switch (presentation.kind) {
+        case "compaction":
+            return {
+                type: "compaction",
+                trigger: presentation.trigger,
+                ...(presentation.tokensBefore === undefined
+                    ? {}
+                    : { tokensBefore: presentation.tokensBefore }),
+                ...(presentation.tokensAfter === undefined
+                    ? {}
+                    : { tokensAfter: presentation.tokensAfter }),
+                ...(presentation.failureReason === undefined
+                    ? {}
+                    : { failureReason: presentation.failureReason }),
+            };
         case "command":
             return {
                 type: "execCommand",

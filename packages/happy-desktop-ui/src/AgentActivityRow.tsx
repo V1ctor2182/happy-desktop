@@ -101,6 +101,7 @@ function mcpResultRows(display: string, budget: number): { rows: string[]; omitt
 function humanizeToolName(name: string): string {
     const explicit: Record<string, string> = {
         Agent: "Subagent",
+        compact: "Context compaction",
         TaskInput: "Terminal input",
         TaskList: "Task list",
         TaskOutput: "Background output",
@@ -139,6 +140,9 @@ function toolVerb(
     if (status === "stopped") return "Stopped";
     const active = status === "running";
     const lower = name.toLowerCase();
+    if (presentation?.type === "compaction") {
+        return status === "failed" ? "Failed" : active ? "Compacting" : "Compacted";
+    }
     if (presentation?.type === "search") return active ? "Searching" : "Searched";
     if (presentation?.type === "exploration") return active ? "Exploring" : "Explored";
     // Typing into a terminal that is already running is not the same act as
@@ -198,6 +202,7 @@ function toolGlyph(
     failed: boolean,
 ): ToolGlyph {
     if (failed) return { set: "octicons", name: "alert" };
+    if (presentation?.type === "compaction") return { set: "house", name: "filter" };
     if (presentation?.type === "search") return { set: "house", name: "globe" };
     if (presentation?.type === "exploration") return { set: "house", name: "search" };
     if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
@@ -275,6 +280,26 @@ function explorationSummary(
             return `Search ${detail}`;
         })
         .join(" · ");
+}
+
+function compactionSummary(
+    presentation: Extract<ConversationActivityPresentation, { type: "compaction" }>,
+): string {
+    const before = presentation.tokensBefore;
+    const after = presentation.tokensAfter;
+    if (before === undefined) {
+        return after === undefined ? "context" : `context to ${contextTokenCount(after)} tokens`;
+    }
+    return after === undefined
+        ? `context from ${contextTokenCount(before)} tokens`
+        : `context ${contextTokenCount(before)} → ${contextTokenCount(after)} tokens`;
+}
+
+/** Context occupancy keeps one useful decimal deeper into the thousands than a file count. */
+function contextTokenCount(tokens: number): string {
+    if (tokens < 1_000) return String(Math.max(0, Math.round(tokens)));
+    const thousands = tokens / 1_000;
+    return `${thousands < 100 ? thousands.toFixed(1).replace(/\.0$/, "") : String(Math.round(thousands))}k`;
 }
 
 /** Status → semantic dot tone: warning while active/awaiting, error on stop/fail. */
@@ -505,6 +530,9 @@ function AgentToolActivity(props: {
     if (mcp) {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = `${mcp.server} · ${mcp.tool}`;
+    } else if (presentation?.type === "compaction") {
+        verb = toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = compactionSummary(presentation);
     } else if (presentation?.type === "search") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.query;
@@ -554,6 +582,8 @@ function AgentToolActivity(props: {
         presentation?.type === "backgroundTerminalInteraction"
             ? presentation.input.replace(/\n+$/, "").split("\n")
             : undefined;
+    const compactionFailure =
+        presentation?.type === "compaction" ? presentation.failureReason : undefined;
 
     /* What a reader reaches for the clipboard to get: the subject that scrolled
        out of the row, followed by the output or result the row only shows in
@@ -564,9 +594,11 @@ function AgentToolActivity(props: {
             ? presentation.output
             : presentation?.type === "search"
               ? presentation.sources?.map((source) => `${source.title}\n${source.url}`).join("\n")
-              : presentation === undefined
-                ? tool.display
-                : undefined,
+              : presentation?.type === "compaction"
+                ? presentation.failureReason
+                : presentation === undefined
+                  ? tool.display
+                  : undefined,
     ]
         .map((part) => part?.replace(/\n+$/, ""))
         .filter((part): part is string => part !== undefined && part.length > 0)
@@ -783,6 +815,10 @@ function AgentToolActivity(props: {
 
             {!singleLine && genericResult !== undefined ? (
                 <ChildRow tone={tool.failed ? "error" : "muted"}>{genericResult}</ChildRow>
+            ) : null}
+
+            {!singleLine && compactionFailure !== undefined ? (
+                <ChildRow tone="error">{compactionFailure}</ChildRow>
             ) : null}
 
             {!singleLine && mcpResult ? (

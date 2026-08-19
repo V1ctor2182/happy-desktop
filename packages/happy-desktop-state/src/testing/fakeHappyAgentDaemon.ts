@@ -3,6 +3,7 @@ import {
     type Agent,
     type AgentContextUsage,
     type AgentDraftSnapshot,
+    type CompactionMessage,
     type DaemonConfig,
     type EventStreamFrame,
     type EventStreamOptions,
@@ -14,6 +15,7 @@ import {
     type MessageMode,
     type Project,
     type Question,
+    type Run,
     type SendMessageRequest,
     type UserMessage,
     type Workspace,
@@ -526,7 +528,42 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async compactAgent(agentId: string, ...rest: unknown[]) {
             await record("compactAgent", [agentId, ...rest]);
-            return { agent: agentBump(agentId), cursor: latestCursor };
+            const cursor = latestCursor;
+            const id = `compaction-${String((idCounter += 1))}`;
+            const run: Run = {
+                costUsd: null,
+                endedAt: null,
+                id,
+                reason: null,
+                startedAt: 1,
+                status: "running",
+                usage: {},
+            };
+            const message: CompactionMessage = {
+                content: [
+                    {
+                        completedAt: null,
+                        failureReason: null,
+                        replacedMessageIds: historyOf(agentId).runs.flatMap((entry) =>
+                            entry.messages.map((candidate) => candidate.id),
+                        ),
+                        startedAt: 1,
+                        status: "running",
+                        tokensAfter: null,
+                        tokensBefore: contexts.get(agentId)?.contextTokens ?? null,
+                        trigger: "manual",
+                        type: "compaction",
+                    },
+                ],
+                createdAt: 1,
+                id,
+                metadata: {},
+                role: "service",
+            };
+            historyOf(agentId).runs.push({ ...run, messages: [message] });
+            emit("run.started", { acceptedMessageIds: [], agentId, run });
+            emit("message.created", { agentId, message, runId: run.id });
+            return { agent: agentBump(agentId), cursor, message, run };
         },
         async markAgentRead(agentId: string, ...rest: unknown[]) {
             await record("markAgentRead", [agentId, ...rest]);

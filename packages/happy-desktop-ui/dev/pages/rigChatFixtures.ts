@@ -118,6 +118,44 @@ export const rigGenericTool: ConversationToolCall = {
     display: "3 tasks in progress",
 };
 
+export const rigCompactionRunningTool: ConversationToolCall = {
+    toolCallId: "tool-compaction-running",
+    toolName: "compact",
+    arguments: { trigger: "manual", replacedMessages: 18 },
+    status: "running",
+    failed: false,
+    presentation: {
+        type: "compaction",
+        trigger: "manual",
+        tokensBefore: 249_234,
+    },
+};
+
+export const rigCompactionCompletedTool: ConversationToolCall = {
+    ...rigCompactionRunningTool,
+    toolCallId: "tool-compaction-completed",
+    status: "success",
+    presentation: {
+        type: "compaction",
+        trigger: "manual",
+        tokensBefore: 249_234,
+        tokensAfter: 5_330,
+    },
+};
+
+export const rigCompactionFailedTool: ConversationToolCall = {
+    ...rigCompactionRunningTool,
+    toolCallId: "tool-compaction-failed",
+    status: "failed",
+    failed: true,
+    presentation: {
+        type: "compaction",
+        trigger: "automatic",
+        tokensBefore: 249_234,
+        failureReason: "The provider could not compact the context.",
+    },
+};
+
 export const rigRunningTool: ConversationToolCall = {
     toolCallId: "tool-running",
     toolName: "grep",

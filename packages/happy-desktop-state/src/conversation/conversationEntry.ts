@@ -121,6 +121,13 @@ export interface ConversationFileDiff {
 /** The rich body an activity expands into, when the producer knows its shape. */
 export type ConversationActivityPresentation =
     | {
+          readonly type: "compaction";
+          readonly trigger: "manual" | "automatic";
+          readonly tokensBefore?: number;
+          readonly tokensAfter?: number;
+          readonly failureReason?: string;
+      }
+    | {
           readonly type: "exploration";
           readonly operations: readonly (
               | { readonly kind: "list"; readonly target: string }

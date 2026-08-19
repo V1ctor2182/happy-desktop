@@ -7,6 +7,7 @@ import type {
     MutationId,
     Project,
 } from "@slopus/happy-agent-client";
+import type { RigDebugLogInput } from "../rig/rigDebugLogStore.js";
 
 export type { MutationId };
 
@@ -20,6 +21,13 @@ interface RigProfile {
 }
 
 export type ToolPresentation =
+    | {
+          kind: "compaction";
+          trigger: "manual" | "automatic";
+          tokensBefore?: number;
+          tokensAfter?: number;
+          failureReason?: string;
+      }
     | {
           kind: "command";
           command: string;
@@ -636,6 +644,8 @@ export interface ConnectHappyAgentOptions {
     now?: () => number;
     onMutationRejected?: (delta: MutationRejectedDelta) => void;
     onCompatibilityChange?: (compatibility: ServerCompatibility) => void;
+    /** Receives bounded, display-ready diagnostics without exposing credentials. */
+    onDebugEntry?: (entry: RigDebugLogInput) => void;
     onSessionFinished?: (sessionId: string) => void;
 }
 

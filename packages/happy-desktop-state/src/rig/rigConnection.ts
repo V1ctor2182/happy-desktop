@@ -1,3 +1,5 @@
+import type { RigDebugLogInput } from "./rigDebugLogStore.js";
+
 /**
  * Minimal Rig daemon health as observed over the injected HTTP probe. This is
  * deliberately a small subset of Rig's protocol health: connection tracking only
@@ -181,6 +183,7 @@ export interface RigConnectionLoaderOptions {
     readonly now?: () => number;
     readonly setTimer?: (handler: () => void, milliseconds: number) => unknown;
     readonly clearTimer?: (handle: unknown) => void;
+    readonly onDebugEntry?: (entry: RigDebugLogInput) => void;
 }
 
 const DEFAULT_HEARTBEAT_MS = 2_000;
@@ -249,7 +252,14 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
 
     const publish = (next: RigConnectionSnapshot): void => {
         if (snapshotsEqual(snapshot, next)) return;
+        const previous = snapshot;
         snapshot = next;
+        options.onDebugEntry?.({
+            detail: JSON.stringify({ previous, next }, null, 2),
+            level: next.connection === "disconnected" ? "warning" : "info",
+            message: `Health state changed: ${next.connection}/${next.daemon}`,
+            source: "health",
+        });
         for (const listener of listeners) listener();
     };
 
@@ -290,6 +300,12 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
                 if (disposed || !active || current !== generation) return;
                 const previous = failures;
                 failures += 1;
+                options.onDebugEntry?.({
+                    detail: error instanceof Error ? (error.stack ?? error.message) : String(error),
+                    level: "warning",
+                    message: `Health probe failed (attempt ${failures})`,
+                    source: "health",
+                });
                 // Keep the last confirmed state on screen while a live connection
                 // misses a beat or two; say nothing until the silence outlasts
                 // what a recovering daemon takes to answer again.
@@ -312,6 +328,12 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
             if (listeners.size === 1 && !disposed) {
                 active = true;
                 failures = 0;
+                options.onDebugEntry?.({
+                    detail: JSON.stringify(snapshot, null, 2),
+                    level: "info",
+                    message: "Health monitor started",
+                    source: "health",
+                });
                 probeNow();
             }
             return () => {
@@ -320,11 +342,21 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
                     active = false;
                     generation += 1;
                     cancelTimer();
+                    options.onDebugEntry?.({
+                        level: "info",
+                        message: "Health monitor stopped",
+                        source: "health",
+                    });
                 }
             };
         },
         retry() {
             if (disposed) return;
+            options.onDebugEntry?.({
+                level: "info",
+                message: "Immediate health retry requested",
+                source: "health",
+            });
             generation += 1;
             cancelTimer();
             failures = 0;
@@ -333,6 +365,11 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
         },
         [Symbol.dispose]() {
             if (disposed) return;
+            options.onDebugEntry?.({
+                level: "info",
+                message: "Health monitor disposed",
+                source: "health",
+            });
             disposed = true;
             active = false;
             generation += 1;

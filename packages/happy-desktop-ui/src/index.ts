@@ -474,6 +474,11 @@ export {
     type RigDebugTarget,
 } from "./pages/settings/RigDebugSettings";
 export {
+    RigDebugLogPanel,
+    type RigDebugLogPanelEntry,
+    type RigDebugLogPanelProps,
+} from "./pages/settings/RigDebugLogPanel";
+export {
     RigProfilerSettings,
     type RigProfilerCapabilities,
     type RigProfilerSettingsProps,

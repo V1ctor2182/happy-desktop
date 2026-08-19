@@ -22,6 +22,7 @@ import {
 import { ChatStore } from "./ChatStore.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
+import type { RigDebugLogInput } from "../rig/rigDebugLogStore.js";
 import {
     applyChanges,
     defaultMode,
@@ -63,6 +64,18 @@ const MUTATION_RESPONSE_TIMEOUT_MS = 60_000;
 const SEND_ATTEMPTS = 3;
 const INITIAL_SEND_RETRY_MS = 250;
 
+function debugDetail(value: unknown): string {
+    try {
+        return JSON.stringify(value, null, 2) ?? String(value);
+    } catch {
+        return String(value);
+    }
+}
+
+function errorDetail(error: unknown): string {
+    return error instanceof Error ? (error.stack ?? error.message) : debugDetail(error);
+}
+
 interface SessionSubscriber extends RigSessionSubscriptionOptions {
     closed: boolean;
 }
@@ -103,6 +116,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const rootController = new AbortController();
     const wait = options.wait ?? abortableWait;
     const now = options.now ?? Date.now;
+    const reportDebug = (entry: RigDebugLogInput): void => options.onDebugEntry?.(entry);
     const nextId = createCuid2(now);
     const sessions = new Map<string, SessionEntry>();
     const groupSubscribers = new Set<GroupsSubscriber>();
@@ -127,6 +141,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     let groups = [] as ReturnType<typeof projectGroups>;
     let closed = false;
 
+    reportDebug({
+        detail: debugDetail({ endpoint }),
+        level: "info",
+        message: "Happy Agent connection created",
+        source: "connection",
+    });
+
     const reportCompatibility = (next: ServerCompatibility): void => {
         compatibility = next;
         options.onCompatibilityChange?.(next);
@@ -138,6 +159,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         error: unknown,
         sessionId?: string,
     ): void => {
+        reportDebug({
+            detail: debugDetail({
+                action,
+                error: errorDetail(error),
+                mutationId,
+                ...(sessionId === undefined ? {} : { sessionId }),
+            }),
+            level: "error",
+            message: `Mutation failed: ${action}`,
+            source: "mutation",
+        });
         const rejection: MutationRejectedDelta = {
             action,
             message: error instanceof Error ? error.message : String(error),
@@ -154,6 +186,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     const reportBackgroundError = (error: unknown): void => {
         if (rootController.signal.aborted) return;
+        reportDebug({
+            detail: errorDetail(error),
+            level: "error",
+            message: "Background state task failed",
+            source: "sync",
+        });
         for (const subscriber of groupSubscribers) subscriber.onError?.(error);
         for (const entry of sessions.values()) {
             for (const subscriber of entry.subscribers) subscriber.onError?.(error);
@@ -229,7 +267,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     const publishConnection = (next: GroupsState["connection"]): void => {
         if (connection === next) return;
+        const previous = connection;
         connection = next;
+        reportDebug({
+            detail: debugDetail({ previous, next }),
+            level: next === "reconnecting" ? "warning" : "info",
+            message: `Connection state changed: ${previous} → ${next}`,
+            source: "connection",
+        });
         publishGroups([{ type: "groups_state_changed", state: groupState() }]);
         for (const entry of sessions.values()) publishSession(entry);
     };
@@ -450,6 +495,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     const resync = (): Promise<void> => {
         if (resyncTask !== undefined) return resyncTask;
+        reportDebug({
+            detail: debugDetail({ after: cursor ?? null }),
+            level: "info",
+            message: "State reconciliation started",
+            source: "sync",
+        });
         const running = (async (): Promise<void> => {
             const bootstrap = await client.getDesktopBootstrap({
                 signal: rootController.signal,
@@ -527,6 +578,24 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 if (boundary !== undefined && event.cursor.localeCompare(boundary) <= 0) continue;
                 applyEventNow(event);
             }
+            reportDebug({
+                detail: debugDetail({
+                    cursor: bootstrap.cursor,
+                    projects: bootstrap.projects.length,
+                    sessions: bootstrap.projects.reduce(
+                        (count, project) => count + project.agents.length,
+                        bootstrap.workspaces.reduce(
+                            (count, workspace) => count + workspace.agents.length,
+                            0,
+                        ),
+                    ),
+                    watchedGit: Object.keys(watchedGit?.snapshots ?? {}).length,
+                    workspaces: bootstrap.workspaces.length,
+                }),
+                level: "info",
+                message: "State reconciliation completed",
+                source: "sync",
+            });
         })();
         const tracked = running.finally(() => {
             if (resyncTask === tracked) resyncTask = undefined;
@@ -1045,22 +1114,53 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         let reconnectMs = INITIAL_RECONNECT_MS;
         while (!rootController.signal.aborted) {
             try {
+                reportDebug({
+                    level: "info",
+                    message: "Checking Rig health before opening SSE",
+                    source: "connection",
+                });
                 const health = await client.getHealth({ signal: rootController.signal });
+                reportDebug({
+                    detail: debugDetail(health),
+                    level: health.ready ? "info" : "warning",
+                    message: health.ready ? "Rig health check passed" : "Rig is not ready",
+                    source: "connection",
+                });
                 const nextCompatibility = serverCompatibility(health.version.protocol);
                 reportCompatibility(nextCompatibility);
                 if (nextCompatibility.status !== "compatible" || !health.ready) {
                     publishConnection(config === undefined ? "connecting" : "reconnecting");
+                    reportDebug({
+                        detail: debugDetail({ delayMs: reconnectMs }),
+                        level: "warning",
+                        message: "Waiting before the next connection attempt",
+                        source: "connection",
+                    });
                     await wait(reconnectMs, rootController.signal);
                     reconnectMs = Math.min(reconnectMs * 2, MAXIMUM_RECONNECT_MS);
                     continue;
                 }
                 if (config === undefined) await resync();
                 let reopen = false;
+                reportDebug({
+                    detail: debugDetail({ after: cursor ?? null }),
+                    level: "info",
+                    message: "Opening SSE stream",
+                    source: "sse",
+                });
                 for await (const frame of client.streamEvents({
                     after: cursor,
                     signal: rootController.signal,
                 })) {
                     if (frame.kind === "hello") {
+                        reportDebug({
+                            detail: debugDetail(frame.hello),
+                            level: frame.hello.gap ? "warning" : "info",
+                            message: frame.hello.gap
+                                ? "SSE hello reported a journal gap"
+                                : "SSE stream connected",
+                            source: "sse",
+                        });
                         if (frame.hello.gap) {
                             await resync();
                             reopen = true;
@@ -1069,21 +1169,49 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         advanceCursor(frame.hello.cursor);
                         publishConnection("live");
                         reconnectMs = INITIAL_RECONNECT_MS;
-                    } else if (
-                        cursor === undefined ||
-                        frame.event.cursor.localeCompare(cursor) > 0
-                    ) {
-                        // The journal is ordered and cursors are unique, so a
-                        // frame at or behind the last applied cursor is a
-                        // redelivery. Deltas are not idempotent — re-applying
-                        // one appends its text again — so duplicates stop here.
-                        applyEvent(frame.event);
+                    } else {
+                        reportDebug({
+                            detail: debugDetail(frame.event),
+                            level: "info",
+                            message: `SSE event arrived: ${frame.event.type}`,
+                            source: "sse",
+                        });
+                        if (cursor === undefined || frame.event.cursor.localeCompare(cursor) > 0) {
+                            // The journal is ordered and cursors are unique, so a
+                            // frame at or behind the last applied cursor is a
+                            // redelivery. Deltas are not idempotent — re-applying
+                            // one appends its text again — so duplicates stop here.
+                            applyEvent(frame.event);
+                        } else {
+                            reportDebug({
+                                detail: debugDetail({
+                                    cursor: frame.event.cursor,
+                                    lastAppliedCursor: cursor,
+                                }),
+                                level: "warning",
+                                message: `Ignored redelivered SSE event: ${frame.event.type}`,
+                                source: "sse",
+                            });
+                        }
                     }
                 }
                 if (reopen) continue;
-                if (!rootController.signal.aborted) publishConnection("reconnecting");
+                if (!rootController.signal.aborted) {
+                    reportDebug({
+                        level: "warning",
+                        message: "SSE stream ended",
+                        source: "sse",
+                    });
+                    publishConnection("reconnecting");
+                }
             } catch (error) {
                 if (rootController.signal.aborted) break;
+                reportDebug({
+                    detail: errorDetail(error),
+                    level: "error",
+                    message: "Connection or SSE stream failed",
+                    source: "connection",
+                });
                 publishConnection(config === undefined ? "connecting" : "reconnecting");
                 for (const subscriber of groupSubscribers) subscriber.onError?.(error);
                 for (const entry of sessions.values()) {
@@ -1091,6 +1219,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 }
             }
             if (!rootController.signal.aborted) {
+                reportDebug({
+                    detail: debugDetail({ delayMs: reconnectMs }),
+                    level: "info",
+                    message: "Reconnect scheduled",
+                    source: "connection",
+                });
                 await wait(reconnectMs, rootController.signal);
                 reconnectMs = Math.min(reconnectMs * 2, MAXIMUM_RECONNECT_MS);
             }
@@ -1747,7 +1881,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         { mutationId },
                         { signal: rootController.signal },
                     ),
-                ({ agent }) => adoptAgent(agent),
+                ({ agent, message, run }) => {
+                    adoptAgent(agent);
+                    const entry = sessions.get(sessionId);
+                    if (entry === undefined) return;
+                    if (!entry.runs.has(run.id)) updateRun(sessionId, run);
+                    if (!entry.messages.has(message.id)) updateMessage(sessionId, message, run.id);
+                },
                 undefined,
                 sessionId,
                 `agent:${sessionId}`,
@@ -1984,6 +2124,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         close() {
             if (closed) return;
             closed = true;
+            reportDebug({
+                level: "info",
+                message: "Happy Agent connection closed",
+                source: "connection",
+            });
             rootController.abort();
             publishConnection("closed");
             groupSubscribers.clear();
@@ -2115,7 +2260,7 @@ function liveMessageContentMerge(
             }
         }
         if (!matches) continue;
-        const content = [...current.slice(0, offset)];
+        const content = current.slice(0, offset);
         for (let index = 0; index < overlap; index += 1) {
             content.push(messageBlockMerge(current[offset + index]!, snapshot[index]!));
         }
@@ -2156,6 +2301,14 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
                     next.status === "running" ||
                     JSON.stringify(previous.arguments ?? null) ===
                         JSON.stringify(next.arguments ?? null))
+            );
+        case "compaction":
+            return (
+                next.type === "compaction" &&
+                previous.startedAt === next.startedAt &&
+                previous.trigger === next.trigger &&
+                JSON.stringify(previous.replacedMessageIds) ===
+                    JSON.stringify(next.replacedMessageIds)
             );
     }
 }
