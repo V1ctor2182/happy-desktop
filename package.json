@@ -1,6 +1,6 @@
 {
     "name": "happy-desktop-workspace",
-    "version": "0.0.61",
+    "version": "0.0.62",
     "private": true,
     "description": "Happy local desktop client for Rig",
     "license": "MIT",
