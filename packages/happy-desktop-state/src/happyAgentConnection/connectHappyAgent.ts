@@ -6,6 +6,7 @@ import {
     type GitState,
     type HappyAgentEvent,
     type Message,
+    type MessageBlock,
     type MessageMode,
     type Project,
     type Question,
@@ -56,6 +57,8 @@ interface SessionEntry {
     store: ChatStore;
     subscribers: Set<SessionSubscriber>;
     messages: Map<string, TranscriptMessage>;
+    /** Cumulative block offset of the provider segment currently streaming per agent message. */
+    messageBlockOffsets: Map<string, number>;
     runs: Map<string, Run>;
     hasMore: boolean;
     loading: Promise<void> | undefined;
@@ -330,6 +333,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 entry.agent = agentResponse.agent;
                 entry.workspace = workspaceOf(agentResponse.agent.workspaceId);
                 entry.messages.clear();
+                entry.messageBlockOffsets.clear();
                 entry.runs.clear();
                 ingestHistory(entry, history.runs, history.pending);
                 entry.hasMore = history.hasMore;
@@ -634,7 +638,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 );
                 return;
             case "message.updated":
-                updateMessage(event.payload.agentId, event.payload.message, event.payload.runId);
+                updateMessageSnapshot(
+                    event.payload.agentId,
+                    event.payload.message,
+                    event.payload.runId,
+                );
                 return;
             case "message.delta":
                 appendMessageDelta(event.payload);
@@ -642,6 +650,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             case "message.deleted": {
                 const entry = sessions.get(event.payload.agentId);
                 entry?.messages.delete(event.payload.messageId);
+                entry?.messageBlockOffsets.delete(event.payload.messageId);
                 if (entry !== undefined) publishSession(entry);
                 return;
             }
@@ -756,6 +765,33 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         publishSession(entry);
     };
 
+    const updateMessageSnapshot = (agentId: string, message: Message, runId: string): void => {
+        const entry = sessions.get(agentId);
+        const current = entry?.messages.get(message.id);
+        if (
+            current?.message.role === "agent" &&
+            message.role === "agent" &&
+            message.content.length === 0
+        ) {
+            return;
+        }
+        if (entry === undefined || current?.message.role !== "agent" || message.role !== "agent") {
+            if (entry !== undefined) entry.messageBlockOffsets.delete(message.id);
+            updateMessage(agentId, message, runId);
+            return;
+        }
+        /*
+         * The API gives every provider segment in a run one assistant-message
+         * identity. A live `message.updated` snapshot contains the current
+         * segment, while history contains their cumulative content. Replace
+         * the matching live suffix when this segment evolved; append it when
+         * the model moved on to a new segment after a tool result.
+         */
+        const merged = liveMessageContentMerge(current.message.content, message.content);
+        entry.messageBlockOffsets.set(message.id, merged.offset);
+        updateMessage(agentId, { ...message, content: merged.content }, runId);
+    };
+
     const createMessage = (
         agentId: string,
         message: Message,
@@ -779,6 +815,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         ) {
             return;
         }
+        if (entry !== undefined) entry.messageBlockOffsets.set(message.id, 0);
         updateMessage(agentId, message, runId, optimisticId);
     };
 
@@ -811,10 +848,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         const entry = sessions.get(payload.agentId);
         const current = entry?.messages.get(payload.messageId);
         if (entry === undefined || current === undefined) return;
-        const block = current.message.content[payload.blockIndex];
+        const blockIndex =
+            (entry.messageBlockOffsets.get(payload.messageId) ?? 0) + payload.blockIndex;
+        const block = current.message.content[blockIndex];
         if (block === undefined || (block.type !== "text" && block.type !== "reasoning")) return;
         const content = [...current.message.content];
-        content[payload.blockIndex] = { ...block, text: block.text + payload.append };
+        content[blockIndex] = { ...block, text: block.text + payload.append };
         entry.messages.set(payload.messageId, {
             ...current,
             message: { ...current.message, content } as Message,
@@ -1078,6 +1117,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     store: new ChatStore(subscription.sessionId),
                     subscribers: new Set(),
                     messages: new Map(),
+                    messageBlockOffsets: new Map(),
                     runs: new Map(),
                     hasMore: false,
                     loading: undefined,
@@ -1883,6 +1923,55 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             undefined,
             `workspace:${workspace.id}`,
         );
+    }
+}
+
+function liveMessageContentMerge(
+    current: readonly MessageBlock[],
+    snapshot: readonly MessageBlock[],
+): { content: MessageBlock[]; offset: number } {
+    const maximumOverlap = Math.min(current.length, snapshot.length);
+    for (let overlap = maximumOverlap; overlap > 0; overlap -= 1) {
+        const offset = current.length - overlap;
+        let continues = true;
+        for (let index = 0; index < overlap; index += 1) {
+            if (!messageBlockContinues(current[offset + index]!, snapshot[index]!)) {
+                continues = false;
+                break;
+            }
+        }
+        if (continues) {
+            return {
+                content: [...current.slice(0, offset), ...snapshot],
+                offset,
+            };
+        }
+    }
+    return { content: [...current, ...snapshot], offset: current.length };
+}
+
+/** Whether the next live block is a newer projection of the same provider block. */
+function messageBlockContinues(previous: MessageBlock, next: MessageBlock): boolean {
+    if (previous.type !== next.type) return false;
+    switch (previous.type) {
+        case "text":
+            return next.type === "text" && next.text.startsWith(previous.text);
+        case "reasoning":
+            return next.type === "reasoning" && next.text.startsWith(previous.text);
+        case "image":
+            return (
+                next.type === "image" &&
+                previous.mimeType === next.mimeType &&
+                previous.data === next.data
+            );
+        case "tool_call":
+            return (
+                next.type === "tool_call" &&
+                previous.name === next.name &&
+                !(previous.status !== "running" && next.status === "running") &&
+                JSON.stringify(previous.arguments ?? null) ===
+                    JSON.stringify(next.arguments ?? null)
+            );
     }
 }
 
