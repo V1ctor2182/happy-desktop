@@ -90,6 +90,9 @@ interface SessionEntry {
     runs: Map<string, Run>;
     hasMore: boolean;
     loading: Promise<void> | undefined;
+    historyLoaded: boolean;
+    loadRetry: Promise<void> | undefined;
+    loadRetryMs: number;
     loadingMore: boolean;
     loadMoreError?: string;
     hydrating: boolean;
@@ -415,6 +418,46 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         for (const event of buffered) applyEvent(event);
     };
 
+    const scheduleSessionLoadRetry = (entry: SessionEntry, error: unknown): void => {
+        if (
+            closed ||
+            rootController.signal.aborted ||
+            entry.historyLoaded ||
+            entry.subscribers.size === 0 ||
+            entry.loadRetry !== undefined
+        ) {
+            return;
+        }
+        const delayMs = entry.loadRetryMs;
+        entry.loadRetryMs = Math.min(delayMs * 2, MAXIMUM_RECONNECT_MS);
+        reportDebug({
+            detail: debugDetail({
+                delayMs,
+                error: errorDetail(error),
+                sessionId: entry.id,
+            }),
+            level: "warning",
+            message: "Session history load failed; retrying",
+            source: "sync",
+        });
+        const retry: Promise<void> = wait(delayMs, rootController.signal)
+            .then(() => {
+                if (entry.loadRetry === retry) entry.loadRetry = undefined;
+                if (
+                    closed ||
+                    rootController.signal.aborted ||
+                    entry.historyLoaded ||
+                    entry.subscribers.size === 0 ||
+                    sessions.get(entry.id) !== entry
+                ) {
+                    return;
+                }
+                void loadSession(entry);
+            })
+            .catch(() => undefined);
+        entry.loadRetry = retry;
+    };
+
     const loadSession = (entry: SessionEntry): Promise<void> => {
         if (entry.loading !== undefined) return entry.loading;
         entry.hydrating = true;
@@ -456,6 +499,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 if (activity !== undefined) setActivity(entry, activity);
                 if (question !== undefined) entry.question = question.question;
                 advanceCursor(bootstrap.cursor);
+                entry.historyLoaded = true;
+                entry.loadRetryMs = INITIAL_RECONNECT_MS;
                 entry.hydrating = false;
                 // The loaded history already contains every change up to the
                 // agent's lastCursor. Replaying an older buffered event over it
@@ -484,6 +529,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 for (const event of buffered) applyEvent(event);
                 drainHydrationBroadcastEvents();
                 for (const subscriber of entry.subscribers) subscriber.onError?.(error);
+                scheduleSessionLoadRetry(entry, error);
             })
             .finally(() => {
                 if (entry.loading === loading) entry.loading = undefined;
@@ -1400,6 +1446,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     runs: new Map(),
                     hasMore: false,
                     loading: undefined,
+                    historyLoaded: false,
+                    loadRetry: undefined,
+                    loadRetryMs: INITIAL_RECONNECT_MS,
                     loadingMore: false,
                     hydrating: false,
                     bufferedEvents: [],
@@ -1525,7 +1574,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     initialization: { attempt: 0, error: null, status: "initializing" },
                     kind: project.worktreeSupport === "supported" ? "worktree" : "copy",
                     name: input.name,
-                    nameSource: "user",
+                    nameSource: "generated",
                     orderKey: workspaceId,
                     parentId: input.projectId,
                     projectId: input.projectId,
@@ -1551,6 +1600,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                             id: workspaceId,
                             mutationId: workspaceId,
                             name: input.name,
+                            // Desktop-created workspaces begin with a placeholder
+                            // name so the first chat can give the workspace its
+                            // durable generated name.
+                            nameConfigured: false,
                             parentId: input.projectId,
                             ...(input.baseRef === undefined ? {} : { baseRef: input.baseRef }),
                         },

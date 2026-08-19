@@ -729,7 +729,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             connected?.usage === undefined ? undefined : transcriptUsageProject(connected.usage);
         const next: RigChatSnapshot = {
             sessionId,
-            ready: connected !== undefined,
+            ready: connected !== undefined && connected.historyLoading !== true,
             archived: connected?.archived ?? false,
             ...(connected?.title === undefined ? {} : { title: connected.title }),
             ...(connected?.cwd === undefined ? {} : { cwd: connected.cwd }),

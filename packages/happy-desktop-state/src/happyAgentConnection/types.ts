@@ -318,6 +318,8 @@ export interface SessionUsage {
 }
 
 export interface SessionState {
+    /** The connection's placeholder before the first durable history snapshot arrives. */
+    historyLoading?: boolean;
     activity: {
         kind:
             | "idle"
