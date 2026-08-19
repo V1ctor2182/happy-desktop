@@ -47,6 +47,14 @@ import type {
 const INITIAL_RECONNECT_MS = 250;
 const MAXIMUM_RECONNECT_MS = 5_000;
 const DEFAULT_HISTORY_LIMIT = 100;
+/*
+ * Deadline for mutations the daemon answers without doing model work. A send
+ * or abort whose response never arrives would otherwise pend forever: the
+ * optimistic user message stays beside the copy the event stream delivers, and
+ * the per-agent mutation lane stays wedged behind the hung request. Long
+ * operations such as compaction are exempt.
+ */
+const MUTATION_RESPONSE_TIMEOUT_MS = 60_000;
 
 interface SessionSubscriber extends RigSessionSubscriptionOptions {
     closed: boolean;
@@ -341,7 +349,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 if (question !== undefined) entry.question = question.question;
                 if (usage !== undefined) entry.usage = usage.usage;
                 entry.hydrating = false;
-                const buffered = entry.bufferedEvents.splice(0);
+                // The loaded history already contains every change up to the
+                // agent's lastCursor. Replaying an older buffered event over it
+                // is what duplicates a streaming segment: a stale
+                // `message.updated` no longer continues the newer history
+                // blocks, so the merge appends the whole segment again.
+                const buffered = entry.bufferedEvents
+                    .splice(0)
+                    .filter(
+                        (event) => event.cursor.localeCompare(agentResponse.agent.lastCursor) > 0,
+                    );
                 replaceAgent(agentResponse.agent);
                 publishSession(entry);
                 for (const event of buffered) applyEvent(event);
@@ -424,8 +441,22 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             ]);
             await Promise.all([...sessions.values()].map((entry) => loadSession(entry)));
             const buffered = resyncBufferedEvents.splice(0);
+            // The bootstrap snapshot already contains every change at or before
+            // its cursor, and the buffer may hold redeliveries; replay only
+            // strictly newer events, each at most once.
+            let replayed = bootstrap.cursor;
             for (const event of buffered) {
-                if (event.cursor.localeCompare(bootstrap.cursor) > 0) applyEventNow(event);
+                if (event.cursor.localeCompare(replayed) <= 0) continue;
+                replayed = event.cursor;
+                // A session reloaded during this resync covers its own events
+                // up to its agent's lastCursor, which may lie past the
+                // bootstrap cursor; replaying one of those would duplicate a
+                // streaming segment the reloaded history already contains.
+                const agentId = agentIdOfEvent(event);
+                const boundary =
+                    agentId === undefined ? undefined : sessions.get(agentId)?.agent?.lastCursor;
+                if (boundary !== undefined && event.cursor.localeCompare(boundary) <= 0) continue;
+                applyEventNow(event);
             }
         })();
         const tracked = running.finally(() => {
@@ -976,7 +1007,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         advanceCursor(frame.hello.cursor);
                         publishConnection("live");
                         reconnectMs = INITIAL_RECONNECT_MS;
-                    } else {
+                    } else if (
+                        cursor === undefined ||
+                        frame.event.cursor.localeCompare(cursor) > 0
+                    ) {
+                        // The journal is ordered and cursors are unique, so a
+                        // frame at or behind the last applied cursor is a
+                        // redelivery. Deltas are not idempotent — re-applying
+                        // one appends its text again — so duplicates stop here.
                         applyEvent(frame.event);
                     }
                 }
@@ -996,6 +1034,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             }
         }
     };
+
+    /** Created inside the request thunk so the clock starts when the queued request does. */
+    const deadlineSignal = (): AbortSignal =>
+        AbortSignal.any([rootController.signal, AbortSignal.timeout(MUTATION_RESPONSE_TIMEOUT_MS)]);
 
     const mutation = <T>(
         action: MutationAction,
@@ -1022,7 +1064,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             .catch((error: unknown) => {
                 if (!rootController.signal.aborted) {
                     rejected?.();
-                    reportMutationFailure(action, mutationId, error, sessionId);
+                    const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+                    reportMutationFailure(
+                        action,
+                        mutationId,
+                        timedOut ? new Error("The agent did not answer in time.") : error,
+                        sessionId,
+                    );
                 }
             })
             .finally(() => {
@@ -1454,7 +1502,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     : block,
             ) ?? [{ type: "text" as const, text: input.text }];
             const richContent = content.filter((block) => block.type !== "text");
-            const delivery = agent.status === "idle" ? "queue" : "steer";
+            // Always steer: a message sent mid-run interrupts the run rather
+            // than waiting behind it, and on an idle agent the daemon treats
+            // steer and queue identically.
+            const delivery = "steer" as const;
             const entry = sessions.get(sessionId);
             if (entry !== undefined) {
                 entry.messages.set(mutationId, {
@@ -1485,7 +1536,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                             mode,
                             mutationId,
                         },
-                        { signal: rootController.signal },
+                        { signal: deadlineSignal() },
                     ),
                 ({ message: sent }) => {
                     updateMessage(sessionId, sent, sent.runId, mutationId);
@@ -1561,8 +1612,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             return mutation(
                 "stop_run",
                 mutationId,
-                () =>
-                    client.abortAgent(sessionId, { mutationId }, { signal: rootController.signal }),
+                () => client.abortAgent(sessionId, { mutationId }, { signal: deadlineSignal() }),
                 ({ agent }) => adoptAgent(agent),
                 undefined,
                 sessionId,
@@ -1930,34 +1980,49 @@ function liveMessageContentMerge(
     current: readonly MessageBlock[],
     snapshot: readonly MessageBlock[],
 ): { content: MessageBlock[]; offset: number } {
+    // Align the snapshot against the current tail by block identity, tolerant
+    // in both directions: the snapshot may be ahead of the assembled content
+    // (arguments and text still streaming) or behind it (a stale in-flight
+    // snapshot, or one whose reasoning text the provider trimmed). Demanding
+    // that the snapshot strictly extend the current blocks made every stale or
+    // trimmed snapshot fail alignment and fall through to the append below,
+    // which is what duplicated whole segments — the appended copies then never
+    // finished, because later snapshots kept aligning with the newest copy.
     const maximumOverlap = Math.min(current.length, snapshot.length);
     for (let overlap = maximumOverlap; overlap > 0; overlap -= 1) {
         const offset = current.length - overlap;
-        let continues = true;
+        let matches = true;
         for (let index = 0; index < overlap; index += 1) {
-            if (!messageBlockContinues(current[offset + index]!, snapshot[index]!)) {
-                continues = false;
+            if (!messageBlockSame(current[offset + index]!, snapshot[index]!)) {
+                matches = false;
                 break;
             }
         }
-        if (continues) {
-            return {
-                content: [...current.slice(0, offset), ...snapshot],
-                offset,
-            };
+        if (!matches) continue;
+        const content = [...current.slice(0, offset)];
+        for (let index = 0; index < overlap; index += 1) {
+            content.push(messageBlockMerge(current[offset + index]!, snapshot[index]!));
         }
+        content.push(...snapshot.slice(overlap));
+        return { content, offset };
     }
     return { content: [...current, ...snapshot], offset: current.length };
 }
 
-/** Whether the next live block is a newer projection of the same provider block. */
-function messageBlockContinues(previous: MessageBlock, next: MessageBlock): boolean {
+/** Whether two live projections describe the same provider block. */
+function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
     if (previous.type !== next.type) return false;
     switch (previous.type) {
         case "text":
-            return next.type === "text" && next.text.startsWith(previous.text);
+            return (
+                next.type === "text" &&
+                (next.text.startsWith(previous.text) || previous.text.startsWith(next.text))
+            );
         case "reasoning":
-            return next.type === "reasoning" && next.text.startsWith(previous.text);
+            return (
+                next.type === "reasoning" &&
+                (next.text.startsWith(previous.text) || previous.text.startsWith(next.text))
+            );
         case "image":
             return (
                 next.type === "image" &&
@@ -1965,14 +2030,43 @@ function messageBlockContinues(previous: MessageBlock, next: MessageBlock): bool
                 previous.data === next.data
             );
         case "tool_call":
+            // While either side is still running its arguments are still
+            // streaming, so the name is the only stable identity. Two finished
+            // calls are the same call only when their final arguments agree.
             return (
                 next.type === "tool_call" &&
                 previous.name === next.name &&
-                !(previous.status !== "running" && next.status === "running") &&
-                JSON.stringify(previous.arguments ?? null) ===
-                    JSON.stringify(next.arguments ?? null)
+                (previous.status === "running" ||
+                    next.status === "running" ||
+                    JSON.stringify(previous.arguments ?? null) ===
+                        JSON.stringify(next.arguments ?? null))
             );
     }
+}
+
+/** The richer of two projections of one block; a stale side never wins. */
+function messageBlockMerge(previous: MessageBlock, next: MessageBlock): MessageBlock {
+    if (previous.type === "text" && next.type === "text") {
+        return next.text.startsWith(previous.text) ? next : previous;
+    }
+    if (previous.type === "reasoning" && next.type === "reasoning") {
+        return next.text.startsWith(previous.text) ? next : previous;
+    }
+    if (previous.type === "tool_call" && next.type === "tool_call") {
+        // A finished call never goes back to running, and a result already
+        // received never disappears.
+        if (previous.status !== "running" && next.status === "running") return previous;
+        if (
+            previous.status !== "running" &&
+            next.status !== "running" &&
+            next.result === undefined &&
+            previous.result !== undefined
+        ) {
+            return previous;
+        }
+        return next;
+    }
+    return next;
 }
 
 /** Mechanical migration name for the former package entry point. */

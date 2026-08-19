@@ -262,6 +262,11 @@ async function workspaceFilesRead(
                 ...(cursor === undefined ? {} : { cursor }),
             });
             for (const entry of page.entries) {
+                // The daemon lists `.git` but refuses to descend into it (the
+                // path is protected), so walking into it would fail the whole
+                // listing. In a linked worktree `.git` is a file and needs the
+                // same exclusion.
+                if (entry.name === ".git") continue;
                 if (entry.type === "directory") directories.push(entry.path);
                 else if (entry.type === "file" || entry.type === "symlink") paths.push(entry.path);
             }
