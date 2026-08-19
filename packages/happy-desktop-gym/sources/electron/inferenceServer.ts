@@ -229,7 +229,6 @@ class DeterministicInferenceServer implements GymInferenceServer {
                                 sessionId ?? "unknown-session",
                                 gymLiveToolMutationLineCount(this.#manifest.profile),
                             ),
-                            workdir: "/workspace",
                             max_output_tokens: 400,
                         },
                     },
@@ -261,7 +260,6 @@ class DeterministicInferenceServer implements GymInferenceServer {
                                     "+export const renderer = 'pierre-gym';",
                                     "*** End Patch",
                                 ].join("\n"),
-                                workdir: "/workspace",
                             },
                         },
                     ],
@@ -315,7 +313,6 @@ class DeterministicInferenceServer implements GymInferenceServer {
                 name: "exec_command",
                 arguments: {
                     cmd: "printf 'gym deterministic tool output\\n'",
-                    workdir: "/workspace",
                     max_output_tokens: 200,
                 },
             });
@@ -452,7 +449,7 @@ function liveToolMutationCommand(sessionId: string, lineCount: number): string {
             `Gym live tool mutation · mixed replay · session ${sessionId} · line ${String(index + 1).padStart(3, "0")}`,
     );
     return (
-        // RigRuntime mounts the actual ready managed worktree at /workspace.
+        // The command runs in the session's own workspace checkout, so the path is relative.
         `printf '%s\\n' ${lines.map(shellQuote).join(" ")} ` +
         ">> src/changes/modified/deep/large-modified.md"
     );
