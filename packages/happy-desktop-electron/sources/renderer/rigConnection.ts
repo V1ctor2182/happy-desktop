@@ -96,7 +96,14 @@ export interface RigSession {
 export interface RigSessionDeps {
     readonly conversationOpen: (location: RigSessionLocation) => void;
     readonly groupOpen: (groupId: string) => void;
-    readonly listOpen: (groupId: string) => void;
+    /**
+     * Takes a group out of this window's navigation, because it is gone from the
+     * host's catalog — its project was archived, here or from somewhere else.
+     * Every remembered place inside it goes with it, so there is no Back that
+     * returns to a row which no longer exists.
+     */
+    readonly groupForget: (groupId: string) => void;
+    /** Announces that this connection's session is ready or has been replaced. */
     readonly changed: () => void;
     readonly unavailable?: (error: unknown) => void;
     readonly compatibility?: (mismatch: RigProtocolMismatch | undefined) => void;
@@ -308,7 +315,7 @@ export function rigConnectionOpen(input: {
                                     input.deps.groupOpen(event.groupId);
                                     return;
                                 case "addressedGroupRemoved":
-                                    input.deps.listOpen(event.groupId);
+                                    input.deps.groupForget(event.groupId);
                                     return;
                             }
                         },

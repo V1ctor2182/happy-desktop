@@ -41,6 +41,7 @@ import {
     type DesktopDebugSnapshot,
     type DesktopGuestKeyEvent,
     type DesktopMediaPreview,
+    type DesktopNavigationStep,
     type DesktopPreviewNavigation,
     type DesktopPreviewNavigationStep,
 } from "../shared/desktopContract";
@@ -915,6 +916,28 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     };
     window.on("enter-full-screen", windowStatePublish);
     window.on("leave-full-screen", windowStatePublish);
+    // Back and Forward, from the inputs the operating system offers for them.
+    // The window owns its stack, so what arrives here is only a direction; where
+    // that lands is the renderer's to decide.
+    const navigationStepPublish = (direction: "back" | "forward") => {
+        if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+        window.webContents.send(desktopIpc.navigationStep, {
+            direction,
+        } satisfies DesktopNavigationStep);
+    };
+    // The mouse's side buttons on Windows and Linux, which is where this event
+    // is emitted; on macOS the same buttons arrive in the renderer as ordinary
+    // pointer buttons and are read there.
+    window.on("app-command", (_event, command) => {
+        if (command === "browser-backward") navigationStepPublish("back");
+        if (command === "browser-forward") navigationStepPublish("forward");
+    });
+    // macOS two-finger swipe. The gesture is only delivered while the system
+    // preference for it is on, which is exactly when the reader expects it.
+    window.on("swipe", (_event, direction) => {
+        if (direction === "right") navigationStepPublish("back");
+        if (direction === "left") navigationStepPublish("forward");
+    });
     window.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
         if (isMainFrame && !isInPlace) cleanup();
     });
@@ -1177,6 +1200,13 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
             click: () => void runtime.reset().catch(() => undefined),
         },
     );
+    const navigationStepSend = (direction: "back" | "forward"): void => {
+        const focused = BrowserWindow.getFocusedWindow();
+        if (!focused || focused.webContents.isDestroyed()) return;
+        focused.webContents.send(desktopIpc.navigationStep, {
+            direction,
+        } satisfies DesktopNavigationStep);
+    };
     const template: MenuItemConstructorOptions[] = [
         {
             // macOS reads the bold first menu from this label. Left to the
@@ -1201,6 +1231,24 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
             : [{ label: "Instances", submenu: instances } as MenuItemConstructorOptions]),
         { role: "editMenu" },
         viewMenu,
+        {
+            // The same two items, and the same keys, every browser puts here.
+            // They carry a direction to the focused window, which is the only
+            // place that knows what going back lands on.
+            label: "History",
+            submenu: [
+                {
+                    label: "Back",
+                    accelerator: "CmdOrCtrl+[",
+                    click: () => navigationStepSend("back"),
+                },
+                {
+                    label: "Forward",
+                    accelerator: "CmdOrCtrl+]",
+                    click: () => navigationStepSend("forward"),
+                },
+            ],
+        },
         { role: "windowMenu" },
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));

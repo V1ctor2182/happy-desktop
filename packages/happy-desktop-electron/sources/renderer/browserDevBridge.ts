@@ -84,6 +84,11 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // A browser tab hosts no preview guest, so no navigation is ever
         // reported and the subscription is a well-behaved no-op.
         previewNavigationSubscribe: () => () => undefined,
+        // A browser tab already has the real thing — its own Back and Forward
+        // buttons, and the trackpad gesture the browser drives from them — which
+        // the window's own stack listens for directly. Nothing has to be relayed
+        // through here, so the subscription is a well-behaved no-op.
+        navigationStepSubscribe: () => () => undefined,
         // A browser tab has no Dock icon to mark, so the count goes nowhere
         // rather than the window branching on where it is running.
         dockUnreadSet: () => undefined,

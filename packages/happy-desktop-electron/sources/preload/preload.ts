@@ -4,6 +4,7 @@ import {
     desktopIpc,
     mediaPreviewArgument,
     type DesktopBrowserStatus,
+    type DesktopNavigationStep,
     type DesktopPreviewNavigation,
     type DesktopBuildIdentity,
     type DesktopDebugSnapshot,
@@ -77,6 +78,12 @@ const bridge: HappyDesktopBridge = {
             listener(step);
         ipcRenderer.on(desktopIpc.previewNavigationChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.previewNavigationChanged, receive);
+    },
+    navigationStepSubscribe(listener: (step: DesktopNavigationStep) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, step: DesktopNavigationStep) =>
+            listener(step);
+        ipcRenderer.on(desktopIpc.navigationStep, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.navigationStep, receive);
     },
     // `send`, not `invoke`: the shell has nothing to answer, and a badge that
     // made the window await the operating system would be a worse badge.

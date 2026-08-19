@@ -45,7 +45,13 @@ export interface RigDirectoryStore {
 export interface RigDirectoryDeps {
     readonly conversationOpen: (rigId: string, location: RigSessionLocation) => void;
     readonly groupOpen: (rigId: string, groupId: string) => void;
-    readonly listOpen: (rigId: string, groupId: string) => void;
+    /**
+     * Takes a group that stopped existing out of the window's navigation. Both
+     * identities travel: the window addresses one Rig at a time, and a
+     * background one reporting a removal must not move the reader.
+     */
+    readonly groupForget: (rigId: string, groupId: string) => void;
+    /** Desktop-wide model memory for this window's Rig connection. */
     readonly modelPreferencePersistence: RigModelPreferencePersistence;
 }
 
@@ -175,7 +181,7 @@ export function rigDirectoryStoreCreate(
             deps: {
                 conversationOpen: (location) => deps.conversationOpen(LOCAL_RIG_ID, location),
                 groupOpen: (groupId) => deps.groupOpen(LOCAL_RIG_ID, groupId),
-                listOpen: (groupId) => deps.listOpen(LOCAL_RIG_ID, groupId),
+                groupForget: (groupId) => deps.groupForget(LOCAL_RIG_ID, groupId),
                 compatibility: (mismatch) => {
                     if (rig.protocolMismatch?.message === mismatch?.message) return;
                     rig.protocolMismatch = mismatch;

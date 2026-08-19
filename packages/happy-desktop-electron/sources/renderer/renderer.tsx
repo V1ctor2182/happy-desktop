@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import {
     DesktopStartupScreen,
+    rigHistoryCreate,
     rigRouterConversationOpen,
     rigRouterGroupOpen,
-    rigRouterListOpen,
+    rigRouterGroupForget,
     rigRouterCreate,
     type AppRigUpdate,
     type AppRigDebugStore,
@@ -71,6 +72,7 @@ import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { desktopPreferencesCreate } from "./desktopPreferences";
+import { desktopHistoryPersistence } from "./desktopHistory";
 import { desktopDebugStoreCreate } from "./desktopDebugStore";
 import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
@@ -652,7 +654,31 @@ if (mediaPreviewBridge) {
         // The local router outlives any single daemon connection, so it is created
         // here and the session store navigates through it when a conversation it
         // created should be opened.
-        const rigRouter = rigRouterCreate();
+        const rigHistory = rigHistoryCreate({
+            // A browser tab's own Back and Forward buttons are real, so that
+            // window keeps native entries for them to move between; the desktop
+            // shell sends the same two directions over the bridge instead.
+            nativeEntries: window.happyDesktop === undefined,
+            persistence: desktopHistoryPersistence(),
+        });
+        const rigRouter = rigRouterCreate(rigHistory);
+        // The window owns its navigation stack, so the shell's Back and Forward —
+        // the mouse's side buttons, the trackpad swipe, and the History menu —
+        // arrive as a direction and are walked here, the way a browser walks its
+        // own stack.
+        desktopBridge.navigationStepSubscribe((step) => {
+            if (step.direction === "back") rigHistory.back();
+            else rigHistory.forward();
+        });
+        // A mouse's side buttons. Windows and Linux report these to the shell as
+        // Back and Forward commands, but macOS delivers them to the page as
+        // ordinary pointer buttons 3 and 4, so they are read where they land.
+        window.addEventListener("auxclick", (event) => {
+            if (event.button !== 3 && event.button !== 4) return;
+            event.preventDefault();
+            if (event.button === 3) rigHistory.back();
+            else rigHistory.forward();
+        });
         // Appearance, title motion, and model choices share one durable desktop
         // document. The adapter keeps its current value synchronous so writes
         // from any product store preserve changes already made by the others.
@@ -697,7 +723,7 @@ if (mediaPreviewBridge) {
             conversationOpen: (rigId, location) =>
                 rigRouterConversationOpen(rigRouter, rigId, location),
             groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
-            listOpen: (rigId, groupId) => rigRouterListOpen(rigRouter, rigId, groupId),
+            groupForget: (rigId, groupId) => rigRouterGroupForget(rigRouter, rigId, groupId),
             modelPreferencePersistence: preferences.preferencePersistence,
         });
         let materialized = "";

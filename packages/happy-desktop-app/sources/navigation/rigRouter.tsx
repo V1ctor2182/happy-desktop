@@ -1,7 +1,4 @@
 import {
-    createBrowserHistory,
-    createHashHistory,
-    createMemoryHistory,
     createRootRouteWithContext,
     createRoute,
     createRouter,
@@ -10,8 +7,9 @@ import {
     useNavigate,
     useParams,
     useRouteContext,
-    type RouterHistory,
 } from "@tanstack/react-router";
+import { rigHistoryCreate, type RigRouterHistory } from "./rigHistory";
+import { rigRoutePathParse } from "./rigRoute";
 import type {
     AppearanceStore,
     ExperimentsStore,
@@ -124,11 +122,7 @@ function rigDefaultId(context: RigRouterContext | undefined): string {
  * retain this locally assembled tree, so `rigRouterCreate` checks the path here.
  */
 function rigListRedirect(rigId: string): never {
-    throw redirect({
-        params: { rigId },
-        replace: true,
-        to: "/chats/$rigId",
-    } as unknown as Parameters<typeof redirect>[0]);
+    throw redirect({ params: { rigId }, replace: true, to: "/chats/$rigId" });
 }
 
 /** The addressed Rig's workspace store, absent while that Rig is not connected. */
@@ -285,24 +279,14 @@ function RigWorkspaceLayout(
         inbox?: boolean;
     } = {},
 ) {
-    // The hook's generic inference does not retain this locally assembled route
-    // tree. Route definitions above are still typed by `RigRouterContext`;
-    // only this hook needs to be told which context it is reading.
+    // Read loosely because this component renders under several routes, which
+    // makes every context member optional; the provider supplies all of them
+    // together, so it is read back as the whole context it was given.
     const context = useRouteContext({ strict: false }) as unknown as RigRouterContext;
-    // Likewise, the hook cannot infer this tree's literal path union. The paths
-    // below are checked against the tree by `rigRouterCreate`.
-    const navigate = useNavigate() as unknown as (options: {
-        params?: Record<string, string>;
-        replace?: boolean;
-        to: string;
-    }) => Promise<void>;
+    const navigate = useNavigate();
     // `strict: false` because a Rig's list carries only `rigId`, and a group
     // carries no `chatId`.
-    const params = useParams({ strict: false }) as {
-        rigId?: string;
-        groupId?: string;
-        chatId?: string;
-    };
+    const params = useParams({ strict: false });
     // The router is constructed before RouterProvider supplies the real context,
     // so the very first render of a deep-linked URL can arrive with an empty
     // context; the provider's context lands on the next synchronous pass.
@@ -369,12 +353,8 @@ function RigWorkspaceLayout(
  */
 function RigSettingsRoute() {
     const context = useRouteContext({ strict: false }) as unknown as RigRouterContext;
-    const navigate = useNavigate() as unknown as (options: {
-        params?: Record<string, string>;
-        replace?: boolean;
-        to: string;
-    }) => Promise<void>;
-    const params = useParams({ strict: false }) as { section?: string };
+    const navigate = useNavigate();
+    const params = useParams({ strict: false });
     return (
         <AppRigSettingsView
             appearance={context.appearance}
@@ -405,7 +385,7 @@ function RigSettingsRoute() {
  * one stable address, so the UI never keeps a second competing selection in a
  * store.
  */
-export function rigRouterCreate(history: RouterHistory = defaultHistory()) {
+export function rigRouterCreate(history: RigRouterHistory = defaultHistory()) {
     return createRouter({
         context: undefined as unknown as RigRouterContext,
         defaultPreload: false,
@@ -420,21 +400,14 @@ export function rigRouterCreate(history: RouterHistory = defaultHistory()) {
 
 /**
  * Addresses one local session: the single place that turns a session's location
- * into a local URL. The cast stays inside this module because the router helper
- * cannot expose this assembled tree's literal paths to outside callers; the
- * desktop shell never hand-builds a local URL.
+ * into a local URL. The desktop shell never hand-builds one.
  */
 export function rigRouterConversationOpen(
     router: RigRouter,
     rigId: string,
     location: RigSessionLocation,
 ): void {
-    void (
-        router.navigate as unknown as (options: {
-            params: Record<string, string>;
-            to: string;
-        }) => Promise<void>
-    )({
+    void router.navigate({
         params: { chatId: location.sessionId, groupId: location.groupId, rigId },
         to: "/chats/$rigId/$groupId/$chatId",
     });
@@ -446,76 +419,65 @@ export function rigRouterConversationOpen(
  * group through `rigRouterConversationOpen` once it exists.
  */
 export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: string): void {
-    void (
-        router.navigate as unknown as (options: {
-            params: Record<string, string>;
-            to: string;
-        }) => Promise<void>
-    )({ params: { groupId, rigId }, to: "/chats/$rigId/$groupId" });
+    void router.navigate({ params: { groupId, rigId }, to: "/chats/$rigId/$groupId" });
 }
 
 /**
- * Addresses a Rig's own list because one of its groups stopped existing — its
- * project archived, here or from another window or another machine. It is the
- * nearest address that is still true for a reader who was inside that group.
+ * Takes a group that stopped existing out of this window's navigation — a
+ * workspace or project archived, here or from another window or another machine.
+ *
+ * Every remembered address naming that group goes, not just the one on screen:
+ * one archive kills a run of them, the workspace and each conversation opened
+ * inside it. Because the stack is this application's own array rather than the
+ * browser's, they are removed outright — there is no dead entry left to step
+ * over, and none to arrive back at by going forward.
  *
  * It moves nobody who is not standing on the thing that went. A Rig reports the
  * removal of its own group whether or not the window is currently showing it, so
- * the current address is what decides: only a route naming this exact Rig and
- * this exact group is replaced. Everything else — another project, the Rig's own
- * list or settings — is already a valid address, and a removal elsewhere
- * is inert against it.
- *
- * Replace rather than push: the entry being left names a row that is gone, so
- * keeping it in history would only offer a Back that lands nowhere.
+ * a reader looking at another project, the Rig's own list, or settings keeps
+ * their place while the dead addresses are quietly dropped from behind them.
  */
-export function rigRouterListOpen(router: RigRouter, rigId: string, groupId: string): void {
-    // The router's own matched route, never a hand-parsed path: it already
-    // knows which route the window is showing and what its parameters decoded
-    // to, and the leaf match is the whole answer. Only the two routes that put
-    // the reader *inside* a group qualify — the group itself and a conversation
-    // in it. Any other address, including one that matched nothing, is left
-    // alone.
-    //
-    // The matches are read through the same structural cast this file already
-    // uses for `navigate`: the ambient route registration these types resolve
-    // against is not this router's tree, so the generated union names routes
-    // that do not exist here. The values are the router's own.
-    const matches = router.state.matches as unknown as readonly {
-        readonly params: Record<string, string | undefined>;
-        readonly routeId: string;
-    }[];
-    const match = matches.at(-1);
-    if (match === undefined) return;
-    if (match.routeId !== groupRoute.id && match.routeId !== chatRoute.id) return;
-    if (match.params.rigId !== rigId || match.params.groupId !== groupId) return;
-    void (
-        router.navigate as unknown as (options: {
-            params: Record<string, string>;
-            replace: boolean;
-            to: string;
-        }) => Promise<void>
-    )({ params: { rigId }, replace: true, to: "/chats/$rigId" });
-}
-
-/** Creates deterministic local-router history for application and navigation tests. */
-export function rigMemoryHistoryCreate(initialEntry = "/chats/local"): RouterHistory {
-    return createMemoryHistory({ initialEntries: [initialEntry] });
+export function rigRouterGroupForget(router: RigRouter, rigId: string, groupId: string): void {
+    const changed = router.history.groupForget(rigId, groupId);
+    // A rendered window is subscribed to its own history and reloads from the
+    // notification above. One that is not — a window still starting up — has to
+    // be told, the same way the router tells itself when it commits a location
+    // with nothing listening.
+    if (changed && router.history.subscribers.size === 0)
+        void router.load({ action: { type: "REPLACE" } });
 }
 
 /**
- * Packaged desktop builds load over `file:`, where a browser history would
- * rewrite the document URL to a path that does not exist on disk. The hosted
- * local shell has the same constraint because its static Pages host has no SPA
- * fallback. Both use hash history; browser-local development retains normal
- * browser URLs.
+ * Creates deterministic local-router history for application and navigation
+ * tests. The starting point is given as a URL because that is what those tests
+ * are about — which place a URL addresses — and it is parsed here exactly as one
+ * arriving from the document would be.
  */
-function defaultHistory(): RouterHistory {
-    if (typeof window === "undefined") return rigMemoryHistoryCreate();
-    const hostedDesktop = new URLSearchParams(window.location.search).get("desktop") === "1";
-    return window.location.protocol === "file:" || hostedDesktop
-        ? createHashHistory()
-        : createBrowserHistory();
+export function rigMemoryHistoryCreate(initialUrl = "/chats/local"): RigRouterHistory {
+    const route = rigRoutePathParse(initialUrl);
+    return rigHistoryCreate({ initialEntries: route ? [route] : [] });
+}
+
+/**
+ * The stack every window navigates. It is this application's own array rather
+ * than the browser's, so an address that stops existing can be removed from it;
+ * the document URL only mirrors where the reader is. A window given somewhere to
+ * keep it reopens where it was left.
+ */
+function defaultHistory(): RigRouterHistory {
+    return rigHistoryCreate();
 }
 
 export type RigRouter = ReturnType<typeof rigRouterCreate>;
+
+/**
+ * Registers this window's route tree as the one every router helper is typed
+ * against. There is exactly one router in this application, so `navigate`,
+ * `redirect`, and `useParams` can name its addresses directly and a path or
+ * parameter that does not exist stops being a compile error waiting to happen.
+ */
+declare module "@tanstack/react-router" {
+    interface Register {
+        router: RigRouter;
+    }
+}

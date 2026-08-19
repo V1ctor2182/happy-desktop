@@ -388,6 +388,19 @@ export type DesktopPreviewNavigationStep =
           readonly reason: string;
       };
 
+/**
+ * A request to move through this window's own navigation stack, made with the
+ * inputs an operating system offers for it: the mouse's side buttons, the
+ * trackpad's two-finger swipe, and the Back and Forward menu items.
+ *
+ * Only the main process sees those inputs, and none of them says *where* to go —
+ * they say which direction. The window holds the stack and decides what that
+ * lands on, exactly as a browser does.
+ */
+export type DesktopNavigationStep = {
+    readonly direction: "back" | "forward";
+};
+
 export type DesktopPreviewNavigation = DesktopPreviewNavigationStep & {
     readonly guestId: number;
     readonly navigationId: number;
@@ -431,6 +444,8 @@ export interface HappyDesktopBridge {
      * the steps carrying its own guest id and follows one navigation at a time.
      */
     previewNavigationSubscribe(listener: (step: DesktopPreviewNavigation) => void): () => void;
+    /** Back and Forward, as asked for by the mouse, the trackpad, or the menu. */
+    navigationStepSubscribe(listener: (step: DesktopNavigationStep) => void): () => void;
     /**
      * Reports how many conversations are waiting for the person, for the mark on
      * the Dock icon. One-way and fire-and-forget: the window states what it is
@@ -535,6 +550,8 @@ export const desktopIpc = {
     browserStatusChanged: "happy2:browser:status-changed",
     guestKey: "happy2:guest:key",
     previewNavigationChanged: "happy2:html-preview:navigation-changed",
+    /** Main → renderer: the reader asked to go back or forward. */
+    navigationStep: "happy2:navigation:step",
     directoryPick: "happy2:directory:pick",
     mediaPreviewChanged: "happy2:media-preview:changed",
     mediaPreviewClose: "happy2:media-preview:close",

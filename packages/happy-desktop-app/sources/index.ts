@@ -18,10 +18,16 @@ export {
     type AppRigProfilerStore,
 } from "./views/AppRigSettingsView";
 export {
+    rigHistoryCreate,
+    type RigHistoryDocument,
+    type RigHistoryPersistence,
+    type RigRouterHistory,
+} from "./navigation/rigHistory";
+export {
     rigMemoryHistoryCreate,
     rigRouterConversationOpen,
     rigRouterGroupOpen,
-    rigRouterListOpen,
+    rigRouterGroupForget,
     rigRouterCreate,
     type RigRouter,
     type RigRouterContext,
