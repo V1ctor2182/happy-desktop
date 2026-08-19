@@ -199,6 +199,7 @@ export function fakeUserMessage(overrides: Partial<UserMessage> & { id: string }
         runId: null,
         status: "pending",
         ...overrides,
+        metadata: overrides.metadata ?? {},
     };
 }
 
@@ -206,7 +207,13 @@ export function fakeUserMessage(overrides: Partial<UserMessage> & { id: string }
 export function fakeAgentMessage(
     overrides: Partial<Extract<Message, { role: "agent" }>> & { id: string },
 ): Extract<Message, { role: "agent" }> {
-    return { content: [], createdAt: 1, role: "agent", ...overrides };
+    return {
+        content: [],
+        createdAt: 1,
+        role: "agent",
+        ...overrides,
+        metadata: overrides.metadata ?? {},
+    };
 }
 
 /** A run envelope; a `HistoryRun` when given messages. */
@@ -463,6 +470,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 createdAt: 1,
                 delivery: request.delivery ?? "queue",
                 id: request.id ?? `server-${String((idCounter += 1))}`,
+                metadata: {},
                 mode: request.mode,
                 role: "user",
                 runId: null,

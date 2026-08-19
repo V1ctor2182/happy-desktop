@@ -1625,6 +1625,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         role: "user",
                         createdAt: now(),
                         content,
+                        metadata: {},
                         status: "pending",
                         delivery,
                         mode,
