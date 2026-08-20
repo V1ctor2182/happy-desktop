@@ -515,6 +515,12 @@ export interface RigWorkspaceSnapshot {
      * having it reset on every file they open would make it not a preference.
      */
     readonly fileViewMode: RigFileViewMode;
+    /**
+     * Whether long diff lines wrap to the pane or scroll out of it. One
+     * preference for the workspace, like the mode: it is how this reader reads
+     * long lines, not a fact about any one file.
+     */
+    readonly fileViewWrap: boolean;
     /** Whether the panel lists only changed files or every file in the checkout. */
     readonly fileScope: RigFileScope;
     /** Whether Changes nests paths into folders or lists them whole. All Files is always lazy. */
@@ -970,6 +976,8 @@ export interface RigWorkspaceStore {
     fileRetry(tabId: string): void;
     /** Chooses how changed files are displayed, for every tab. */
     fileViewModeUpdate(mode: RigFileViewMode): void;
+    /** Chooses whether long diff lines wrap or scroll, for every tab. */
+    fileViewWrapUpdate(wrap: boolean): void;
     /**
      * Chooses whether the panel lists changed files or all of them. Asking for
      * all of them is what reads the checkout's listing, so it is never read for
@@ -1302,6 +1310,7 @@ export function rigWorkspaceStoreCreate(
     /** Every group id the last authoritative read listed: projects and their worktrees. */
     let authoritativeGroupIds: ReadonlySet<string> = new Set();
     let fileViewMode: RigFileViewMode = "unified";
+    let fileViewWrap = false;
     /**
      * How each checkout this window has arranged is arranged, read once here.
      *
@@ -1569,6 +1578,7 @@ export function rigWorkspaceStoreCreate(
         groupResume,
         openInTargets,
         fileViewMode,
+        fileViewWrap,
         fileScope: "changed",
         fileLayout: "flat",
         fileTreeExpanded,
@@ -1946,6 +1956,7 @@ export function rigWorkspaceStoreCreate(
                 snapshot.projectArchive === projectArchive &&
                 snapshot.projectCompute === projectCompute &&
                 snapshot.fileViewMode === fileViewMode &&
+                snapshot.fileViewWrap === fileViewWrap &&
                 snapshot.fileScope === nextFileScope &&
                 snapshot.fileLayout === nextFileLayout &&
                 snapshot.panelWidth === nextPanelWidth &&
@@ -1968,6 +1979,7 @@ export function rigWorkspaceStoreCreate(
                           groupResume,
                           openInTargets,
                           fileViewMode,
+                          fileViewWrap,
                           fileScope: nextFileScope,
                           fileLayout: nextFileLayout,
                           ...(nextPanelWidth === undefined ? {} : { panelWidth: nextPanelWidth }),
@@ -3631,6 +3643,7 @@ export function rigWorkspaceStoreCreate(
                     groupResume,
                     openInTargets,
                     fileViewMode,
+                    fileViewWrap,
                     // Nothing is addressed here, so there is no checkout whose
                     // arrangement this could be: the defaults stand in.
                     fileScope: "changed",
@@ -4294,6 +4307,11 @@ export function rigWorkspaceStoreCreate(
         fileViewModeUpdate(mode) {
             if (fileViewMode === mode) return;
             fileViewMode = mode;
+            recompute();
+        },
+        fileViewWrapUpdate(wrap) {
+            if (fileViewWrap === wrap) return;
+            fileViewWrap = wrap;
             recompute();
         },
         fileScopeUpdate(groupId, scope) {

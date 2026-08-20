@@ -42,6 +42,14 @@ export function elapsed(seconds: number): string {
 }
 `;
 
+const wideBefore = `/** One sentence, kept on one line the way configuration prose often is. */
+export const guidance = "Workspace writes stay inside the checkout.";
+`;
+
+const wide = `/** One sentence, kept on one line the way configuration prose often is. */
+export const guidance = "Workspace writes stay inside the checkout, its Git control directory, and temporary directories; everything else on the host is readable but never writable, and outbound network access flows through the managed proxy alone.";
+`;
+
 /** The preview a host hands in: the product's own file surface, over one file. */
 function preview(path: string, text: string) {
     return <FilePreview content={{ type: "text", text }} path={path} />;
@@ -328,6 +336,39 @@ export function ChangedFileDiffPage() {
                     />,
                     300,
                 )}
+            </Specimen>
+
+            <Specimen
+                detail="The choice sits at the right end of the mode bar and leaves only for Preview; wrapped lines fold at the pane instead of scrolling out of it, in the diff and in Edit alike"
+                label="Wrap"
+                number="11"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {frame(
+                        <ChangedFileDiff
+                            appearance="light"
+                            mode="unified"
+                            newContent={wide}
+                            oldContent={wideBefore}
+                            onWrapChange={() => {}}
+                            path="packages/happy-desktop-ui/src/guidance.ts"
+                        />,
+                        240,
+                    )}
+                    {frame(
+                        <ChangedFileDiff
+                            appearance="light"
+                            mode="unified"
+                            newContent={wide}
+                            oldContent={wideBefore}
+                            onWrapChange={() => {}}
+                            path="packages/happy-desktop-ui/src/guidance.ts"
+                            wrap
+                        />,
+                        240,
+                    )}
+                </div>
             </Specimen>
         </ComponentPage>
     );

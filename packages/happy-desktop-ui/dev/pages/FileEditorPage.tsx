@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { Banner } from "../../src/Banner";
 import { EmptyState } from "../../src/EmptyState";
 import { FileEditor } from "../../src/FileEditor";
+import { MarkdownDocument } from "../../src/MarkdownDocument";
 import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -17,6 +18,13 @@ export function Counter() {
         </button>
     );
 }
+`;
+const wideSample = `[workspace]
+guidance = "Workspace writes stay inside the checkout, its Git control directory, and temporary directories; everything else on the host is readable but never writable, and outbound network access flows through the managed proxy alone."
+`;
+const markdownSample = `# Notes
+
+One sentence kept on one line the way dictated prose often is, long enough that the only honest ways to read it are to scroll after it or to fold it at the pane and keep reading.
 `;
 function frame(
     children: ReactNode,
@@ -193,6 +201,41 @@ export function FileEditorPage() {
                         />,
                         220,
                         { path: "src/components/NewFile.tsx" },
+                    )}
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Right-aligned in the path row; on a file with a rendered face it sits left of Rendered / Source and shows only with the source, so the face control never moves"
+                label="Wrap"
+                number="07"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {frame(
+                        <FileEditor
+                            documentKey="happy.toml@31c8"
+                            onSave={() => {}}
+                            onWrapChange={() => {}}
+                            path="happy.toml"
+                            value={wideSample}
+                            wrap
+                        />,
+                        220,
+                        { path: "happy.toml" },
+                    )}
+                    {frame(
+                        <FileEditor
+                            documentKey="docs/notes.md@5d02"
+                            initialFace="source"
+                            onSave={() => {}}
+                            onWrapChange={() => {}}
+                            path="docs/notes.md"
+                            rendered={<MarkdownDocument text={markdownSample} />}
+                            value={markdownSample}
+                        />,
+                        220,
+                        { path: "docs/notes.md" },
                     )}
                 </div>
             </Specimen>

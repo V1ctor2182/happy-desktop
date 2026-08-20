@@ -117,6 +117,8 @@ export type CodeEditorProps = {
     onSave?: () => void;
     readOnly?: boolean;
     placeholder?: string;
+    /** Soft-wraps long lines at the view edge instead of scrolling them. */
+    wrap?: boolean;
 };
 
 type EditorBridge = {
@@ -132,7 +134,7 @@ interface EditorDocument {
     /** Duplicate simultaneous consumers stay isolated and never enter the shared LRU. */
     readonly cacheable: boolean;
     readonly editable: Compartment;
-    /** The read-only and placeholder configuration currently installed. */
+    /** The read-only, wrapping, and placeholder configuration currently installed. */
     editableKey: string;
     readonly key?: string;
     readonly language: Compartment;
@@ -184,13 +186,14 @@ function editorBridgeClear(bridge: EditorBridge): void {
 }
 
 function editorEditableKey(props: CodeEditorProps): string {
-    return `${String(props.readOnly === true)}|${props.placeholder ?? ""}`;
+    return `${String(props.readOnly === true)}|${String(props.wrap === true)}|${props.placeholder ?? ""}`;
 }
 
 function editorEditableExtensions(props: CodeEditorProps): Extension[] {
     return [
         EditorView.editable.of(props.readOnly !== true),
         EditorState.readOnly.of(props.readOnly === true),
+        ...(props.wrap === true ? [EditorView.lineWrapping] : []),
         ...(props.placeholder === undefined ? [] : [placeholderExtension(props.placeholder)]),
     ];
 }

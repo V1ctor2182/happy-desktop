@@ -1997,6 +1997,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             mode={workspace.fileViewMode}
             {...(onReady === undefined ? {} : { onReady })}
             rigOnline={rigOnline}
+            wrap={workspace.fileViewWrap}
             {...(access.writeRefusal === undefined ? {} : { writeRefusal: access.writeRefusal })}
             {...(connectionRefusal === undefined ? {} : { saveRefusal: connectionRefusal })}
             workspace={props.workspace}
@@ -2640,6 +2641,8 @@ function RigFileBody(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: RigFileViewMode;
+    /** Whether long diff lines wrap to the pane or scroll out of it. */
+    wrap: boolean;
     /** Reports that a pending worker-backed diff has committed its final DOM. */
     onReady?: () => void;
     /** Re-reads Rig availability when a retained file handler fires. */
@@ -2747,12 +2750,14 @@ function RigFileBody(props: {
                         void workspace.fileDraftSave(file.id).catch(() => undefined);
                 }}
                 onValueChange={(value) => workspace.fileDraftUpdate(file.id, value)}
+                onWrapChange={(wrap) => workspace.fileViewWrapUpdate(wrap)}
                 path={file.path}
                 readOnly={file.saving || !writable}
                 saveDisabled={saveDisabled}
                 saving={file.saving}
                 {...(status === undefined ? {} : { status })}
                 value={text}
+                wrap={props.wrap}
             />
         );
     }
@@ -2799,6 +2804,8 @@ function RigFileBody(props: {
                         : {})}
                     saveDisabled={saveDisabled}
                     onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
+                    onWrapChange={(wrap) => workspace.fileViewWrapUpdate(wrap)}
+                    wrap={props.wrap}
                     {...(props.onReady === undefined ? {} : { onReady: props.onReady })}
                     // A change that deleted the file left no copy to look at, which
                     // the read reports by having no working-tree identity for it.

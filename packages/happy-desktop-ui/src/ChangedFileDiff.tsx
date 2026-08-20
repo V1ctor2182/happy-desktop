@@ -162,6 +162,18 @@ export type ChangedFileDiffProps = {
     mode?: ChangedFileDiffMode;
     onModeChange?: (mode: ChangedFileDiffMode) => void;
     /**
+     * Whether long lines wrap to the pane instead of scrolling out of it, in
+     * the diff and the editor alike. Defaults to scrolling, which keeps the
+     * shape of the code.
+     */
+    wrap?: boolean;
+    /**
+     * Receives the reader's wrap choice. Without it there is nobody to hand
+     * the choice to, so the toggle is not offered at all rather than offered
+     * and silently inert.
+     */
+    onWrapChange?: (wrap: boolean) => void;
+    /**
      * Receives edits to the working-tree text. Without it there is nobody to
      * hand an edit to, so the mode is not offered at all rather than offered
      * and silently inert.
@@ -278,7 +290,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             diffStyle: mode === "split" ? ("split" as const) : ("unified" as const),
             hunkSeparators: "line-info-basic" as const,
             lineDiffType: "word-alt" as const,
-            overflow: "scroll" as const,
+            overflow: props.wrap === true ? ("wrap" as const) : ("scroll" as const),
             stickyHeader: true,
             theme: {
                 dark: "pierre-dark" as const,
@@ -288,7 +300,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             unsafeCSS: PIERRE_PANE_CSS,
             onPostRender: diffPostRender,
         }),
-        [diffPostRender, mode, props.appearance],
+        [diffPostRender, mode, props.appearance, props.wrap],
     );
     return (
         <section
@@ -320,6 +332,22 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                             {props.saving ? "Saving…" : "Updating…"}
                         </span>
                     ) : null}
+                    {/* Wrap is a fact about lines of source — the diff's or the
+                        editor's — so the toggle leaves only for Preview, whose
+                        rendered face has no lines to wrap. */}
+                    {props.onWrapChange !== undefined && mode !== "preview" ? (
+                        <SegmentedControl
+                            aria-label="Whether long lines wrap"
+                            data-testid="changed-file-diff-wrap"
+                            onChange={(value) => props.onWrapChange?.(value === "wrap")}
+                            segments={[
+                                { value: "wrap", label: "Wrap" },
+                                { value: "scroll", label: "No wrap" },
+                            ]}
+                            size="compact"
+                            value={props.wrap === true ? "wrap" : "scroll"}
+                        />
+                    ) : null}
                 </span>
             </div>
 
@@ -343,6 +371,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         onValueChange={(content) => props.onContentChange?.(content)}
                         readOnly={props.saving === true}
                         value={props.newContent}
+                        wrap={props.wrap}
                     />
                 ) : highlightState === "waiting" || diff === undefined ? null : (
                     <FileDiff

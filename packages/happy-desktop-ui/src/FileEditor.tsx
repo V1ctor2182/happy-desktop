@@ -51,6 +51,14 @@ export type FileEditorProps = {
     placeholder?: string;
     revertLabel?: string;
     closeLabel?: string;
+    /** Whether long lines wrap at the view edge instead of scrolling out of it. */
+    wrap?: boolean;
+    /**
+     * Receives the reader's wrap choice. Without it there is nobody to hand
+     * the choice to, so the toggle is not offered at all rather than offered
+     * and silently inert.
+     */
+    onWrapChange?: (wrap: boolean) => void;
 };
 /**
  * C-054 FileEditor — a props-only text editor surface for one workspace file.
@@ -84,6 +92,8 @@ export function FileEditor(props: FileEditorProps) {
         "placeholder",
         "revertLabel",
         "closeLabel",
+        "wrap",
+        "onWrapChange",
     ]);
     // A Markdown file opens as the document it is, and typing in it is the
     // deliberate second step. Which face is showing belongs to this reading of
@@ -132,6 +142,23 @@ export function FileEditor(props: FileEditorProps) {
                         >
                             {local.status}
                         </span>
+                    ) : null}
+                    {/* Wrap is a fact about lines of source, so the toggle shows
+                        with the source face and leaves when the document is being
+                        read. It sits to the left of the face control, so its
+                        coming and going never moves that control. */}
+                    {local.onWrapChange !== undefined && !reading ? (
+                        <SegmentedControl
+                            aria-label="Whether long lines wrap"
+                            data-testid="file-editor-wrap"
+                            onChange={(value) => local.onWrapChange?.(value === "wrap")}
+                            segments={[
+                                { value: "wrap", label: "Wrap" },
+                                { value: "scroll", label: "No wrap" },
+                            ]}
+                            size="compact"
+                            value={local.wrap === true ? "wrap" : "scroll"}
+                        />
                     ) : null}
                     {local.rendered === undefined ? null : (
                         <SegmentedControl
@@ -188,6 +215,7 @@ export function FileEditor(props: FileEditorProps) {
                     placeholder={local.placeholder}
                     readOnly={local.readOnly}
                     value={local.value}
+                    wrap={local.wrap}
                 />
             )}
         </section>
