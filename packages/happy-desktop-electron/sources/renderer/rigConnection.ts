@@ -97,10 +97,9 @@ export interface RigSessionDeps {
     readonly conversationOpen: (location: RigSessionLocation) => void;
     readonly groupOpen: (groupId: string) => void;
     /**
-     * Takes a group out of this window's navigation, because it is gone from the
-     * host's catalog — its project was archived, here or from somewhere else.
-     * Every remembered place inside it goes with it, so there is no Back that
-     * returns to a row which no longer exists.
+     * Takes a group gone from the host's catalog out of this window's
+     * navigation. Every remembered place inside it goes too, so no Back returns
+     * to a row that no longer exists.
      */
     readonly groupForget: (groupId: string) => void;
     /** Announces that this connection's session is ready or has been replaced. */

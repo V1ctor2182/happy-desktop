@@ -3,14 +3,10 @@ import type { RigHistoryDocument, RigHistoryPersistence } from "happy-desktop-ap
 const HISTORY_KEY = "happy2.router-history.v1";
 
 /**
- * Where this window's navigation stack is kept between runs, so reopening the
- * app — or reloading it during development — lands back on the conversation the
- * reader was in rather than at the beginning.
- *
- * What comes back is whatever is under that key: written by an older build,
- * truncated by a failed write, or edited by hand. It is handed over as `unknown`
- * and parsed into places by the window that owns the stack; a record that does
- * not hold up costs the reader their position and nothing else.
+ * Where this window's navigation stack is kept between runs, so reopening lands
+ * back on the conversation the reader was in. What comes back is whatever is
+ * under that key — an older build's, truncated, hand-edited — so it is handed
+ * over as `unknown` for the window owning the stack to parse.
  */
 export function desktopHistoryPersistence(): RigHistoryPersistence {
     return {

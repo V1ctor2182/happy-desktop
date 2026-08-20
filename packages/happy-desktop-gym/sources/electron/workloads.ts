@@ -137,14 +137,10 @@ interface PanelFileEditMeasurement {
 }
 
 /**
- * A workspace archived out from under an open window.
- *
- * The archive is asked for over the host connection rather than through this
- * window's own menus, because that is the case the window cannot see coming:
- * another window, another machine, or the reader's own second instance retires a
- * workspace while this one is standing inside it. What the window owes the
- * reader then is to leave, and to forget — every remembered address naming that
- * workspace goes, so Back cannot walk into a row that is not there any more.
+ * A workspace archived out from under an open window, over the host connection
+ * rather than this window's menus — the case it cannot see coming. What it owes
+ * the reader then is to leave, and to forget every remembered address naming
+ * that workspace, so Back cannot walk into a row that is gone.
  */
 interface ArchiveReconcileMeasurement {
     /** The route the window was standing on when the archive was requested. */
@@ -855,20 +851,13 @@ async function workloadRun(
 }
 
 /**
- * A workspace retired while this window is standing in it.
+ * A workspace retired while this window stands in it. The archive goes over the
+ * host connection, so nothing here initiated it or waits for it — the window has
+ * to find out by reconciling the catalog, as it would for another machine.
  *
- * The archive is asked for over the host connection, so nothing in this window
- * initiated it and nothing in this window is waiting for it — which is the whole
- * point. A workspace can be retired from another window, another machine, or a
- * second instance of this app, and the window holding it open has to find out
- * the way it finds out about everything else: by reconciling the host's catalog.
- *
- * Two things are then owed. The window must leave, because the address it is on
- * names a row that no longer exists. And it must forget: the remembered stack is
- * this application's own array precisely so that entries naming the dead
- * workspace can be taken out of it, rather than left as steps Back walks into.
- * The lane proves the second by walking the entire stack backwards afterwards
- * and reading every address it arrives at.
+ * It must then leave, and forget: the stack is an array precisely so entries
+ * naming the dead workspace can be removed rather than left as steps Back walks
+ * into. The second is proved by walking the whole stack backwards afterwards.
  */
 async function archiveReconcileRun(
     page: Page,
@@ -892,10 +881,8 @@ async function archiveReconcileRun(
     });
     const project = options.projects[0];
     if (project === undefined) return skipped("No seeded project to make a workspace in.");
-    // The lane makes the workspace it retires rather than taking one of the
-    // seeded ones. What it archives is gone afterwards, and the dataset every
-    // other lane measures against has to survive this one being run — and be the
-    // same dataset when it is run again.
+    // The lane makes what it retires: the dataset every other lane measures
+    // against has to survive this one, and be the same on the next run.
     const created = await options.runtime.client.createWorkspace(
         project.id,
         `archive-reconcile-${Date.now().toString(36)}`,
@@ -908,9 +895,8 @@ async function archiveReconcileRun(
     await mark("workspace-created");
     const victimRoute = `/chats/local/${victim.id}`;
     const projectRoute = `/chats/local/${project.id}`;
-    // A stack with the doomed workspace in it more than once, and a real place on
-    // either side of it. One archive has to take out every one of its entries,
-    // not merely the one on screen.
+    // The doomed workspace twice, with a real place on either side: one archive
+    // has to take out every entry naming it, not merely the one on screen.
     for (const route of [projectRoute, victimRoute, projectRoute, victimRoute]) {
         await navigateRoute(page, route);
         await waitForAny(page, ["body"]);
@@ -934,8 +920,8 @@ async function archiveReconcileRun(
     const reconcileMs = performance.now() - requestedAt;
     await mark("window-left");
     const settledRoute = await routeRead(page);
-    // Walking the whole stack backwards. The count is bounded by what was put
-    // in it, and one extra step proves the far end holds rather than wrapping.
+    // More steps than were put in, so the far end is proved to hold rather than
+    // wrap.
     const walkedRoutes: string[] = [];
     for (let step = 0; step < 6; step += 1) {
         await historyBack(page);
@@ -963,9 +949,8 @@ async function routeRead(page: Page): Promise<string> {
 }
 
 /**
- * One press of Back, delivered the way a mouse delivers it. macOS hands the side
- * buttons to the page as ordinary pointer buttons rather than to the shell, so
- * this is the real path that code takes, not a test-only entry point.
+ * One press of Back, as a mouse delivers it. macOS hands the side buttons to the
+ * page as pointer buttons rather than to the shell, so this is the real path.
  */
 async function historyBack(page: Page): Promise<void> {
     await page.evaluate(() => {
@@ -974,10 +959,7 @@ async function historyBack(page: Page): Promise<void> {
     await page.waitForTimeout(150);
 }
 
-/**
- * How many sidebar rows currently name one group. A row is addressed by its Rig
- * and then the group inside it, which is the id the sidebar already carries.
- */
+/** How many sidebar rows name one group; rows carry Rig then group. */
 async function sidebarGroupRowCount(page: Page, groupId: string): Promise<number> {
     return page.locator(`[data-item-id="local/${groupId}"]`).count();
 }

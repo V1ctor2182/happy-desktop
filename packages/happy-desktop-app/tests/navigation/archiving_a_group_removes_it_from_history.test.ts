@@ -11,12 +11,9 @@ import {
 import { rigRoutePath, rigRoutePathParse, type RigRoute } from "../../sources/navigation/rigRoute";
 
 /**
- * Archiving a project takes it out of the window's navigation entirely.
- *
- * The window owns its stack, so a place that stops existing is removed from it
- * rather than left behind as an address nothing answers. What these prove is
- * that the removal is a real deletion — no dead entry to step back onto, none to
- * reach by going forward — and that it moves nobody who was somewhere else.
+ * Archiving a project takes it out of the window's navigation entirely. These
+ * prove the removal is a real deletion — no dead entry to step back onto, none
+ * to reach going forward — and that it moves nobody who was somewhere else.
  */
 
 /** A stack held in memory, so a test can watch what a window would have kept. */
@@ -274,12 +271,10 @@ describe("the browser's own back and forward", () => {
 });
 
 /**
- * The document's URL is an address, and one that arrives in it is a request.
- *
- * A window honours the address it was opened on. Honouring one that appears
- * afterwards is the same act, and the window that stopped doing it showed one
- * place in its URL while standing on another — invisibly, because the URL still
- * said what was asked for.
+ * A window honours the address it was opened on; honouring one that arrives
+ * afterwards is the same act. The window that stopped doing it showed one place
+ * in its URL while standing on another — invisibly, since the URL still said
+ * what was asked for.
  */
 describe("an address arriving in the document's URL", () => {
     it("is somewhere to go, not something to ignore", async () => {

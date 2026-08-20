@@ -423,19 +423,16 @@ export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: st
 }
 
 /**
- * Takes a group that stopped existing out of this window's navigation — a
- * workspace or project archived, here or from another window or another machine.
+ * Takes a group that stopped existing out of this window's navigation — archived
+ * here, or from another window or machine.
  *
- * Every remembered address naming that group goes, not just the one on screen:
- * one archive kills a run of them, the workspace and each conversation opened
- * inside it. Because the stack is this application's own array rather than the
- * browser's, they are removed outright — there is no dead entry left to step
- * over, and none to arrive back at by going forward.
+ * Every remembered address naming it goes, not just the one on screen: one
+ * archive kills the workspace and each conversation opened inside it. The stack
+ * is an array rather than the browser's, so they are removed outright.
  *
- * It moves nobody who is not standing on the thing that went. A Rig reports the
- * removal of its own group whether or not the window is currently showing it, so
- * a reader looking at another project, the Rig's own list, or settings keeps
- * their place while the dead addresses are quietly dropped from behind them.
+ * It moves nobody who was not standing on what went. A Rig reports the removal
+ * whether or not this window shows it, so a reader on another project, the Rig's
+ * list, or settings keeps their place while dead addresses drop from behind.
  */
 export function rigRouterGroupForget(router: RigRouter, rigId: string, groupId: string): void {
     const changed = router.history.groupForget(rigId, groupId);

@@ -655,24 +655,19 @@ if (mediaPreviewBridge) {
         // here and the session store navigates through it when a conversation it
         // created should be opened.
         const rigHistory = rigHistoryCreate({
-            // A browser tab's own Back and Forward buttons are real, so that
-            // window keeps native entries for them to move between; the desktop
-            // shell sends the same two directions over the bridge instead.
+            // A browser tab's own buttons are real and need native entries to
+            // move between; the desktop shell sends directions over the bridge.
             nativeEntries: window.happyDesktop === undefined,
             persistence: desktopHistoryPersistence(),
         });
         const rigRouter = rigRouterCreate(rigHistory);
-        // The window owns its navigation stack, so the shell's Back and Forward —
-        // the mouse's side buttons, the trackpad swipe, and the History menu —
-        // arrive as a direction and are walked here, the way a browser walks its
-        // own stack.
+        // The shell's Back and Forward arrive as a direction and are walked here.
         desktopBridge.navigationStepSubscribe((step) => {
             if (step.direction === "back") rigHistory.back();
             else rigHistory.forward();
         });
-        // A mouse's side buttons. Windows and Linux report these to the shell as
-        // Back and Forward commands, but macOS delivers them to the page as
-        // ordinary pointer buttons 3 and 4, so they are read where they land.
+        // macOS delivers the mouse's side buttons to the page as pointer buttons
+        // 3 and 4 rather than as the shell commands other platforms send.
         window.addEventListener("auxclick", (event) => {
             if (event.button !== 3 && event.button !== 4) return;
             event.preventDefault();

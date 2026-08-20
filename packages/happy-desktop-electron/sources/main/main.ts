@@ -916,24 +916,21 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     };
     window.on("enter-full-screen", windowStatePublish);
     window.on("leave-full-screen", windowStatePublish);
-    // Back and Forward, from the inputs the operating system offers for them.
-    // The window owns its stack, so what arrives here is only a direction; where
-    // that lands is the renderer's to decide.
+    // Back and Forward. The window owns its stack, so only a direction travels;
+    // where it lands is the renderer's to decide.
     const navigationStepPublish = (direction: "back" | "forward") => {
         if (window.isDestroyed() || window.webContents.isDestroyed()) return;
         window.webContents.send(desktopIpc.navigationStep, {
             direction,
         } satisfies DesktopNavigationStep);
     };
-    // The mouse's side buttons on Windows and Linux, which is where this event
-    // is emitted; on macOS the same buttons arrive in the renderer as ordinary
-    // pointer buttons and are read there.
+    // The mouse's side buttons on Windows and Linux; macOS delivers the same
+    // buttons to the renderer as pointer buttons, and they are read there.
     window.on("app-command", (_event, command) => {
         if (command === "browser-backward") navigationStepPublish("back");
         if (command === "browser-forward") navigationStepPublish("forward");
     });
-    // macOS two-finger swipe. The gesture is only delivered while the system
-    // preference for it is on, which is exactly when the reader expects it.
+    // macOS two-finger swipe, delivered only while its system preference is on.
     window.on("swipe", (_event, direction) => {
         if (direction === "right") navigationStepPublish("back");
         if (direction === "left") navigationStepPublish("forward");
@@ -1232,9 +1229,9 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
         { role: "editMenu" },
         viewMenu,
         {
-            // The same two items, and the same keys, every browser puts here.
-            // They carry a direction to the focused window, which is the only
-            // place that knows what going back lands on.
+            // The two items every browser puts here, on the same keys. They
+            // carry a direction to the focused window, which alone knows where
+            // going back lands.
             label: "History",
             submenu: [
                 {

@@ -389,13 +389,10 @@ export type DesktopPreviewNavigationStep =
       };
 
 /**
- * A request to move through this window's own navigation stack, made with the
- * inputs an operating system offers for it: the mouse's side buttons, the
- * trackpad's two-finger swipe, and the Back and Forward menu items.
- *
- * Only the main process sees those inputs, and none of them says *where* to go —
- * they say which direction. The window holds the stack and decides what that
- * lands on, exactly as a browser does.
+ * A request to move through this window's navigation stack, from the inputs an
+ * OS offers: the mouse's side buttons, the trackpad swipe, the menu items. Only
+ * the main process sees them, and none says *where* to go — only which
+ * direction. The window holds the stack and decides what that lands on.
  */
 export type DesktopNavigationStep = {
     readonly direction: "back" | "forward";

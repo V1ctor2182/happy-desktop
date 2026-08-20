@@ -1,19 +1,14 @@
 /**
- * Every place this window can be, as a value.
+ * Every place this window can be, as a value. Paths and stored records are only
+ * how a place is rendered for the router and written down; both parse back into
+ * this union, which is where a place is defined.
  *
- * The router addresses places with paths, and storage holds them between runs,
- * but neither is where a place is *defined*. This union is. A path is what a
- * `RigRoute` looks like once it is rendered for the router, and a stored record
- * is what one looks like written down; both are rendered from, and parsed back
- * into, the value below.
+ * That is what lets a place be reasoned about instead of pattern-matched: asking
+ * whether an address is inside a group compares two fields, rather than re-running
+ * a path through the router's matcher and hoping it decodes the same way.
  *
- * That is what lets a place be reasoned about instead of pattern-matched. Asking
- * whether an address is inside some group is a comparison of two fields, not a
- * path re-run through the router's matcher and hoped to decode the same way.
- *
- * A place is its identifiers and nothing else: no query and no fragment. A route
- * that needs to carry something further becomes a field here, so that it is kept
- * between runs and can be reasoned about like the rest.
+ * A place is its identifiers and nothing else — no query, no fragment. Anything a
+ * route must carry becomes a field here.
  */
 export type RigRoute =
     | { readonly kind: "blueprint" }
@@ -78,12 +73,9 @@ function segmentsOf(pathname: string): string[] | undefined {
 }
 
 /**
- * The place a path addresses, or nothing when it addresses none.
- *
- * The router hands locations over as paths, so this is the boundary where an
- * address stops being text and becomes one of the places above. A path that
- * matches no route is not a place, and is refused here rather than carried
- * around as a string that might be one.
+ * The place a path addresses, or nothing. This is where an address stops being
+ * text and becomes one of the places above; a path matching no route is refused
+ * here rather than carried around as a string that might be one.
  */
 export function rigRoutePathParse(pathname: string): RigRoute | undefined {
     const segments = segmentsOf(pathname);
@@ -119,12 +111,9 @@ function fieldOf(record: Record<string, unknown>, name: string): string | undefi
 }
 
 /**
- * The place a stored record describes, or nothing when it describes none.
- *
- * What comes back from storage was written by an older build of this app, or
- * edited by hand, so it is parsed into the union rather than asserted to be one
- * of its members. A record naming a place this build no longer has, or missing
- * what that place needs to be addressed, is not a place here any more.
+ * The place a stored record describes, or nothing. Storage holds what an older
+ * build wrote, or what somebody edited by hand, so it is parsed rather than
+ * asserted: a record naming a place this build lacks is no longer a place.
  */
 export function rigRouteParse(value: unknown): RigRoute | undefined {
     if (typeof value !== "object" || value === null) return undefined;

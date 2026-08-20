@@ -9,18 +9,14 @@ import {
     type RigRoute,
 } from "./rigRoute";
 
-/**
- * How many places a window remembers. Long enough to hold a working session's
- * worth of steps, short enough that the record stays small and cheap to write.
- */
+/** How many places a window remembers, oldest dropped first. */
 const ENTRY_LIMIT = 100;
 
 type LocationState = HistoryLocation["state"];
 
 /**
- * One window's navigation stack as it is written down: the places it has been,
- * oldest first, and which of them it was showing. The entries are places, not
- * paths — a path is only how a place is handed to the router.
+ * One window's stack as it is written down: places it has been, oldest first,
+ * and which it was showing. Entries are places, not paths.
  */
 export interface RigHistoryDocument {
     readonly entries: readonly RigRoute[];
@@ -34,22 +30,18 @@ export interface RigHistoryPersistence {
 }
 
 /**
- * A window's navigation stack, owned by this application rather than by the
- * browser it runs in.
+ * A window's navigation stack, owned here rather than by the browser.
  *
- * The browser's own stack can only be pushed onto, replaced at the cursor, and
- * walked; an entry naming something that no longer exists cannot be taken out of
- * it, or even read. Here the entries are an array of places, so one that stops
- * existing is removed and is simply not there any more — no entry to step over,
- * and nothing to find by going forward.
+ * The browser's stack can only be pushed onto and walked — an entry naming
+ * something that stopped existing cannot be taken out of it, or even read. These
+ * entries are an array, so such an entry is removed outright.
  */
 export interface RigRouterHistory extends RouterHistory {
     /**
-     * Removes every remembered place inside this machine's group, and shows the
-     * nearest survivor if the window was standing on one of them. Answers
-     * whether the stack changed at all, which is not the same as the window
-     * having moved: places behind the reader can go without disturbing where
-     * they are standing.
+     * Removes every remembered place inside one group, showing the nearest
+     * survivor if the window stood on one. Answers whether the stack changed,
+     * which is not the same as the window having moved: places behind the reader
+     * can go without disturbing where they stand.
      */
     groupForget(rigId: string, groupId: string): boolean;
 }
@@ -65,28 +57,25 @@ function stateOf(): LocationState {
 }
 
 /**
- * The place the router just asked for. Every route this window has is a member
- * of the union, so a path that does not parse means the route tree grew a place
- * the union was never told about — a defect in this module, reported here rather
- * than stored as text nobody can reason about later.
+ * The place the router just asked for. A path that does not parse means the
+ * route tree grew a place `RigRoute` was never told about — a defect in this
+ * module. Nothing at the type level ties the two together, so the drift is only
+ * found by walking into it: worth stopping on in development, worth a console
+ * line and the one always-addressable place in a reader's hands.
  */
 function routeOf(path: string): RigRoute {
     const route = rigRoutePathParse(path);
     if (route !== undefined) return route;
     const complaint = `[rigHistory] no place matches ${path}; add it to RigRoute`;
-    // Nothing at the type level ties the route tree to the union, so the drift is
-    // only ever found by walking into it. In development that is a defect worth
-    // stopping on; in a reader's hands it is worth a line in the console and the
-    // one place that is always addressable.
     if (import.meta.env.DEV) throw new Error(complaint);
     console.error(complaint);
     return RIG_ROUTE_HOME;
 }
 
 /**
- * Reads a stored stack, keeping the places it can still read. A record written
- * by an older build can name a place this one no longer has; that is one entry
- * this window cannot go to, not a reason to forget the rest of the session.
+ * Reads a stored stack, keeping the places it can still read. An older build's
+ * record can name a place this one lacks: that is one entry lost, not a reason
+ * to forget the session.
  */
 function documentParse(value: unknown): RigHistoryDocument | undefined {
     if (typeof value !== "object" || value === null) return undefined;
@@ -107,14 +96,11 @@ function documentParse(value: unknown): RigHistoryDocument | undefined {
 }
 
 /**
- * The place the document was opened at, when it names one somebody asked for.
- *
- * A window opened on a bare document is not addressing anything and is left to
- * whatever it remembers. An address in the URL is a request for that exact
- * place — except when it is this window's own reflection: the URL is kept in
- * step with where the reader is, so a reload finds the record's own current
- * place sitting in it, and restoring a single entry from that would throw the
- * rest of the stack away.
+ * The place the document was opened at, when somebody asked for one. A bare
+ * document addresses nothing and is left to what the window remembers. An
+ * address is a request — except when it is this window's own reflection, since
+ * the URL is kept in step and a reload finds the record's current place sitting
+ * in it; restoring that one entry would throw the rest of the stack away.
  */
 function documentRoute(restored: RigHistoryDocument | undefined): RigRoute | undefined {
     if (typeof window === "undefined") return undefined;
@@ -125,15 +111,10 @@ function documentRoute(restored: RigHistoryDocument | undefined): RigRoute | und
 }
 
 /**
- * Mirrors the place into the document's own URL.
- *
- * A window running in a real browser tab keeps one browser entry per step it
- * takes, so that browser's own Back and Forward buttons — and the trackpad
- * gesture the browser drives from them — have something to move between; each
- * entry is stamped with its depth, which is how a `popstate` says which way it
- * went. A window in the desktop shell gets its Back and Forward from the shell
- * instead, so it never grows a second stack it would then have to keep in step
- * with the one it owns.
+ * Mirrors the place into the document's URL. A browser tab keeps one native
+ * entry per step so its own Back and Forward have something to move between,
+ * each stamped with its depth for `popstate` to read back. The desktop shell
+ * supplies those inputs itself and grows no second stack.
  */
 function urlSync(path: string, step: "push" | "replace", ticket: number): void {
     if (typeof window === "undefined") return;
@@ -142,28 +123,21 @@ function urlSync(path: string, step: "push" | "replace", ticket: number): void {
         if (step === "push") window.history.pushState({ happyTicket: ticket }, "", url);
         else window.history.replaceState({ happyTicket: ticket }, "", url);
     } catch {
-        // A document that refuses a URL rewrite still navigates; only the
-        // address shown in developer tools goes stale.
+        // A document refusing a URL rewrite still navigates; only the address
+        // shown in developer tools goes stale.
     }
 }
 
 /**
- * Creates the navigation stack for one window.
- *
- * Given somewhere to keep it, the window reopens where it was left, which is
- * what makes a reload during development land back on the same conversation.
- * The stored stack is parsed rather than trusted, so a damaged record costs the
- * reader their position and nothing else.
+ * Creates the navigation stack for one window. Given somewhere to keep it, the
+ * window reopens where it was left. The stored stack is parsed rather than
+ * trusted, so a damaged record costs the reader their position and nothing else.
  */
 export function rigHistoryCreate(
     options: {
         readonly persistence?: RigHistoryPersistence;
         readonly initialEntries?: readonly RigRoute[];
-        /**
-         * Whether to keep one of the browser's own history entries per step, so
-         * that a real browser tab's Back and Forward buttons work. The desktop
-         * shell supplies those inputs itself and leaves this off.
-         */
+        /** Keep a native entry per step, so a browser tab's buttons work. */
         readonly nativeEntries?: boolean;
     } = {},
 ): RigRouterHistory {
@@ -183,10 +157,8 @@ export function rigHistoryCreate(
 
     const persist = (): void => {
         if (!persistence) return;
-        // Only the newest places are worth keeping, and the window kept has to
-        // contain the cursor: trimming past it would write a position that is
-        // not in the record, which is no longer a stack anybody can be restored
-        // to.
+        // The window kept has to contain the cursor: trimming past it would
+        // write a position that is not in the record.
         const from = Math.min(Math.max(0, entries.length - ENTRY_LIMIT), index);
         persistence.write({
             entries: entries.slice(from, from + ENTRY_LIMIT),
@@ -194,9 +166,6 @@ export function rigHistoryCreate(
         });
     };
 
-    // The browser's own stack is grown only where the browser's own buttons are
-    // the ones a reader presses. In the desktop shell those inputs are delivered
-    // as a direction instead, and this window's array is the only stack there is.
     const nativeEntries = options.nativeEntries ?? false;
     const settle = (step: "push" | "replace" = "replace"): void => {
         urlSync(rigRoutePath(entries[index]), nativeEntries ? step : "replace", index);
@@ -221,9 +190,8 @@ export function rigHistoryCreate(
         getLocation: () =>
             locationOf(entries[index], {
                 ...states[index],
-                // Where the entry sits now. `canGoBack` reads this rather than
-                // counting the array, so it is answered from the array at every
-                // read instead of being stored and kept in step.
+                // `canGoBack` reads this, so it is answered from the array at
+                // every read instead of stored and kept in step.
                 __TSR_index: index,
             }),
         go: (step) => {
@@ -231,8 +199,7 @@ export function rigHistoryCreate(
             settle();
         },
         pushState: (path, state) => {
-            // Going somewhere new from part-way back abandons what was ahead,
-            // exactly as a browser does.
+            // Somewhere new from part-way back abandons what was ahead.
             if (index < entries.length - 1) {
                 entries.splice(index + 1);
                 states.splice(index + 1);
@@ -252,12 +219,10 @@ export function rigHistoryCreate(
         },
     });
 
-    // A real browser tab has its own Back and Forward buttons, and they move
-    // through the native entries `settle` stamped. Each stamp is the position it
-    // was made at, so the entry the browser landed on says where to stand — which
-    // is also what makes the browser's long-press menu, jumping several entries
-    // at once, land in the right place. The stamp is clamped because the stack it
-    // indexes can have shrunk since, when a group was forgotten out from under it.
+    // A browser tab's own buttons move through the entries `settle` stamped, and
+    // the stamp says where to stand — which is also what lands a long-press menu
+    // jumping several at once. It is clamped because the stack can have shrunk
+    // since, when a group was forgotten out from under it.
     if (nativeEntries && typeof window !== "undefined") {
         window.addEventListener("popstate", () => {
             const state = window.history.state as { happyTicket?: unknown } | null;
@@ -265,27 +230,22 @@ export function rigHistoryCreate(
             const moved = Math.min(Math.max(state.happyTicket, 0), entries.length - 1);
             if (moved === index) return;
             index = moved;
-            // The URL is already where the browser put it, so only the record
-            // needs catching up.
+            // The URL is already where the browser put it; only the record lags.
             persist();
             history.notify({ type: "REPLACE" });
         });
     }
 
-    // An address that appears in the document's URL after startup is the same
-    // request as one that was sitting there at startup: somewhere to go. Only an
-    // address from outside this window reaches here — the window's own steps are
-    // mirrored out with `pushState`/`replaceState`, and neither raises this
-    // event — so it is honoured rather than mirrored back. Without this the URL
-    // would be writable and inert, showing one place while the window stood on
-    // another.
+    // An address arriving in the URL after startup is the same request as one
+    // sitting there at startup. Only an address from outside reaches here, since
+    // `pushState`/`replaceState` raise no such event, so it is honoured rather
+    // than mirrored back — otherwise the URL is writable and inert.
     if (typeof window !== "undefined") {
         window.addEventListener("hashchange", () => {
             const route = rigRoutePathParse(window.location.hash.slice(1));
-            // A hash naming no place, and the reflection of a step this window
-            // has already taken, are both nothing to act on. The second is what
-            // a browser's own Back raises alongside the `popstate` that has
-            // already been answered above.
+            // A hash naming no place, and the reflection of a step already
+            // taken, are both nothing to act on. The second is what a browser's
+            // Back raises alongside the `popstate` answered above.
             if (route === undefined || rigRouteSame(entries[index], route)) return;
             history.push(rigRoutePath(route));
         });
@@ -299,9 +259,8 @@ export function rigHistoryCreate(
             for (let at = 0; at < entries.length; at++) {
                 const route = entries[at];
                 if (rigRouteInGroup(route, rigId, groupId)) continue;
-                // Removing what sat between two visits to the same place would
-                // otherwise leave it twice in a row, and a Back that appears to
-                // do nothing.
+                // Removing what sat between two visits to one place would leave
+                // it twice in a row, and a Back that appears to do nothing.
                 const previous = keptEntries[keptEntries.length - 1];
                 if (previous === undefined || !rigRouteSame(previous, route)) {
                     keptEntries.push(route);
@@ -320,9 +279,7 @@ export function rigHistoryCreate(
                 index = keptIndex === -1 ? 0 : keptIndex;
             }
             settle();
-            // Told once, whether or not the place itself changed: the window may
-            // now be standing somewhere else, and what it can go back to has
-            // changed either way.
+            // Told whether or not the place changed: what it can go back to has.
             history.notify({ type: "REPLACE" });
             return true;
         },
