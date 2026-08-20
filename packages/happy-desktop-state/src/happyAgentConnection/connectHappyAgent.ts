@@ -21,6 +21,7 @@ import {
     type UsageBreakdown,
     type Workspace,
 } from "@slopus/happy-agent-client";
+import { createStore } from "zustand/vanilla";
 import { ChatStore } from "./ChatStore.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
@@ -157,21 +158,33 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const sessionMutationCounts = new Map<string, number>();
     const gitStates = new Map<string, GitState>();
     const processOwners = new Map<string, string>();
-    let projects: readonly Project[] = [];
-    let workspaces: readonly Workspace[] = [];
     let config: DaemonConfig | undefined;
     let cursor: string | undefined;
     let resyncTask: Promise<void> | undefined;
     const resyncBufferedEvents: HappyAgentEvent[] = [];
     const hydrationBroadcastEvents: HappyAgentEvent[] = [];
     const recentEvents: RecentEvent[] = [];
-    let connection: GroupsState["connection"] = "connecting";
     let compatibility: ServerCompatibility = CHECKING_SERVER_COMPATIBILITY;
-    let groups = [] as ReturnType<typeof projectGroups>;
     let closed = false;
     let streamAttemptController: AbortController | undefined;
     let retryRequested = false;
     let retryWake: (() => void) | undefined;
+
+    /** The group/catalog pipeline state this connection reconciles and publishes. */
+    interface GroupsStoreState {
+        readonly projects: readonly Project[];
+        readonly workspaces: readonly Workspace[];
+        readonly connection: GroupsState["connection"];
+        /** The published group projection, rebuilt by `publishGroups`. */
+        readonly groups: ReturnType<typeof projectGroups>;
+    }
+
+    const groupsStore = createStore<GroupsStoreState>()(() => ({
+        connection: "connecting",
+        groups: [],
+        projects: [],
+        workspaces: [],
+    }));
 
     reportDebug({
         detail: debugDetail({ endpoint }),
@@ -239,23 +252,27 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         AbortSignal.any([rootController.signal, AbortSignal.timeout(timeoutMs)]);
 
     const groupState = (): GroupsState => ({
-        connection,
+        connection: groupsStore.getState().connection,
         sessionsComplete: config !== undefined,
     });
 
     const publishGroups = (deltas: readonly GroupDelta[] = []): void => {
         if (config !== undefined) {
-            groups = projectGroups(
-                projects,
-                workspaces,
-                endpoint,
-                config,
-                gitStates,
-                agentDrafts,
-                agentModes,
-            );
+            const daemonConfig = config;
+            groupsStore.setState((current) => ({
+                groups: projectGroups(
+                    current.projects,
+                    current.workspaces,
+                    endpoint,
+                    daemonConfig,
+                    gitStates,
+                    agentDrafts,
+                    agentModes,
+                ),
+            }));
         }
         const state = groupState();
+        const { groups } = groupsStore.getState();
         for (const subscriber of groupSubscribers) {
             if (subscriber.closed) continue;
             subscriber.onChange(groups, state);
@@ -268,7 +285,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         return {
             agent: entry.agent,
             config,
-            connection,
+            connection: groupsStore.getState().connection,
             endpoint,
             hasMore: entry.hasMore,
             messages: [...entry.messages.values()],
@@ -302,9 +319,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     };
 
     const publishConnection = (next: GroupsState["connection"]): void => {
-        if (connection === next) return;
-        const previous = connection;
-        connection = next;
+        const previous = groupsStore.getState().connection;
+        if (previous === next) return;
+        groupsStore.setState({ connection: next });
         reportDebug({
             detail: debugDetail({ previous, next }),
             level: next === "reconnecting" ? "warning" : "info",
@@ -316,9 +333,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     };
 
     const workspaceOf = (workspaceId: string): Workspace | undefined =>
-        workspaces.find((candidate) => candidate.id === workspaceId);
+        groupsStore.getState().workspaces.find((candidate) => candidate.id === workspaceId);
 
     const agentOf = (agentId: string): Agent | undefined => {
+        const { projects, workspaces } = groupsStore.getState();
         for (const workspace of workspaces) {
             const agent = workspace.agents.find((candidate) => candidate.id === agentId);
             if (agent !== undefined) return agent;
@@ -345,18 +363,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         current.version.localeCompare(updated.version) <= 0;
 
     const replaceAgent = (agent: Agent): void => {
-        workspaces = workspaces.map((workspace) =>
-            workspace.id === agent.workspaceId ||
-            workspace.agents.some((candidate) => candidate.id === agent.id)
-                ? { ...workspace, agents: replaceResource(workspace.agents, agent) as Agent[] }
-                : workspace,
-        );
-        projects = projects.map((project) =>
-            project.id === agent.workspaceId ||
-            project.agents.some((candidate) => candidate.id === agent.id)
-                ? { ...project, agents: replaceResource(project.agents, agent) as Agent[] }
-                : project,
-        );
+        groupsStore.setState((current) => ({
+            workspaces: current.workspaces.map((workspace) =>
+                workspace.id === agent.workspaceId ||
+                workspace.agents.some((candidate) => candidate.id === agent.id)
+                    ? { ...workspace, agents: replaceResource(workspace.agents, agent) as Agent[] }
+                    : workspace,
+            ),
+            projects: current.projects.map((project) =>
+                project.id === agent.workspaceId ||
+                project.agents.some((candidate) => candidate.id === agent.id)
+                    ? { ...project, agents: replaceResource(project.agents, agent) as Agent[] }
+                    : project,
+            ),
+        }));
         const entry = sessions.get(agent.id);
         if (entry !== undefined) {
             entry.agent = agent;
@@ -410,16 +430,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     };
 
     const adoptProject = (project: Project, deltas: readonly GroupDelta[] = []): boolean => {
-        const current = projects.find((candidate) => candidate.id === project.id);
+        const current = groupsStore
+            .getState()
+            .projects.find((candidate) => candidate.id === project.id);
         if (!shouldAdoptVersion(current, project)) return false;
-        projects = replaceResource(projects, project);
+        groupsStore.setState((state) => ({ projects: replaceResource(state.projects, project) }));
         publishGroups(deltas);
         return true;
     };
 
     const adoptWorkspace = (workspace: Workspace, deltas: readonly GroupDelta[] = []): boolean => {
         if (!shouldAdoptVersion(workspaceOf(workspace.id), workspace)) return false;
-        workspaces = replaceResource(workspaces, workspace);
+        groupsStore.setState((state) => ({
+            workspaces: replaceResource(state.workspaces, workspace),
+        }));
         publishGroups(deltas);
         return true;
     };
@@ -693,8 +717,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 ),
             );
             config = bootstrap.config;
-            projects = bootstrap.projects;
-            workspaces = bootstrap.workspaces;
+            groupsStore.setState({
+                projects: bootstrap.projects,
+                workspaces: bootstrap.workspaces,
+            });
             gitStates.clear();
             for (const [workspaceId, git] of Object.entries(watchedGit?.snapshots ?? {})) {
                 gitStates.set(workspaceId, git);
@@ -711,8 +737,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 {
                     type: "projects_changed",
                     projects: projectGroups(
-                        projects,
-                        workspaces,
+                        bootstrap.projects,
+                        bootstrap.workspaces,
                         endpoint,
                         config,
                         gitStates,
@@ -783,9 +809,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     const renewGitWatch = async (): Promise<void> => {
         if (config === undefined) return;
+        const watched = groupsStore.getState();
         const watchedGit = await optional(() =>
             client.watchGit(
-                { workspaceIds: activeGitWorkspaceIds(projects, workspaces) },
+                { workspaceIds: activeGitWorkspaceIds(watched.projects, watched.workspaces) },
                 {
                     signal: AbortSignal.any([
                         rootController.signal,
@@ -800,12 +827,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             const current = gitStates.get(workspaceId);
             if (current !== undefined && current.scannedAt >= git.scannedAt) continue;
             gitStates.set(workspaceId, git);
-            workspaces = workspaces.map((workspace) =>
-                workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
-            );
-            projects = projects.map((project) =>
-                project.id === workspaceId ? { ...project, git: git.facts } : project,
-            );
+            groupsStore.setState((state) => ({
+                workspaces: state.workspaces.map((workspace) =>
+                    workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
+                ),
+                projects: state.projects.map((project) =>
+                    project.id === workspaceId ? { ...project, git: git.facts } : project,
+                ),
+            }));
             changed = true;
         }
         if (changed) publishGroups();
@@ -862,12 +891,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         }
         switch (event.type) {
             case "project.created":
-                projects = replaceResource(projects, event.payload.project);
+                groupsStore.setState((state) => ({
+                    projects: replaceResource(state.projects, event.payload.project),
+                }));
                 publishGroups([{ type: "project_added", projectId: event.payload.project.id }]);
                 background(renewGitWatch());
                 return;
             case "project.updated": {
-                const current = projects.find((project) => project.id === event.payload.projectId);
+                const current = groupsStore
+                    .getState()
+                    .projects.find((project) => project.id === event.payload.projectId);
                 if (current === undefined) {
                     refetchResource(
                         client
@@ -875,7 +908,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                                 signal: rootController.signal,
                             })
                             .then(({ project }) => {
-                                projects = replaceResource(projects, project);
+                                groupsStore.setState((state) => ({
+                                    projects: replaceResource(state.projects, project),
+                                }));
                                 publishGroups();
                             }),
                     );
@@ -888,29 +923,35 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                                 signal: rootController.signal,
                             })
                             .then(({ project }) => {
-                                const latest = projects.find(
-                                    (candidate) => candidate.id === project.id,
-                                );
+                                const latest = groupsStore
+                                    .getState()
+                                    .projects.find((candidate) => candidate.id === project.id);
                                 if (
                                     latest === undefined ||
                                     latest.version.localeCompare(project.version) <= 0
                                 ) {
-                                    projects = replaceResource(projects, project);
+                                    groupsStore.setState((state) => ({
+                                        projects: replaceResource(state.projects, project),
+                                    }));
                                     publishGroups();
                                 }
                             }),
                     );
                     return;
                 }
-                projects = replaceResource(projects, {
-                    ...applyChanges(current, event.payload.changes),
-                    version: event.payload.version,
-                });
+                groupsStore.setState((state) => ({
+                    projects: replaceResource(state.projects, {
+                        ...applyChanges(current, event.payload.changes),
+                        version: event.payload.version,
+                    }),
+                }));
                 publishGroups();
                 return;
             }
             case "workspace.created":
-                workspaces = replaceResource(workspaces, event.payload.workspace);
+                groupsStore.setState((state) => ({
+                    workspaces: replaceResource(state.workspaces, event.payload.workspace),
+                }));
                 publishGroups([
                     {
                         type: "workspace_added",
@@ -929,7 +970,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                                 signal: rootController.signal,
                             })
                             .then(({ workspace }) => {
-                                workspaces = replaceResource(workspaces, workspace);
+                                groupsStore.setState((state) => ({
+                                    workspaces: replaceResource(state.workspaces, workspace),
+                                }));
                                 publishGroups();
                             }),
                     );
@@ -947,17 +990,21 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                                     latest === undefined ||
                                     latest.version.localeCompare(workspace.version) <= 0
                                 ) {
-                                    workspaces = replaceResource(workspaces, workspace);
+                                    groupsStore.setState((state) => ({
+                                        workspaces: replaceResource(state.workspaces, workspace),
+                                    }));
                                     publishGroups();
                                 }
                             }),
                     );
                     return;
                 }
-                workspaces = replaceResource(workspaces, {
-                    ...applyChanges(current, event.payload.changes),
-                    version: event.payload.version,
-                });
+                groupsStore.setState((state) => ({
+                    workspaces: replaceResource(state.workspaces, {
+                        ...applyChanges(current, event.payload.changes),
+                        version: event.payload.version,
+                    }),
+                }));
                 publishGroups();
                 return;
             }
@@ -1119,12 +1166,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             case "git.updated": {
                 const { git, workspaceId } = event.payload;
                 gitStates.set(workspaceId, git);
-                workspaces = workspaces.map((workspace) =>
-                    workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
-                );
-                projects = projects.map((project) =>
-                    project.id === workspaceId ? { ...project, git: git.facts } : project,
-                );
+                groupsStore.setState((state) => ({
+                    workspaces: state.workspaces.map((workspace) =>
+                        workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
+                    ),
+                    projects: state.projects.map((project) =>
+                        project.id === workspaceId ? { ...project, git: git.facts } : project,
+                    ),
+                }));
                 publishGroups();
                 return;
             }
@@ -1740,9 +1789,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             if (closed) throw new Error("This Happy Agent connection is closed.");
             const subscriber: GroupsSubscriber = { ...subscription, closed: false };
             groupSubscribers.add(subscriber);
-            subscriber.onChange(groups, groupState());
+            subscriber.onChange(groupsStore.getState().groups, groupState());
             return {
-                projects: () => groups,
+                projects: () => groupsStore.getState().groups,
                 state: groupState,
                 close: () => {
                     subscriber.closed = true;
@@ -1824,7 +1873,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             },
             archive(projectId) {
                 const mutationId = nextId();
-                const project = projects.find((candidate) => candidate.id === projectId);
+                const project = groupsStore
+                    .getState()
+                    .projects.find((candidate) => candidate.id === projectId);
                 if (project === undefined) {
                     return mutation(
                         "archive_project",
@@ -1842,8 +1893,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     () =>
                         client.archiveProject(projectId, {
                             ifMatch:
-                                projects.find((candidate) => candidate.id === projectId)?.version ??
-                                project.version,
+                                groupsStore
+                                    .getState()
+                                    .projects.find((candidate) => candidate.id === projectId)
+                                    ?.version ?? project.version,
                             mutationId,
                             signal: rootController.signal,
                         }),
@@ -1877,7 +1930,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         },
         createWorkspace(input) {
             const workspaceId = nextId();
-            const project = projects.find((candidate) => candidate.id === input.projectId);
+            const project = groupsStore
+                .getState()
+                .projects.find((candidate) => candidate.id === input.projectId);
             const parent = workspaceOf(input.projectId);
             const createdAt = now();
             if (project !== undefined && parent !== undefined) {
@@ -1904,7 +1959,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     updatedAt: createdAt,
                     version: workspaceId,
                 };
-                workspaces = replaceResource(workspaces, optimistic);
+                groupsStore.setState((state) => ({
+                    workspaces: replaceResource(state.workspaces, optimistic),
+                }));
                 publishGroups([
                     {
                         type: "workspace_added",
@@ -1940,10 +1997,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         },
                     ]),
                 () => {
-                    workspaces = workspaces.filter(
-                        (workspace) =>
-                            workspace.id !== workspaceId || workspace.version !== workspaceId,
-                    );
+                    groupsStore.setState((state) => ({
+                        workspaces: state.workspaces.filter(
+                            (workspace) =>
+                                workspace.id !== workspaceId || workspace.version !== workspaceId,
+                        ),
+                    }));
                     publishGroups();
                 },
                 undefined,
@@ -1981,7 +2040,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         },
         createSession(input, checkoutReady) {
             const sessionId = nextId();
-            const workspaceId = resolveWorkspaceId(input, workspaces);
+            const workspaceId = resolveWorkspaceId(input, groupsStore.getState().workspaces);
             if (workspaceId === undefined) {
                 return mutation(
                     "create_session",
@@ -2079,28 +2138,30 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     agentModes.delete(sessionId);
                     agentDrafts.delete(sessionId);
                     draftRevisions.delete(sessionId);
-                    workspaces = workspaces.map((candidate) =>
-                        candidate.id === workspaceId
-                            ? {
-                                  ...candidate,
-                                  agents: candidate.agents.filter(
-                                      (agent) =>
-                                          agent.id !== sessionId || agent.version !== sessionId,
-                                  ),
-                              }
-                            : candidate,
-                    );
-                    projects = projects.map((candidate) =>
-                        candidate.id === workspaceId
-                            ? {
-                                  ...candidate,
-                                  agents: candidate.agents.filter(
-                                      (agent) =>
-                                          agent.id !== sessionId || agent.version !== sessionId,
-                                  ),
-                              }
-                            : candidate,
-                    );
+                    groupsStore.setState((state) => ({
+                        workspaces: state.workspaces.map((candidate) =>
+                            candidate.id === workspaceId
+                                ? {
+                                      ...candidate,
+                                      agents: candidate.agents.filter(
+                                          (agent) =>
+                                              agent.id !== sessionId || agent.version !== sessionId,
+                                      ),
+                                  }
+                                : candidate,
+                        ),
+                        projects: state.projects.map((candidate) =>
+                            candidate.id === workspaceId
+                                ? {
+                                      ...candidate,
+                                      agents: candidate.agents.filter(
+                                          (agent) =>
+                                              agent.id !== sessionId || agent.version !== sessionId,
+                                      ),
+                                  }
+                                : candidate,
+                        ),
+                    }));
                     publishGroups([{ type: "session_removed", sessionId }]);
                     return true;
                 },
@@ -2448,7 +2509,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         },
         reorderProject(projectId, afterId) {
             const mutationId = nextId();
-            const project = projects.find((candidate) => candidate.id === projectId);
+            const project = groupsStore
+                .getState()
+                .projects.find((candidate) => candidate.id === projectId);
             if (project === undefined) {
                 return mutation(
                     "reorder_group",
@@ -2469,8 +2532,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         { afterId, mutationId },
                         {
                             ifMatch:
-                                projects.find((candidate) => candidate.id === projectId)?.version ??
-                                project.version,
+                                groupsStore
+                                    .getState()
+                                    .projects.find((candidate) => candidate.id === projectId)
+                                    ?.version ?? project.version,
                             signal: rootController.signal,
                         },
                     ),
@@ -2585,7 +2650,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     function renameGroup(target: GroupTarget, name: string): string {
         const mutationId = nextId();
         if (target.kind === "project") {
-            const project = projects.find((candidate) => candidate.id === target.projectId);
+            const project = groupsStore
+                .getState()
+                .projects.find((candidate) => candidate.id === target.projectId);
             if (project === undefined) {
                 return mutation(
                     "rename_group",
@@ -2606,7 +2673,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         { name, mutationId },
                         {
                             ifMatch:
-                                projects.find((candidate) => candidate.id === project.id)
+                                groupsStore
+                                    .getState()
+                                    .projects.find((candidate) => candidate.id === project.id)
                                     ?.version ?? project.version,
                             signal: rootController.signal,
                         },

@@ -388,6 +388,51 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const EMPTY_CATALOG: RigProjectCatalog = { projects: [], worktrees: [] };
 
+    /**
+     * The durable rows this surface last reconciled, kept apart from the public
+     * snapshot so a projection can be rebuilt without refetching and so
+     * unchanged rows keep their references.
+     */
+    interface RigSessionListInternalState {
+        readonly catalog: RigProjectCatalog;
+        // Whether the catalog has ever been read. An empty catalog is not the
+        // same claim as an unread one, and neither of them is permission:
+        // before the first read nothing is known, and after it an id that is
+        // not there has been withdrawn. Both refuse, and they say different
+        // things.
+        readonly catalogListed: boolean;
+        readonly sessions: readonly RigSessionSummary[];
+        /**
+         * Counts the changes the authoritative reads have made to what this
+         * list describes. An optimistic publication leaves it alone, so a
+         * subscriber can tell "the host says this row is gone" from "this
+         * store took a row out ahead of the host".
+         */
+        readonly catalogRevision: number;
+        readonly optimisticProjectOrder: readonly RigProjectId[] | undefined;
+        readonly optimisticWorkspaceOrders: ReadonlyMap<RigProjectId, readonly RigWorktreeId[]>;
+        /**
+         * The list as the last successful authoritative read described it, kept
+         * apart from what is currently published because the published rows
+         * also carry optimistic changes the host has not answered yet.
+         * Comparing each read against this — rather than against the snapshot —
+         * is what makes a removal the reader performed here still count as the
+         * host's own answer when it is read back, while a read that changed
+         * nothing counts as nothing.
+         */
+        readonly authoritativeProjects: readonly RigProjectGroup[] | undefined;
+    }
+
+    const internal = createStore<RigSessionListInternalState>()(() => ({
+        authoritativeProjects: undefined,
+        catalog: EMPTY_CATALOG,
+        catalogListed: false,
+        catalogRevision: 0,
+        optimisticProjectOrder: undefined,
+        optimisticWorkspaceOrders: new Map(),
+        sessions: [],
+    }));
+
     const listeners = new Set<() => void>();
     let active = false;
     let disposed = false;
@@ -422,12 +467,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         stopObservation?: () => void;
     }
     const projectArchiveWaiters = new Map<string, ProjectArchiveWaiter>();
-    // The durable rows this surface last reconciled, kept so a projection can be
-    // rebuilt without refetching and so unchanged rows keep their references.
-    let sessions: readonly RigSessionSummary[] = [];
-    let catalog: RigProjectCatalog = EMPTY_CATALOG;
-    let optimisticProjectOrder: readonly RigProjectId[] | undefined;
-    const optimisticWorkspaceOrders = new Map<RigProjectId, readonly RigWorktreeId[]>();
     const reorderMutations = new Map<
         string,
         | { readonly kind: "project"; readonly order: readonly RigProjectId[] }
@@ -437,11 +476,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
               readonly order: readonly RigWorktreeId[];
           }
     >();
-    // Whether the catalog has ever been read. An empty catalog is not the same
-    // claim as an unread one, and neither of them is permission: before the
-    // first read nothing is known, and after it an id that is not there has
-    // been withdrawn. Both refuse, and they say different things.
-    let catalogListed = false;
     // Callers waiting for a freshly reserved worktree to be given its canonical
     // path. Settled from every reconcile, so the wait is driven by the host's
     // own catalog rather than by polling it. Each waiter keeps both halves: a
@@ -492,28 +526,15 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const projectArchivesConfirmAbsent = (): void => {
         for (const [mutationId, waiter] of projectArchiveWaiters) {
-            if (!catalog.projects.some((project) => project.id === waiter.projectId)) {
+            if (
+                !internal
+                    .getState()
+                    .catalog.projects.some((project) => project.id === waiter.projectId)
+            ) {
                 projectArchiveSettle(mutationId, { type: "archived" });
             }
         }
     };
-
-    /**
-     * Counts the changes the authoritative reads have made to what this list
-     * describes. An optimistic publication leaves it alone, so a subscriber can
-     * tell "the host says this row is gone" from "this store took a row out ahead
-     * of the host".
-     */
-    let catalogRevision = 0;
-    /**
-     * The list as the last successful authoritative read described it, kept apart
-     * from what is currently published because the published rows also carry
-     * optimistic changes the host has not answered yet. Comparing each read
-     * against this — rather than against the snapshot — is what makes a removal
-     * the reader performed here still count as the host's own answer when it is
-     * read back, while a read that changed nothing counts as nothing.
-     */
-    let authoritativeProjects: readonly RigProjectGroup[] | undefined;
 
     const orderByIds = <T extends { readonly id: string }>(
         entries: readonly T[],
@@ -533,8 +554,9 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const optimisticOrderApply = (
         projected: readonly RigProjectGroup[],
-    ): readonly RigProjectGroup[] =>
-        orderByIds(
+    ): readonly RigProjectGroup[] => {
+        const { optimisticProjectOrder, optimisticWorkspaceOrders } = internal.getState();
+        return orderByIds(
             projected.map((project) => {
                 const order = optimisticWorkspaceOrders.get(project.id);
                 if (order === undefined) return project;
@@ -542,6 +564,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }),
             optimisticProjectOrder,
         );
+    };
 
     const orderMatches = (
         entries: readonly { readonly id: string }[],
@@ -551,50 +574,69 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         entries.every((entry, index) => entry.id === expected[index]);
 
     const optimisticOrdersConfirm = (projected: readonly RigProjectGroup[]): void => {
+        const { optimisticProjectOrder, optimisticWorkspaceOrders } = internal.getState();
+        let nextProjectOrder = optimisticProjectOrder;
         if (
             optimisticProjectOrder !== undefined &&
             orderMatches(projected, optimisticProjectOrder)
         ) {
-            optimisticProjectOrder = undefined;
+            nextProjectOrder = undefined;
             for (const [mutationId, target] of reorderMutations)
                 if (target.kind === "project") reorderMutations.delete(mutationId);
         }
+        let nextWorkspaceOrders: Map<RigProjectId, readonly RigWorktreeId[]> | undefined;
         for (const project of projected) {
             const expected = optimisticWorkspaceOrders.get(project.id);
             if (expected === undefined || !orderMatches(project.worktrees, expected)) continue;
-            optimisticWorkspaceOrders.delete(project.id);
+            nextWorkspaceOrders ??= new Map(optimisticWorkspaceOrders);
+            nextWorkspaceOrders.delete(project.id);
             for (const [mutationId, target] of reorderMutations)
                 if (target.kind === "workspace" && target.projectId === project.id)
                     reorderMutations.delete(mutationId);
         }
+        if (nextProjectOrder !== optimisticProjectOrder || nextWorkspaceOrders !== undefined)
+            internal.setState({
+                optimisticProjectOrder: nextProjectOrder,
+                ...(nextWorkspaceOrders === undefined
+                    ? {}
+                    : { optimisticWorkspaceOrders: nextWorkspaceOrders }),
+            });
     };
 
     const publish = (
-        projected: readonly RigProjectGroup[] = rigProjectGroupsProject(catalog, sessions),
+        projected: readonly RigProjectGroup[] = rigProjectGroupsProject(
+            internal.getState().catalog,
+            internal.getState().sessions,
+        ),
     ): void => {
-        const previous = store.getState();
+        const { catalogRevision } = internal.getState();
         const ordered = optimisticOrderApply(projected);
-        // An unchanged project keeps its previous object — and with it the
-        // identity of the worktrees and conversation rows nested inside it — so a
-        // reconcile that changed one session does not replace every project row,
-        // and a worktree changing phase does not replace its siblings.
-        const projects =
-            previous.projects.type === "ready"
-                ? rigProjectGroupsPreserve(previous.projects.value, ordered)
-                : ordered;
-        // The revision alone is worth a notification: a read that confirmed the
-        // list is unchanged is still the host's answer, and it is what a
-        // subscriber waiting on authoritative truth is waiting for.
-        if (
-            previous.projects.type !== "ready" ||
-            previous.projects.value !== projects ||
-            previous.catalogRevision !== catalogRevision
-        )
-            store.setState({
+        store.setState((previous) => {
+            // An unchanged project keeps its previous object — and with it the
+            // identity of the worktrees and conversation rows nested inside it — so a
+            // reconcile that changed one session does not replace every project row,
+            // and a worktree changing phase does not replace its siblings.
+            const projects =
+                previous.projects.type === "ready"
+                    ? rigProjectGroupsPreserve(previous.projects.value, ordered)
+                    : ordered;
+            // The revision alone is worth a notification: a read that confirmed the
+            // list is unchanged is still the host's answer, and it is what a
+            // subscriber waiting on authoritative truth is waiting for. A
+            // publish that changed nothing returns the previous snapshot
+            // untouched, so no subscriber is notified for it.
+            if (
+                previous.projects.type === "ready" &&
+                previous.projects.value === projects &&
+                previous.catalogRevision === catalogRevision
+            )
+                return previous;
+            return {
                 ...previous,
                 catalogRevision,
                 projects: { type: "ready", value: projects },
-            });
+            };
+        });
     };
 
     /**
@@ -659,10 +701,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // is the read order, and a later read must not be allowed to think
                 // this one never happened just because the host had nothing new.
                 appliedSequence = token;
-                catalog = snapshot.catalog;
-                catalogListed = true;
-                sessions = snapshot.sessions;
-                const projected = rigProjectGroupsProject(catalog, sessions);
+                internal.setState({
+                    catalog: snapshot.catalog,
+                    catalogListed: true,
+                    sessions: snapshot.sessions,
+                });
+                const projected = rigProjectGroupsProject(snapshot.catalog, snapshot.sessions);
                 optimisticOrdersConfirm(projected);
                 // Judged against the previous authoritative read, so a row this
                 // store took out optimistically is still a change when the host
@@ -670,13 +714,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // not. Reusing that read's references keeps the equal case
                 // identical rather than merely equal, which is what lets the
                 // comparison be an identity check.
+                const { authoritativeProjects } = internal.getState();
                 const authoritative =
                     authoritativeProjects === undefined
                         ? projected
                         : referencesPreserve(authoritativeProjects, projected);
                 if (authoritative !== authoritativeProjects) {
-                    authoritativeProjects = authoritative;
-                    catalogRevision += 1;
+                    internal.setState((state) => ({
+                        authoritativeProjects: authoritative,
+                        catalogRevision: state.catalogRevision + 1,
+                    }));
                 }
                 publish(authoritative);
                 worktreesSettle();
@@ -707,7 +754,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const worktreesSettle = (): void => {
         if (worktreeWaiters.size === 0) return;
         const listed = new Set<RigWorktreeId>();
-        for (const worktree of catalog.worktrees) {
+        for (const worktree of internal.getState().catalog.worktrees) {
             const waiting = worktreeWaiters.get(worktree.id);
             if (!waiting) continue;
             listed.add(worktree.id);
@@ -743,7 +790,9 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const worktreePathed = (worktreeId: RigWorktreeId): Promise<RigWorktree> => {
         const refused = store.getState().worktreeCreateFailures.get(worktreeId);
         if (refused) return Promise.reject(new Error(refused.message));
-        const known = catalog.worktrees.find((candidate) => candidate.id === worktreeId);
+        const known = internal
+            .getState()
+            .catalog.worktrees.find((candidate) => candidate.id === worktreeId);
         if (known) {
             if (known.status === "initializing") {
                 // Keep waiting below even when an initializing workspace already
@@ -801,13 +850,17 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         const error = rigUserError(new Error(rejection.message));
         const reordered = reorderMutations.get(rejection.mutationId);
         reorderMutations.delete(rejection.mutationId);
+        const { optimisticProjectOrder, optimisticWorkspaceOrders } = internal.getState();
         if (reordered?.kind === "project" && optimisticProjectOrder === reordered.order)
-            optimisticProjectOrder = undefined;
+            internal.setState({ optimisticProjectOrder: undefined });
         if (
             reordered?.kind === "workspace" &&
             optimisticWorkspaceOrders.get(reordered.projectId) === reordered.order
-        )
-            optimisticWorkspaceOrders.delete(reordered.projectId);
+        ) {
+            const nextWorkspaceOrders = new Map(optimisticWorkspaceOrders);
+            nextWorkspaceOrders.delete(reordered.projectId);
+            internal.setState({ optimisticWorkspaceOrders: nextWorkspaceOrders });
+        }
         const previous = store.getState();
         const worktreeCreateFailures =
             rejection.action === "create_workspace"
@@ -858,7 +911,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         // first read of an epoch therefore always counts as a change, however
         // familiar it looks, so a group is confirmed present before its later
         // absence can be reported as a removal.
-        authoritativeProjects = undefined;
+        internal.setState({ authoritativeProjects: undefined });
         unsubscribeGlobal = deps.catalogSource.subscribe(
             () => {
                 if (!disposed && active) void reconcile();
@@ -892,9 +945,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const storeUnsub = store.subscribe(notify);
 
     /** Whether a group id still names something this list would show a reader. */
-    const groupListed = (groupId: RigGroupId): boolean =>
-        catalog.projects.some((project) => project.id === groupId) ||
-        catalog.worktrees.some((worktree) => worktree.id === groupId);
+    const groupListed = (groupId: RigGroupId): boolean => {
+        const { catalog } = internal.getState();
+        return (
+            catalog.projects.some((project) => project.id === groupId) ||
+            catalog.worktrees.some((worktree) => worktree.id === groupId)
+        );
+    };
 
     /**
      * Remembers a mutation issued through `connectActions` so its later refusal
@@ -945,6 +1002,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         input: RigSessionCreateInput,
         checkoutReady?: Promise<unknown>,
     ): RigSessionLocation => {
+        const { catalog } = internal.getState();
         const worktree =
             input.worktreeId === undefined
                 ? undefined
@@ -1003,6 +1061,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         },
         sessionsRefresh: () => reconcile(),
         groupWriteRefusal(groupId) {
+            const { catalog, catalogListed } = internal.getState();
             const worktree = catalog.worktrees.find((entry) => entry.id === groupId);
             if (worktree !== undefined) return rigWorktreeWriteRefusal(worktree);
             const project = catalog.projects.find((entry) => entry.id === groupId);
@@ -1010,6 +1069,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             return catalogListed ? RIG_GROUP_UNLISTED_REFUSAL : RIG_GROUP_UNREAD_REFUSAL;
         },
         groupConversationRefusal(groupId) {
+            const { catalog, catalogListed } = internal.getState();
             const worktree = catalog.worktrees.find((entry) => entry.id === groupId);
             if (worktree !== undefined) return rigWorktreeConversationRefusal(worktree);
             const project = catalog.projects.find((entry) => entry.id === groupId);
@@ -1020,11 +1080,15 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             return catalogListed ? RIG_GROUP_UNLISTED_REFUSAL : RIG_GROUP_UNREAD_REFUSAL;
         },
         sessionDelegated(sessionId) {
-            const known = sessions.find((candidate) => candidate.id === sessionId);
+            const known = internal
+                .getState()
+                .sessions.find((candidate) => candidate.id === sessionId);
             return known !== undefined && known.parentSessionId !== undefined;
         },
         async sessionLocationRead(sessionId) {
-            const listed = sessions.find((candidate) => candidate.id === sessionId);
+            const listed = internal
+                .getState()
+                .sessions.find((candidate) => candidate.id === sessionId);
             // A session the list does not carry is not necessarily gone: a
             // subagent never takes a row, and a session started a moment ago
             // may not have been reconciled yet. Asking the host is what tells
@@ -1042,14 +1106,17 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             return groupListed(location.groupId) ? location : undefined;
         },
         sessionRead(sessionId, knownUnread) {
+            const { sessions } = internal.getState();
             const session = sessions.find((candidate) => candidate.id === sessionId);
             if (session?.unreadReason === undefined && knownUnread !== true) return;
             if (session?.unreadReason !== undefined) {
-                sessions = sessions.map((candidate) =>
-                    candidate.id === sessionId
-                        ? { ...candidate, unreadReason: undefined }
-                        : candidate,
-                );
+                internal.setState({
+                    sessions: sessions.map((candidate) =>
+                        candidate.id === sessionId
+                            ? { ...candidate, unreadReason: undefined }
+                            : candidate,
+                    ),
+                });
                 publish();
             }
             deps.connectActions.markSessionRead(sessionId);
@@ -1070,7 +1137,9 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // closing a tab must feel immediate. A failed archive is
                 // recorded in `mutationError`; its rejection then reconciles
                 // the authoritative catalog and puts the row back.
-                sessions = sessions.filter((existing) => existing.id !== sessionId);
+                internal.setState((state) => ({
+                    sessions: state.sessions.filter((existing) => existing.id !== sessionId),
+                }));
                 publish();
                 connectMutationTrack(deps.connectActions.setSessionArchived(sessionId, true));
             }),
@@ -1086,6 +1155,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // is even sent, and the id can be addressed immediately. A
                 // refusal withdraws the row and arrives as a rejection rather
                 // than as a thrown error, which is why it is tracked below.
+                const { catalog } = internal.getState();
                 const project = catalog.projects.find((entry) => entry.id === projectId);
                 return connectMutationTrack(
                     deps.connectActions.createWorkspace({
@@ -1118,7 +1188,9 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // Whatever the host has already said about where the checkout
                 // is going. It is the workspace's id that names the agent's
                 // home, so a checkout with no path yet costs nothing.
-                const known = catalog.worktrees.find((entry) => entry.id === worktreeId);
+                const known = internal
+                    .getState()
+                    .catalog.worktrees.find((entry) => entry.id === worktreeId);
                 return sessionCreateRun({ ...create, cwd: known?.path ?? "", worktreeId }, pathed);
             }),
         worktreeArchive: (projectId, worktreeId) =>
@@ -1126,15 +1198,20 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // The worktree leaves the list before the host confirms, because
                 // archiving is a deliberate act and must feel immediate. A failure
                 // is recorded and the reconcile below puts it back.
-                catalog = {
-                    ...catalog,
-                    worktrees: catalog.worktrees.filter((entry) => entry.id !== worktreeId),
-                };
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        worktrees: state.catalog.worktrees.filter(
+                            (entry) => entry.id !== worktreeId,
+                        ),
+                    },
+                }));
                 publish();
                 connectMutationTrack(deps.connectActions.archiveWorkspace(projectId, worktreeId));
             }),
         worktreeReorder: (projectId, worktreeId, afterId) =>
             mutate(async () => {
+                const { catalog, sessions } = internal.getState();
                 const projected = rigProjectGroupsProject(catalog, sessions);
                 const current = store.getState().projects;
                 const peers =
@@ -1147,7 +1224,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     worktreeId,
                     afterId,
                 );
-                optimisticWorkspaceOrders.set(projectId, order);
+                internal.setState((state) => ({
+                    optimisticWorkspaceOrders: new Map(state.optimisticWorkspaceOrders).set(
+                        projectId,
+                        order,
+                    ),
+                }));
                 publish(projected);
                 const mutationId = connectMutationTrack(
                     deps.connectActions.reorderWorkspace(worktreeId, afterId),
@@ -1156,6 +1238,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }),
         projectReorder: (projectId, afterId) =>
             mutate(async () => {
+                const { catalog, sessions } = internal.getState();
                 const projected = rigProjectGroupsProject(catalog, sessions);
                 const current = store.getState().projects;
                 const visible = current.type === "ready" ? current.value : projected;
@@ -1165,7 +1248,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     projectId,
                     afterId,
                 );
-                optimisticProjectOrder = order;
+                internal.setState({ optimisticProjectOrder: order });
                 publish(projected);
                 const mutationId = connectMutationTrack(
                     deps.connectActions.reorderProject(projectId, afterId),
@@ -1178,12 +1261,14 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // manipulation of a label, and a name that lags behind the
                 // typing that produced it reads as the rename having failed.
                 // The reconcile below is what makes the host's answer final.
-                catalog = {
-                    ...catalog,
-                    projects: catalog.projects.map((project) =>
-                        project.id === projectId ? { ...project, name } : project,
-                    ),
-                };
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        projects: state.catalog.projects.map((project) =>
+                            project.id === projectId ? { ...project, name } : project,
+                        ),
+                    },
+                }));
                 publish();
                 connectMutationTrack(
                     deps.connectActions.renameGroup({ kind: "project", projectId }, name),
@@ -1191,12 +1276,14 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }),
         worktreeRename: (projectId, worktreeId, name) =>
             mutate(async () => {
-                catalog = {
-                    ...catalog,
-                    worktrees: catalog.worktrees.map((worktree) =>
-                        worktree.id === worktreeId ? { ...worktree, name } : worktree,
-                    ),
-                };
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        worktrees: state.catalog.worktrees.map((worktree) =>
+                            worktree.id === worktreeId ? { ...worktree, name } : worktree,
+                        ),
+                    },
+                }));
                 publish();
                 connectMutationTrack(
                     deps.connectActions.renameGroup(
@@ -1206,7 +1293,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 );
             }),
         async projectArchive(projectId) {
-            if (!catalog.projects.some((project) => project.id === projectId)) {
+            if (!internal.getState().catalog.projects.some((project) => project.id === projectId)) {
                 return { type: "archived" };
             }
 

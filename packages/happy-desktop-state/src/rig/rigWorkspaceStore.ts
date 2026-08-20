@@ -1,3 +1,4 @@
+import { createStore } from "zustand/vanilla";
 import type { ConversationEntry } from "../conversation/conversationEntry.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
@@ -1557,7 +1558,7 @@ export function rigWorkspaceStoreCreate(
     let groupResumeList: RigSessionListSnapshot | undefined;
     let groupResumeRevision = -1;
     let memoryRevision = 0;
-    let snapshot: RigWorkspaceSnapshot = {
+    const snapshotStore = createStore<RigWorkspaceSnapshot>()(() => ({
         address: addressPublic(),
         list: list.get(),
         conversation,
@@ -1575,11 +1576,22 @@ export function rigWorkspaceStoreCreate(
         workspaceFilesLoading,
         projectAdd,
         ...(projectClone ? { projectClone } : {}),
-    };
+    }));
 
     const notify = (): void => {
         for (const listener of listeners) listener();
     };
+    /**
+     * True while the snapshot is being replaced without an announcement.
+     * Stopping rebuilds the published snapshot for a surface that is no longer
+     * watching, and disposal can run while subscribers still exist; neither has
+     * ever notified, so the store's own subscription is gated rather than the
+     * behavior changed.
+     */
+    let snapshotSilent = false;
+    const unsubscribeSnapshot = snapshotStore.subscribe(() => {
+        if (!snapshotSilent) notify();
+    });
 
     /**
      * Depth of a change made of several steps. Moving a file across the window
@@ -1909,71 +1921,75 @@ export function rigWorkspaceStoreCreate(
         // The panel's file is not a second thing to keep in step: it is the one
         // member of the strip placed there, found rather than mirrored.
         const panelFile = fileTabs.find((tab) => tab.placement === "panel");
-        if (
-            snapshot.address === nextAddress &&
-            snapshot.groupAccess.writeRefusal === groupAccess.writeRefusal &&
-            snapshot.groupAccess.conversationRefusal === groupAccess.conversationRefusal &&
-            snapshot.list === listSnapshot &&
-            snapshot.conversationDelegated === conversationDelegated &&
-            snapshot.conversation === conversation &&
-            snapshot.groupComposer === groupComposerDraft &&
-            snapshot.groupSessionDraft === groupSessionDraft &&
-            snapshot.fileTabs === fileTabs &&
-            snapshot.tabOrder === tabOrder &&
-            snapshot.activeMainViewId === activeMainViewId &&
-            snapshot.displayedMainViewId === displayedMainViewId &&
-            snapshot.panelFile === panelFile &&
-            snapshot.groupResume === groupResume &&
-            snapshot.openInTargets === openInTargets &&
-            snapshot.openInRecentId === openInRecentId &&
-            snapshot.rename === rename &&
-            snapshot.projectArchive === projectArchive &&
-            snapshot.projectCompute === projectCompute &&
-            snapshot.fileViewMode === fileViewMode &&
-            snapshot.fileScope === nextFileScope &&
-            snapshot.fileLayout === nextFileLayout &&
-            snapshot.panelWidth === nextPanelWidth &&
-            snapshot.fileTreeExpanded === fileTreeExpanded &&
-            snapshot.fileTreeCollapsed === fileTreeCollapsed &&
-            snapshot.workspaceFiles === workspaceFiles &&
-            snapshot.workspaceFilesLoading === workspaceFilesLoading &&
-            snapshot.create === create &&
-            snapshot.projectAdd === projectAdd &&
-            snapshot.projectClone === projectClone
-        )
-            return;
-        snapshot = {
-            address: nextAddress,
-            list: listSnapshot,
-            conversation,
-            conversationDelegated,
-            groupAccess,
-            fileTabs,
-            tabOrder,
-            groupResume,
-            openInTargets,
-            fileViewMode,
-            fileScope: nextFileScope,
-            fileLayout: nextFileLayout,
-            ...(nextPanelWidth === undefined ? {} : { panelWidth: nextPanelWidth }),
-            fileTreeExpanded,
-            fileTreeCollapsed,
-            ...(workspaceFiles ? { workspaceFiles } : {}),
-            ...(openInRecentId ? { openInRecentId } : {}),
-            workspaceFilesLoading,
-            projectAdd,
-            ...(projectClone ? { projectClone } : {}),
-            ...(create ? { create } : {}),
-            ...(activeMainViewId ? { activeMainViewId } : {}),
-            ...(displayedMainViewId ? { displayedMainViewId } : {}),
-            ...(panelFile ? { panelFile } : {}),
-            ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
-            ...(groupSessionDraft ? { groupSessionDraft } : {}),
-            ...(rename ? { rename } : {}),
-            ...(projectArchive ? { projectArchive } : {}),
-            ...(projectCompute ? { projectCompute } : {}),
-        };
-        notify();
+        // Returning the previous snapshot keeps its identity and announces
+        // nothing; a changed one replaces it wholesale and the store's own
+        // subscription is what notifies.
+        snapshotStore.setState(
+            (snapshot) =>
+                snapshot.address === nextAddress &&
+                snapshot.groupAccess.writeRefusal === groupAccess.writeRefusal &&
+                snapshot.groupAccess.conversationRefusal === groupAccess.conversationRefusal &&
+                snapshot.list === listSnapshot &&
+                snapshot.conversationDelegated === conversationDelegated &&
+                snapshot.conversation === conversation &&
+                snapshot.groupComposer === groupComposerDraft &&
+                snapshot.groupSessionDraft === groupSessionDraft &&
+                snapshot.fileTabs === fileTabs &&
+                snapshot.tabOrder === tabOrder &&
+                snapshot.activeMainViewId === activeMainViewId &&
+                snapshot.displayedMainViewId === displayedMainViewId &&
+                snapshot.panelFile === panelFile &&
+                snapshot.groupResume === groupResume &&
+                snapshot.openInTargets === openInTargets &&
+                snapshot.openInRecentId === openInRecentId &&
+                snapshot.rename === rename &&
+                snapshot.projectArchive === projectArchive &&
+                snapshot.projectCompute === projectCompute &&
+                snapshot.fileViewMode === fileViewMode &&
+                snapshot.fileScope === nextFileScope &&
+                snapshot.fileLayout === nextFileLayout &&
+                snapshot.panelWidth === nextPanelWidth &&
+                snapshot.fileTreeExpanded === fileTreeExpanded &&
+                snapshot.fileTreeCollapsed === fileTreeCollapsed &&
+                snapshot.workspaceFiles === workspaceFiles &&
+                snapshot.workspaceFilesLoading === workspaceFilesLoading &&
+                snapshot.create === create &&
+                snapshot.projectAdd === projectAdd &&
+                snapshot.projectClone === projectClone
+                    ? snapshot
+                    : {
+                          address: nextAddress,
+                          list: listSnapshot,
+                          conversation,
+                          conversationDelegated,
+                          groupAccess,
+                          fileTabs,
+                          tabOrder,
+                          groupResume,
+                          openInTargets,
+                          fileViewMode,
+                          fileScope: nextFileScope,
+                          fileLayout: nextFileLayout,
+                          ...(nextPanelWidth === undefined ? {} : { panelWidth: nextPanelWidth }),
+                          fileTreeExpanded,
+                          fileTreeCollapsed,
+                          ...(workspaceFiles ? { workspaceFiles } : {}),
+                          ...(openInRecentId ? { openInRecentId } : {}),
+                          workspaceFilesLoading,
+                          projectAdd,
+                          ...(projectClone ? { projectClone } : {}),
+                          ...(create ? { create } : {}),
+                          ...(activeMainViewId ? { activeMainViewId } : {}),
+                          ...(displayedMainViewId ? { displayedMainViewId } : {}),
+                          ...(panelFile ? { panelFile } : {}),
+                          ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
+                          ...(groupSessionDraft ? { groupSessionDraft } : {}),
+                          ...(rename ? { rename } : {}),
+                          ...(projectArchive ? { projectArchive } : {}),
+                          ...(projectCompute ? { projectCompute } : {}),
+                      },
+            true,
+        );
     };
 
     /**
@@ -3571,35 +3587,45 @@ export function rigWorkspaceStoreCreate(
         releaseGroup();
         releaseConversation();
         conversation = { type: "unloaded" };
-        snapshot = {
-            // Where navigation last pointed outlives the subscription privately,
-            // because the URL still names it and starting again re-acquires it.
-            // Publicly there is nowhere to act until that happens.
-            address: addressPublic(),
-            list: list.get(),
-            conversation,
-            conversationDelegated: false,
-            groupAccess: rigGroupAccessRefused(RIG_GROUP_UNLISTED_REFUSAL),
-            fileTabs,
-            tabOrder,
-            groupResume,
-            openInTargets,
-            fileViewMode,
-            // Nothing is addressed here, so there is no checkout whose
-            // arrangement this could be: the defaults stand in.
-            fileScope: "changed",
-            fileLayout: "flat",
-            fileTreeExpanded,
-            fileTreeCollapsed,
-            ...(workspaceFiles ? { workspaceFiles } : {}),
-            ...(openInRecentId ? { openInRecentId } : {}),
-            workspaceFilesLoading,
-            projectAdd,
-            ...(projectClone ? { projectClone } : {}),
-            ...(create ? { create } : {}),
-            ...(activeMainViewId ? { activeMainViewId } : {}),
-            ...(displayedMainViewId ? { displayedMainViewId } : {}),
-        };
+        // Replaced without an announcement: a stopped surface has nobody left
+        // to tell, and stopping has never notified.
+        snapshotSilent = true;
+        try {
+            snapshotStore.setState(
+                {
+                    // Where navigation last pointed outlives the subscription privately,
+                    // because the URL still names it and starting again re-acquires it.
+                    // Publicly there is nowhere to act until that happens.
+                    address: addressPublic(),
+                    list: list.get(),
+                    conversation,
+                    conversationDelegated: false,
+                    groupAccess: rigGroupAccessRefused(RIG_GROUP_UNLISTED_REFUSAL),
+                    fileTabs,
+                    tabOrder,
+                    groupResume,
+                    openInTargets,
+                    fileViewMode,
+                    // Nothing is addressed here, so there is no checkout whose
+                    // arrangement this could be: the defaults stand in.
+                    fileScope: "changed",
+                    fileLayout: "flat",
+                    fileTreeExpanded,
+                    fileTreeCollapsed,
+                    ...(workspaceFiles ? { workspaceFiles } : {}),
+                    ...(openInRecentId ? { openInRecentId } : {}),
+                    workspaceFilesLoading,
+                    projectAdd,
+                    ...(projectClone ? { projectClone } : {}),
+                    ...(create ? { create } : {}),
+                    ...(activeMainViewId ? { activeMainViewId } : {}),
+                    ...(displayedMainViewId ? { displayedMainViewId } : {}),
+                },
+                true,
+            );
+        } finally {
+            snapshotSilent = false;
+        }
     };
 
     const withChat = <T>(run: (store: RigChatStore) => Promise<T>): Promise<T> =>
@@ -3778,7 +3804,7 @@ export function rigWorkspaceStoreCreate(
     };
 
     return {
-        get: () => snapshot,
+        get: () => snapshotStore.getState(),
         panel,
         subscribe(listener) {
             listeners.add(listener);
@@ -4830,6 +4856,7 @@ export function rigWorkspaceStoreCreate(
             // going away, and a shell nobody can reach again is an orphan.
             unsubscribePanel();
             panel[Symbol.dispose]();
+            unsubscribeSnapshot();
             listeners.clear();
         },
     };
