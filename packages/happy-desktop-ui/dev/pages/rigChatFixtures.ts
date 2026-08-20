@@ -196,6 +196,22 @@ export const rigAwaitingTool: ConversationToolCall = {
     },
 };
 
+/** A reviewed call that was let out of the sandbox: the whole line turns amber. */
+export const rigElevatedTool: ConversationToolCall = {
+    toolCallId: "tool-elevated",
+    toolName: "bash",
+    arguments: { command: "docker compose up -d", dangerouslyDisableSandbox: true },
+    status: "success",
+    failed: false,
+    elevated: true,
+    display: "Ran docker compose up -d",
+    presentation: {
+        type: "execCommand",
+        command: "docker compose up -d",
+        output: "Container happy-db  Started\nContainer happy-api  Started",
+    },
+};
+
 export const rigFailedTool: ConversationToolCall = {
     toolCallId: "tool-failed",
     toolName: "bash",

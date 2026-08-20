@@ -213,6 +213,12 @@ export interface ToolCallElement extends BaseChatElement {
     progress?: string;
     result?: string;
     presentation?: ToolPresentation;
+    /**
+     * The call crossed the automatic permission-review boundary and its
+     * execution was granted temporary Full access. Absent on a call that was
+     * never reviewed and on a reviewed call that stayed inside the sandbox.
+     */
+    elevated?: boolean;
     permissionReview?:
         | {
               action: string;

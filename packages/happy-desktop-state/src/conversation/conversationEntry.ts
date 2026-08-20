@@ -191,6 +191,12 @@ export interface ConversationToolCall {
     readonly failure?: ConversationActivityFailure;
     readonly presentation?: ConversationActivityPresentation;
     readonly review?: ConversationActivityReview;
+    /**
+     * The call asked for a review and was granted temporary Full access, so it
+     * ran outside the sandbox. Present only on that call: everything else, both
+     * unreviewed and reviewed-but-sandboxed, is the ordinary case.
+     */
+    readonly elevated?: boolean;
 }
 
 /**

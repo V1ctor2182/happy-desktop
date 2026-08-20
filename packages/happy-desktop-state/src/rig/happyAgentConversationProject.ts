@@ -689,6 +689,7 @@ function toolProject(
             : {}),
         failed: element.status === "failed",
         ...presentationEntry(element.presentation),
+        ...(element.elevated === true ? { elevated: true } : {}),
         // A review still running has only the action it is weighing: no
         // verdict, no reason, no risk. The row states a decision, so it waits
         // for one rather than painting a blank verdict beside the call.

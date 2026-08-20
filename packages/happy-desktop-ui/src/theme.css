@@ -153,6 +153,14 @@
        amber, muted well below the warning orange so a transcript full of
        reviewed calls still reads as prose rather than as a wall of alerts. */
     --review-accent: #a3690f;
+    /* A whole line of colour is far louder than a two-word mark, so an
+       activity row that turns entirely stays mostly text ink with the accent
+       stirred in: same weight as the prose around it, tinted enough to say
+       which line it is. Written as a mix rather than a pair of hex values so
+       it holds in both themes from the ink each one already defines — and so
+       the row's status dot stays the one full-strength colour. */
+    --activity-elevated-line: color-mix(in srgb, var(--review-accent) 40%, var(--text));
+    --activity-failed-line: color-mix(in srgb, var(--status-error) 40%, var(--text));
 
     --status-connected: #34c759;
     --status-connecting: #007aff;

@@ -571,6 +571,15 @@ function AgentToolActivity(props: {
                 : humanizeToolName(tool.toolName);
     }
     if (focused && presentation?.type !== "fileDiff") verb = toolVerbFocused(verb);
+    /* Ran outside the sandbox. Said in colour alone — the whole line turns
+       amber — because a word in the verb would push the command itself out of
+       a row that is already short. A call that stopped or failed never got
+       that far, and its own status is the louder fact. */
+    const elevated =
+        tool.elevated === true &&
+        tool.status !== "stopped" &&
+        tool.status !== "failed" &&
+        !tool.failed;
     const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;
 
     const argsJson = presentation ? undefined : boundedJson(tool.arguments);
@@ -734,9 +743,10 @@ function AgentToolActivity(props: {
         </>
     );
 
-    // `data-review` marks a call that went through a permission review. It sits
-    // on the row rather than on the review line so the mark survives the
-    // single-line variant, where that line is cut.
+    // `data-review` marks a call that went through a permission review, and
+    // `data-elevated` the reviewed call that then ran with temporary Full
+    // access. Both sit on the row rather than on the review line so the mark
+    // survives the single-line variant, where that line is cut.
     return (
         <div
             className="happy2-agent-activity"
@@ -745,6 +755,7 @@ function AgentToolActivity(props: {
             data-tone={tone}
             data-presentation={presentation?.type ?? "generic"}
             data-review={tool.review ? "" : undefined}
+            data-elevated={elevated ? "" : undefined}
             data-single-line={singleLine ? "" : undefined}
             data-expanded={expanded ? "" : undefined}
             data-happy-desktop-ui="agent-activity-call"

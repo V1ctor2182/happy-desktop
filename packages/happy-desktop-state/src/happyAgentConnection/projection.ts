@@ -547,6 +547,10 @@ function projectMessage(
                 ...(block.presentation === undefined
                     ? {}
                     : { presentation: projectToolPresentation(block.presentation) }),
+                // Only a reviewed call carries elevation, and only the granted
+                // one is worth carrying: "not elevated" is the ordinary case
+                // every unreviewed call is already in.
+                ...(block.elevated === true ? { elevated: true } : {}),
             });
         } else if (block.type === "compaction") {
             elements.push({
