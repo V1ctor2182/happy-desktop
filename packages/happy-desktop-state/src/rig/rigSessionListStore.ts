@@ -231,12 +231,12 @@ export interface RigSessionListStore {
     projectRename(projectId: RigProjectId, name: string): Promise<void>;
 
     /**
-     * Reserves a worktree in the project and resolves as soon as it exists, with
-     * its id, so the caller can list and address it while the host is still
-     * preparing the checkout. Resolves with `undefined` when the reservation
-     * failed, with the reason recorded in `mutationError`.
+     * Reserves a worktree in the project and returns its id at once, in the
+     * caller's own call stack, so the caller can list and address it while the
+     * host is still preparing the checkout. Returns `undefined` when the
+     * reservation failed, with the reason recorded in `mutationError`.
      */
-    worktreeCreate(projectId: RigProjectId): Promise<RigWorktreeId | undefined>;
+    worktreeCreate(projectId: RigProjectId): RigWorktreeId | undefined;
 
     /**
      * Why the host's checkout for a group cannot be written to right now, or
@@ -258,13 +258,13 @@ export interface RigSessionListStore {
     /**
      * Whether this session belongs to another session rather than to a list.
      *
-     * The host says so by giving it no `orderKey`: a subagent syncs and can be
-     * opened by id, but it belongs to whatever started it and never takes a row.
-     * That is the only thing that makes a chat someone else's, and it is asked
-     * for here rather than worked out from the rows, because a session missing
-     * from the rows has several ordinary reasons to be — chiefly that it was
-     * named a moment ago and the list has not caught up. Reading absence as
-     * delegation locks the reader out of the chat they just made.
+     * The host says so outright, by naming the session that spawned it: a
+     * subagent syncs and can be opened by id, but it belongs to its parent and
+     * never takes a row. Parentage is asked for here rather than worked out
+     * from the rows or from ordering, because a session can be missing from
+     * both for ordinary reasons — chiefly that it was named a moment ago —
+     * and reading that absence as delegation locks the reader out of the chat
+     * they just made.
      *
      * A session this Rig has never heard of is not delegated. Nothing is known
      * about it, which is not the same as knowing it belongs to someone else.
@@ -272,9 +272,12 @@ export interface RigSessionListStore {
     sessionDelegated(sessionId: RigSessionId): boolean;
 
     /**
-     * Starts the first conversation in a worktree, resolving at once with that
-     * conversation's address. It is split from `worktreeCreate` so addressing
-     * the worktree does not wait on the host at all.
+     * Starts the first conversation in a worktree and returns its address in
+     * the caller's own call stack. It is split from `worktreeCreate` so
+     * addressing the worktree does not wait on the host at all, and it is
+     * synchronous so the workspace and its first tab appear in the same frame:
+     * there is never a rendered moment where the place exists and its
+     * conversation does not.
      *
      * The address is real from the first moment: the connection names the agent
      * itself and announces it locally, so the workspace has its tab, its id, and
@@ -287,11 +290,13 @@ export interface RigSessionListStore {
      *
      * `create` configures that conversation. Its `cwd` and `worktreeId` are
      * supplied here, since only this call knows which checkout is meant.
+     * Returns `undefined` when starting failed, with the reason recorded in
+     * `mutationError`.
      */
     worktreeSessionStart(
         worktreeId: RigWorktreeId,
         create?: Omit<RigSessionCreateInput, "cwd" | "worktreeId">,
-    ): Promise<RigSessionLocation | undefined>;
+    ): RigSessionLocation | undefined;
 
     /** Archives a worktree: it leaves the list and the host removes its checkout. */
     worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
@@ -918,10 +923,28 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         }
     };
 
-    const sessionCreateRun = async (
+    /**
+     * The synchronous shape of `mutate`, for the acts that only name things
+     * locally. It exists so a caller can have the name in hand — and the row on
+     * screen — in the same call stack as the click, with no interim frame where
+     * the place exists and its conversation does not.
+     */
+    const mutateSync = <T>(run: () => T): T | undefined => {
+        try {
+            store.setState({ ...store.getState(), mutationError: undefined });
+            return run();
+        } catch (error) {
+            if (!disposed) {
+                store.setState({ ...store.getState(), mutationError: rigUserError(error) });
+            }
+            return undefined;
+        }
+    };
+
+    const sessionCreateRun = (
         input: RigSessionCreateInput,
         checkoutReady?: Promise<unknown>,
-    ): Promise<RigSessionLocation | undefined> => {
+    ): RigSessionLocation => {
         const worktree =
             input.worktreeId === undefined
                 ? undefined
@@ -998,7 +1021,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         },
         sessionDelegated(sessionId) {
             const known = sessions.find((candidate) => candidate.id === sessionId);
-            return known !== undefined && known.orderKey === undefined;
+            return known !== undefined && known.parentSessionId !== undefined;
         },
         async sessionLocationRead(sessionId) {
             const listed = sessions.find((candidate) => candidate.id === sessionId);
@@ -1031,7 +1054,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }
             deps.connectActions.markSessionRead(sessionId);
         },
-        sessionCreate: (input) => mutate(() => sessionCreateRun(input)),
+        sessionCreate: (input) => mutate(async () => sessionCreateRun(input)),
         projectCloneGithub(repository, name) {
             return connectMutationTrack(
                 deps.connectActions.projects.clone({
@@ -1056,7 +1079,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 connectMutationTrack(deps.connectActions.reorderSession(sessionId, afterId));
             }),
         worktreeCreate: (projectId) =>
-            mutate(async () => {
+            mutateSync(() => {
                 // The connection names the worktree itself and returns that name
                 // synchronously, so the row is in the catalog — through the same
                 // stream that carries the authoritative one — before the request
@@ -1078,11 +1101,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 ) as RigWorktreeId;
             }),
         worktreeSessionStart: (worktreeId, create) =>
-            mutate(async () => {
-                // The session is named now and requested when the checkout is
-                // there. Waiting here instead would leave the reader looking at
-                // a workspace with no tab in it for as long as the checkout
-                // takes, and then rebuild the surface around them when it
+            mutateSync(() => {
+                // The session is named here, in the caller's own call stack,
+                // and requested when the checkout is there. Anything slower
+                // would give the reader a frame with a workspace and no tab in
+                // it, and then rebuild the surface around them when the tab
                 // arrived. The daemon is still never asked for an agent in a
                 // workspace it is preparing: the wait moved behind the name
                 // rather than in front of it.

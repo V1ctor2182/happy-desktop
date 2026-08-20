@@ -404,6 +404,11 @@ function projectAgent(
         modelId: mode.modelId,
         ownerInstanceId: endpoint,
         ...(agent.orderKey === null ? {} : { orderKey: agent.orderKey }),
+        // Who this chat belongs to, when it belongs to another chat rather than
+        // to a list. The protocol says it plainly and says it from the start, so
+        // it never has to be guessed at from where a session did or did not turn
+        // up.
+        ...(agent.parentAgentId === null ? {} : { parentSessionId: agent.parentAgentId }),
         permissionMode: mode.permissionMode,
         scope,
         providerId: mode.providerId,

@@ -502,11 +502,21 @@ export interface RigSessionSummary {
     /**
      * Fractional index the host sorts sessions by within their own group.
      *
-     * Absent for a session that has no place in an ordered list. A subagent is
-     * the case that matters: it syncs and can be opened by id, but it belongs to
-     * the session that started it, so it must never take a row of its own.
+     * Absent for a session the host has not placed in an order yet, which is an
+     * ordinary state for one that has just been created. It says nothing about
+     * whose chat this is; `parentSessionId` answers that.
      */
     readonly orderKey?: string;
+    /**
+     * The chat that started this one, for a subagent. Absent for a top-level
+     * chat.
+     *
+     * This is the whole of what makes a chat someone else's: it syncs and can be
+     * opened by id, but its runner owns its input and it never takes a row of
+     * its own. The host states it from the moment the agent exists, so nothing
+     * has to infer it from a missing order or a missing row.
+     */
+    readonly parentSessionId?: RigSessionId;
     /** Canonical absolute working directory. */
     readonly cwd: string;
     /** Original Rig path retained for presentation when it differs from `cwd`. */

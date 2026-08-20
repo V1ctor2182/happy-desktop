@@ -186,8 +186,9 @@ export interface RigClient {
     ): Promise<RigChangedFileDocument>;
     /**
      * Acquires a retained chat store for one session. Concurrent and later
-     * acquisitions share its messages and model state; releasing a view lease
-     * never evicts it or stops its client-owned background synchronization.
+     * acquisitions share its messages and model state. Releasing the last lease
+     * pauses this store's projection; the Rig-wide SSE cache continues following
+     * the session and catches the store up when it is acquired again.
      */
     chat(sessionId: RigSessionId): Promise<RigChatHandle>;
     /** Stops background synchronization for an archived chat without evicting its memory. */
@@ -245,7 +246,7 @@ interface ChatBinding {
     count: number;
     readonly storePromise: Promise<RigChatStore>;
     store?: RigChatStore;
-    backgroundUnsubscribe?: () => void;
+    activeUnsubscribe?: () => void;
     archived: boolean;
 }
 
@@ -311,8 +312,8 @@ async function changedFileRead(
 /**
  * Composition root for a direct Happy Agent client: it owns the stateless `/v0`
  * client, the live connection, model store, session list, and retained chats.
- * Once opened, a non-archived chat stays synchronized for this client's lifetime;
- * archiving suspends its live subscription but leaves messages and model state in memory.
+ * Chat projections run only while leased; their state remains in memory, while
+ * the one connection-wide SSE cache follows materialized sessions between views.
  */
 export function rigClientCreate(deps: RigClientDeps): RigClient {
     const models = rigModelStoreCreate({
@@ -331,6 +332,33 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
+
+    const chatDeactivate = (binding: ChatBinding): void => {
+        binding.activeUnsubscribe?.();
+        binding.activeUnsubscribe = undefined;
+    };
+
+    const chatActivate = (binding: ChatBinding): void => {
+        const store = binding.store;
+        if (
+            store === undefined ||
+            binding.archived ||
+            binding.count === 0 ||
+            binding.activeUnsubscribe !== undefined
+        ) {
+            return;
+        }
+        const unsubscribe = store.subscribe(() => {
+            if (!store.get().archived) return;
+            binding.archived = true;
+            chatDeactivate(binding);
+        });
+        binding.activeUnsubscribe = unsubscribe;
+        if (store.get().archived) {
+            binding.archived = true;
+            chatDeactivate(binding);
+        }
+    };
 
     return {
         models,
@@ -454,14 +482,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     const current = chats.get(sessionId);
                     if (current) {
                         current.store = store;
-                        if (!current.archived) {
-                            current.backgroundUnsubscribe = store.subscribe(() => {
-                                if (!store.get().archived) return;
-                                current.archived = true;
-                                current.backgroundUnsubscribe?.();
-                                current.backgroundUnsubscribe = undefined;
-                            });
-                        }
+                        chatActivate(current);
                     }
                     return store;
                 });
@@ -469,6 +490,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 chats.set(sessionId, binding);
             }
             binding.count += 1;
+            chatActivate(binding);
             let store: RigChatStore;
             try {
                 store = await binding.storePromise;
@@ -488,9 +510,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     current.count -= 1;
                     if (current.count <= 0) {
                         current.count = 0;
-                        // A retained background subscriber keeps durable chat
-                        // synchronization alive, but usage polling belongs only
-                        // to a visible view lease.
+                        chatDeactivate(current);
                         current.store?.usagePanelClose();
                     }
                 },
@@ -500,8 +520,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             const binding = chats.get(sessionId);
             if (!binding) return;
             binding.archived = true;
-            binding.backgroundUnsubscribe?.();
-            binding.backgroundUnsubscribe = undefined;
+            chatDeactivate(binding);
         },
         terminalOpen(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -534,7 +553,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             securityPolicyStore = undefined;
             deps.catalogSource[Symbol.dispose]();
             for (const binding of chats.values()) {
-                binding.backgroundUnsubscribe?.();
+                chatDeactivate(binding);
                 binding.store?.[Symbol.dispose]();
             }
             chats.clear();

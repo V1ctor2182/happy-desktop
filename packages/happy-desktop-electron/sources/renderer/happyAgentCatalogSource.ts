@@ -227,9 +227,10 @@ function sessionProject(session: GroupSession): RigSessionSummary {
         ...(session.scope.kind === "workspace"
             ? { worktreeId: session.scope.workspaceId as RigWorktreeId }
             : {}),
-        // The live connection groups only sessions the host has placed, so a
-        // session reaching here has a key. Carry absence through honestly.
         ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
+        ...(session.parentSessionId === undefined
+            ? {}
+            : { parentSessionId: session.parentSessionId as RigSessionId }),
         cwd: session.cwd,
         displayCwd: session.cwd,
         providerId: session.providerId,

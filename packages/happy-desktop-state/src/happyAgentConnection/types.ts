@@ -466,6 +466,8 @@ export interface GroupSession {
     modelId: string;
     ownerInstanceId: string;
     orderKey?: string;
+    /** The session that spawned this one, for a subagent. Absent for a top-level session. */
+    parentSessionId?: string;
     permissionMode: string;
     scope:
         | { kind: "project"; projectId: string }
@@ -659,6 +661,8 @@ export interface ConnectHappyAgentOptions {
 
 export interface RigConnection {
     compatibility: () => ServerCompatibility;
+    /** Interrupts the current SSE attempt or backoff so reconnection starts immediately. */
+    retry: () => void;
     connectSession: (options: RigSessionSubscriptionOptions) => RigSessionConnection;
     connectGroups: (options: RigGroupsSubscriptionOptions) => RigGroupsConnection;
     projects: {

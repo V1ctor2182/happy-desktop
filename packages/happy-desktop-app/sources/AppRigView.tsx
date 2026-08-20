@@ -1987,24 +1987,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         openGroup !== undefined &&
         activeMainTool === undefined &&
         activeFile === undefined;
-    // A new workspace opens as a plain empty chat, with the ordinary placeholder
-    // and a live composer. The checkout being prepared is only worth a word once
-    // there is something in the chat waiting on it: a message sent before the
-    // checkout arrives is an ordinary message, and this is the standing fact
-    // above all of them that says why it has not run yet. Rig has already named
-    // where the checkout is going and holds the work until it is there.
-    const preparingNotice =
-        openGroup &&
-        preparingChatOnScreen &&
-        conversation.type === "ready" &&
-        conversation.value.entries.length > 0 ? (
-            <WorkspaceLifecycleNotice
-                name={openGroup.name}
-                {...(openGroup.path ? { path: openGroup.path } : {})}
-                phase="creating"
-                size="compact"
-            />
-        ) : undefined;
     const mainFileBody = (file: RigFileTabSnapshot, onReady?: () => void): ReactNode => (
         <RigFileBody
             appearance={appearance.appearance}
@@ -2044,7 +2026,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 focusOnType
                 groupId={openGroup.id}
                 groupName={openGroup.name}
-                {...(preparingNotice ? { notice: preparingNotice } : {})}
                 now={now}
                 {...(connectionRefusal === undefined &&
                 openGroupChatRefusal === undefined &&

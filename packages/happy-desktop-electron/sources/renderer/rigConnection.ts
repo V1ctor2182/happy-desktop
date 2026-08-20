@@ -5,15 +5,14 @@ import {
     HappyAgentClient,
     rigClientCreate,
     rigClockStoreCreate,
-    rigConnectionLoaderCreate,
     rigDebugLogStoreCreate,
     rigWorkspaceStoreCreate,
     type MutationRejectedDelta,
     type RigClient,
     type RigClockStore,
     type RigConnection,
+    type RigConnectionSnapshot,
     type RigConnectionStore,
-    type RigDaemonHealth,
     type RigDebugLogInput,
     type RigDebugLogStore,
     type RigHost,
@@ -109,13 +108,87 @@ export interface RigConnectionHandle {
     dispose(): void;
 }
 
-function healthProbe(client: HappyAgentClient): () => Promise<RigDaemonHealth> {
-    return async () => {
-        const health = await client.getHealth();
-        return {
-            status: health.status,
-            version: health.version.daemon,
-        };
+function snapshotsEqual(left: RigConnectionSnapshot, right: RigConnectionSnapshot): boolean {
+    return (
+        left.connection === right.connection &&
+        left.daemon === right.daemon &&
+        left.message === right.message &&
+        left.attempt === right.attempt
+    );
+}
+
+/**
+ * Projects the connection's existing SSE lifecycle into the host availability
+ * store. It opens no transport of its own: `/health` remains the one startup
+ * gate inside `connectHappyAgent`, and stream completion owns reconnect state.
+ */
+function streamConnectionStoreCreate(connection: RigConnection): RigConnectionStore {
+    const listeners = new Set<() => void>();
+    let snapshot: RigConnectionSnapshot = {
+        attempt: 0,
+        connection: "connecting",
+        daemon: "unknown",
+    };
+    let sourceState: ReturnType<ReturnType<RigConnection["connectGroups"]>["state"]>["connection"] =
+        "connecting";
+    let disposed = false;
+
+    const publish = (next: RigConnectionSnapshot): void => {
+        if (snapshotsEqual(snapshot, next)) return;
+        snapshot = next;
+        for (const listener of listeners) listener();
+    };
+
+    const source = connection.connectGroups({
+        onChange: (_projects, state) => {
+            const previous = sourceState;
+            sourceState = state.connection;
+            if (state.connection === "live") {
+                publish({ attempt: 0, connection: "connected", daemon: "ready" });
+                return;
+            }
+            if (state.connection === "connecting") {
+                publish({ attempt: 0, connection: "connecting", daemon: "unknown" });
+                return;
+            }
+            const attempt =
+                state.connection === "reconnecting" && previous !== "reconnecting"
+                    ? snapshot.attempt + 1
+                    : snapshot.attempt;
+            publish({
+                attempt,
+                connection: "disconnected",
+                daemon: "unknown",
+                message:
+                    state.connection === "closed"
+                        ? "This Rig connection is closed."
+                        : "The SSE stream is reconnecting.",
+            });
+        },
+        onError: (error) => {
+            publish({
+                attempt: Math.max(1, snapshot.attempt),
+                connection: "disconnected",
+                daemon: "unknown",
+                message: error instanceof Error ? error.message : String(error),
+            });
+        },
+    });
+
+    return {
+        get: () => snapshot,
+        subscribe(listener) {
+            if (disposed) return () => undefined;
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        retry: () => connection.retry(),
+        [Symbol.dispose]() {
+            if (disposed) return;
+            disposed = true;
+            source.close();
+            listeners.clear();
+        },
     };
 }
 
@@ -217,10 +290,7 @@ export function rigConnectionOpen(input: {
                     source: "catalog",
                 });
                 session = {
-                    connection: rigConnectionLoaderCreate({
-                        onDebugEntry: debugEntry,
-                        probe: healthProbe(directClient),
-                    }),
+                    connection: streamConnectionStoreCreate(agentConnection),
                     debugLog,
                     host: input.host,
                     models: client.models,

@@ -144,12 +144,14 @@ export function rigProjectGroupsProject(
     const projectSessions = new Map<RigProjectId, RigPlacedSession[]>();
     const worktreeSessions = new Map<RigWorktreeId, RigPlacedSession[]>();
     for (const session of sessions) {
-        // No position, no place in the list. A subagent runs under the session
-        // that started it and is reachable through that session; giving it a row
-        // of its own would put a session nobody opened in the tab strip and
-        // leave the drag order with rows the host will not reorder.
-        if (session.orderKey === undefined) continue;
-        const placed: RigPlacedSession = { ...session, orderKey: session.orderKey };
+        // A subagent runs under the session that started it and is reachable
+        // through that session; giving it a row of its own would put a session
+        // nobody opened in the tab strip. Parentage is the whole of that test:
+        // a top-level session the host has not ordered yet — one created a
+        // moment ago — is still the reader's own tab, so a missing key falls
+        // back to the session's id rather than costing the session its row.
+        if (session.parentSessionId !== undefined) continue;
+        const placed: RigPlacedSession = { ...session, orderKey: session.orderKey ?? session.id };
         const bucket = session.worktreeId
             ? mapAppend(worktreeSessions, session.worktreeId)
             : mapAppend(projectSessions, session.projectId);
