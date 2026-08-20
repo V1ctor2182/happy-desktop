@@ -661,14 +661,19 @@ if (mediaPreviewBridge) {
             if (step.direction === "back") rigHistory.back();
             else rigHistory.forward();
         });
-        // macOS delivers the mouse's side buttons to the page as pointer buttons
-        // 3 and 4 rather than as the shell commands other platforms send.
-        window.addEventListener("auxclick", (event) => {
-            if (event.button !== 3 && event.button !== 4) return;
-            event.preventDefault();
-            if (event.button === 3) rigHistory.back();
-            else rigHistory.forward();
-        });
+        // Chromium acts on macOS side buttons after mouseup, before auxclick is
+        // guaranteed to arrive. Claim them in capture so only our stack moves.
+        window.addEventListener(
+            "mouseup",
+            (event) => {
+                if (event.button !== 3 && event.button !== 4) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (event.button === 3) rigHistory.back();
+                else rigHistory.forward();
+            },
+            { capture: true },
+        );
         // Appearance, title motion, and model choices share one durable desktop
         // document. The adapter keeps its current value synchronous so writes
         // from any product store preserve changes already made by the others.
