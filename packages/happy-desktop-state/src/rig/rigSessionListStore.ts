@@ -256,6 +256,22 @@ export interface RigSessionListStore {
     groupConversationRefusal(groupId: RigGroupId): string | undefined;
 
     /**
+     * Whether this session belongs to another session rather than to a list.
+     *
+     * The host says so by giving it no `orderKey`: a subagent syncs and can be
+     * opened by id, but it belongs to whatever started it and never takes a row.
+     * That is the only thing that makes a chat someone else's, and it is asked
+     * for here rather than worked out from the rows, because a session missing
+     * from the rows has several ordinary reasons to be — chiefly that it was
+     * named a moment ago and the list has not caught up. Reading absence as
+     * delegation locks the reader out of the chat they just made.
+     *
+     * A session this Rig has never heard of is not delegated. Nothing is known
+     * about it, which is not the same as knowing it belongs to someone else.
+     */
+    sessionDelegated(sessionId: RigSessionId): boolean;
+
+    /**
      * Starts the first conversation in a worktree, resolving at once with that
      * conversation's address. It is split from `worktreeCreate` so addressing
      * the worktree does not wait on the host at all.
@@ -979,6 +995,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // not a change: the same sentence answers both questions.
             if (project !== undefined) return rigProjectWriteRefusal(project);
             return catalogListed ? RIG_GROUP_UNLISTED_REFUSAL : RIG_GROUP_UNREAD_REFUSAL;
+        },
+        sessionDelegated(sessionId) {
+            const known = sessions.find((candidate) => candidate.id === sessionId);
+            return known !== undefined && known.orderKey === undefined;
         },
         async sessionLocationRead(sessionId) {
             const listed = sessions.find((candidate) => candidate.id === sessionId);

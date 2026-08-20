@@ -875,6 +875,17 @@ function composerPlaceholder(groupName: string | undefined): string {
     return groupName === undefined ? "Message Happy…" : `Message Happy in “${groupName}”…`;
 }
 
+/**
+ * The composer prompt for a chat the reader may only read. It names the agent
+ * holding the conversation, because that is the fact the reader needs: this work
+ * belongs to something already running and is not waiting on a message. A chat
+ * whose title has not been written yet says the same thing without a name rather
+ * than falling back to jargon about what kind of chat it is.
+ */
+function conversationLockedPlaceholder(title: string | undefined): string {
+    return title === undefined || title === "" ? "Running…" : `${title} is running this chat…`;
+}
+
 /** A sidebar row's id: which Rig it belongs to, then the group inside it. */
 function rigItemId(rigId: string, id: string): string {
     return `${rigId}/${id}`;
@@ -1812,19 +1823,27 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         (target) => target.id === workspace.openInRecentId,
     );
     const conversation = workspace.conversation;
+    // A chat that belongs to another session rather than to this group's strip.
+    // The state says so outright — the host gives such a session no place in an
+    // order — because the alternatives all lie at the moment it matters: a
+    // session is addressed the instant it is named, so it is legitimately
+    // missing from the rows for a moment after the reader creates it, and
+    // reading that absence as delegation locked them out of their own new chat
+    // and put someone else's name on it.
     const detachedConversationId =
-        openGroup &&
-        props.chatId &&
-        !openGroup.conversations.some((summary) => summary.id === props.chatId)
-            ? props.chatId
-            : undefined;
+        workspace.conversationDelegated && props.chatId ? props.chatId : undefined;
     const detachedConversation =
         detachedConversationId && conversation.type === "ready" ? conversation.value : undefined;
     const detachedConversationTab: TabItem | undefined = detachedConversationId
         ? {
               id: detachedConversationId,
-              icon: "agents",
-              label: detachedConversation?.title ?? "Subagent",
+              // The chat's own mark and the chat's own name, exactly as every
+              // other session tab wears them. A shared glyph and the word
+              // "Subagent" told the reader which category of thing they had
+              // opened, which they already knew, while taking away the one thing
+              // that tells this chat apart from the next one.
+              avatarId: detachedConversationId,
+              label: detachedConversation?.title ?? "Untitled",
               labelShimmer: props.titleShimmerEnabled,
               ...(detachedConversation?.running ? { busy: true } : {}),
           }
@@ -1841,7 +1860,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         detachedConversationId !== undefined || openGroupChatRefusal !== undefined;
     const conversationReadOnlyReason =
         detachedConversationId !== undefined
-            ? "Subagent chats are read-only"
+            ? conversationLockedPlaceholder(detachedConversation?.title)
             : openGroupChatRefusal;
     // Stopping is not writing. An unusable checkout still has whatever was
     // already running in it, and leaving the reader unable to end that would be
@@ -3270,13 +3289,15 @@ function RigConversationSurface(props: {
             />
         );
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
-    // Why this chat will not take a message right now, in one sentence, whether
-    // the reason is the Rig, the checkout, or a chat whose runner owns it. It is
-    // the send that is refused and nothing else, so this is the only place the
-    // refusal is applied.
-    const sendRefusal =
-        props.unavailable ??
-        (props.readOnly ? (props.readOnlyReason ?? "Subagent chats are read-only") : undefined);
+    // Whether a chat this reader may not write into is closed rather than merely
+    // held. A chat whose runner owns it is not somewhere to leave a draft: the
+    // agent is having this conversation and the reader is reading it, so the
+    // composer locks instead of collecting a message with nowhere to go.
+    //
+    // The Rig being unreachable is deliberately not this: that is a wait, the
+    // draft survives it, and it keeps the banner that names it. Only an unusable
+    // destination locks the box.
+    const sendRefusal = props.unavailable;
     const activeActivity = rigActiveActivityCounts(conversation);
     const activityTotal = activeActivity.agents + activeActivity.terminals;
     return (
@@ -3313,22 +3334,26 @@ function RigConversationSurface(props: {
                     ) : null}
                 </>
             }
-            // Writing and sending are refused separately. A chat this reader may
-            // not send into still takes a draft: composing a thought is not
-            // delivering it, and closing the input takes away the only place the
-            // thought can go while it is being worked out. So the box stays live
-            // and the send is what carries the refusal, with its reason beside
-            // the control that is actually withheld.
+            composerDisabled={props.readOnly}
             composerSubmitDisabled={sendRefusal !== undefined}
             {...(sendRefusal === undefined ? {} : { composerUnavailable: sendRefusal })}
-            composerFocusOnType={props.focusOnType}
+            composerFocusOnType={!props.readOnly && props.focusOnType}
             // The open conversation is what this composer writes into, so moving
             // to another one — or landing in the one a new workspace was made
-            // with — puts the caret in the draft. Only the composer claiming
-            // stray typing takes it, so the dock over an expanded panel cannot
-            // steal it.
-            {...(props.focusOnType ? { composerFocusKey: conversation.conversationId } : {})}
-            composerPlaceholder={composerPlaceholder(props.groupName)}
+            // with — puts the caret in the draft. A locked chat has no draft to
+            // put it in, and only the composer claiming stray typing takes it,
+            // so the dock over an expanded panel cannot steal it.
+            {...(!props.readOnly && props.focusOnType
+                ? { composerFocusKey: conversation.conversationId }
+                : {})}
+            // A locked chat says why in the words of whatever locked it: the
+            // agent that owns it, named, or the checkout that will not take a
+            // message. Both are more use than the category of chat this is.
+            composerPlaceholder={
+                props.readOnly
+                    ? (props.readOnlyReason ?? composerPlaceholder(props.groupName))
+                    : composerPlaceholder(props.groupName)
+            }
             conversationId={conversation.conversationId}
             entries={conversation.entries}
             loading={!conversation.ready}

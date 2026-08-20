@@ -423,6 +423,17 @@ export interface RigWorkspaceSnapshot {
      * refused always give the same reason.
      */
     readonly groupAccess: RigGroupAccess;
+    /**
+     * Whether the addressed conversation belongs to another session rather than
+     * to the addressed group's list. A delegated chat is readable but its runner
+     * owns its input and configuration.
+     *
+     * Stated here rather than left to be worked out from the tab strip: a
+     * session is addressed the instant it is named, which is before the list
+     * carries it, and a surface reading its absence as delegation would lock the
+     * reader out of the session they have just made.
+     */
+    readonly conversationDelegated: boolean;
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
     readonly fileTabs: readonly RigFileTabSnapshot[];
@@ -1550,6 +1561,7 @@ export function rigWorkspaceStoreCreate(
         address: addressPublic(),
         list: list.get(),
         conversation,
+        conversationDelegated: false,
         groupAccess: rigGroupAccessRefused(RIG_GROUP_UNLISTED_REFUSAL),
         fileTabs,
         tabOrder,
@@ -1893,6 +1905,7 @@ export function rigWorkspaceStoreCreate(
         );
         if (groupAccess.writeRefusal !== panel.get().terminalRefusal)
             panel.scopeApply(addressedGroupId, openId, groupAccess.writeRefusal);
+        const conversationDelegated = openId !== undefined && list.sessionDelegated(openId);
         // The panel's file is not a second thing to keep in step: it is the one
         // member of the strip placed there, found rather than mirrored.
         const panelFile = fileTabs.find((tab) => tab.placement === "panel");
@@ -1901,6 +1914,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.groupAccess.writeRefusal === groupAccess.writeRefusal &&
             snapshot.groupAccess.conversationRefusal === groupAccess.conversationRefusal &&
             snapshot.list === listSnapshot &&
+            snapshot.conversationDelegated === conversationDelegated &&
             snapshot.conversation === conversation &&
             snapshot.groupComposer === groupComposerDraft &&
             snapshot.groupSessionDraft === groupSessionDraft &&
@@ -1932,6 +1946,7 @@ export function rigWorkspaceStoreCreate(
             address: nextAddress,
             list: listSnapshot,
             conversation,
+            conversationDelegated,
             groupAccess,
             fileTabs,
             tabOrder,
@@ -3594,6 +3609,7 @@ export function rigWorkspaceStoreCreate(
             address: addressPublic(),
             list: list.get(),
             conversation,
+            conversationDelegated: false,
             groupAccess: rigGroupAccessRefused(RIG_GROUP_UNLISTED_REFUSAL),
             fileTabs,
             tabOrder,
