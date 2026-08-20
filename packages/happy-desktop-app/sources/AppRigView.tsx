@@ -3270,6 +3270,13 @@ function RigConversationSurface(props: {
             />
         );
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+    // Why this chat will not take a message right now, in one sentence, whether
+    // the reason is the Rig, the checkout, or a chat whose runner owns it. It is
+    // the send that is refused and nothing else, so this is the only place the
+    // refusal is applied.
+    const sendRefusal =
+        props.unavailable ??
+        (props.readOnly ? (props.readOnlyReason ?? "Subagent chats are read-only") : undefined);
     const activeActivity = rigActiveActivityCounts(conversation);
     const activityTotal = activeActivity.agents + activeActivity.terminals;
     return (
@@ -3306,23 +3313,22 @@ function RigConversationSurface(props: {
                     ) : null}
                 </>
             }
-            composerDisabled={props.readOnly}
-            composerSubmitDisabled={props.unavailable !== undefined}
-            {...(props.unavailable === undefined ? {} : { composerUnavailable: props.unavailable })}
-            composerFocusOnType={!props.readOnly && props.focusOnType}
+            // Writing and sending are refused separately. A chat this reader may
+            // not send into still takes a draft: composing a thought is not
+            // delivering it, and closing the input takes away the only place the
+            // thought can go while it is being worked out. So the box stays live
+            // and the send is what carries the refusal, with its reason beside
+            // the control that is actually withheld.
+            composerSubmitDisabled={sendRefusal !== undefined}
+            {...(sendRefusal === undefined ? {} : { composerUnavailable: sendRefusal })}
+            composerFocusOnType={props.focusOnType}
             // The open conversation is what this composer writes into, so moving
             // to another one — or landing in the one a new workspace was made
-            // with — puts the caret in the draft. A read-only chat has no draft
-            // to put it in, and only the composer claiming stray typing takes it,
-            // so the dock over an expanded panel cannot steal it.
-            {...(!props.readOnly && props.focusOnType
-                ? { composerFocusKey: conversation.conversationId }
-                : {})}
-            composerPlaceholder={
-                props.readOnly
-                    ? (props.readOnlyReason ?? "Subagent chats are read-only")
-                    : composerPlaceholder(props.groupName)
-            }
+            // with — puts the caret in the draft. Only the composer claiming
+            // stray typing takes it, so the dock over an expanded panel cannot
+            // steal it.
+            {...(props.focusOnType ? { composerFocusKey: conversation.conversationId } : {})}
+            composerPlaceholder={composerPlaceholder(props.groupName)}
             conversationId={conversation.conversationId}
             entries={conversation.entries}
             loading={!conversation.ready}
@@ -3349,10 +3355,7 @@ function RigConversationSurface(props: {
                                 // is active or queued behind it, so the control
                                 // says so rather than accepting a choice the
                                 // next message could not apply.
-                                disabled:
-                                    props.readOnly ||
-                                    props.unavailable !== undefined ||
-                                    conversation.modelLocked,
+                                disabled: sendRefusal !== undefined || conversation.modelLocked,
                                 onEffortChange: (effort?: RigThinkingLevel) => {
                                     if (props.rigOnline()) workspace.sessionEffortUpdate(effort);
                                 },
@@ -3369,7 +3372,7 @@ function RigConversationSurface(props: {
                     leading={
                         <>
                             <RigSessionControls
-                                disabled={props.readOnly || props.unavailable !== undefined}
+                                disabled={sendRefusal !== undefined}
                                 fields={["permission", "tier"]}
                                 menuPlacement="above"
                                 variant="ghost"

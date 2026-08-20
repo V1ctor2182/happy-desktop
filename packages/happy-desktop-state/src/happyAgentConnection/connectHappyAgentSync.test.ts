@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { connectHappyAgent } from "./connectHappyAgent.js";
-import { HAPPY_AGENT_PROTOCOL_VERSION } from "@slopus/happy-agent-client";
+import { HAPPY_AGENT_PROTOCOL_VERSION, HappyAgentApiError } from "@slopus/happy-agent-client";
 import type {
     ChatDelta,
     ChatElement,
@@ -341,7 +341,7 @@ it("does not duplicate the session row when agent.created is redelivered", async
 
 // --- sent message reconciliation ------------------------------------------
 
-it("shows an optimistic message immediately and reconciles it with the server identity", async () => {
+it("shows an optimistic message immediately and keeps its identity once the daemon takes it", async () => {
     const { connection, daemon, chat, sessionId } = await liveHarness();
     const release = daemon.pause("sendMessage");
     const mutationId = connection.sendMessage(sessionId, "hello there");
@@ -351,30 +351,49 @@ it("shows an optimistic message immediately and reconciles it with the server id
     expect(userMessages(chat.elements)[0]?.text).toBe("hello there");
 
     release();
-    await vi.waitFor(() => expect(userMessages(chat.elements)[0]?.messageId).toBe("server-1"));
+    // The identity is the client's own and the daemon adopts it — "reusing it
+    // returns the existing message" — so a send that lands changes nothing the
+    // reader can see. That is the whole point: there is no identity swap to
+    // survive, and the row drawn before the request cannot be replaced by a
+    // second one carrying the same message under another name.
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     expect(userMessages(chat.elements)).toHaveLength(1);
-    // The row identity survives the identity swap, so the DOM row would too.
+    expect(userMessages(chat.elements)[0]?.messageId).toBe(mutationId);
     expect(userMessages(chat.elements)[0]?.id).toBe(`message:${mutationId}`);
+    // The id the row was drawn under is the id the daemon was asked to use.
+    const sent = daemon.calls.find((call) => call.method === "sendMessage");
+    expect((sent?.args[1] as { id?: string } | undefined)?.id).toBe(mutationId);
 });
 
 it("does not duplicate the sent message when its event beats the HTTP response", async () => {
     const { connection, daemon, chat, sessionId } = await liveHarness();
     const release = daemon.pause("sendMessage:respond");
-    connection.sendMessage(sessionId, "race");
+    const mutationId = connection.sendMessage(sessionId, "race");
 
-    // The stream event arrives while the response is still held.
-    await vi.waitFor(() => expect(userMessages(chat.elements)[0]?.messageId).toBe("server-1"));
+    // The stream event arrives while the response is still held. It carries the
+    // client's own identity, so it lands on the row already there instead of
+    // adding a second one beside it.
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     expect(userMessages(chat.elements)).toHaveLength(1);
+    expect(userMessages(chat.elements)[0]?.messageId).toBe(mutationId);
 
     release();
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(userMessages(chat.elements)).toHaveLength(1);
-    expect(userMessages(chat.elements)[0]?.messageId).toBe("server-1");
+    expect(userMessages(chat.elements)[0]?.messageId).toBe(mutationId);
 });
 
 it("removes the optimistic message and reports the rejection when the send fails", async () => {
     const { connection, daemon, chat, rejections, sessionId } = await liveHarness();
-    daemon.failOnce("sendMessage", new Error("the daemon refused"));
+    // Refused rather than lost: a send is retried through anything that might
+    // be transport, so only a failure the daemon owns ends the attempt and
+    // takes the message off the screen.
+    daemon.failOnce(
+        "sendMessage",
+        new HappyAgentApiError(400, "the daemon refused", "invalid_request", null),
+    );
     const mutationId = connection.sendMessage(sessionId, "doomed");
     expect(userMessages(chat.elements)).toHaveLength(1);
 
@@ -386,6 +405,20 @@ it("removes the optimistic message and reports the rejection when the send fails
     });
     expect(userMessages(chat.elements)).toHaveLength(0);
     expect(chat.deltas.filter((delta) => delta.type === "mutation_rejected")).toHaveLength(1);
+});
+
+it("retries a send the daemon never answered and reports nothing when it lands", async () => {
+    const { connection, daemon, chat, rejections, sessionId } = await liveHarness();
+    daemon.failOnce("sendMessage", new Error("connection reset"));
+    const mutationId = connection.sendMessage(sessionId, "kept");
+
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // The retry reuses the same identity, so the message the reader has been
+    // looking at throughout is the one that landed — not a second copy of it.
+    expect(rejections).toHaveLength(0);
+    expect(userMessages(chat.elements)).toHaveLength(1);
+    expect(userMessages(chat.elements)[0]?.messageId).toBe(mutationId);
 });
 
 it("marks pending messages accepted and moves them under the run that took them", async () => {
