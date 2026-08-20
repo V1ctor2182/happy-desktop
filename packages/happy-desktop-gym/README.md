@@ -52,6 +52,28 @@ never a Gym replacement or re-serialization. If the profile build or bridge is
 unavailable, Gym falls back to bounded heap/DOM/process snapshots and reports
 the capability honestly.
 
+`window-edge-resize` reuses the prepared profile's first durable long-chat
+session; it does not submit messages or manufacture another fixture. The
+workload refuses to run until the seeded long-chat marker is visible and the
+message list is hydrated, virtualized, scrollable, and nonempty. With the right
+panel open, it drives fixed-origin and moving-origin 380px round trips in 2px
+updates every 5ms. Animation-frame gaps are calibrated against idle frames
+captured immediately around each sweep and reported with estimated dropped
+frames, long frames, browser long tasks, delivered viewport widths, and panel
+geometry. Every sampled frame must keep rendered transcript rows mounted. The
+gym window remains inactive and the workload never controls the system cursor.
+
+Run it repeatedly against one already-prepared root:
+
+```sh
+pnpm --dir packages/happy-desktop-gym gym:electron run \
+  --root .context/happy-desktop-gym/runs/<run> \
+  --workload window-edge-resize
+```
+
+When Happy Desktop does not have a bundled Rig package, point the gym at an
+existing Rig build with `HAPPY_DESKTOP_RIG_ENTRYPOINT=/absolute/path/to/dist/main.js`.
+
 `mixed-replay` is the end-to-end lane. It reads the existing
 `gold-five-minute-session.v1.json` recording for its real submitted-message
 patterns, submits those prompts concurrently to several durable Happy Agent conversations,

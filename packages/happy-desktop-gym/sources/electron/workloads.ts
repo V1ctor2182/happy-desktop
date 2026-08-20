@@ -1,4 +1,4 @@
-import { appendFile, readFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
@@ -411,6 +411,7 @@ export async function electronWorkloadsRun(options: {
                   "catalog-switch",
                   "long-transcript",
                   "long-chat-scroll",
+                  "window-edge-resize",
                   "session-switch-load",
                   "file-switch-warm",
                   "highlight-warm",
@@ -737,6 +738,11 @@ async function workloadRun(
         });
         await mark("transcript-ready");
         return finish(await performanceCapture(page, app, options.profilerActive()));
+    }
+    if (workload === "window-edge-resize") {
+        return finish(
+            await windowEdgeResizeRun(page, app, options.paths, location.sessionId, mark),
+        );
     }
     if (
         workload === "file-switch-warm" ||
@@ -2963,6 +2969,409 @@ async function scrollStabilityRun(
         );
     }
     return measurement;
+}
+
+interface WindowEdgeResizeFrame {
+    readonly chatWidth: number;
+    readonly elapsedMs: number;
+    readonly innerWidth: number;
+    readonly panelLeft: number;
+    readonly panelRight: number;
+    readonly panelWidth: number;
+    readonly renderedRows: number;
+    readonly screenX: number;
+    readonly sidebarWidth: number;
+}
+
+interface WindowEdgeResizeLongTask {
+    readonly durationMs: number;
+    readonly elapsedMs: number;
+}
+
+interface WindowEdgeResizeCapture {
+    readonly frames: readonly WindowEdgeResizeFrame[];
+    readonly longTasks: readonly WindowEdgeResizeLongTask[];
+}
+
+interface WindowEdgeResizeStep {
+    readonly at: number;
+    readonly width: number;
+    readonly x: number;
+}
+
+const WINDOW_EDGE_RESIZE_DISTANCE = 380;
+const WINDOW_EDGE_RESIZE_INTERVAL_MS = 5;
+const WINDOW_EDGE_RESIZE_MIN_WIDTH = 720;
+const WINDOW_EDGE_RESIZE_STEP = 2;
+const WINDOW_EDGE_RESIZE_TRANSCRIPT_MARKER = "[gym-long-chat-session]";
+
+/**
+ * One monotone V-sweep changes direction exactly once, at the turnaround.
+ * Further changes expose backtracking; one large delivered step exposes frames
+ * the renderer could not present between two sampled widths.
+ */
+function sweepStats(values: readonly number[]): {
+    readonly directionChanges: number;
+    readonly largestStep: number;
+} {
+    let direction = 0;
+    let directionChanges = 0;
+    let largestStep = 0;
+    let previous = values[0] ?? 0;
+    for (const value of values.slice(1)) {
+        const delta = value - previous;
+        previous = value;
+        if (Math.abs(delta) <= 1) continue;
+        largestStep = Math.max(largestStep, Math.abs(delta));
+        const next = Math.sign(delta);
+        if (direction !== 0 && next !== direction) directionChanges += 1;
+        direction = next;
+    }
+    return { directionChanges, largestStep };
+}
+
+function windowEdgeResizePhaseSummarize(
+    capture: WindowEdgeResizeCapture,
+    steps: readonly WindowEdgeResizeStep[],
+): Record<string, unknown> {
+    const frames = capture.frames;
+    const innerWidths = frames.map((frame) => frame.innerWidth);
+    const panelWidths = frames.map((frame) => frame.panelWidth);
+    const panelRights = frames.map((frame) => frame.panelRight);
+    const renderedRows = frames.map((frame) => frame.renderedRows);
+    const rightGaps = frames.map((frame) => frame.innerWidth - frame.panelRight);
+    const initialWidth = frames[0]?.innerWidth;
+    const firstActive = frames.findIndex((frame) => frame.innerWidth !== initialWidth);
+    let lastActive = -1;
+    for (let index = frames.length - 1; index >= 0; index -= 1) {
+        if (frames[index]?.innerWidth === initialWidth) continue;
+        lastActive = index;
+        break;
+    }
+    const activeFrames =
+        firstActive >= 0 && lastActive >= firstActive
+            ? frames.slice(firstActive, lastActive + 1)
+            : frames;
+    const gapsOf = (captured: readonly WindowEdgeResizeFrame[]) =>
+        captured.slice(1).map((frame, index) => frame.elapsedMs - captured[index]!.elapsedMs);
+    const gaps = gapsOf(activeFrames).sort((left, right) => left - right);
+    const idleGaps = [
+        ...gapsOf(firstActive > 0 ? frames.slice(0, firstActive) : []),
+        ...gapsOf(lastActive >= 0 ? frames.slice(lastActive + 1) : []),
+    ].sort((left, right) => left - right);
+    const frameIntervalMs = idleGaps[Math.floor(idleGaps.length * 0.5)] ?? 0;
+    const droppedFrameEstimate =
+        frameIntervalMs > 0
+            ? gaps.reduce(
+                  (total, gap) => total + Math.max(0, Math.round(gap / frameIntervalMs) - 1),
+                  0,
+              )
+            : 0;
+    const longFrameCount =
+        frameIntervalMs > 0 ? gaps.filter((gap) => gap > frameIntervalMs * 1.5).length : 0;
+    const resizeStarted = activeFrames[0]?.elapsedMs ?? 0;
+    const resizeFinished = activeFrames.at(-1)?.elapsedMs ?? resizeStarted;
+    const activeLongTasks = capture.longTasks.filter(
+        (task) =>
+            task.elapsedMs < resizeFinished && task.elapsedMs + task.durationMs >= resizeStarted,
+    );
+    const stepDurationMs = Math.max(0, (steps.at(-1)?.at ?? 0) - (steps[0]?.at ?? 0));
+    return {
+        distinctInnerWidths: new Set(innerWidths).size,
+        estimatedDroppedFrames: droppedFrameEstimate,
+        frameCount: frames.length,
+        framesDuringResize: activeFrames.length,
+        idleFrameCadenceMs: frameIntervalMs,
+        stepCount: steps.length,
+        stepDurationMs,
+        stepsPerSecond: stepDurationMs > 0 ? (steps.length * 1_000) / stepDurationMs : 0,
+        frameGapMaxMs: gaps.at(-1) ?? 0,
+        frameGapP95Ms: gaps[Math.floor(gaps.length * 0.95)] ?? 0,
+        innerWidth: sweepStats(innerWidths),
+        innerWidthMin: Math.min(...innerWidths),
+        innerWidthMax: Math.max(...innerWidths),
+        longFrameCount,
+        longTaskCount: activeLongTasks.length,
+        longTaskDurationMs: activeLongTasks.reduce((total, task) => total + task.durationMs, 0),
+        panelWidth: sweepStats(panelWidths),
+        panelWidthMin: Math.min(...panelWidths),
+        panelWidthMax: Math.max(...panelWidths),
+        renderedRowsMin: Math.min(...renderedRows),
+        panelRight: sweepStats(panelRights),
+        rightGapMin: Math.min(...rightGaps),
+        rightGapMax: Math.max(...rightGaps),
+    };
+}
+
+/** Per-frame geometry sampler for the resize probes. Stop with samplerStop. */
+function samplerStart(page: Page): Promise<void> {
+    return page.evaluate(() => {
+        const frames: WindowEdgeResizeFrame[] = [];
+        const longTasks: WindowEdgeResizeLongTask[] = [];
+        const started = performance.now();
+        const browserWindow = window as Window & {
+            __happyDesktopGymEdgeResizeFrames?: WindowEdgeResizeFrame[];
+            __happyDesktopGymEdgeResizeHandle?: number;
+            __happyDesktopGymEdgeResizeLongTaskObserver?: PerformanceObserver;
+            __happyDesktopGymEdgeResizeLongTasks?: WindowEdgeResizeLongTask[];
+            __happyDesktopGymEdgeResizeStarted?: number;
+            __happyDesktopGymSampleEdgeResize?: () => void;
+        };
+        browserWindow.__happyDesktopGymEdgeResizeFrames = frames;
+        browserWindow.__happyDesktopGymEdgeResizeLongTasks = longTasks;
+        browserWindow.__happyDesktopGymEdgeResizeStarted = started;
+        if (
+            typeof PerformanceObserver !== "undefined" &&
+            PerformanceObserver.supportedEntryTypes.includes("longtask")
+        ) {
+            const observer = new PerformanceObserver((entries) => {
+                for (const entry of entries.getEntries()) {
+                    longTasks.push({
+                        durationMs: entry.duration,
+                        elapsedMs: entry.startTime - started,
+                    });
+                }
+            });
+            observer.observe({ type: "longtask" });
+            browserWindow.__happyDesktopGymEdgeResizeLongTaskObserver = observer;
+        }
+        browserWindow.__happyDesktopGymSampleEdgeResize = () => {
+            const panel = document
+                .querySelector('[data-happy-desktop-ui="app-shell-panel"]')
+                ?.getBoundingClientRect();
+            const mains = document.querySelectorAll('[data-happy-desktop-ui="app-shell-main"]');
+            const chat = mains[mains.length - 1]?.getBoundingClientRect();
+            const sidebar = document
+                .querySelector('[data-happy-desktop-ui="app-shell-sidebar"]')
+                ?.getBoundingClientRect();
+            const renderedRows = document.querySelectorAll(
+                ".happy2-message-list__virtual-row[data-index]",
+            ).length;
+            frames.push({
+                chatWidth: chat?.width ?? 0,
+                elapsedMs: performance.now() - started,
+                innerWidth: window.innerWidth,
+                panelLeft: panel?.left ?? 0,
+                panelRight: panel?.right ?? 0,
+                panelWidth: panel?.width ?? 0,
+                renderedRows,
+                screenX: window.screenX,
+                sidebarWidth: sidebar?.width ?? 0,
+            });
+            browserWindow.__happyDesktopGymEdgeResizeHandle = requestAnimationFrame(
+                browserWindow.__happyDesktopGymSampleEdgeResize!,
+            );
+        };
+        browserWindow.__happyDesktopGymEdgeResizeHandle = requestAnimationFrame(
+            browserWindow.__happyDesktopGymSampleEdgeResize,
+        );
+    });
+}
+
+function samplerStop(page: Page): Promise<WindowEdgeResizeCapture> {
+    return page.evaluate(() => {
+        const browserWindow = window as Window & {
+            __happyDesktopGymEdgeResizeFrames?: WindowEdgeResizeFrame[];
+            __happyDesktopGymEdgeResizeHandle?: number;
+            __happyDesktopGymEdgeResizeLongTaskObserver?: PerformanceObserver;
+            __happyDesktopGymEdgeResizeLongTasks?: WindowEdgeResizeLongTask[];
+            __happyDesktopGymEdgeResizeStarted?: number;
+            __happyDesktopGymSampleEdgeResize?: () => void;
+        };
+        if (browserWindow.__happyDesktopGymEdgeResizeHandle !== undefined)
+            cancelAnimationFrame(browserWindow.__happyDesktopGymEdgeResizeHandle);
+        const observer = browserWindow.__happyDesktopGymEdgeResizeLongTaskObserver;
+        if (observer !== undefined) {
+            const started = browserWindow.__happyDesktopGymEdgeResizeStarted ?? performance.now();
+            for (const entry of observer.takeRecords()) {
+                browserWindow.__happyDesktopGymEdgeResizeLongTasks?.push({
+                    durationMs: entry.duration,
+                    elapsedMs: entry.startTime - started,
+                });
+            }
+            observer.disconnect();
+        }
+        const capture = {
+            frames: browserWindow.__happyDesktopGymEdgeResizeFrames ?? [],
+            longTasks: browserWindow.__happyDesktopGymEdgeResizeLongTasks ?? [],
+        };
+        delete browserWindow.__happyDesktopGymEdgeResizeFrames;
+        delete browserWindow.__happyDesktopGymEdgeResizeHandle;
+        delete browserWindow.__happyDesktopGymEdgeResizeLongTaskObserver;
+        delete browserWindow.__happyDesktopGymEdgeResizeLongTasks;
+        delete browserWindow.__happyDesktopGymEdgeResizeStarted;
+        delete browserWindow.__happyDesktopGymSampleEdgeResize;
+        return capture;
+    });
+}
+
+/**
+ * Models each edge's bounds while the right panel is open. `left-fixed` keeps
+ * the origin fixed like a right-edge drag; `right-fixed` moves it like a
+ * left-edge drag. This intentionally does not enter AppKit's native live-resize
+ * loop: it isolates renderer layout from presentation-time compositor lag.
+ */
+async function windowEdgeResizeRun(
+    page: Page,
+    app: ElectronApplication,
+    paths: GymRunPaths,
+    sessionId: string,
+    mark: (name: string) => Promise<void>,
+): Promise<Record<string, unknown>> {
+    await waitForReplayMarker(page, WINDOW_EDGE_RESIZE_TRANSCRIPT_MARKER);
+    const transcriptBefore = await windowEdgeResizeTranscriptRead(page);
+    await mark("hydrated-transcript-ready");
+    const showPanel = page.locator('button[aria-label="Show panel"]').first();
+    if (await showPanel.isVisible().catch(() => false)) await showPanel.click();
+    await page.waitForSelector('[data-happy-desktop-ui="app-shell-panel"]', {
+        state: "visible",
+        timeout: 30_000,
+    });
+    const geometry = await app.evaluate(({ BrowserWindow, screen }) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        if (!window) throw new Error("The desktop window is gone.");
+        const original = window.getBounds();
+        const workArea = screen.getDisplayMatching(original).workArea;
+        const width = Math.min(Math.max(original.width, 1_100), workArea.width);
+        const x = Math.max(workArea.x, Math.min(original.x, workArea.x + workArea.width - width));
+        const measured = { ...original, width, x };
+        window.setBounds(measured);
+        return { measured, original };
+    });
+    await page.waitForTimeout(250);
+    const narrowest = Math.max(
+        WINDOW_EDGE_RESIZE_MIN_WIDTH,
+        geometry.measured.width - WINDOW_EDGE_RESIZE_DISTANCE,
+    );
+    const widths = [geometry.measured.width];
+    for (
+        let width = geometry.measured.width - WINDOW_EDGE_RESIZE_STEP;
+        width > narrowest;
+        width -= WINDOW_EDGE_RESIZE_STEP
+    )
+        widths.push(width);
+    widths.push(narrowest);
+    for (
+        let width = narrowest + WINDOW_EDGE_RESIZE_STEP;
+        width < geometry.measured.width;
+        width += WINDOW_EDGE_RESIZE_STEP
+    )
+        widths.push(width);
+    widths.push(geometry.measured.width);
+    const phaseRun = async (
+        anchor: "left-fixed" | "right-fixed",
+    ): Promise<WindowEdgeResizeCapture & { readonly steps: readonly WindowEdgeResizeStep[] }> => {
+        await samplerStart(page);
+        await page.waitForTimeout(250);
+        const steps = await app.evaluate(
+            async ({ BrowserWindow }, input) => {
+                const window = BrowserWindow.getAllWindows()[0];
+                if (!window) throw new Error("The desktop window is gone.");
+                const origin = window.getBounds();
+                const rightEdge = origin.x + origin.width;
+                const applied: { at: number; width: number; x: number }[] = [];
+                for (const width of input.widths) {
+                    const x = input.anchor === "left-fixed" ? origin.x : rightEdge - width;
+                    window.setBounds({ x, y: origin.y, width, height: origin.height });
+                    applied.push({ at: Date.now(), width, x });
+                    await new Promise<void>((resolveSleep) =>
+                        setTimeout(resolveSleep, input.intervalMs),
+                    );
+                }
+                window.setBounds(origin);
+                return applied;
+            },
+            { anchor, intervalMs: WINDOW_EDGE_RESIZE_INTERVAL_MS, widths },
+        );
+        await page.waitForTimeout(250);
+        return { ...(await samplerStop(page)), steps };
+    };
+    let movingOrigin:
+        | (WindowEdgeResizeCapture & { readonly steps: readonly WindowEdgeResizeStep[] })
+        | undefined;
+    let fixedOrigin:
+        | (WindowEdgeResizeCapture & { readonly steps: readonly WindowEdgeResizeStep[] })
+        | undefined;
+    try {
+        fixedOrigin = await phaseRun("left-fixed");
+        await mark("fixed-origin-sweep");
+        await page.waitForTimeout(250);
+        movingOrigin = await phaseRun("right-fixed");
+        await mark("moving-origin-sweep");
+    } finally {
+        await app.evaluate(({ BrowserWindow }, bounds) => {
+            BrowserWindow.getAllWindows()[0]?.setBounds(bounds);
+        }, geometry.original);
+    }
+    if (!movingOrigin || !fixedOrigin)
+        throw new Error("The rapid window resize sweep did not finish.");
+    for (const [name, sweep] of [
+        ["moving-origin", movingOrigin],
+        ["fixed-origin", fixedOrigin],
+    ] as const) {
+        if (sweep.frames.length === 0)
+            throw new Error(`The ${name} resize sweep captured no animation frames.`);
+        if (sweep.frames.some((frame) => frame.renderedRows === 0))
+            throw new Error(`The hydrated transcript became empty during the ${name} sweep.`);
+    }
+    const transcriptAfter = await windowEdgeResizeTranscriptRead(page);
+    const artifact = join(paths.artifacts, "window-edge-resize-frames.json");
+    await writeFile(
+        artifact,
+        `${JSON.stringify(
+            {
+                fixedOrigin,
+                movingOrigin,
+                sessionId,
+                sweep: {
+                    distancePx: geometry.measured.width - narrowest,
+                    intervalMs: WINDOW_EDGE_RESIZE_INTERVAL_MS,
+                    stepPx: WINDOW_EDGE_RESIZE_STEP,
+                    updateCount: widths.length,
+                },
+                transcriptAfter,
+                transcriptBefore,
+            },
+            null,
+            2,
+        )}\n`,
+        "utf8",
+    );
+    return {
+        artifact,
+        fixedOrigin: windowEdgeResizePhaseSummarize(fixedOrigin, fixedOrigin.steps),
+        movingOrigin: windowEdgeResizePhaseSummarize(movingOrigin, movingOrigin.steps),
+        sessionId,
+        sweep: {
+            distancePx: geometry.measured.width - narrowest,
+            intervalMs: WINDOW_EDGE_RESIZE_INTERVAL_MS,
+            stepPx: WINDOW_EDGE_RESIZE_STEP,
+            updateCount: widths.length,
+        },
+        transcriptAfter,
+        transcriptBefore,
+    };
+}
+
+async function windowEdgeResizeTranscriptRead(
+    page: Page,
+): Promise<TranscriptViewportMeasurement & { readonly textLength: number }> {
+    const viewport = await transcriptViewportRead(page);
+    const textLength = await page
+        .locator('[data-happy-desktop-ui="message-list"]')
+        .evaluate((element) => element.textContent?.trim().length ?? 0);
+    if (textLength === 0) throw new Error("The window resize workload opened an empty transcript.");
+    if (!viewport.virtualized || viewport.renderedRows === 0) {
+        throw new Error(
+            `The window resize workload needs a hydrated virtual transcript: ${JSON.stringify(viewport)}.`,
+        );
+    }
+    if (viewport.scrollHeight <= viewport.clientHeight) {
+        throw new Error(
+            `The window resize workload needs scrollable chat content: ${JSON.stringify(viewport)}.`,
+        );
+    }
+    return { ...viewport, textLength };
 }
 
 function streamingScrollPhaseBuild(

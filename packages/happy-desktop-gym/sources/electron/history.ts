@@ -197,7 +197,12 @@ export async function catalogSnapshotRead(
     const workspaceLists = await Promise.all(
         registeredProjects.projects.map((project) => client.listWorkspaces(project.id)),
     );
-    const workspaces = workspaceLists.flatMap((result) => result.workspaces);
+    // Current Rig includes each registered project's root checkout in this
+    // collection; the Gym's worktree target counts only checkouts beside it.
+    const projectPaths = new Set(registeredProjects.projects.map((project) => project.path));
+    const workspaces = workspaceLists
+        .flatMap((result) => result.workspaces)
+        .filter((workspace) => !projectPaths.has(workspace.path));
     const agentCount = (await client.agentIds()).length;
     if (expectedSessionIds !== undefined) {
         await persistedSessionIdsVerify(client, expectedSessionIds);
@@ -210,7 +215,7 @@ export async function catalogSnapshotRead(
             (workspace) => workspace.status === "active" && workspace.initialization === "ready",
         ).length,
         archivedWorktreeCount: workspaces.filter(
-            (workspace) => workspace.status === "archived" || workspace.archivedAt !== undefined,
+            (workspace) => workspace.status === "archived" || workspace.archivedAt != null,
         ).length,
         sessionCount: agentCount,
     };

@@ -41,7 +41,7 @@ export async function rigRuntimeCreate(
         timeout: 15_000,
         maxBuffer: 2 * 1024 * 1024,
     }).catch(() => undefined);
-    await unlink(paths.socketPath).catch(() => undefined);
+    await unlink(join(paths.home, ".happy", "agent", "server.sock")).catch(() => undefined);
     const runtime = new LocalRigRuntime(paths, command, environment, inference);
     await runtime.start();
     return runtime;
@@ -75,12 +75,14 @@ class LocalRigRuntime implements StartedRigRuntime {
         return this.#environment;
     }
 
+    /* Current Rig derives its private transport from HOME. The gym owns this
+       isolated HOME, so these paths cannot attach to the user's daemon. */
     get socketPath(): string {
-        return this.#paths.socketPath;
+        return join(this.#paths.home, ".happy", "agent", "server.sock");
     }
 
     get tokenPath(): string {
-        return join(this.#paths.rigServer, "token");
+        return join(this.#paths.home, ".happy", "agent", "token");
     }
 
     get token(): string {
@@ -150,8 +152,6 @@ function environmentCreate(
         RIG_MODEL: "openai/gpt-5.6-sol",
         RIG_PERMISSION_MODE: "full_access",
         RIG_PROVIDER: "codex",
-        RIG_SERVER_DIRECTORY: paths.rigServer,
-        RIG_SERVER_SOCKET_PATH: paths.socketPath,
         TMPDIR: paths.tmp,
         OPENAI_API_KEY: "happy-desktop-gym-local-only",
     };

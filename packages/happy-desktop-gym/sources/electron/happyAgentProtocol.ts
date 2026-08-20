@@ -158,7 +158,7 @@ export class GymHappyAgentClient {
         for (;;) {
             const history = await this.#client.getMessages(cuid(agentId), {
                 ...(before === undefined ? {} : { before }),
-                limit: 1_000,
+                limit: 200,
             });
             messages += history.runs.reduce((total, run) => total + run.messages.length, 0);
             if (!history.hasMore) return messages;
@@ -286,7 +286,16 @@ export class GymHappyAgentClient {
         const deadline = Date.now() + timeoutMs;
         let last: HappyAgentWorkspace | undefined;
         while (Date.now() < deadline) {
-            const response = await this.#client.getWorkspace(cuid(workspaceId));
+            let response: Awaited<ReturnType<HappyAgentClient["getWorkspace"]>>;
+            try {
+                response = await this.#client.getWorkspace(cuid(workspaceId));
+            } catch (error) {
+                if (String(error).includes("still initializing")) {
+                    await delay(100);
+                    continue;
+                }
+                throw error;
+            }
             last = workspaceProject(response.workspace);
             if (status === "ready" && last.status === "active" && last.initialization === "ready") {
                 return last;

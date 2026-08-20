@@ -18,6 +18,7 @@ const workloads: readonly GymWorkloadName[] = [
     "streaming",
     "mixed-replay",
     "memory-idle",
+    "window-edge-resize",
     "all",
 ];
 
