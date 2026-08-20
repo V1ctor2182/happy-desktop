@@ -8,7 +8,6 @@ import type {
     RigModelCatalog,
     RigModelKey,
     RigPermissionMode,
-    RigProfilesStore,
     RigSettingsSnapshot,
     RigSettingsStore,
     RigThinkingLevel,
@@ -23,7 +22,7 @@ import {
     rigThinkingLabel,
     experimentsStoreNoop,
     rigAvailabilityProject,
-    rigProfilesStoreNoop,
+    rigProfileStoreNoop,
     rigProviderUsageStoreNoop,
     rigWindowStoreNoop,
     titleShimmerStoreNoop,
@@ -35,7 +34,7 @@ import {
     RigInstructionsSettings,
     RigProviderSettings,
     RigProfilerSettings,
-    RigProfilesSettings,
+    RigProfileSettings,
     RigSettingsShell,
     RigUsageSettings,
     type RigProviderRow,
@@ -48,7 +47,7 @@ import { hostRig, type AppRigDirectoryStore } from "../AppRigView";
 export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "code", id: "debug", label: "Dev Tools" },
-    { icon: "users", id: "profiles", label: "Profiles" },
+    { icon: "users", id: "profile", label: "Profile" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "globe", id: "providers", label: "Providers" },
     // Usage sits after Providers because it is the same accounts read the other
@@ -129,7 +128,7 @@ export interface AppRigProfilerStore {
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     debug: "Inspect live state, Happy and Rig debugger endpoints, and renderer profiles",
     general: "How this window looks and what a new session starts with",
-    profiles: "The identities available for agent work",
+    profile: "Who this machine is when it authors work",
     instructions: "Machine-wide agent guidance and permission-review policy",
     providers: "Every model provider this Rig daemon knows about",
     usage: "How much of each provider account's plan this machine has spent",
@@ -223,13 +222,13 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         props.settings.get,
         props.settings.get,
     );
-    const profilesStore =
-        (props.section === "profiles" ? host?.session?.profiles?.() : undefined) ??
-        rigProfilesStoreNoop;
-    const profiles = useSyncExternalStore(
-        profilesStore.subscribe,
-        profilesStore.get,
-        profilesStore.get,
+    const profileStore =
+        (props.section === "profile" ? host?.session?.profile?.() : undefined) ??
+        rigProfileStoreNoop;
+    const profile = useSyncExternalStore(
+        profileStore.subscribe,
+        profileStore.get,
+        profileStore.get,
     );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
@@ -340,24 +339,22 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                         supported={profiler.status !== "unavailable"}
                     />
                 </>
-            ) : props.section === "profiles" ? (
-                <RigProfilesSettings
-                    loading={profiles.loading}
-                    onProfileCreate={() => profilesStore.profileCreateOpen()}
-                    onProfileEdit={(profileId) => profilesStore.profileEditOpen(profileId)}
-                    onProfileSelect={(profileId) => profilesStore.profileSelect(profileId)}
-                    profiles={profiles.profiles.map((profile) => ({
-                        email: profile.email,
-                        id: profile.id,
-                        name: profile.name,
-                        selected: profile.id === profiles.selectedProfileId,
-                        ...(profile.photo === undefined
-                            ? {}
-                            : { imageUrl: profile.photo.imageUrl }),
-                    }))}
-                    {...(profiles.editor ? { editor: profileEditor(profilesStore) } : {})}
-                    {...(profiles.error ? { error: profiles.error.message } : {})}
-                    {...(profiles.actionError ? { actionError: profiles.actionError } : {})}
+            ) : props.section === "profile" ? (
+                <RigProfileSettings
+                    dirty={profile.dirty}
+                    email={profile.email}
+                    loading={profile.loading}
+                    name={profile.name}
+                    onEmailChange={(value) => profileStore.emailUpdate(value)}
+                    onNameChange={(value) => profileStore.displayNameUpdate(value)}
+                    onRevert={() => profileStore.profileRevert()}
+                    onSave={() => {
+                        if (rigOnline()) void profileStore.profileSave();
+                    }}
+                    saving={profile.saving}
+                    {...(profile.photo === undefined ? {} : { imageUrl: profile.photo.imageUrl })}
+                    {...(profile.error ? { error: profile.error.message } : {})}
+                    {...(profile.saveError ? { saveError: profile.saveError } : {})}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
             ) : props.section === "instructions" ? (
@@ -493,23 +490,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             )}
         </RigSettingsShell>
     );
-}
-
-function profileEditor(store: RigProfilesStore) {
-    const editor = store.get().editor;
-    return {
-        email: editor?.email ?? "",
-        mode: editor?.mode ?? ("create" as const),
-        name: editor?.name ?? "",
-        saving: editor?.submitting ?? false,
-        onEmailChange: (value: string) => store.profileEmailUpdate(value),
-        onNameChange: (value: string) => store.profileNameUpdate(value),
-        onSave: () => {
-            void store.profileEditorSubmit();
-        },
-        onCancel: () => store.profileEditorCancel(),
-        ...(editor?.error === undefined ? {} : { error: editor.error }),
-    };
 }
 
 /**

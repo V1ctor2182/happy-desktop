@@ -6,6 +6,7 @@ import {
     RigInstructionsSettings,
     RigProviderSettings,
     RigProfilerSettings,
+    RigProfileSettings,
     RigSettingsShell,
     RigUsageSettings,
     type RigProviderRow,
@@ -19,12 +20,15 @@ export const componentNumber = "P-012";
 const categories: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "code", id: "debug", label: "Dev Tools" },
+    { icon: "users", id: "profile", label: "Profile" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "globe", id: "providers", label: "Providers" },
     { icon: "zap", id: "usage", label: "Usage" },
 ];
 
 const usageDescription = "How much of each provider account's plan this machine has spent";
+
+const profileDescription = "Who this machine is when it authors work";
 
 const usageAccounts: readonly RigProviderUsageEntry[] = [
     {
@@ -382,6 +386,54 @@ export function RigSettingsBlueprintPage() {
                                 value: "",
                             },
                         ]}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Profile category: the single identity this machine authors work as, edited where it is shown"
+                label="Rig settings — profile"
+                number="02a"
+            >
+                <RigSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <RigProfileSettings
+                        email="steve@korshakov.com"
+                        name="Steve Korshakov"
+                        onEmailChange={noop}
+                        onNameChange={noop}
+                        onRevert={noop}
+                        onSave={noop}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Edited in place: the fields differ from what is stored, and the last save was refused"
+                label="Rig settings — profile edited"
+                number="02b"
+            >
+                <RigSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <RigProfileSettings
+                        dirty
+                        email="steve@"
+                        name="Steve Korshakov"
+                        onEmailChange={noop}
+                        onNameChange={noop}
+                        onRevert={noop}
+                        onSave={noop}
+                        saveError="Enter the email used for Git commits."
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>

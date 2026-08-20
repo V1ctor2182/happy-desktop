@@ -20,7 +20,7 @@ import {
     type RigInstructionsStore,
     type RigModelPreferencePersistence,
     type RigModelStore,
-    type RigProfilesStore,
+    type RigProfileStore,
     type RigProviderUsageStore,
     type RigSecurityPolicyStore,
     type RigSessionLocation,
@@ -86,7 +86,7 @@ export interface RigSession {
     readonly debugLog: RigDebugLogStore;
     readonly host: RigHost;
     readonly models: RigModelStore;
-    readonly profiles: () => RigProfilesStore | undefined;
+    readonly profile: () => RigProfileStore | undefined;
     readonly providerUsage: RigProviderUsageStore | undefined;
     readonly workspace: RigWorkspaceStore;
     readonly instructions: RigInstructionsStore;
@@ -152,7 +152,7 @@ export function rigConnectionOpen(input: {
         endpoint: input.connectEndpoint,
         token: "happy2-local-capability",
     });
-    const profiles = happyAgentProfileSourceCreate(directClient, input.rigId);
+    const profile = happyAgentProfileSourceCreate(directClient);
     const mutationListeners = new Set<(rejection: MutationRejectedDelta) => void>();
     const agentConnection: RigConnection = connectHappyAgent({
         client: directClient,
@@ -180,8 +180,8 @@ export function rigConnectionOpen(input: {
         modelPreferencePersistence: input.modelPreferencePersistence,
         workspaceMemoryPersistence: workspaceMemoryPersistence(input.rigId),
         catalogSource,
-        profilesActions: profiles.actions,
-        profilesSource: profiles.source,
+        profileActions: profile.actions,
+        profileSource: profile.source,
         providerUsageSource: happyAgentUsageSourceCreate(directClient),
         transcriptConnect: happyAgentTranscriptConnectCreate(agentConnection),
         connectMutationSubscribe: (listener) => {
@@ -224,7 +224,7 @@ export function rigConnectionOpen(input: {
                     debugLog,
                     host: input.host,
                     models: client.models,
-                    profiles: () => client.profiles(),
+                    profile: () => client.profile(),
                     providerUsage: client.providerUsage(),
                     workspace: rigWorkspaceStoreCreate(client, {
                         host: input.host,

@@ -28,7 +28,7 @@ import type {
     RigPanelTabId,
     RigPanelTabSnapshot,
     RigPermissionMode,
-    RigProfilesStore,
+    RigProfileStore,
     RigInboxItem,
     RigInboxSnapshot,
     RigInboxStore,
@@ -188,8 +188,8 @@ export interface AppRigSession {
      * mean nothing.
      */
     readonly providerUsage?: RigProviderUsageStore;
-    /** Identities this Rig exposes in its profile settings. */
-    readonly profiles?: () => RigProfilesStore | undefined;
+    /** The identity this Rig authors work as, as its profile settings edit it. */
+    readonly profile?: () => RigProfileStore | undefined;
     /** This Rig's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy. */

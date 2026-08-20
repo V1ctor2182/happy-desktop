@@ -56,12 +56,11 @@ import {
     type RigProviderUsageStore,
 } from "./rigProviderUsageStore.js";
 import {
-    rigProfilesStoreCreate,
-    type RigProfilesActions,
-    type RigProfileSelectionPersistence,
-    type RigProfilesSource,
-    type RigProfilesStore,
-} from "./rigProfilesStore.js";
+    rigProfileStoreCreate,
+    type RigProfileActions,
+    type RigProfileSource,
+    type RigProfileStore,
+} from "./rigProfileStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -99,8 +98,8 @@ export interface RigClient {
      * empty for the wrong reason.
      */
     providerUsage(): RigProviderUsageStore | undefined;
-    /** Host-owned human identities used to author work sent into remote Rigs. */
-    profiles(): RigProfilesStore | undefined;
+    /** The one host-owned identity work is authored as. */
+    profile(): RigProfileStore | undefined;
     /**
      * This Rig's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -215,10 +214,9 @@ export interface RigClientDeps {
      * unavailable rather than empty.
      */
     readonly providerUsageSource?: RigProviderUsageSource;
-    /** Host-only profile catalog and mutations. Omitted on a node connection. */
-    readonly profilesSource?: RigProfilesSource;
-    readonly profilesActions?: RigProfilesActions;
-    readonly profileSelectionPersistence?: RigProfileSelectionPersistence;
+    /** Host-only profile read and mutation. Omitted on a node connection. */
+    readonly profileSource?: RigProfileSource;
+    readonly profileActions?: RigProfileActions;
     /** Opens the core transcript stream for one materialized chat. */
     readonly transcriptConnect: RigChatTranscriptConnect;
     /** Terminal failures emitted by the shared Happy Agent mutation authority. */
@@ -325,7 +323,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let sessionListStore: RigSessionListStore | undefined;
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
-    let profilesStore: RigProfilesStore | undefined;
+    let profileStore: RigProfileStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
@@ -413,17 +411,14 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             providerUsageStore ??= rigProviderUsageStoreCreate({ source });
             return providerUsageStore;
         },
-        profiles() {
+        profile() {
             if (disposed) throw new Error("The Rig client is disposed.");
-            if (!deps.profilesSource || !deps.profilesActions) return undefined;
-            profilesStore ??= rigProfilesStoreCreate({
-                source: deps.profilesSource,
-                actions: deps.profilesActions,
-                ...(deps.profileSelectionPersistence
-                    ? { selectionPersistence: deps.profileSelectionPersistence }
-                    : {}),
+            if (!deps.profileSource || !deps.profileActions) return undefined;
+            profileStore ??= rigProfileStoreCreate({
+                source: deps.profileSource,
+                actions: deps.profileActions,
             });
-            return profilesStore;
+            return profileStore;
         },
         instructions() {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -527,8 +522,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             inboxStore = undefined;
             providerUsageStore?.[Symbol.dispose]();
             providerUsageStore = undefined;
-            profilesStore?.[Symbol.dispose]();
-            profilesStore = undefined;
+            profileStore?.[Symbol.dispose]();
+            profileStore = undefined;
             instructionsStore?.[Symbol.dispose]();
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();

@@ -498,9 +498,7 @@ export {
     type RigProviderStatus,
 } from "./pages/settings/RigProviderSettings";
 export {
-    RigProfilesSettings,
-    type RigProfileEditor,
-    type RigProfileRow,
-    type RigProfilesSettingsProps,
-} from "./pages/settings/RigProfilesSettings";
+    RigProfileSettings,
+    type RigProfileSettingsProps,
+} from "./pages/settings/RigProfileSettings";
 export { RigUsageSettings, type RigUsageSettingsProps } from "./pages/settings/RigUsageSettings";

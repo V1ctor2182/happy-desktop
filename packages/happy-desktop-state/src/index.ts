@@ -37,7 +37,7 @@ export * from "./rig/rigNavigationOrderStore.js";
 export * from "./rig/rigPanelStore.js";
 export * from "./rig/rigProjectGroupProject.js";
 export * from "./rig/rigProjectRegistration.js";
-export * from "./rig/rigProfilesStore.js";
+export * from "./rig/rigProfileStore.js";
 export * from "./rig/rigProviderUsageStore.js";
 export * from "./rig/rigSecurityPolicyStore.js";
 export * from "./rig/rigSessionListStore.js";
