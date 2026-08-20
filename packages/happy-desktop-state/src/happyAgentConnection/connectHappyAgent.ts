@@ -53,6 +53,7 @@ import type {
 const INITIAL_RECONNECT_MS = 250;
 const MAXIMUM_RECONNECT_MS = 5_000;
 const DEFAULT_HISTORY_LIMIT = 100;
+const GIT_WATCH_RENEW_MS = 2 * 60 * 1000;
 /*
  * Deadline for mutations the daemon answers without doing model work. A send
  * or abort whose response never arrives would otherwise pend forever: the
@@ -554,24 +555,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             const watchedGit = await optional(() =>
                 client.watchGit(
                     {
-                        workspaceIds: [
-                            ...new Set([
-                                ...bootstrap.projects
-                                    .filter(
-                                        (project) =>
-                                            project.archivedAt === null &&
-                                            project.status === "active",
-                                    )
-                                    .map((project) => project.id),
-                                ...bootstrap.workspaces
-                                    .filter(
-                                        (workspace) =>
-                                            workspace.archivedAt === null &&
-                                            workspace.status === "active",
-                                    )
-                                    .map((workspace) => workspace.id),
-                            ]),
-                        ],
+                        workspaceIds: activeGitWorkspaceIds(
+                            bootstrap.projects,
+                            bootstrap.workspaces,
+                        ),
                     },
                     { signal: rootController.signal },
                 ),
@@ -650,6 +637,43 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         return tracked;
     };
 
+    const renewGitWatch = async (): Promise<void> => {
+        if (config === undefined) return;
+        const watchedGit = await optional(() =>
+            client.watchGit(
+                { workspaceIds: activeGitWorkspaceIds(projects, workspaces) },
+                {
+                    signal: AbortSignal.any([
+                        rootController.signal,
+                        AbortSignal.timeout(MUTATION_RESPONSE_TIMEOUT_MS),
+                    ]),
+                },
+            ),
+        );
+        if (watchedGit === undefined || rootController.signal.aborted) return;
+        let changed = false;
+        for (const [workspaceId, git] of Object.entries(watchedGit.snapshots)) {
+            const current = gitStates.get(workspaceId);
+            if (current !== undefined && current.scannedAt >= git.scannedAt) continue;
+            gitStates.set(workspaceId, git);
+            workspaces = workspaces.map((workspace) =>
+                workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
+            );
+            projects = projects.map((project) =>
+                project.id === workspaceId ? { ...project, git: git.facts } : project,
+            );
+            changed = true;
+        }
+        if (changed) publishGroups();
+    };
+
+    const runGitWatchRenewal = async (): Promise<void> => {
+        while (!rootController.signal.aborted) {
+            await abortableWait(GIT_WATCH_RENEW_MS, rootController.signal);
+            await renewGitWatch();
+        }
+    };
+
     const applyEvent = (event: HappyAgentEvent): void => {
         advanceCursor(event.cursor);
         if (resyncTask !== undefined) {
@@ -692,6 +716,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             case "project.created":
                 projects = replaceResource(projects, event.payload.project);
                 publishGroups([{ type: "project_added", projectId: event.payload.project.id }]);
+                background(renewGitWatch());
                 return;
             case "project.updated": {
                 const current = projects.find((project) => project.id === event.payload.projectId);
@@ -736,6 +761,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         workspaceId: event.payload.workspace.id,
                     },
                 ]);
+                background(renewGitWatch());
                 return;
             case "workspace.updated": {
                 const current = workspaceOf(event.payload.workspaceId);
@@ -1416,6 +1442,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     };
 
     background(runStream());
+    background(runGitWatchRenewal());
 
     return {
         compatibility: () => compatibility,
@@ -2450,6 +2477,24 @@ async function optional<T>(read: () => Promise<T>): Promise<T | undefined> {
     } catch {
         return undefined;
     }
+}
+
+function activeGitWorkspaceIds(
+    projects: readonly Project[],
+    workspaces: readonly Workspace[],
+): string[] {
+    return [
+        ...new Set([
+            ...projects
+                .filter((project) => project.archivedAt === null && project.status === "active")
+                .map((project) => project.id),
+            ...workspaces
+                .filter(
+                    (workspace) => workspace.archivedAt === null && workspace.status === "active",
+                )
+                .map((workspace) => workspace.id),
+        ]),
+    ];
 }
 
 function agentIdOfEvent(event: HappyAgentEvent): string | undefined {
