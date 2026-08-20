@@ -1,5 +1,9 @@
 # Agent Instructions
 
+## Notice
+
+Absolutely never change a host process of electron app without double confirmation from a human - this breaks clous updates.
+
 ## Master plans
 
 Read [`master-plans/00-master-plan.md`](master-plans/00-master-plan.md) first,
