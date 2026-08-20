@@ -16,6 +16,7 @@ export type GymWorkloadName =
     | "mixed-replay"
     | "memory-idle"
     | "window-edge-resize"
+    | "archive-reconcile"
     | "all";
 
 export interface GymTargetCounts {

@@ -272,6 +272,25 @@ export function rigHistoryCreate(
         });
     }
 
+    // An address that appears in the document's URL after startup is the same
+    // request as one that was sitting there at startup: somewhere to go. Only an
+    // address from outside this window reaches here — the window's own steps are
+    // mirrored out with `pushState`/`replaceState`, and neither raises this
+    // event — so it is honoured rather than mirrored back. Without this the URL
+    // would be writable and inert, showing one place while the window stood on
+    // another.
+    if (typeof window !== "undefined") {
+        window.addEventListener("hashchange", () => {
+            const route = rigRoutePathParse(window.location.hash.slice(1));
+            // A hash naming no place, and the reflection of a step this window
+            // has already taken, are both nothing to act on. The second is what
+            // a browser's own Back raises alongside the `popstate` that has
+            // already been answered above.
+            if (route === undefined || rigRouteSame(entries[index], route)) return;
+            history.push(rigRoutePath(route));
+        });
+    }
+
     return Object.assign(history, {
         groupForget: (rigId: string, groupId: string): boolean => {
             const keptEntries: RigRoute[] = [];

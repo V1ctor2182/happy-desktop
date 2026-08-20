@@ -19,6 +19,7 @@ const workloads: readonly GymWorkloadName[] = [
     "mixed-replay",
     "memory-idle",
     "window-edge-resize",
+    "archive-reconcile",
     "all",
 ];
 
@@ -149,7 +150,7 @@ Commands:
 Workloads:
   boot, catalog-switch, long-transcript, file-switch-warm,
   long-chat-scroll, session-switch-load, highlight-warm, changed-files-warm,
-  streaming, mixed-replay, memory-idle, all
+  streaming, mixed-replay, memory-idle, window-edge-resize, archive-reconcile, all
 
 The default root is workspace/.context/happy-desktop-gym/runs/<profile>-<uuid>.
 Only roots carrying the Gym ownership marker can be cleaned.`);

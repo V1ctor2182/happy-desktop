@@ -273,6 +273,40 @@ describe("the browser's own back and forward", () => {
     });
 });
 
+/**
+ * The document's URL is an address, and one that arrives in it is a request.
+ *
+ * A window honours the address it was opened on. Honouring one that appears
+ * afterwards is the same act, and the window that stopped doing it showed one
+ * place in its URL while standing on another — invisibly, because the URL still
+ * said what was asked for.
+ */
+describe("an address arriving in the document's URL", () => {
+    it("is somewhere to go, not something to ignore", async () => {
+        const history = rigHistoryCreate();
+        history.push("/chats/r1");
+
+        window.location.hash = "/chats/r1/g9";
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(stack(history)).toBe("/chats/r1/g9");
+    });
+
+    it("is not acted on when it only reflects where the window already is", async () => {
+        const history = rigHistoryCreate();
+        history.push("/chats/r1/g1");
+        const before = history.length;
+
+        window.location.hash = "/chats/r1/g1";
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Mirroring the window's own step back at it must not grow the stack,
+        // or Back would need two presses to leave one place.
+        expect(history.length).toBe(before);
+        expect(stack(history)).toBe("/chats/r1/g1");
+    });
+});
+
 describe("every place this window can address", () => {
     const ALL: RigRoute[] = [
         { kind: "home" },

@@ -136,6 +136,37 @@ interface PanelFileEditMeasurement {
     readonly status: "ok" | "skipped";
 }
 
+/**
+ * A workspace archived out from under an open window.
+ *
+ * The archive is asked for over the host connection rather than through this
+ * window's own menus, because that is the case the window cannot see coming:
+ * another window, another machine, or the reader's own second instance retires a
+ * workspace while this one is standing inside it. What the window owes the
+ * reader then is to leave, and to forget — every remembered address naming that
+ * workspace goes, so Back cannot walk into a row that is not there any more.
+ */
+interface ArchiveReconcileMeasurement {
+    /** The route the window was standing on when the archive was requested. */
+    readonly addressedRoute: string;
+    /** The window left that address on its own, without being navigated. */
+    readonly leftArchivedGroup: boolean;
+    /** Where it went instead. */
+    readonly settledRoute: string;
+    /** How long the window took to notice, from the host's acknowledgement. */
+    readonly reconcileMs: number;
+    /** Back was pressed this many times, walking the whole remembered stack. */
+    readonly backSteps: number;
+    /** Every address Back arrived at, in order. */
+    readonly walkedRoutes: readonly string[];
+    /** No remembered address named the archived workspace afterwards. */
+    readonly archivedGroupForgotten: boolean;
+    /** The workspace's own sidebar row went with it. */
+    readonly sidebarRowRemoved: boolean;
+    readonly reason?: string;
+    readonly status: "ok" | "skipped";
+}
+
 interface ChangedFileStatsMeasurement {
     readonly deletions: string;
     readonly insertions: string;
@@ -420,6 +451,7 @@ export async function electronWorkloadsRun(options: {
                   "streaming",
                   "mixed-replay",
                   "memory-idle",
+                  "archive-reconcile",
               ] as const)
             : [options.workload];
     const samples: GymMeasurement[] = [];
@@ -665,6 +697,23 @@ async function workloadRun(
         await mark("boot-ready");
         return finish(await performanceCapture(page, app, options.profilerActive()));
     }
+    if (workload === "archive-reconcile") {
+        await options.profilerStart();
+        await mark("profiler-started");
+        const details = await archiveReconcileRun(page, options, mark);
+        if (details.status === "ok" && !details.leftArchivedGroup) {
+            throw new Error(
+                `The window stayed on an archived workspace: ${JSON.stringify(details)}`,
+            );
+        }
+        if (details.status === "ok" && !details.archivedGroupForgotten) {
+            throw new Error(`Back walked into an archived workspace: ${JSON.stringify(details)}`);
+        }
+        return finish({
+            ...details,
+            ...(await performanceCapture(page, app, options.profilerActive())),
+        });
+    }
     if (workload === "mixed-replay") {
         const material = await gymGoldReplayMaterialRead(options.paths.workspaceRoot);
         const targets = await mixedSessionTargetsRead(options.clusterSessionIds, options.runtime);
@@ -803,6 +852,134 @@ async function workloadRun(
         return finish({ before, after });
     }
     return finish({ reason: "No implementation for workload.", status: "skipped" });
+}
+
+/**
+ * A workspace retired while this window is standing in it.
+ *
+ * The archive is asked for over the host connection, so nothing in this window
+ * initiated it and nothing in this window is waiting for it — which is the whole
+ * point. A workspace can be retired from another window, another machine, or a
+ * second instance of this app, and the window holding it open has to find out
+ * the way it finds out about everything else: by reconciling the host's catalog.
+ *
+ * Two things are then owed. The window must leave, because the address it is on
+ * names a row that no longer exists. And it must forget: the remembered stack is
+ * this application's own array precisely so that entries naming the dead
+ * workspace can be taken out of it, rather than left as steps Back walks into.
+ * The lane proves the second by walking the entire stack backwards afterwards
+ * and reading every address it arrives at.
+ */
+async function archiveReconcileRun(
+    page: Page,
+    options: {
+        readonly runtime: StartedRigRuntime;
+        readonly projects: readonly GymProject[];
+    },
+    mark: (name: string) => Promise<void>,
+): Promise<ArchiveReconcileMeasurement> {
+    const skipped = (reason: string): ArchiveReconcileMeasurement => ({
+        addressedRoute: "",
+        archivedGroupForgotten: false,
+        backSteps: 0,
+        leftArchivedGroup: false,
+        reason,
+        reconcileMs: 0,
+        settledRoute: "",
+        sidebarRowRemoved: false,
+        status: "skipped",
+        walkedRoutes: [],
+    });
+    const project = options.projects[0];
+    if (project === undefined) return skipped("No seeded project to make a workspace in.");
+    // The lane makes the workspace it retires rather than taking one of the
+    // seeded ones. What it archives is gone afterwards, and the dataset every
+    // other lane measures against has to survive this one being run — and be the
+    // same dataset when it is run again.
+    const created = await options.runtime.client.createWorkspace(
+        project.id,
+        `archive-reconcile-${Date.now().toString(36)}`,
+    );
+    const victim = await options.runtime.client.waitForWorkspace(
+        created.workspace.id,
+        "ready",
+        90_000,
+    );
+    await mark("workspace-created");
+    const victimRoute = `/chats/local/${victim.id}`;
+    const projectRoute = `/chats/local/${project.id}`;
+    // A stack with the doomed workspace in it more than once, and a real place on
+    // either side of it. One archive has to take out every one of its entries,
+    // not merely the one on screen.
+    for (const route of [projectRoute, victimRoute, projectRoute, victimRoute]) {
+        await navigateRoute(page, route);
+        await waitForAny(page, ["body"]);
+    }
+    await mark("stack-built");
+    const addressedRoute = await routeRead(page);
+    const sidebarRowBefore = await sidebarGroupRowCount(page, victim.id);
+    const requestedAt = performance.now();
+    await options.runtime.client.archiveWorkspace(victim);
+    await options.runtime.client.waitForWorkspace(victim.id, "archived", 90_000);
+    await mark("host-archived");
+    // The window is never told to move; it is watched until it moves itself.
+    const left = await page
+        .waitForFunction((dead: string) => !location.hash.startsWith(`#${dead}`), victimRoute, {
+            timeout: 60_000,
+        })
+        .then(
+            () => true,
+            () => false,
+        );
+    const reconcileMs = performance.now() - requestedAt;
+    await mark("window-left");
+    const settledRoute = await routeRead(page);
+    // Walking the whole stack backwards. The count is bounded by what was put
+    // in it, and one extra step proves the far end holds rather than wrapping.
+    const walkedRoutes: string[] = [];
+    for (let step = 0; step < 6; step += 1) {
+        await historyBack(page);
+        walkedRoutes.push(await routeRead(page));
+    }
+    await mark("stack-walked");
+    const namesVictim = (route: string): boolean => route.startsWith(victimRoute);
+    return {
+        addressedRoute,
+        archivedGroupForgotten: !namesVictim(settledRoute) && !walkedRoutes.some(namesVictim),
+        backSteps: walkedRoutes.length,
+        leftArchivedGroup: left,
+        reconcileMs: Math.round(reconcileMs),
+        settledRoute,
+        sidebarRowRemoved:
+            sidebarRowBefore > 0 && (await sidebarGroupRowCount(page, victim.id)) === 0,
+        status: "ok",
+        walkedRoutes,
+    };
+}
+
+/** The address the window is showing, without the leading hash. */
+async function routeRead(page: Page): Promise<string> {
+    return page.evaluate(() => location.hash.replace(/^#/, ""));
+}
+
+/**
+ * One press of Back, delivered the way a mouse delivers it. macOS hands the side
+ * buttons to the page as ordinary pointer buttons rather than to the shell, so
+ * this is the real path that code takes, not a test-only entry point.
+ */
+async function historyBack(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        window.dispatchEvent(new MouseEvent("auxclick", { bubbles: true, button: 3 }));
+    });
+    await page.waitForTimeout(150);
+}
+
+/**
+ * How many sidebar rows currently name one group. A row is addressed by its Rig
+ * and then the group inside it, which is the id the sidebar already carries.
+ */
+async function sidebarGroupRowCount(page: Page, groupId: string): Promise<number> {
+    return page.locator(`[data-item-id="local/${groupId}"]`).count();
 }
 
 /**
