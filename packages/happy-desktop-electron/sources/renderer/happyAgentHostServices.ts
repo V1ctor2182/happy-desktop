@@ -125,6 +125,15 @@ export function happyAgentHostServicesCreate(baseUrl: string): RigHostServices {
                     path,
                 })
             ).url,
+        attachmentSourcePath: (file) => window.happyDesktop?.attachmentSourcePath(file),
+        attachmentSourceReachable: async (workspaceId, sourcePath) =>
+            (
+                await postJson<{ readonly reachable: boolean }>(
+                    baseUrl,
+                    "/attachment-source-reachable",
+                    { workspaceId, sourcePath },
+                )
+            ).reachable,
         attachmentWrite: (workspaceId, name, content) =>
             postJson<{ readonly path: string }>(baseUrl, "/attachment", {
                 workspaceId,

@@ -2636,11 +2636,38 @@ export function rigWorkspaceStoreCreate(
     };
 
     /**
-     * Places a draft's non-image attachments in the group's checkout and returns
-     * the text the turn should carry, which names them. Copies are
-     * written one at a time: their order in the draft is the order they take
-     * names in, and two writes racing for the same name would settle it by luck.
-     * A failed copy fails the send, which is the only place a reader is looking.
+     * Answers how the turn should name one attachment, placing it first only
+     * when it has to be placed at all.
+     *
+     * A file the agent can already open is named where it lies. Nothing is read,
+     * encoded, or written, so its size stops being a question and the checkout
+     * stays as the reader left it — a video dropped on a chat does not become an
+     * untracked file at the top of their repository.
+     *
+     * Only a file that exists nowhere but the browser, or work happening
+     * somewhere the reader's disk is not, falls back to carrying the bytes into
+     * the checkout. That route keeps its own ceiling, because it is the route
+     * the ceiling was always about.
+     */
+    const attachmentReferenceOf = async (
+        groupId: RigGroupId,
+        attachment: Extract<ComposerAttachment, { kind: "workspaceFile" }>,
+    ): Promise<string> => {
+        if (
+            attachment.sourcePath !== undefined &&
+            (await client.attachmentSourceReachable(groupId, attachment.sourcePath))
+        )
+            return attachment.sourcePath;
+        const data = await rigWorkspaceAttachmentData(attachment);
+        return `./${(await client.attachmentWrite(groupId, attachment.name, data)).path}`;
+    };
+
+    /**
+     * Names a draft's non-image attachments for the turn, placing the ones that
+     * need placing. They are handled one at a time: their order in the draft is
+     * the order they take names in, and two copies racing for the same name in
+     * the checkout would settle it by luck. A failure fails the send, which is
+     * the only place a reader is looking.
      */
     const attachmentsPlace = async (
         groupId: RigGroupId,
@@ -2651,16 +2678,14 @@ export function rigWorkspaceStoreCreate(
         const paths: string[] = [];
         for (const attachment of attachments) {
             if (attachment.kind !== "workspaceFile") continue;
-            // A file put beside the message lands on disk, which the message
+            // A file copied beside the message lands on disk, which the message
             // itself does not: a workspace whose checkout is still being
             // prepared takes the sentence but has nowhere to put the file. The
             // refusal is raised here rather than swallowed so the composer keeps
             // the draft and its attachments for another attempt.
             const refusal = groupWorkRefusalFind(groupId);
             if (refusal) throw new Error(refusal);
-            const data = await rigWorkspaceAttachmentData(attachment);
-            const written = await client.attachmentWrite(groupId, attachment.name, data);
-            paths.push(written.path);
+            paths.push(await attachmentReferenceOf(groupId, attachment));
         }
         return rigAttachmentTextAppend(text, paths);
     };
@@ -4392,7 +4417,11 @@ export function rigWorkspaceStoreCreate(
             if (!target) return;
             for (const file of files) {
                 const id = `attachment:${++attachmentSequence}`;
-                target.getState().attachmentAdd(rigComposerAttachmentCreate(id, file));
+                // Asked for now, while the browser still has the object the host
+                // can answer about, and kept with the draft: the send that needs
+                // it may be minutes later and in another surface.
+                const sourcePath = client.attachmentSourcePath(file);
+                target.getState().attachmentAdd(rigComposerAttachmentCreate(id, file, sourcePath));
             }
         },
         composerAttachmentRemove(attachmentId) {

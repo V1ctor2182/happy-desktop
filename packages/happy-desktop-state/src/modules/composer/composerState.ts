@@ -68,6 +68,13 @@ export type ComposerAttachment =
           readonly mediaType: string;
           /** Browser-owned source bytes, encoded only when the draft is submitted. */
           readonly file: File;
+          /**
+           * Where this file already sits on the reader's machine, when the host
+           * could say. It lets the send copy the file where it is going instead
+           * of carrying it through here, which is what makes a video's size stop
+           * mattering. A pasted screenshot has no path and travels by value.
+           */
+          readonly sourcePath?: string;
           /** Object URL for image/video thumbnails; owned by the workspace store. */
           readonly previewUrl?: string;
       };

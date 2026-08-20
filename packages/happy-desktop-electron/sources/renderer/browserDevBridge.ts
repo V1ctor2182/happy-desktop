@@ -73,6 +73,9 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // A normal browser exposes no native preferred-color-scheme override;
         // the application tree itself is already controlled by ThemeScope.
         appearanceSet: () => undefined,
+        // A browser tab is told nothing about where a dropped file came from,
+        // so every attachment here travels by value.
+        attachmentSourcePath: () => undefined,
         browserProxyApply: async () => undefined,
         browserOpenSubscribe: () => () => undefined,
         browserStatusSubscribe: () => () => undefined,

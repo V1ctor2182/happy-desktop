@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import {
     buildIdentityArgument,
     desktopIpc,
@@ -44,6 +44,16 @@ const identity = buildIdentityRead();
 const bridge: HappyDesktopBridge = {
     ...(identity ? { buildIdentity: identity } : {}),
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
+    attachmentSourcePath(file: File) {
+        // Chromium hands the renderer a `File` that hides where it came from,
+        // and asking is the only way back to the path. A file that never had
+        // one answers with an empty string rather than failing.
+        try {
+            return webUtils.getPathForFile(file) || undefined;
+        } catch {
+            return undefined;
+        }
+    },
     browserProxyApply: (target) => ipcRenderer.invoke(desktopIpc.browserProxyApply, target),
     browserOpenSubscribe(listener: (url: string) => void) {
         const receive = (_event: Electron.IpcRendererEvent, url: string) => listener(url);

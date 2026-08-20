@@ -406,6 +406,16 @@ export interface HappyDesktopBridge {
      * the application tree instead of independently following macOS.
      */
     appearanceSet(mode: DesktopAppearanceMode): void;
+    /**
+     * Where a file the reader dropped, picked, or pasted actually lives on this
+     * machine, when it lives anywhere. A file the browser only holds in memory —
+     * a pasted screenshot — has no path and answers undefined.
+     *
+     * It is what lets an attachment be copied where it is going instead of read
+     * into the renderer, expanded to base64, and pushed back out through a JSON
+     * body every hop holds whole. A video is the case that makes that plain.
+     */
+    attachmentSourcePath(file: File): string | undefined;
     /** Points this window's browser guests at one local Rig session's network boundary. */
     browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;

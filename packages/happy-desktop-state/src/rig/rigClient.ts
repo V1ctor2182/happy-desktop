@@ -154,9 +154,16 @@ export interface RigClient {
         content: string,
         expectedHash: string | null,
     ): Promise<void>;
+    /** Where a file the reader chose lives on this machine, when it lives anywhere. */
+    attachmentSourcePath(file: File): string | undefined;
     /**
-     * Copies an attached file into a project or worktree checkout, answering
-     * with the path it landed on relative to that checkout.
+     * Whether an agent working in this group could open that path where it lies,
+     * which is true exactly when its work happens on the reader's own machine.
+     */
+    attachmentSourceReachable(groupId: RigGroupId, sourcePath: string): Promise<boolean>;
+    /**
+     * Copies an attached file into a project or worktree checkout by value,
+     * answering with the path it landed on relative to that checkout.
      */
     attachmentWrite(
         groupId: RigGroupId,
@@ -389,6 +396,9 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 expectedHash,
             });
         },
+        attachmentSourcePath: (file) => deps.hostServices.attachmentSourcePath(file),
+        attachmentSourceReachable: (groupId, sourcePath) =>
+            deps.hostServices.attachmentSourceReachable(groupId, sourcePath),
         attachmentWrite: (groupId, name, content) =>
             deps.hostServices.attachmentWrite(groupId, name, content),
         async projectAdd(path) {

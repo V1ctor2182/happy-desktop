@@ -1,5 +1,7 @@
+import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { pipeline } from "node:stream/promises";
+import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import {
     rigDaemonConnectionUnavailable,
     RigDaemonHttpError,
@@ -24,6 +26,21 @@ export interface RigProxyHandleOptions {
     readonly onConnectionError?: (error: unknown) => void;
     /** Publishes one workspace file as an isolated local preview site. */
     readonly htmlPreviewUrl?: (workspaceId: string, filePath: string) => string;
+}
+
+/**
+ * The status a refused daemon call carried, whichever boundary raised it.
+ *
+ * Both are the daemon answering, and both must be read the same way. Reading
+ * only one of them is how an ordinary "not there yet" 404 became a hard failure:
+ * the file routes moved onto `HappyAgentClient` while the checks below still
+ * asked for the transport's own error type, so every probe for a name that was
+ * free was rethrown instead of answered.
+ */
+function daemonErrorStatus(error: unknown): number | undefined {
+    if (error instanceof RigDaemonHttpError) return error.statusCode;
+    if (error instanceof HappyAgentApiError) return error.status;
+    return undefined;
 }
 
 /**
@@ -83,6 +100,17 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             );
             return true;
         }
+        if (method === "POST" && path === "/attachment-source-reachable") {
+            const body = await bodyReadJson(request);
+            writeJson(response, 200, {
+                reachable: await attachmentSourceReachable(
+                    client,
+                    requiredString(body.workspaceId, "workspaceId"),
+                    requiredString(body.sourcePath, "sourcePath"),
+                ),
+            });
+            return true;
+        }
         if (method === "GET" && path === "/workspace-file-bytes") {
             const workspaceId = requiredQuery(query, "workspaceId");
             const filePath = requiredQuery(query, "path");
@@ -129,9 +157,8 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
     } catch (error) {
         if (rigDaemonConnectionUnavailable(error)) options.onConnectionError?.(error);
         if (!response.headersSent) {
-            if (error instanceof RigDaemonHttpError)
-                writeJson(response, error.statusCode, { error: error.message });
-            else writeJson(response, 502, { error: errorMessage(error) });
+            const status = daemonErrorStatus(error);
+            writeJson(response, status ?? 502, { error: errorMessage(error) });
         } else {
             response.end();
         }
@@ -189,14 +216,42 @@ async function attachmentWrite(
             return { path };
         } catch (error) {
             if (
-                !(error instanceof RigDaemonHttpError) ||
-                error.statusCode !== 409 ||
+                daemonErrorStatus(error) !== 409 ||
                 !(await workspaceFileExists(client, workspaceId, path))
             )
                 throw error;
         }
     }
     throw new Error(`The workspace already holds every available name for ${wanted}.`);
+}
+
+/**
+ * Whether an agent working in this workspace could open the reader's file where
+ * it already lies.
+ *
+ * When the answer is yes the attachment needs no transfer at all: the file and
+ * the agent are on one machine, so naming the path is the whole of the work.
+ * That is why an attachment's size stops mattering — nothing is read, encoded,
+ * or written, and a screen recording costs exactly what a text file costs.
+ *
+ * The answer is no when work happens somewhere the reader's disk is not: a
+ * container workspace has its own filesystem, and a Rig on another machine
+ * would resolve this path against a stranger's disk. Both send the bytes
+ * instead. A path that is not there any more is also no, because the check that
+ * matters is whether it can be opened rather than whether it once existed.
+ */
+async function attachmentSourceReachable(
+    client: RigProxyClient,
+    workspaceId: string,
+    sourcePath: string,
+): Promise<boolean> {
+    const { workspace } = await client.getWorkspace(workspaceId);
+    if (workspace.compute.type !== "host") return false;
+    try {
+        return (await stat(sourcePath)).isFile();
+    } catch {
+        return false;
+    }
 }
 
 async function workspaceFileExists(
@@ -208,7 +263,7 @@ async function workspaceFileExists(
         await client.readWorkspaceFile(workspaceId, path);
         return true;
     } catch (error) {
-        if (error instanceof RigDaemonHttpError && error.statusCode === 404) return false;
+        if (daemonErrorStatus(error) === 404) return false;
         throw error;
     }
 }

@@ -48,7 +48,11 @@ function mediaPreviewUrl(file: File): string | undefined {
  * inline with the turn; everything else becomes a copy written into the
  * session's working directory when the draft is submitted.
  */
-export function rigComposerAttachmentCreate(id: string, file: File): ComposerAttachment {
+export function rigComposerAttachmentCreate(
+    id: string,
+    file: File,
+    sourcePath?: string,
+): ComposerAttachment {
     const previewUrl = mediaPreviewUrl(file);
     if (file.type.startsWith("image/") && file.size <= INLINE_IMAGE_MAX_BYTES) {
         return {
@@ -68,6 +72,7 @@ export function rigComposerAttachmentCreate(id: string, file: File): ComposerAtt
         size: file.size,
         mediaType: file.type || "application/octet-stream",
         file,
+        ...(sourcePath ? { sourcePath } : {}),
         ...(previewUrl ? { previewUrl } : {}),
     };
 }
@@ -77,10 +82,17 @@ function attachmentSizeAssert(name: string, size: number): void {
         throw new Error(`${name} is too large to attach. Rig currently accepts files up to 29 MB.`);
 }
 
-/** Validates a whole draft before it creates a session or writes its first file. */
+/**
+ * Validates a whole draft before it creates a session or writes its first file.
+ *
+ * The ceiling is a fact about carrying bytes through here, not about the file,
+ * so it is asked only of the attachments that will be carried. One the host can
+ * copy where it stands never becomes base64, never becomes a JSON body, and has
+ * no reason to be measured against the size of one.
+ */
 export function rigComposerAttachmentsValidate(attachments: readonly ComposerAttachment[]): void {
     for (const attachment of attachments)
-        if (attachment.kind === "workspaceFile")
+        if (attachment.kind === "workspaceFile" && attachment.sourcePath === undefined)
             attachmentSizeAssert(attachment.name, attachment.size);
     const inlineBytes = attachments
         .filter((attachment) => attachment.kind === "inlineImage")
@@ -109,14 +121,18 @@ export function rigComposerAttachmentPreviewRelease(attachment: ComposerAttachme
 }
 
 /**
- * Names the copies a turn placed in the working directory, so the agent learns
- * about a file it was never shown. The paths are appended rather than woven into
- * what was typed: the sentence someone wrote is theirs, and a bare list under it
- * reads the same whether they wrote "look at this" or nothing at all.
+ * Names a turn's files so the agent learns about one it was never shown. The
+ * paths are appended rather than woven into what was typed: the sentence someone
+ * wrote is theirs, and a bare list under it reads the same whether they wrote
+ * "look at this" or nothing at all.
+ *
+ * Each path arrives ready to be read as written — `./name` for a copy placed in
+ * the working directory, an absolute path for a file named where it already
+ * lies — so this decides how the list reads and never where anything is.
  */
 export function rigAttachmentTextAppend(text: string, paths: readonly string[]): string {
     if (paths.length === 0) return text;
-    const lines = paths.map((path) => `- ./${path}`).join("\n");
+    const lines = paths.map((path) => `- ${path}`).join("\n");
     const heading = paths.length === 1 ? "Attached file:" : "Attached files:";
     return text.trim().length === 0 ? `${heading}\n${lines}` : `${text}\n\n${heading}\n${lines}`;
 }
