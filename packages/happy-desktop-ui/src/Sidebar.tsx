@@ -455,6 +455,16 @@ function reducedMotion(): boolean {
     );
 }
 
+/**
+ * How long the lift under a carried row takes to arrive and to go again. A row
+ * is picked up and put down by hand, and neither is an instant: the shadow that
+ * says the row has left the column comes up under it and settles back out rather
+ * than being switched on and off. Stated here and in the stylesheet both — the
+ * fade is the stylesheet's, and this is how long the sidebar keeps the surface
+ * on screen for it to run.
+ */
+const LIFT_MS = 120;
+
 /** How long a dropped row takes to travel from where it was to where it now is. */
 const SETTLE_MS = 160;
 const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
@@ -585,6 +595,47 @@ function dragTargetIndex(drag: SidebarDrag, deltaY: number): number {
         index -= 1;
     }
     return index;
+}
+
+/**
+ * The peers in the order a move puts them: the moved one lifted out and put back
+ * at its landing slot. Stated exactly as the move itself is — the row it now
+ * follows is whichever peer precedes that slot once it has been lifted out — so
+ * the arrangement waited for is the arrangement asked for.
+ */
+function orderAfterMove(peers: readonly string[], from: number, to: number): readonly string[] {
+    const moved = peers[from];
+    if (moved === undefined) return peers;
+    const remaining = peers.filter((_, index) => index !== from);
+    return [...remaining.slice(0, to), moved, ...remaining.slice(to)];
+}
+
+/**
+ * Whether the rows on screen already stand in the order a drop asked for.
+ *
+ * This is what tells the render that rearranged the list apart from one that has
+ * not applied the move yet, and it cannot be inferred from anything moving: a
+ * drop lands with its neighbours already displaced to exactly where the new order
+ * puts them, so the only row that can travel at all is the carried one, by
+ * however far it was released from its slot. Release it on the slot — which is
+ * what carrying a row cleanly one place down does — and nothing measurable moves,
+ * even though the list has been rearranged.
+ *
+ * The peers are picked out of the rows actually rendered rather than counted, so
+ * a drag among one row's children reads its own siblings and a drag at the top
+ * level reads the projects without the worktrees nested between them.
+ */
+function orderArranged(node: HTMLElement | undefined, expected: readonly string[]): boolean {
+    const parent = node?.parentElement;
+    if (!parent) return false;
+    const rendered = [
+        ...parent.querySelectorAll<HTMLElement>('[data-happy-desktop-ui="sidebar-item"]'),
+    ]
+        .map((row) => row.dataset.itemId)
+        .filter((id): id is string => id !== undefined && expected.includes(id));
+    return (
+        rendered.length === expected.length && rendered.every((id, index) => id === expected[index])
+    );
 }
 
 /**
@@ -719,8 +770,16 @@ function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
     );
 }
 
-/** One carried surface around every row in the held subtree. */
-function SidebarDragSurface(props: { readonly drag: SidebarDrag }) {
+/**
+ * One carried surface around every row in the held subtree.
+ *
+ * It brackets the gesture at both ends rather than matching it. A touched row
+ * mounts it invisible, so the shadow has somewhere to fade up from once the row
+ * is actually being carried; a released one leaves it behind at the geometry the
+ * hand left it with, for exactly as long as it takes to fade back out, while the
+ * rows themselves are already free to be arranged.
+ */
+function SidebarDragSurface(props: { readonly drag: SidebarDrag; readonly carried: boolean }) {
     const held = props.drag.units[props.drag.from];
     const first = held?.[0];
     const last = held?.[held.length - 1];
@@ -731,6 +790,7 @@ function SidebarDragSurface(props: { readonly drag: SidebarDrag }) {
             aria-hidden="true"
             className="happy2-sidebar__tree-drag-surface"
             data-happy-desktop-ui="sidebar-tree-drag-surface"
+            data-carried={props.carried ? "" : undefined}
             style={{
                 height: `${String((last - first) * rowPitch + SIDEBAR_ROW_HEIGHT)}px`,
                 top: `${String(first * rowPitch + rowDragShift(props.drag, first))}px`,
@@ -1355,6 +1415,11 @@ export function Sidebar(props: SidebarProps) {
     const connectorFlipRef = useRef<
         Map<string, { readonly height: number; readonly top: number }> | undefined
     >(undefined);
+    // The arrangement the drop asked for, and the row to read it from, so the
+    // render that applies it can be recognised even when it moves nothing.
+    const settleRef = useRef<
+        { readonly key: string; readonly expected: readonly string[] } | undefined
+    >(undefined);
     // Lets go of a capture the rearranging render never came for.
     const flipWait = useRef<number | undefined>(undefined);
     const flipWaitClear = (): void => {
@@ -1362,7 +1427,11 @@ export function Sidebar(props: SidebarProps) {
         flipWait.current = undefined;
     };
     // The row that was just dropped, kept lit until it has finished travelling.
-    const [dropped, setDropped] = useState<string>();
+    const [dropped, setDropped] = useState<{
+        readonly carried: boolean;
+        readonly key: string;
+        readonly listId: SidebarListId;
+    }>();
     // Set by a drag that actually moved, so the click the browser fires on
     // release rearranges rather than also opening what was dragged.
     const dragClick = useRef(false);
@@ -1373,6 +1442,34 @@ export function Sidebar(props: SidebarProps) {
     };
     const dragOf = (listId: SidebarListId): SidebarDrag | undefined =>
         dragPaint?.listId === listId ? dragPaint.drag : undefined;
+    /*
+     * The lift a gesture is leaving behind, kept on screen for exactly as long as
+     * it takes to fade. A surface torn out of the document cannot animate, so the
+     * gesture hands its last geometry over here and the drag itself is released
+     * in the same breath: the rows go on to be rearranged while the shadow that
+     * was carrying them goes out where the hand let go of it.
+     *
+     * Held apart from the drop's own settle rather than folded into it. A move
+     * that lands cleanly rearranges the list without any row travelling — there
+     * is nothing to wait for and the settle ends at once — and the lift still has
+     * its fade to run.
+     */
+    const [liftFade, setLiftFade] = useState<{
+        listId: SidebarListId;
+        drag: SidebarDrag;
+    }>();
+    const liftFadeWait = useRef<number | undefined>(undefined);
+    const liftFadeStart = (released: { listId: SidebarListId; drag: SidebarDrag }): void => {
+        if (!released.drag.moved || reducedMotion()) return;
+        setLiftFade(released);
+        if (liftFadeWait.current !== undefined) window.clearTimeout(liftFadeWait.current);
+        liftFadeWait.current = window.setTimeout(() => {
+            liftFadeWait.current = undefined;
+            setLiftFade(undefined);
+        }, LIFT_MS);
+    };
+    const liftFadeOf = (listId: SidebarListId): SidebarDrag | undefined =>
+        liftFade?.listId === listId ? liftFade.drag : undefined;
     const actions = local.actions ?? [];
     const numberShortcuts = local.numberShortcuts !== undefined;
     const numberShortcutNavigation = local.numberShortcuts === "navigate";
@@ -1508,11 +1605,15 @@ export function Sidebar(props: SidebarProps) {
      * new order puts them, so the one commit that moves DOM nodes happens while
      * the move is being made and never once the rows are sitting still.
      */
-    const settleCapture = (
-        listId: SidebarListId,
-        items: readonly SidebarItem[],
-        movedId: string,
-    ): void => {
+    const settleCapture = (settle: {
+        /** The move was carried by hand, so its lift belongs to the drag surface. */
+        readonly carried: boolean;
+        readonly expected: readonly string[];
+        readonly items: readonly SidebarItem[];
+        readonly listId: SidebarListId;
+        readonly movedId: string;
+    }): void => {
+        const { expected, items, listId, movedId } = settle;
         const firsts = new Map<string, number>();
         for (const item of items) {
             const node = rowNodes.get(rowKey(listId, item.id));
@@ -1531,9 +1632,10 @@ export function Sidebar(props: SidebarProps) {
         }
         flipRef.current = firsts;
         connectorFlipRef.current = connectorFirsts;
+        settleRef.current = { expected, key: rowKey(listId, movedId) };
         // Released lit, not resting: the highlight is handed from the drag to
         // the travelling row and only let go once it has arrived.
-        setDropped(rowKey(listId, movedId));
+        setDropped({ carried: settle.carried, key: rowKey(listId, movedId), listId });
         // The capture waits for the render that applies the new order, but
         // it cannot wait forever: a move the caller declines to make, or one
         // the server rejects, never produces that render, and an unclaimed
@@ -1544,6 +1646,7 @@ export function Sidebar(props: SidebarProps) {
             flipWait.current = undefined;
             flipRef.current = undefined;
             connectorFlipRef.current = undefined;
+            settleRef.current = undefined;
             setDropped(undefined);
         }, SETTLE_WAIT_MS);
     };
@@ -1562,7 +1665,14 @@ export function Sidebar(props: SidebarProps) {
         dragClick.current = true;
         const movedId = drag.peers[drag.from];
         if (!reducedMotion() && drag.from !== drag.to && movedId !== undefined)
-            settleCapture(current.listId, items, movedId);
+            settleCapture({
+                carried: true,
+                expected: orderAfterMove(drag.peers, drag.from, drag.to),
+                items,
+                listId: current.listId,
+                movedId,
+            });
+        liftFadeStart(current);
         dragSet(undefined);
         if (drag.from === drag.to || movedId === undefined) return;
         haptic("impact");
@@ -1587,6 +1697,10 @@ export function Sidebar(props: SidebarProps) {
     const dragCancel = (event: ReactPointerEvent<HTMLButtonElement>): void => {
         const current = dragRef.current;
         if (!current || event.pointerId !== current.drag.pointerId) return;
+        // Interrupted is still let go of: the rows snap back to the order they
+        // were already in, and the lift over them goes out the way it would have
+        // if the gesture had finished.
+        liftFadeStart(current);
         dragSet(undefined);
     };
 
@@ -1609,6 +1723,7 @@ export function Sidebar(props: SidebarProps) {
         const lost = (event: Event): void => {
             const current = dragRef.current;
             if (!current || (event as PointerEvent).pointerId !== current.drag.pointerId) return;
+            liftFadeStart(current);
             dragSet(undefined);
         };
         document.addEventListener("lostpointercapture", lost);
@@ -1652,7 +1767,14 @@ export function Sidebar(props: SidebarProps) {
         if (to < 0 || to >= units.length) return;
         const peers = units.map((unit) => items[unit[0]!]!.id);
         const movedId = peers[from]!;
-        if (!reducedMotion()) settleCapture(listId, items, movedId);
+        if (!reducedMotion())
+            settleCapture({
+                carried: false,
+                expected: orderAfterMove(peers, from, to),
+                items,
+                listId,
+                movedId,
+            });
         haptic("selection");
         const remaining = peers.filter((_, index) => index !== from);
         reorder({
@@ -1716,13 +1838,33 @@ export function Sidebar(props: SidebarProps) {
                 );
             }
         }
-        // Kept until something actually moved: the reorder may reach the list one
-        // render later than the drop, and dropping the capture on the first empty
-        // pass would lose the animation entirely.
-        if (played.length === 0) return;
+        // Kept until the list is actually arranged the way the drop asked: the
+        // reorder may reach it one render later than the drop, and dropping the
+        // capture on the first pass would lose the animation entirely. Movement
+        // alone cannot answer that question — a row released on its slot travels
+        // nowhere — so the rendered order is what is waited for, and a pass that
+        // arranged the rows without moving any of them is still the pass that
+        // finished the drop.
+        const settle = settleRef.current;
+        const arranged =
+            settle !== undefined && orderArranged(rowNodes.get(settle.key), settle.expected);
+        if (played.length === 0 && !arranged) return;
         flipRef.current = undefined;
         connectorFlipRef.current = undefined;
+        settleRef.current = undefined;
         flipWaitClear();
+        // Arrived without travelling: there is nothing to stay lit for, and
+        // holding the lift any longer is the pause that reads as the row still
+        // being carried after it was let go. It is let go of from a timer rather
+        // than from here, because this effect runs after every render and a state
+        // write in its body cascades one more render out of every one of them.
+        if (played.length === 0) {
+            flipWait.current = window.setTimeout(() => {
+                flipWait.current = undefined;
+                setDropped(undefined);
+            }, 0);
+            return;
+        }
         // The row stays lit until it stops moving. Rearranging the list moves its
         // node, which drops `:hover` until the pointer moves again — so releasing
         // straight into the resting style would blink the highlight out and let
@@ -1886,7 +2028,7 @@ export function Sidebar(props: SidebarProps) {
                                         className="happy2-sidebar__compose"
                                         dragging={
                                             (dragging && drag.from === index) ||
-                                            rowKey(ACTIONS_LIST, action.id) === dropped
+                                            rowKey(ACTIONS_LIST, action.id) === dropped?.key
                                         }
                                         grabbed={dragging && drag.from === index}
                                         item={action}
@@ -1948,6 +2090,20 @@ export function Sidebar(props: SidebarProps) {
                         const shown = visibleRows(section.items);
                         const shownItems = shown.map((row) => row.item);
                         const sectionDrag = dragOf(section.id);
+                        // The lift belongs to the live gesture while there is one
+                        // — from the moment a row is touched, so the shadow has a
+                        // node to come up in — and to the fading remains of the
+                        // last one after that. It is one element either way, so
+                        // the same node carries the shadow in and back out again.
+                        const sectionLift = sectionDrag ?? liftFadeOf(section.id);
+                        // Who paints the lift in this tree. The surface owns it
+                        // for the whole of a carried move, including the travel
+                        // after the shadow has gone out: a row that took its own
+                        // lift back at that point would light up again once, on
+                        // its way to a place it is already nearly standing in.
+                        const surfaceLift =
+                            sectionLift !== undefined ||
+                            (dropped?.carried === true && dropped.listId === section.id);
                         return (
                             <section
                                 className="happy2-sidebar__section"
@@ -2007,13 +2163,14 @@ export function Sidebar(props: SidebarProps) {
                                 {!section.headingOnly ? (
                                     <div
                                         className="happy2-sidebar__tree"
-                                        data-connector-dragging={
-                                            sectionDrag?.moved === true ? "" : undefined
-                                        }
+                                        data-connector-dragging={surfaceLift ? "" : undefined}
                                         data-happy-desktop-ui="sidebar-tree"
                                     >
-                                        {sectionDrag?.moved === true ? (
-                                            <SidebarDragSurface drag={sectionDrag} />
+                                        {sectionLift ? (
+                                            <SidebarDragSurface
+                                                carried={sectionDrag?.moved === true}
+                                                drag={sectionLift}
+                                            />
                                         ) : null}
                                         <SidebarTreeConnectors
                                             drag={
@@ -2049,7 +2206,7 @@ export function Sidebar(props: SidebarProps) {
                                                     active={item.id === local.activeItemId}
                                                     dragging={
                                                         held ||
-                                                        rowKey(section.id, item.id) === dropped
+                                                        rowKey(section.id, item.id) === dropped?.key
                                                     }
                                                     grabbed={held}
                                                     key={item.id}

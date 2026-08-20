@@ -429,6 +429,17 @@
     z-index: 0;
 }
 
+/* The lift under a carried subtree. Its geometry is never transitioned — that is
+   what keeps it under the hand — but the shadow itself comes up rather than being
+   switched on: a row is picked up and put down, and both take a moment.
+
+   One element does both halves. It is mounted, empty and invisible, as soon as a
+   row is touched, and stays mounted for the length of its own fade after the hand
+   has gone, so `opacity` is always a transition between two states of the same
+   node rather than a mount and an unmount. That is what a flicked row needs: a
+   drag let go of before the shadow has finished arriving turns around from
+   wherever it had got to, which keyframes — starting again from their own first
+   frame — cannot do. */
 .happy2-sidebar__tree-drag-surface {
     position: absolute;
     z-index: 0;
@@ -438,8 +449,13 @@
     border-radius: var(--happy2-radius-sm);
     background: var(--surface-ripple);
     box-shadow: 0 4px 12px var(--shadow-subtle);
+    opacity: 0;
     pointer-events: none;
-    transition: none;
+    transition: opacity 120ms ease;
+}
+
+.happy2-sidebar__tree-drag-surface[data-carried] {
+    opacity: 1;
 }
 
 .happy2-sidebar__tree-connectors {
@@ -507,8 +523,12 @@
     text-align: left;
     appearance: none;
     cursor: pointer;
+    /* The shadow is listed for the rows that can be carried: a row that has been
+       let go of puts its lift back down over the same moment it takes its fill
+       back, rather than losing the shadow a frame before the colour. */
     transition:
         background-color 120ms ease,
+        box-shadow 120ms ease,
         color 120ms ease;
 }
 
@@ -525,23 +545,30 @@
         transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* The row under the pointer rides above its neighbours and drops its transition,
-   so it tracks the pointer exactly while the rows it displaces still glide. The
-   shadow is what lifts it off the column: a row being carried is the one thing
-   in the sidebar that is not lying flat in the list. */
+/* The row under the pointer rides above its neighbours and drops the transition
+   on its position, so it tracks the pointer exactly while the rows it displaces
+   still glide. The shadow is what lifts it off the column: a row being carried is
+   the one thing in the sidebar that is not lying flat in the list — so it comes
+   up over the same moment it takes anywhere else, while `transform`, left out of
+   the list on purpose, stays under the hand. */
 .happy2-sidebar__item[data-dragging] {
     z-index: 1;
     background: var(--surface-ripple);
     box-shadow: 0 4px 12px var(--shadow-subtle);
-    transition: none;
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease,
+        color 120ms ease;
 }
 
 .happy2-sidebar__item[data-grabbed] {
     cursor: grabbing;
 }
 
-/* A tree drag paints one surface around the complete held subtree. Its rows keep
-   this attribute only so every transform tracks the pointer without lag. */
+/* A tree drag paints one surface around the complete held subtree, so no row in
+   it paints a lift of its own — for the whole of the move, including the travel
+   after the surface has gone. Its rows keep this attribute only so every
+   transform tracks the pointer without lag. */
 .happy2-sidebar__tree[data-connector-dragging] > .happy2-sidebar__item[data-dragging] {
     background: transparent;
     box-shadow: none;
@@ -558,7 +585,10 @@
    tracking it — a lag under the hand, worst exactly when the hand moves fast. */
 .happy2-sidebar__section[data-reordering] .happy2-sidebar__item[data-dragging],
 .happy2-sidebar__actions[data-reordering] .happy2-sidebar__item[data-dragging] {
-    transition: none;
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease,
+        color 120ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -567,6 +597,13 @@
         transition:
             background-color 120ms ease,
             color 120ms ease;
+    }
+
+    /* A reader who asked for less motion is not kept waiting for the lift to go
+       out either: the sidebar drops the surface the moment the gesture ends, so
+       the entry it would have paired with is dropped here to match. */
+    .happy2-sidebar__tree-drag-surface {
+        transition: none;
     }
 }
 
