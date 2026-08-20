@@ -1,4 +1,5 @@
 import {
+    applyMessageDelta,
     HappyAgentClient,
     HappyAgentApiError,
     type Agent,
@@ -54,12 +55,14 @@ const INITIAL_RECONNECT_MS = 250;
 const MAXIMUM_RECONNECT_MS = 5_000;
 const DEFAULT_HISTORY_LIMIT = 100;
 const GIT_WATCH_RENEW_MS = 2 * 60 * 1000;
+const RECENT_EVENT_RETENTION_MS = 60_000;
+const SNAPSHOT_RESPONSE_TIMEOUT_MS = 60_000;
 /*
- * Deadline for mutations the daemon answers without doing model work. A send
- * or abort whose response never arrives would otherwise pend forever: the
- * optimistic user message stays beside the copy the event stream delivers, and
- * the per-agent mutation lane stays wedged behind the hung request. Long
- * operations such as compaction are exempt.
+ * Deadline for mutations the daemon answers without doing model work. A
+ * create, send, or abort whose response never arrives would otherwise pend
+ * forever: the optimistic user message stays beside the copy the event stream
+ * delivers, and the per-agent mutation lane stays wedged behind the hung
+ * request. Long operations such as compaction are exempt.
  */
 const MUTATION_RESPONSE_TIMEOUT_MS = 60_000;
 const SEND_ATTEMPTS = 3;
@@ -91,6 +94,8 @@ interface SessionEntry {
     runs: Map<string, Run>;
     hasMore: boolean;
     loading: Promise<void> | undefined;
+    loadRequestedRevision: number;
+    loadCompletedRevision: number;
     historyLoaded: boolean;
     loadRetry: Promise<void> | undefined;
     loadRetryMs: number;
@@ -114,6 +119,11 @@ interface GroupsSubscriber extends RigGroupsSubscriptionOptions {
     closed: boolean;
 }
 
+interface RecentEvent {
+    event: HappyAgentEvent;
+    receivedAt: number;
+}
+
 export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnection {
     const client = options.client ?? new HappyAgentClient(options);
     const endpoint = options.endpoint.toString();
@@ -128,6 +138,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const agentDrafts = new Map<string, AgentDraftSnapshot>();
     const agentModes = new Map<string, MessageMode | null>();
     const draftRevisions = new Map<string, number>();
+    /**
+     * Agents named here and not yet created on the daemon. Opening one is an
+     * ordinary thing to do — a workspace hands the reader its first session
+     * before its checkout exists — and the daemon has nothing to answer about
+     * it, so the transcript is served from what is already known here until the
+     * creation lands.
+     */
+    const unannouncedAgents = new Set<string>();
     const sendConfirmations = new Map<string, () => void>();
     const mutationQueues = new Map<string, Promise<void>>();
     const sessionMutationCounts = new Map<string, number>();
@@ -140,6 +158,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     let resyncTask: Promise<void> | undefined;
     const resyncBufferedEvents: HappyAgentEvent[] = [];
     const hydrationBroadcastEvents: HappyAgentEvent[] = [];
+    const recentEvents: RecentEvent[] = [];
     let connection: GroupsState["connection"] = "connecting";
     let compatibility: ServerCompatibility = CHECKING_SERVER_COMPATIBILITY;
     let groups = [] as ReturnType<typeof projectGroups>;
@@ -205,6 +224,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const background = (task: Promise<unknown>): void => {
         void task.catch(reportBackgroundError);
     };
+
+    /** Created at each request so queued work receives its full response window. */
+    const deadlineSignal = (timeoutMs = MUTATION_RESPONSE_TIMEOUT_MS): AbortSignal =>
+        AbortSignal.any([rootController.signal, AbortSignal.timeout(timeoutMs)]);
 
     const groupState = (): GroupsState => ({
         connection,
@@ -419,11 +442,45 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         for (const event of buffered) applyEvent(event);
     };
 
+    const rememberEvent = (event: HappyAgentEvent): void => {
+        const receivedAt = now();
+        recentEvents.push({ event, receivedAt });
+        const cutoff = receivedAt - RECENT_EVENT_RETENTION_MS;
+        let expired = 0;
+        while (recentEvents[expired]?.receivedAt < cutoff) expired += 1;
+        if (expired > 0) recentEvents.splice(0, expired);
+    };
+
+    const eventsForSessionAfter = (
+        entry: SessionEntry,
+        after: string,
+        buffered: readonly HappyAgentEvent[],
+    ): HappyAgentEvent[] => {
+        const events = new Map<string, HappyAgentEvent>();
+        if (resyncTask === undefined) {
+            for (const candidate of recentEvents) {
+                const event = candidate.event;
+                if (event.cursor.localeCompare(after) > 0 && agentIdOfEvent(event) === entry.id) {
+                    events.set(event.cursor, event);
+                }
+            }
+        }
+        // A connection-wide resync owns its journal replay after all session
+        // snapshots land. Replaying the rolling window here as well would apply
+        // the same non-idempotent message delta twice.
+        // A hydration can outlive the rolling window. Its direct buffer keeps
+        // every event needed by that in-flight read until the snapshot lands.
+        for (const event of buffered) {
+            if (event.cursor.localeCompare(after) > 0) events.set(event.cursor, event);
+        }
+        return [...events.values()].sort((left, right) => left.cursor.localeCompare(right.cursor));
+    };
+
     const scheduleSessionLoadRetry = (entry: SessionEntry, error: unknown): void => {
         if (
             closed ||
             rootController.signal.aborted ||
-            entry.historyLoaded ||
+            entry.loadCompletedRevision >= entry.loadRequestedRevision ||
             entry.subscribers.size === 0 ||
             entry.loadRetry !== undefined
         ) {
@@ -447,7 +504,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 if (
                     closed ||
                     rootController.signal.aborted ||
-                    entry.historyLoaded ||
+                    entry.loadCompletedRevision >= entry.loadRequestedRevision ||
                     entry.subscribers.size === 0 ||
                     sessions.get(entry.id) !== entry
                 ) {
@@ -461,16 +518,30 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     const loadSession = (entry: SessionEntry): Promise<void> => {
         if (entry.loading !== undefined) return entry.loading;
+        // An agent this connection has named but not yet created has no history
+        // anywhere to read, and asking the daemon for one would answer "no such
+        // agent" and put a retrying error in front of a session the reader is
+        // already writing into. It opens empty, which is exactly what it is; the
+        // creation asks for the real thing the moment it lands.
+        if (unannouncedAgents.has(entry.id)) {
+            entry.hydrating = false;
+            entry.historyLoaded = true;
+            entry.loadCompletedRevision = entry.loadRequestedRevision;
+            publishSession(entry);
+            return Promise.resolve();
+        }
         entry.hydrating = true;
+        const revision = entry.loadRequestedRevision;
+        const signal = deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS);
         const loading = Promise.all([
             client.getMessages(
                 entry.id,
                 { limit: DEFAULT_HISTORY_LIMIT, omitToolData: false },
-                { signal: rootController.signal },
+                { signal },
             ),
-            client.getAgentBootstrap(entry.id, { signal: rootController.signal }),
-            optional(() => client.getAgentActivity(entry.id, { signal: rootController.signal })),
-            optional(() => client.getPendingQuestion(entry.id, { signal: rootController.signal })),
+            client.getAgentBootstrap(entry.id, { signal }),
+            optional(() => client.getAgentActivity(entry.id, { signal })),
+            optional(() => client.getPendingQuestion(entry.id, { signal })),
         ])
             .then(([history, bootstrap, activity, question]) => {
                 if (closed) return;
@@ -499,21 +570,25 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 entry.hasMore = history.hasMore;
                 if (activity !== undefined) setActivity(entry, activity);
                 if (question !== undefined) entry.question = question.question;
-                advanceCursor(bootstrap.cursor);
                 entry.historyLoaded = true;
+                entry.loadCompletedRevision = Math.max(entry.loadCompletedRevision, revision);
                 entry.loadRetryMs = INITIAL_RECONNECT_MS;
                 entry.hydrating = false;
-                // The loaded history already contains every change up to the
-                // agent's lastCursor. Replaying an older buffered event over it
-                // is what duplicates a streaming segment: a stale
-                // `message.updated` no longer continues the newer history
-                // blocks, so the merge appends the whole segment again.
-                const buffered = entry.bufferedEvents
-                    .splice(0)
-                    .filter((event) => event.cursor.localeCompare(bootstrap.cursor) > 0);
+                // History and bootstrap are independent snapshots. Rebase from
+                // the earlier boundary so neither accepted history nor pending
+                // work can fall between its read and the global stream.
+                const snapshotCursor =
+                    history.cursor.localeCompare(bootstrap.cursor) <= 0
+                        ? history.cursor
+                        : bootstrap.cursor;
+                const buffered = eventsForSessionAfter(
+                    entry,
+                    snapshotCursor,
+                    entry.bufferedEvents.splice(0),
+                );
                 replaceAgent(bootstrap.agent);
                 publishSession(entry);
-                for (const event of buffered) applyEvent(event);
+                for (const event of buffered) applyEventNow(event);
                 drainHydrationBroadcastEvents();
                 if (
                     question === undefined &&
@@ -533,11 +608,26 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 scheduleSessionLoadRetry(entry, error);
             })
             .finally(() => {
-                if (entry.loading === loading) entry.loading = undefined;
+                if (entry.loading === loading) {
+                    entry.loading = undefined;
+                    if (
+                        entry.loadRequestedRevision > revision &&
+                        !closed &&
+                        !rootController.signal.aborted &&
+                        sessions.get(entry.id) === entry
+                    ) {
+                        background(loadSession(entry));
+                    }
+                }
                 disposeSessionIfIdle(entry);
             });
         entry.loading = loading;
         return loading;
+    };
+
+    const requestSessionLoad = (entry: SessionEntry): Promise<void> => {
+        entry.loadRequestedRevision += 1;
+        return loadSession(entry);
     };
 
     const resync = (): Promise<void> => {
@@ -550,7 +640,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         });
         const running = (async (): Promise<void> => {
             const bootstrap = await client.getDesktopBootstrap({
-                signal: rootController.signal,
+                signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
             });
             const watchedGit = await optional(() =>
                 client.watchGit(
@@ -560,7 +650,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                             bootstrap.workspaces,
                         ),
                     },
-                    { signal: rootController.signal },
+                    { signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS) },
                 ),
             );
             config = bootstrap.config;
@@ -592,7 +682,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     ),
                 },
             ]);
-            await Promise.all([...sessions.values()].map((entry) => loadSession(entry)));
+            await Promise.all([...sessions.values()].map((entry) => requestSessionLoad(entry)));
             const buffered = resyncBufferedEvents.splice(0);
             // The bootstrap snapshot already contains every change at or before
             // its cursor, and the buffer may hold redeliveries; replay only
@@ -675,7 +765,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     };
 
     const applyEvent = (event: HappyAgentEvent): void => {
-        advanceCursor(event.cursor);
         if (resyncTask !== undefined) {
             resyncBufferedEvents.push(event);
             return;
@@ -866,6 +955,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     event.payload.startedRun.id,
                 );
                 updateRun(event.payload.agentId, event.payload.startedRun);
+                {
+                    const entry = sessions.get(event.payload.agentId);
+                    if (entry !== undefined) background(requestSessionLoad(entry));
+                }
                 return;
             case "run.finished":
                 updateRun(event.payload.agentId, event.payload.run);
@@ -877,7 +970,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                      * conversation folds the turn behind its trace control.
                      */
                     const entry = sessions.get(event.payload.agentId);
-                    if (entry !== undefined) background(loadSession(entry));
+                    if (entry !== undefined) background(requestSessionLoad(entry));
                 }
                 options.onSessionFinished?.(event.payload.agentId);
                 return;
@@ -984,6 +1077,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const updateRun = (agentId: string, run: Run): void => {
         const entry = sessions.get(agentId);
         if (entry === undefined) return;
+        const current = entry.runs.get(run.id);
+        if (current !== undefined && current.status !== "running" && run.status === "running") {
+            return;
+        }
         entry.runs.set(run.id, run);
         publishSession(entry);
     };
@@ -1035,19 +1132,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const createMessage = (agentId: string, message: Message, runId: string | null): void => {
         const entry = sessions.get(agentId);
         const current = entry?.messages.get(message.id);
-        /*
-         * Happy Agent announces the start of every assistant content block
-         * with the same message identity and an empty body. Only the first
-         * announcement creates the message; replacing an existing snapshot
-         * here would erase all preceding reasoning and tool calls until a
-         * later full update (and can erase them permanently when the block
-         * finishes through deltas alone).
-         */
-        if (
-            current?.message.role === "agent" &&
-            message.role === "agent" &&
-            message.content.length === 0
-        ) {
+        if (current !== undefined) {
+            /*
+             * Happy Agent reuses one assistant-message identity across its
+             * provider segments, and hydration can replay a creation already
+             * represented by newer history. Only a locally pending user send
+             * needs the durable creation to replace it.
+             */
+            if (current.pendingSend && message.role === "user") {
+                updateMessage(agentId, message, runId);
+            } else if (message.role === "user") {
+                sendConfirmations.get(message.id)?.();
+            }
             return;
         }
         if (entry !== undefined) entry.messageBlockOffsets.set(message.id, 0);
@@ -1080,17 +1176,31 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         payload: Extract<HappyAgentEvent, { type: "message.delta" }>["payload"],
     ): void => {
         const entry = sessions.get(payload.agentId);
+        if (entry === undefined) return;
         const current = entry?.messages.get(payload.messageId);
-        if (entry === undefined || current === undefined) return;
         const blockIndex =
             (entry.messageBlockOffsets.get(payload.messageId) ?? 0) + payload.blockIndex;
-        const block = current.message.content[blockIndex];
-        if (block === undefined || (block.type !== "text" && block.type !== "reasoning")) return;
-        const content = [...current.message.content];
-        content[blockIndex] = { ...block, text: block.text + payload.append };
+        const applied = applyMessageDelta(current?.message, { ...payload, blockIndex });
+        if (applied.kind === "replayed") return;
+        if (applied.kind === "reconcile") {
+            reportDebug({
+                detail: debugDetail({
+                    blockIndex,
+                    messageId: payload.messageId,
+                    offset: payload.offset,
+                    sessionId: payload.agentId,
+                }),
+                level: "warning",
+                message: "Message delta did not match local state; reconciling",
+                source: "sync",
+            });
+            background(requestSessionLoad(entry));
+            return;
+        }
+        if (current === undefined) return;
         entry.messages.set(payload.messageId, {
             ...current,
-            message: { ...current.message, content } as Message,
+            message: applied.message,
         });
         publishSession(entry);
     };
@@ -1114,7 +1224,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         entry.activityRevision = revision;
         try {
             const activity = await client.getAgentActivity(entry.id, {
-                signal: rootController.signal,
+                signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
             });
             if (
                 entry.activityRevision !== revision ||
@@ -1149,7 +1259,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 }
                 try {
                     const response = await client.getPendingQuestion(entry.id, {
-                        signal: rootController.signal,
+                        signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
                     });
                     if (sessions.get(entry.id) !== entry) return;
                     if (
@@ -1191,7 +1301,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     message: "Checking Rig health before opening SSE",
                     source: "connection",
                 });
-                const health = await client.getHealth({ signal: rootController.signal });
+                const health = await client.getHealth({
+                    signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
+                });
                 reportDebug({
                     detail: debugDetail(health),
                     level: health.ready ? "info" : "warning",
@@ -1238,7 +1350,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                             reopen = true;
                             break;
                         }
-                        advanceCursor(frame.hello.cursor);
                         publishConnection("live");
                         reconnectMs = INITIAL_RECONNECT_MS;
                     } else {
@@ -1249,16 +1360,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                             source: "sse",
                         });
                         if (cursor === undefined || frame.event.cursor.localeCompare(cursor) > 0) {
-                            // The journal is ordered and cursors are unique, so a
-                            // frame at or behind the last applied cursor is a
-                            // redelivery. Deltas are not idempotent — re-applying
-                            // one appends its text again — so duplicates stop here.
+                            // Keep the event before acknowledging its cursor.
+                            // Session snapshots can then rebase from this
+                            // connection-wide rolling window without changing
+                            // where the global journal resumes.
+                            rememberEvent(frame.event);
                             applyEvent(frame.event);
+                            advanceCursor(frame.event.cursor);
                         } else {
                             reportDebug({
                                 detail: debugDetail({
                                     cursor: frame.event.cursor,
-                                    lastAppliedCursor: cursor,
+                                    lastReceivedCursor: cursor,
                                 }),
                                 level: "warning",
                                 message: `Ignored redelivered SSE event: ${frame.event.type}`,
@@ -1302,10 +1415,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             }
         }
     };
-
-    /** Created inside the request thunk so the clock starts when the queued request does. */
-    const deadlineSignal = (): AbortSignal =>
-        AbortSignal.any([rootController.signal, AbortSignal.timeout(MUTATION_RESPONSE_TIMEOUT_MS)]);
 
     const sendMessageWithRetry = async (
         sessionId: string,
@@ -1474,6 +1583,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     hasMore: false,
                     loading: undefined,
                     historyLoaded: false,
+                    loadRequestedRevision: 0,
+                    loadCompletedRevision: 0,
                     loadRetry: undefined,
                     loadRetryMs: INITIAL_RECONNECT_MS,
                     loadingMore: false,
@@ -1492,7 +1603,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             const subscriber: SessionSubscriber = { ...subscription, closed: false };
             entry.subscribers.add(subscriber);
             subscriber.onChange(entry.store.elements(), entry.store.session());
-            void loadSession(entry);
+            void requestSessionLoad(entry);
             const connectedEntry = entry;
             return {
                 elements: () => connectedEntry.store.elements(),
@@ -1684,7 +1795,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 `workspace:${workspaceId}`,
             );
         },
-        createSession(input) {
+        createSession(input, checkoutReady) {
             const sessionId = nextId();
             const workspaceId = resolveWorkspaceId(input, workspaces);
             if (workspaceId === undefined) {
@@ -1703,6 +1814,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 intendedModes.set(sessionId, mode);
                 agentModes.set(sessionId, mode);
             }
+            unannouncedAgents.add(sessionId);
             const workspace = workspaceOf(workspaceId);
             const createdAt = now();
             if (workspace !== undefined) {
@@ -1730,21 +1842,55 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             return mutation(
                 "create_session",
                 sessionId,
-                () =>
-                    client.createAgent(
-                        {
-                            id: sessionId,
-                            mutationId: sessionId,
-                            workspaceId,
-                        },
-                        { signal: rootController.signal },
-                    ),
+                async () => {
+                    // The name above is already out in the world; only the
+                    // request waits. A workspace still being prepared settles
+                    // this first, and its failure is this creation's failure.
+                    if (checkoutReady !== undefined) await checkoutReady;
+                    try {
+                        return await client.createAgent(
+                            {
+                                id: sessionId,
+                                mutationId: sessionId,
+                                workspaceId,
+                            },
+                            { signal: deadlineSignal() },
+                        );
+                    } catch (error) {
+                        if (
+                            rootController.signal.aborted ||
+                            (error instanceof HappyAgentApiError && error.status < 500)
+                        ) {
+                            throw error;
+                        }
+                        // The daemon may have committed the chosen agent ID and
+                        // only lost the HTTP response. Read that exact resource
+                        // back before declaring creation failed and releasing
+                        // the first queued send.
+                        try {
+                            return await client.getAgent(sessionId, { signal: deadlineSignal() });
+                        } catch {
+                            throw error;
+                        }
+                    }
+                },
                 ({ agent }) => {
+                    unannouncedAgents.delete(sessionId);
                     if (adoptAgent(agent)) {
                         publishGroups([{ type: "session_added", sessionId: agent.id }]);
                     }
+                    // The daemon can answer for this agent now. A reader who has
+                    // been sitting in it since before it existed gets its real
+                    // transcript without having asked for one.
+                    const entry = sessions.get(sessionId);
+                    if (entry !== undefined) background(requestSessionLoad(entry));
                 },
                 () => {
+                    unannouncedAgents.delete(sessionId);
+                    const authoritative = agentOf(sessionId);
+                    if (authoritative !== undefined && authoritative.version !== sessionId) {
+                        return false;
+                    }
                     intendedModes.delete(sessionId);
                     agentModes.delete(sessionId);
                     agentDrafts.delete(sessionId);
@@ -1772,6 +1918,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                             : candidate,
                     );
                     publishGroups([{ type: "session_removed", sessionId }]);
+                    return true;
                 },
                 sessionId,
                 `agent:${sessionId}`,
@@ -1822,6 +1969,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     : block,
             ) ?? [{ type: "text" as const, text: input.text }];
             const richContent = content.filter((block) => block.type !== "text");
+            // The composer deliberately permits an image-only turn, while the
+            // daemon's send contract requires non-empty display text. Rig uses
+            // the image media types as the canonical display fallback.
+            const requestText =
+                input.text.trim().length > 0
+                    ? input.text
+                    : richContent.map((block) => `[image:${block.mimeType}]`).join("");
             // Always steer: a message sent mid-run interrupts the run rather
             // than waiting behind it, and on an idle agent the daemon treats
             // steer and queue identically.
@@ -1858,7 +2012,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                         sessionId,
                         {
                             id: mutationId,
-                            text: input.text,
+                            text: requestText,
                             ...(richContent.length === 0 ? {} : { content: richContent }),
                             delivery,
                             mode,
@@ -2223,6 +2377,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             sessionMutationCounts.clear();
             processOwners.clear();
             hydrationBroadcastEvents.length = 0;
+            recentEvents.length = 0;
             resyncBufferedEvents.length = 0;
         },
     };
@@ -2238,7 +2393,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             const page = await client.getMessages(
                 entry.id,
                 { before: token, limit: DEFAULT_HISTORY_LIMIT, omitToolData: false },
-                { signal: rootController.signal },
+                { signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS) },
             );
             ingestHistory(entry, page.runs, []);
             entry.hasMore = page.hasMore;
@@ -2371,17 +2526,7 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
                 previous.data === next.data
             );
         case "tool_call":
-            // While either side is still running its arguments are still
-            // streaming, so the name is the only stable identity. Two finished
-            // calls are the same call only when their final arguments agree.
-            return (
-                next.type === "tool_call" &&
-                previous.name === next.name &&
-                (previous.status === "running" ||
-                    next.status === "running" ||
-                    JSON.stringify(previous.arguments ?? null) ===
-                        JSON.stringify(next.arguments ?? null))
-            );
+            return next.type === "tool_call" && previous.id === next.id;
         case "compaction":
             return (
                 next.type === "compaction" &&

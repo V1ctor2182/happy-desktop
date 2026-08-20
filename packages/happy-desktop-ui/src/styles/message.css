@@ -55,6 +55,14 @@
     margin-bottom: 0;
 }
 
+/* The lead row of a focused turn is a tool line, not prose, and the rest of
+ * that turn's rows end on the transcript's own 30px inset. The message that
+ * carries the first one takes the same trailing inset instead of prose's wider
+ * right edge, so the hover time does not step in and out down one turn. */
+.happy2-message--activity-lead:has(.happy2-agent-activity-row[data-treatment="focused"]) {
+    padding-right: 30px;
+}
+
 .happy2-message.happy2-message--activity-lead:not([data-has-body]) .happy2-message__attachments {
     margin-top: 0;
 }
@@ -1159,11 +1167,12 @@
  * centered banner.
  */
 /* The 14px leading glyph plus the 8px gap consume 22px, so an 8px inset lands
-   the text itself on the same 30px column a message body starts on. */
+   the text itself on the same 30px column a message body starts on. Its 6px
+   vertical inset around one 20px line matches a compact tool call exactly. */
 .happy2-system-notice[data-align="start"] {
     align-items: flex-start;
     justify-content: flex-start;
-    padding: 4px 20px 4px 8px;
+    padding: 6px 96px 6px 8px;
 }
 
 /* Same as the activity row and the error card: the identity Message around a
@@ -1179,8 +1188,14 @@
 }
 
 .happy2-system-notice[data-align="start"] .happy2-system-notice__text {
+    overflow: hidden;
+    flex: 1 1 auto;
+    font-size: 14px;
+    font-weight: 500;
     text-align: left;
-    text-wrap: initial;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+    white-space: nowrap;
 }
 
 .happy2-system-notice__ref {

@@ -32,7 +32,7 @@ import type {
     RigOpenInTargets,
     RigWorkspaceFileBytes,
     RigWorkspaceFileDocument,
-    RigWorkspaceFiles,
+    RigWorkspaceFileTreePage,
     RigModelCatalog,
     RigProjectId,
     RigSessionId,
@@ -108,8 +108,12 @@ export interface RigClient {
     instructions(): RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy, as one editable document. */
     securityPolicy(): RigSecurityPolicyStore;
-    /** Lists every file in a project or worktree checkout, changed or not. */
-    workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
+    /** Reads one bounded page of one checkout directory. */
+    workspaceFileTreeRead(
+        groupId: RigGroupId,
+        path: string,
+        cursor?: string,
+    ): Promise<RigWorkspaceFileTreePage>;
     /**
      * Searches one checkout for `@`-mention candidates. A pure query: the result
      * is transient composer typeahead and never enters a durable snapshot.
@@ -245,34 +249,33 @@ interface ChatBinding {
     archived: boolean;
 }
 
-async function workspaceFilesRead(
+async function workspaceFileTreeRead(
     client: Pick<HappyAgentClient, "getFileTree">,
     groupId: RigGroupId,
-): Promise<RigWorkspaceFiles> {
-    const directories = [""];
-    const paths: string[] = [];
-    for (let directoryIndex = 0; directoryIndex < directories.length; directoryIndex += 1) {
-        const directory = directories[directoryIndex]!;
-        let cursor: string | undefined;
-        do {
-            const page = await client.getFileTree(groupId, {
-                ...(directory === "" ? {} : { path: directory }),
-                ...(cursor === undefined ? {} : { cursor }),
-            });
-            for (const entry of page.entries) {
-                // The daemon lists `.git` but refuses to descend into it (the
-                // path is protected), so walking into it would fail the whole
-                // listing. In a linked worktree `.git` is a file and needs the
-                // same exclusion.
-                if (entry.name === ".git") continue;
-                if (entry.type === "directory") directories.push(entry.path);
-                else if (entry.type === "file" || entry.type === "symlink") paths.push(entry.path);
-            }
-            cursor = page.nextCursor ?? undefined;
-        } while (cursor !== undefined);
-    }
-    paths.sort((left, right) => left.localeCompare(right));
-    return { paths, truncated: false };
+    path: string,
+    cursor?: string,
+): Promise<RigWorkspaceFileTreePage> {
+    const page = await client.getFileTree(groupId, {
+        ...(path === "" ? {} : { path }),
+        ...(cursor === undefined ? {} : { cursor }),
+        limit: 500,
+    });
+    const entries = page.entries.flatMap((entry) => {
+        // `.git` is never a browsable project entry. Older daemons exposed it
+        // and then refused expansion; newer ones omit it at the source.
+        if (entry.name === ".git" || entry.type === "other") return [];
+        return [
+            {
+                kind: entry.type === "directory" ? ("directory" as const) : ("file" as const),
+                name: entry.name,
+                path: entry.path,
+            },
+        ];
+    });
+    return {
+        entries,
+        ...(page.nextCursor === null ? {} : { nextCursor: page.nextCursor }),
+    };
 }
 
 async function changedFileRead(
@@ -335,7 +338,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
         changedFileRead: (groupId, path, signal) =>
             changedFileRead(deps.client, groupId, path, signal),
-        workspaceFilesRead: (groupId) => workspaceFilesRead(deps.client, groupId),
+        workspaceFileTreeRead: (groupId, path, cursor) =>
+            workspaceFileTreeRead(deps.client, groupId, path, cursor),
         filesSearch: async (groupId, query, limit) =>
             (
                 await deps.client.searchFiles(groupId, {

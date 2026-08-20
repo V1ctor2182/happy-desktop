@@ -21,6 +21,7 @@ import {
 } from "./ConversationRequestView";
 import { type RigUserInputAnswerMap } from "./RigUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
+import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 
 type ConversationLinkedAttachment = Extract<ConversationAttachment, { kind: "linked" }>;
 
@@ -325,16 +326,15 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     tone={entry.retry ? "warning" : "error"}
                 />
             ) : (
-                // Mid-turn agent context (system prompts, reasoning preambles,
-                // run notices) belongs to the turn that produced it, so it reads
-                // as a quiet left-aligned hint rather than a centered channel
-                // banner.
+                // The raw context belongs to the agent, not the transcript.
+                // Readers only need to know that the daemon inserted something,
+                // in the same compact one-line rhythm as a tool call.
                 <SystemNotice
                     align="start"
                     className={props.activityAuthor ? undefined : props.className}
                     icon={NOTICE_ICON[entry.level]}
                     style={props.activityAuthor ? undefined : props.style}
-                    text={entry.title ? `${entry.title}: ${entry.text}` : entry.text}
+                    text={SYSTEM_NOTIFICATION_LABEL}
                 />
             );
         /* A turn can fail before it does anything else, and then these notices

@@ -71,6 +71,7 @@ import type {
     RigContextGauge,
     RigOpenInTarget,
     RigWorkspaceFiles,
+    RigWorkspaceFileTreeDirectory,
     RigWorkspaceFileBytes,
     RigWorkspaceFileDocument,
     RigScrollPosition,
@@ -287,9 +288,18 @@ type RigFileLoadRequest = {
     readonly promise: Promise<RigFileDocument>;
 };
 
+type RigWorkspaceFileTreeLoadRequest = {
+    readonly cursor?: string;
+    readonly generation: number;
+    readonly groupId: RigGroupId;
+    readonly path: string;
+};
+
 /** Bounds decoded source text retained between preview/tab lifetimes. */
 const RIG_READY_DOCUMENT_CACHE_MAX_ENTRIES = 48;
 const RIG_READY_DOCUMENT_CACHE_MAX_WEIGHT = 16 * 1024 * 1024;
+/** Bounds speculative and reader-requested directory reads across the all-files tree. */
+const RIG_WORKSPACE_FILE_TREE_MAX_CONCURRENT_LOADS = 3;
 /**
  * The renderer/UI uses the same ceiling when deciding whether to retain a
  * Pierre AST. A changed document at or above it must already carry the
@@ -495,7 +505,7 @@ export interface RigWorkspaceSnapshot {
     readonly fileViewMode: RigFileViewMode;
     /** Whether the panel lists only changed files or every file in the checkout. */
     readonly fileScope: RigFileScope;
-    /** Whether the panel nests paths into folders or lists them whole. */
+    /** Whether Changes nests paths into folders or lists them whole. All Files is always lazy. */
     readonly fileLayout: RigFileLayout;
     /**
      * How wide the right panel is in the addressed checkout, in CSS pixels, or
@@ -517,12 +527,9 @@ export interface RigWorkspaceSnapshot {
     readonly fileTreeExpanded: ReadonlySet<string>;
     /** Directories the reader closed, including ones that open on their own. */
     readonly fileTreeCollapsed: ReadonlySet<string>;
-    /**
-     * Every file in the open group's checkout, once it has been asked for.
-     * Absent until then, which is what "All files" is loading.
-     */
+    /** The lazily materialized directories of the open group's all-files tree. */
     readonly workspaceFiles?: RigWorkspaceFiles;
-    /** True while that listing is being read. */
+    /** True while the all-files root directory is being read. */
     readonly workspaceFilesLoading: boolean;
     /** The create dialog, when it is open. */
     readonly create?: RigCreateSnapshot;
@@ -969,6 +976,10 @@ export interface RigWorkspaceStore {
      * decides what has not been spoken for — and the store does not build one.
      */
     fileTreeExpandedUpdate(path: string, expanded: boolean): void;
+    /** Warms one all-files directory after pointer or keyboard interest. */
+    fileTreeDirectoryPrefetch(path: string): void;
+    /** Reads the next page of one already expanded all-files directory. */
+    fileTreeLoadMore(path: string): void;
     /** Records an unsaved edit to one file's working-tree text. */
     fileDraftUpdate(tabId: string, draft: string): void;
     /** Discards one file's unsaved edit and returns to its last loaded text. */
@@ -1356,6 +1367,9 @@ export function rigWorkspaceStoreCreate(
     let workspaceFilesLoading = false;
     let workspaceFilesGroupId: RigGroupId | undefined;
     let workspaceFilesGeneration = 0;
+    /** Most-recent intent first; a repeated hover moves its pending read back to the front. */
+    let workspaceFileTreeLoadQueue: RigWorkspaceFileTreeLoadRequest[] = [];
+    let workspaceFileTreeLoadsActive = 0;
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
     /** How the addressed group's first session will be configured. */
@@ -1864,7 +1878,10 @@ export function rigWorkspaceStoreCreate(
         // carrying the last one's panel width and listing across to it.
         const nextView = groupView(nextAddress.groupId);
         const nextFileScope = nextView.fileScope ?? "changed";
-        const nextFileLayout = nextView.fileLayout ?? "flat";
+        // The daemon's all-files contract is a lazy directory tree. Flattening
+        // it would require recursively opening every directory before the first
+        // row could be truthful, which turns one panel open into a request storm.
+        const nextFileLayout = nextFileScope === "all" ? "tree" : (nextView.fileLayout ?? "flat");
         const nextPanelWidth = nextView.panelWidth;
         // Recomputed here rather than remembered: it is derived from the same
         // list snapshot this projection is built from, so it cannot lag behind
@@ -3205,10 +3222,12 @@ export function rigWorkspaceStoreCreate(
      *
      * The configuration is the connection's last selection, exactly as a new tab
      * in an existing workspace takes it: this is that same act, performed for
-     * the reader because asking for a workspace is asking to work in one. The
-     * directory is left to `worktreeSessionStart`, which fills it in from the
-     * path Rig names for the checkout — the only reason a conversation can be
-     * asked for before there is a checkout to hold it.
+     * the reader because asking for a workspace is asking to work in one.
+     *
+     * It resolves as soon as the conversation has a name, which is before the
+     * checkout exists, so the reader is put into a real session with a real id
+     * and writes into that session's own composer from the first moment. Only
+     * the daemon's side of the creation waits for the directory.
      */
     const worktreeFirstConversationStart = async (worktreeId: RigWorktreeId): Promise<void> => {
         const models = client.models.get();
@@ -3253,35 +3272,142 @@ export function rigWorkspaceStoreCreate(
         );
     };
 
+    const workspaceFilesDirectorySet = (
+        path: string,
+        directory: RigWorkspaceFileTreeDirectory,
+    ): void => {
+        const directories = new Map(workspaceFiles?.directories ?? []);
+        directories.set(path, directory);
+        workspaceFiles = { directories };
+    };
+
     /**
-     * Reads the open group's full file listing, once per group. The listing is
-     * a property of a checkout rather than of the session in it, so switching
-     * sessions within a group reuses it and switching groups discards it.
+     * Starts one queued directory read. The root follows all of its pages because
+     * it has no parent row on which to place a "Show more" affordance; every
+     * child reads exactly one page and exposes the rest explicitly.
+     */
+    function workspaceFilesDirectoryLoadStart(request: RigWorkspaceFileTreeLoadRequest): void {
+        if (
+            workspaceFilesGroupId !== request.groupId ||
+            workspaceFilesGeneration !== request.generation
+        )
+            return;
+        const previous = workspaceFiles?.directories.get(request.path);
+        if (previous?.loading) return;
+        workspaceFileTreeLoadsActive += 1;
+        let entries = [...(previous?.entries ?? [])];
+        let nextCursor = request.cursor;
+        workspaceFilesDirectorySet(request.path, {
+            entries,
+            loading: true,
+            ...(request.cursor === undefined ? {} : { nextCursor: request.cursor }),
+        });
+        if (request.path === "") workspaceFilesLoading = true;
+        recompute();
+
+        const finish = (failed: boolean): void => {
+            workspaceFileTreeLoadsActive -= 1;
+            if (
+                !disposed &&
+                request.generation === workspaceFilesGeneration &&
+                request.groupId === workspaceFilesGroupId
+            ) {
+                workspaceFilesDirectorySet(request.path, {
+                    entries,
+                    ...(failed ? { error: true } : {}),
+                    loading: false,
+                    ...(nextCursor === undefined ? {} : { nextCursor }),
+                });
+                if (request.path === "") workspaceFilesLoading = false;
+                recompute();
+            }
+            workspaceFilesDirectoryLoadPump();
+        };
+
+        void (async () => {
+            do {
+                const page = await client.workspaceFileTreeRead(
+                    request.groupId,
+                    request.path,
+                    nextCursor,
+                );
+                entries = [...entries, ...page.entries];
+                nextCursor = page.nextCursor;
+            } while (request.path === "" && nextCursor !== undefined);
+        })().then(
+            () => finish(false),
+            () => finish(true),
+        );
+    }
+
+    /** Fills the three transport slots from the most-recent-intent end of the queue. */
+    function workspaceFilesDirectoryLoadPump(): void {
+        if (!active || disposed) return;
+        while (
+            workspaceFileTreeLoadsActive < RIG_WORKSPACE_FILE_TREE_MAX_CONCURRENT_LOADS &&
+            workspaceFileTreeLoadQueue.length > 0
+        ) {
+            const request = workspaceFileTreeLoadQueue.shift()!;
+            if (
+                request.generation !== workspaceFilesGeneration ||
+                request.groupId !== workspaceFilesGroupId ||
+                workspaceFiles?.directories.get(request.path)?.loading
+            )
+                continue;
+            workspaceFilesDirectoryLoadStart(request);
+        }
+    }
+
+    /** Adds or promotes one directory request, so the latest intent runs next. */
+    const workspaceFilesDirectoryLoadSchedule = (
+        groupId: RigGroupId,
+        path: string,
+        cursor?: string,
+    ): void => {
+        if (disposed || workspaceFilesGroupId !== groupId) return;
+        if (workspaceFiles?.directories.get(path)?.loading) return;
+        const queued = workspaceFileTreeLoadQueue.findIndex(
+            (request) =>
+                request.generation === workspaceFilesGeneration &&
+                request.groupId === groupId &&
+                request.path === path,
+        );
+        if (queued >= 0) workspaceFileTreeLoadQueue.splice(queued, 1);
+        workspaceFileTreeLoadQueue.unshift({
+            ...(cursor === undefined ? {} : { cursor }),
+            generation: workspaceFilesGeneration,
+            groupId,
+            path,
+        });
+        if (path === "" && !workspaceFilesLoading) {
+            workspaceFilesLoading = true;
+            recompute();
+        }
+        workspaceFilesDirectoryLoadPump();
+    };
+
+    /** Loads a directory once, or retries the page that most recently failed. */
+    const workspaceFilesDirectoryEnsure = (groupId: RigGroupId, path: string): void => {
+        const directory = workspaceFiles?.directories.get(path);
+        if (directory !== undefined && directory.error !== true) return;
+        workspaceFilesDirectoryLoadSchedule(groupId, path, directory?.nextCursor);
+    };
+
+    /**
+     * Opens the all-files tree at its root once per group. Switching sessions in
+     * one checkout reuses every branch already materialized; switching checkouts
+     * retires in-flight pages and starts with one root read.
      */
     const workspaceFilesEnsure = (groupId: RigGroupId): void => {
-        if (workspaceFilesGroupId === groupId && (workspaceFiles || workspaceFilesLoading)) return;
-        workspaceFilesGroupId = groupId;
-        workspaceFiles = undefined;
-        workspaceFilesLoading = true;
-        const current = (workspaceFilesGeneration += 1);
-        recompute();
-        void client.workspaceFilesRead(groupId).then(
-            (files) => {
-                if (disposed || current !== workspaceFilesGeneration) return;
-                workspaceFiles = files;
-                workspaceFilesLoading = false;
-                recompute();
-            },
-            () => {
-                if (disposed || current !== workspaceFilesGeneration) return;
-                // An unreadable checkout lists nothing. The panel says it is
-                // empty, which is what the reader can act on; a failed `git
-                // ls-files` is not something they can do anything about.
-                workspaceFiles = { paths: [], truncated: false };
-                workspaceFilesLoading = false;
-                recompute();
-            },
-        );
+        const root = workspaceFiles?.directories.get("");
+        if (workspaceFilesGroupId === groupId && root !== undefined && root.error !== true) return;
+        if (workspaceFilesGroupId !== groupId) {
+            workspaceFilesGroupId = groupId;
+            workspaceFiles = { directories: new Map() };
+            workspaceFileTreeLoadQueue = [];
+            workspaceFilesGeneration += 1;
+        }
+        workspaceFilesDirectoryEnsure(groupId, "");
     };
 
     /**
@@ -3402,6 +3528,7 @@ export function rigWorkspaceStoreCreate(
 
     const start = (): void => {
         active = true;
+        workspaceFilesDirectoryLoadPump();
         unsubscribeList = list.subscribe(() => {
             if (openId) list.sessionRead(openId);
             // A group addressed before its sessions arrived could not have its
@@ -4135,15 +4262,15 @@ export function rigWorkspaceStoreCreate(
             recompute();
         },
         fileScopeUpdate(groupId, scope) {
-            // A whole-repository listing costs a Git invocation over a tree that
-            // may be enormous, so it is read when it is first wanted rather than
-            // kept current against a group nobody is listing files for.
+            // Even the root directory belongs to the checkout being viewed, so
+            // it is read when first wanted rather than for every addressed group.
             if (scope === "all") workspaceFilesEnsure(groupId);
             if (fileScopeOf(groupId) === scope) return;
             viewPreferencesWrite(groupId, { fileScope: scope });
             recompute();
         },
         fileLayoutUpdate(groupId, layout) {
+            if (fileScopeOf(groupId) === "all") return;
             if ((groupView(groupId).fileLayout ?? "flat") === layout) return;
             viewPreferencesWrite(groupId, { fileLayout: layout });
             recompute();
@@ -4171,7 +4298,22 @@ export function rigWorkspaceStoreCreate(
             }
             fileTreeExpanded = opened;
             fileTreeCollapsed = closed;
+            const groupId = addressedGroupId;
+            if (expanded && groupId !== undefined && fileScopeOf(groupId) === "all")
+                workspaceFilesDirectoryEnsure(groupId, path);
             recompute();
+        },
+        fileTreeDirectoryPrefetch(path) {
+            const groupId = addressedGroupId;
+            if (groupId === undefined || fileScopeOf(groupId) !== "all") return;
+            workspaceFilesDirectoryEnsure(groupId, path);
+        },
+        fileTreeLoadMore(path) {
+            const groupId = addressedGroupId;
+            if (groupId === undefined || fileScopeOf(groupId) !== "all") return;
+            const directory = workspaceFiles?.directories.get(path);
+            if (directory?.nextCursor === undefined || directory.loading) return;
+            workspaceFilesDirectoryLoadSchedule(groupId, path, directory.nextCursor);
         },
         fileDraftUpdate(tabId, draft) {
             // An edit that could never be saved is not an edit; the editor is

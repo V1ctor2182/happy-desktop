@@ -25,6 +25,7 @@ export type FileBrowserProps = {
     onSelect?: FileTreeProps["onSelect"];
     onOpen?: FileTreeProps["onOpen"];
     onToggle?: FileTreeProps["onToggle"];
+    onDirectoryPrefetch?: FileTreeProps["onDirectoryPrefetch"];
     onLoadMore?: FileTreeProps["onLoadMore"];
     loading?: boolean;
     loadingLabel?: string;
@@ -42,15 +43,15 @@ export type FileBrowserProps = {
     fileActionsUnavailable?: string;
 };
 const SCOPES: { value: FileBrowserScope; label: string }[] = [
-    { value: "changed", label: "Changes" },
     { value: "all", label: "All Files" },
+    { value: "changed", label: "Changes" },
 ];
 /**
  * C-168 FileBrowser — the file listing of a workspace panel.
  *
  * One 32px control row and a scrolling `FileTree` beneath it. The row carries
- * the one-layer Changes / All Files choice, diff totals or selection actions,
- * and the flat List / Tree choice.
+ * the one-layer All Files / Changes choice. Changes adds diff totals and the
+ * flat List / Tree choice; All Files is always a lazy tree.
  *
  * Every exclusive control in the row is one layer: no enclosing track, and
  * only the selected option carries the shared selection fill and outline. No
@@ -76,6 +77,7 @@ export function FileBrowser(props: FileBrowserProps) {
         "onSelect",
         "onOpen",
         "onToggle",
+        "onDirectoryPrefetch",
         "onLoadMore",
         "loading",
         "loadingLabel",
@@ -117,58 +119,65 @@ export function FileBrowser(props: FileBrowserProps) {
                     size="compact"
                     value={local.scope}
                 />
-                <span
-                    className="happy2-file-browser__summary"
-                    data-happy-desktop-ui="file-browser-summary"
-                >
-                    <span className="happy2-file-browser__count">
-                        {`${compactCount(local.count)} ${local.count === 1 ? "file" : "files"}`}
-                    </span>
-                    {added || deleted ? (
-                        <span className="happy2-file-browser__lines">
-                            {added ? (
-                                <span
-                                    aria-hidden="true"
-                                    className="happy2-file-browser__added"
-                                >{`+${compactCount(local.addedLines ?? 0)}`}</span>
-                            ) : null}
-                            {deleted ? (
-                                <span
-                                    aria-hidden="true"
-                                    className="happy2-file-browser__deleted"
-                                >{`−${compactCount(local.deletedLines ?? 0)}`}</span>
-                            ) : null}
-                            {/* Out of flow, so the pair keeps the row's spacing. */}
-                            <span className="happy2-visually-hidden">
-                                {changeCountLabel(local.addedLines ?? 0, local.deletedLines ?? 0)}
+                {local.scope === "changed" ? (
+                    <>
+                        <span
+                            className="happy2-file-browser__summary"
+                            data-happy-desktop-ui="file-browser-summary"
+                        >
+                            <span className="happy2-file-browser__count">
+                                {`${compactCount(local.count)} ${local.count === 1 ? "file" : "files"}`}
                             </span>
+                            {added || deleted ? (
+                                <span className="happy2-file-browser__lines">
+                                    {added ? (
+                                        <span
+                                            aria-hidden="true"
+                                            className="happy2-file-browser__added"
+                                        >{`+${compactCount(local.addedLines ?? 0)}`}</span>
+                                    ) : null}
+                                    {deleted ? (
+                                        <span
+                                            aria-hidden="true"
+                                            className="happy2-file-browser__deleted"
+                                        >{`−${compactCount(local.deletedLines ?? 0)}`}</span>
+                                    ) : null}
+                                    {/* Out of flow, so the pair keeps the row's spacing. */}
+                                    <span className="happy2-visually-hidden">
+                                        {changeCountLabel(
+                                            local.addedLines ?? 0,
+                                            local.deletedLines ?? 0,
+                                        )}
+                                    </span>
+                                </span>
+                            ) : null}
                         </span>
-                    ) : null}
-                </span>
-                <div className="happy2-file-browser__layouts" role="group">
-                    <button
-                        aria-label="List files"
-                        aria-pressed={local.layout === "flat"}
-                        className="happy2-file-browser__layout"
-                        data-active={local.layout === "flat" ? "" : undefined}
-                        data-happy-desktop-ui="file-browser-layout"
-                        onClick={() => local.onLayoutChange?.("flat")}
-                        type="button"
-                    >
-                        <Icon name="files" size={14} />
-                    </button>
-                    <button
-                        aria-label="Nest files into directories"
-                        aria-pressed={local.layout === "tree"}
-                        className="happy2-file-browser__layout"
-                        data-active={local.layout === "tree" ? "" : undefined}
-                        data-happy-desktop-ui="file-browser-layout"
-                        onClick={() => local.onLayoutChange?.("tree")}
-                        type="button"
-                    >
-                        <Icon name="branch" size={14} />
-                    </button>
-                </div>
+                        <div className="happy2-file-browser__layouts" role="group">
+                            <button
+                                aria-label="List files"
+                                aria-pressed={local.layout === "flat"}
+                                className="happy2-file-browser__layout"
+                                data-active={local.layout === "flat" ? "" : undefined}
+                                data-happy-desktop-ui="file-browser-layout"
+                                onClick={() => local.onLayoutChange?.("flat")}
+                                type="button"
+                            >
+                                <Icon name="files" size={14} />
+                            </button>
+                            <button
+                                aria-label="Nest files into directories"
+                                aria-pressed={local.layout === "tree"}
+                                className="happy2-file-browser__layout"
+                                data-active={local.layout === "tree" ? "" : undefined}
+                                data-happy-desktop-ui="file-browser-layout"
+                                onClick={() => local.onLayoutChange?.("tree")}
+                                type="button"
+                            >
+                                <Icon name="branch" size={14} />
+                            </button>
+                        </div>
+                    </>
+                ) : null}
             </div>
             {local.note ? (
                 <div
@@ -194,6 +203,7 @@ export function FileBrowser(props: FileBrowserProps) {
                     loadingLabel={local.loadingLabel}
                     nodes={local.nodes}
                     filesUnavailable={local.fileActionsUnavailable}
+                    onDirectoryPrefetch={local.onDirectoryPrefetch}
                     onLoadMore={local.onLoadMore}
                     onOpen={local.onOpen}
                     onSelect={local.onSelect}

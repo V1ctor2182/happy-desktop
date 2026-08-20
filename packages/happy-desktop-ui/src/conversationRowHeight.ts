@@ -14,6 +14,7 @@ import {
     noticeTextHeight,
     type MessageTextLayoutCache,
 } from "./messageTextLayout";
+import { SYSTEM_NOTIFICATION_HEIGHT } from "./systemNotification";
 
 /**
  * Height of one conversation row, computed from the entry and the list's measure
@@ -141,8 +142,7 @@ const ACTIVITY_LEAD_CHROME = 36;
 const DELEGATION_HEIGHT = 44;
 /** `.happy2-day-divider` — 20px padding around a 20px label that never wraps. */
 export const DIVIDER_HEIGHT = 60;
-/** `.happy2-system-notice`: 4px padding at `align="start"`, 16px centered. */
-const NOTICE_CHROME = 8;
+/** Centered `.happy2-system-notice`: 16px padding above and below. */
 const NOTICE_CHROME_CENTER = 32;
 const NOTICE_INSET = 50;
 /* A steering notice keeps the notice row's 16px lead but closes to 4px above the
@@ -237,8 +237,8 @@ export function noticeRowHeight(
     align: "center" | "start",
     cache?: MessageTextLayoutCache,
 ): number {
-    const chrome = align === "start" ? NOTICE_CHROME : NOTICE_CHROME_CENTER;
-    return chrome + noticeTextHeight(text, width - NOTICE_INSET, cache);
+    if (align === "start") return SYSTEM_NOTIFICATION_HEIGHT;
+    return NOTICE_CHROME_CENTER + noticeTextHeight(text, width - NOTICE_INSET, cache);
 }
 /** Height of a steering notice: its service line above the message it quotes. */
 export function steeringNoticeRowHeight(
@@ -357,7 +357,6 @@ export function conversationRowHeight(
             return rowHeightCached(cache, entry, "notice:divider", () => DIVIDER_HEIGHT);
         if (entry.level === "error")
             return rowHeightCached(cache, entry, "notice:error", () => undefined);
-        const text = entry.title ? `${entry.title}: ${entry.text}` : entry.text;
         /* A notice that opens its turn wears the same identity header a
            tool-first row does, and therefore the same chrome above it. */
         const lead =
@@ -368,7 +367,7 @@ export function conversationRowHeight(
             cache,
             entry,
             `notice:${String(width)}:${String(lead)}`,
-            () => lead + noticeRowHeight(text, width, "start", cache?.text),
+            () => lead + SYSTEM_NOTIFICATION_HEIGHT,
         );
     }
     if (entry.kind === "request") return undefined;

@@ -449,9 +449,11 @@
 
 /* Focused conversation rows spend their resting width on the tool subject.
    Their start time overlays the trailing edge on hover, so it takes no width
-   from the subject before or after it appears. */
+   from the subject before or after it appears — and because it rides that
+   edge, the row's trailing inset is also the time's, so it matches the 30px
+   leading inset and the line reads as evenly framed. */
 .happy2-agent-activity-row[data-treatment="focused"] {
-    padding-right: 20px;
+    padding-right: 30px;
 }
 
 .happy2-agent-activity-row[data-treatment="focused"][data-kind="tool"]

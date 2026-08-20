@@ -92,6 +92,19 @@ compatibility problems. Do not add abstractions, options, or behavior solely
 for hypothetical future use cases; solve the feature currently being built
 well.
 
+## End-to-end data modeling
+
+We own the full stack from agent to app. Data within this owned stack must be
+modeled explicitly and carried through authoritative typed contracts end to
+end. Do not use heuristics, inference, parsing conventions, shape detection, or
+fallback guesses to reconstruct data that one owned layer could have provided
+to another.
+
+Heuristics are allowed only at boundaries involving something we do not own and
+cannot give an explicit contract, such as detecting the type of an external
+file. Isolate the heuristic at that boundary; after detection, represent and
+transport the result explicitly through the owned stack.
+
 ## Design system
 
 Before creating or changing any user interface, read and follow `DESIGN.md`.

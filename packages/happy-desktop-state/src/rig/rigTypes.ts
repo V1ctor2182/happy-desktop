@@ -637,14 +637,35 @@ export interface RigScrollPosition {
     readonly measurements?: readonly RigScrollMeasurement[];
 }
 
+/** One physical child of a checkout directory. Symlinks are file-like leaves. */
+export interface RigWorkspaceFileTreeEntry {
+    readonly kind: "directory" | "file";
+    readonly name: string;
+    readonly path: string;
+}
+
+/** One bounded page read from a checkout directory. */
+export interface RigWorkspaceFileTreePage {
+    readonly entries: readonly RigWorkspaceFileTreeEntry[];
+    readonly nextCursor?: string;
+}
+
 /**
- * Every file in a project or worktree checkout, not just the changed ones.
- * `truncated` says the repository held more than the host was willing to list,
- * so the panel can admit it rather than showing part of a tree as the whole.
+ * The materialized part of one checkout directory. A directory enters this map
+ * when the root opens or pointer, keyboard, or disclosure intent warms it;
+ * untouched descendants remain names in their parent and cost no transport work.
  */
+export interface RigWorkspaceFileTreeDirectory {
+    readonly entries: readonly RigWorkspaceFileTreeEntry[];
+    /** The last page failed; closing and reopening the directory retries it. */
+    readonly error?: boolean;
+    readonly loading: boolean;
+    readonly nextCursor?: string;
+}
+
+/** The lazily materialized all-files tree, keyed by directory path; `""` is the root. */
 export interface RigWorkspaceFiles {
-    readonly paths: readonly string[];
-    readonly truncated: boolean;
+    readonly directories: ReadonlyMap<string, RigWorkspaceFileTreeDirectory>;
 }
 
 /** One application a project directory can be opened in. */

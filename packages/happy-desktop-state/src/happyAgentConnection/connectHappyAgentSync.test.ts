@@ -250,6 +250,7 @@ it("ignores a redelivered message.delta instead of appending its text twice", as
         runId: "r1",
         messageId: "a1",
         blockIndex: 0,
+        offset: 3,
         append: "lo",
     });
     await vi.waitFor(() => expect(agentTexts(chat.elements)[0]?.text).toBe("Hello"));
@@ -442,6 +443,7 @@ it("merges a cumulative message.updated snapshot without duplicating streamed te
         runId: "r1",
         messageId: "a1",
         blockIndex: 0,
+        offset: 3,
         append: "lo",
     });
     daemon.eventEmit("message.updated", {
@@ -475,7 +477,13 @@ it("keeps one tool row while its arguments stream and shows it finished at the e
                 id: "a1",
                 content: [
                     { type: "text", text: "Running it" },
-                    { type: "tool_call", name: "Bash", status: "running", arguments: args },
+                    {
+                        type: "tool_call",
+                        id: "tool-a1-1",
+                        name: "Bash",
+                        status: "running",
+                        arguments: args,
+                    },
                 ],
             }),
         });
@@ -489,6 +497,7 @@ it("keeps one tool row while its arguments stream and shows it finished at the e
                 { type: "text", text: "Running it" },
                 {
                     type: "tool_call",
+                    id: "tool-a1-1",
                     name: "Bash",
                     status: "completed",
                     arguments: { command: "ls -la /tmp" },
@@ -521,6 +530,7 @@ it("ignores a stale in-flight snapshot instead of appending a duplicate segment"
                 { type: "text", text: "Hello world" },
                 {
                     type: "tool_call",
+                    id: "tool-a1-1",
                     name: "Bash",
                     status: "completed",
                     arguments: { command: "ls" },
@@ -543,6 +553,7 @@ it("ignores a stale in-flight snapshot instead of appending a duplicate segment"
                 { type: "text", text: "Hello wor" },
                 {
                     type: "tool_call",
+                    id: "tool-a1-1",
                     name: "Bash",
                     status: "running",
                     arguments: { command: "ls" },
@@ -574,6 +585,7 @@ it("keeps streamed reasoning when a snapshot trims it while adding a tool call",
         runId: "r1",
         messageId: "a1",
         blockIndex: 0,
+        offset: 2,
         append: "inking",
     });
     // The next snapshot carries an empty reasoning block — providers trim the
@@ -585,7 +597,13 @@ it("keeps streamed reasoning when a snapshot trims it while adding a tool call",
             id: "a1",
             content: [
                 { type: "reasoning", text: "" },
-                { type: "tool_call", name: "Bash", status: "running", arguments: {} },
+                {
+                    type: "tool_call",
+                    id: "tool-a1-1",
+                    name: "Bash",
+                    status: "running",
+                    arguments: {},
+                },
             ],
         }),
     });
@@ -607,6 +625,7 @@ it("adds a second same-named tool call as its own row without disturbing the fir
     });
     const first = {
         type: "tool_call" as const,
+        id: "tool-a1-1",
         name: "Bash",
         status: "completed" as const,
         arguments: { command: "first" },
@@ -626,6 +645,7 @@ it("adds a second same-named tool call as its own row without disturbing the fir
                 first,
                 {
                     type: "tool_call",
+                    id: "tool-a1-2",
                     name: "Bash",
                     status: "running",
                     arguments: { command: "second" },
@@ -782,7 +802,13 @@ it("does not duplicate a streaming segment when a stale snapshot buffers during 
                     id: "a1",
                     content: [
                         { type: "text", text: "Hello world" },
-                        { type: "tool_call", name: "Bash", status: "completed", arguments: {} },
+                        {
+                            type: "tool_call",
+                            id: "tool-a1-1",
+                            name: "Bash",
+                            status: "completed",
+                            arguments: {},
+                        },
                     ],
                 }),
             ],
@@ -806,7 +832,13 @@ it("does not duplicate a streaming segment when a stale snapshot buffers during 
             id: "a1",
             content: [
                 { type: "text", text: "Hello wor" },
-                { type: "tool_call", name: "Bash", status: "running", arguments: {} },
+                {
+                    type: "tool_call",
+                    id: "tool-a1-1",
+                    name: "Bash",
+                    status: "running",
+                    arguments: {},
+                },
             ],
         }),
     });
@@ -832,7 +864,13 @@ it("does not duplicate a streaming segment when a stale snapshot buffers during 
             id: "a1",
             content: [
                 { type: "text", text: "Para" },
-                { type: "tool_call", name: "Bash", status: "running", arguments: {} },
+                {
+                    type: "tool_call",
+                    id: "tool-a1-1",
+                    name: "Bash",
+                    status: "running",
+                    arguments: {},
+                },
             ],
         }),
         runId: "r1",
@@ -853,7 +891,13 @@ it("does not duplicate a streaming segment when a stale snapshot buffers during 
             id: "a1",
             content: [
                 { type: "text", text: "Para" },
-                { type: "tool_call", name: "Bash", status: "running", arguments: {} },
+                {
+                    type: "tool_call",
+                    id: "tool-a1-1",
+                    name: "Bash",
+                    status: "running",
+                    arguments: {},
+                },
             ],
         }),
     });
@@ -868,6 +912,7 @@ it("does not duplicate a streaming segment when a stale snapshot buffers during 
                         { type: "text", text: "Para" },
                         {
                             type: "tool_call",
+                            id: "tool-a1-1",
                             name: "Bash",
                             status: "completed",
                             arguments: {},

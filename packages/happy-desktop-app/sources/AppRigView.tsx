@@ -100,7 +100,9 @@ import {
     RigActivityPanel,
     RigControlMenu,
     fileTreeBuild,
+    fileTreeExpanded,
     fileTreeFlatten,
+    fileNameCompare,
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     RigCreateSessionDialog,
@@ -1731,10 +1733,16 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // this one, while file and terminal actions read the write refusal above it.
     const openGroupChatRefusal = access.conversationRefusal;
     const openGroup = openGroupFind(rows, props.groupId);
+    // Whether another session may be added here. A workspace whose checkout is
+    // still being prepared already has the one it was made with and can take no
+    // second: Rig does not queue an agent against a checkout that is not there,
+    // so the control is disabled until it arrives rather than offering a tab
+    // that could not open.
     const sessionCreateAvailable =
         openGroup?.create !== undefined &&
         connectionRefusal === undefined &&
-        openGroupChatRefusal === undefined;
+        openGroupChatRefusal === undefined &&
+        workspaceLifecyclePhase(openGroup.lifecycle) !== "creating";
     const workspaceCreateProjectId = props.workspaceCreateProjectId;
     // The worktree phase this screen has to say something about. `ready` and a
     // project both leave it absent: there is nothing to interrupt the reader
@@ -1821,16 +1829,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
               ...(detachedConversation?.running ? { busy: true } : {}),
           }
         : undefined;
-    // Whether this group has anything to put in a tab strip at all. A group with
-    // nothing open in it shows its composer alone; everywhere else the strip is
-    // the frame, and a group that still has no session puts that same composer
-    // underneath it rather than beside it.
-    const groupTabbedPane =
-        openGroup !== undefined &&
-        (openGroup.conversations.length > 0 ||
-            groupFileTabs.length > 0 ||
-            mainTools.length > 0 ||
-            detachedConversationTab !== undefined);
     // Sessions without a list position are delegated children. They remain
     // readable by id, but their runner owns their input and configuration.
     // A workspace that cannot take a chat cannot take a message into an old
@@ -2141,6 +2139,10 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         onToggle={(path, expanded) =>
                             props.workspace.fileTreeExpandedUpdate(path, expanded)
                         }
+                        onDirectoryPrefetch={(path) =>
+                            props.workspace.fileTreeDirectoryPrefetch(path)
+                        }
+                        onLoadMore={(path) => props.workspace.fileTreeLoadMore(path)}
                         onViewTransfer={(viewId) =>
                             props.workspace.viewPlacementUpdate(viewId, "main")
                         }
@@ -2365,51 +2367,27 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             {...(openGroup.path ? { path: openGroup.path } : {})}
                             phase={openGroupPhase}
                         />
-                    ) : openGroup.conversations.length === 0 &&
-                      workspace.groupComposer &&
-                      !groupTabbedPane ? (
-                        // A group with nothing in it gets no tab strip — an empty
-                        // strip is a control that does nothing but take a row —
-                        // and a live composer rather than a button: the first
-                        // message is what starts the conversation, so opening a
-                        // project or worktree to type into never leaves an empty
-                        // session behind. Once there is a strip the same composer
-                        // moves under it, so it is never drawn twice.
-                        <RigGroupComposer
-                            composer={workspace.groupComposer}
-                            {...(workspace.groupSessionDraft
-                                ? { draftMenus: workspace.groupSessionDraft.menus }
-                                : {})}
-                            focusOnType
-                            groupId={openGroup.id}
-                            groupName={openGroup.name}
-                            rigOnline={rigOnline}
-                            {...(connectionRefusal === undefined
-                                ? {}
-                                : { unavailable: connectionRefusal })}
-                            workspace={props.workspace}
-                        />
-                    ) : null}
-                    {groupTabbedPane ? (
+                    ) : (
                         <TabbedPane
                             actions={
                                 // A tab is a session, so adding one creates it
                                 // directly in the addressed project or worktree
-                                // instead of opening the task form — and a
-                                // workspace that cannot host a session offers no
-                                // button, because the only thing it could do is
-                                // fail.
-                                sessionCreateAvailable ? (
-                                    <Button
-                                        aria-label="Create a session in this project"
-                                        icon="plus"
-                                        iconOnly
-                                        onClick={() => groupConversationCreate(openGroup)}
-                                        shortcut={APP_SHORTCUTS.sessionCreate}
-                                        size="small"
-                                        variant="ghost"
-                                    />
-                                ) : undefined
+                                // instead of opening the task form. A workspace
+                                // that cannot host one keeps the control and
+                                // disables it: the strip is the same strip
+                                // throughout a checkout being prepared, so the
+                                // button goes grey for a moment rather than
+                                // appearing out of nowhere when it arrives.
+                                <Button
+                                    aria-label="Create a session in this project"
+                                    disabled={!sessionCreateAvailable}
+                                    icon="plus"
+                                    iconOnly
+                                    onClick={() => groupConversationCreate(openGroup)}
+                                    shortcut={APP_SHORTCUTS.sessionCreate}
+                                    size="small"
+                                    variant="ghost"
+                                />
                             }
                             activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"
@@ -2584,7 +2562,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 />
                             </TransferZone>
                         </TabbedPane>
-                    ) : null}
+                    )}
                 </>
             ) : (
                 <>
@@ -3848,6 +3826,58 @@ function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
     };
 }
 
+/** Projects only the directory pages the workspace store has materialized. */
+function workspaceFileTreeNodes(
+    files: RigWorkspaceFiles | undefined,
+    directoryPath: string,
+    expansion: FileTreeExpansion,
+    changesByPath: ReadonlyMap<string, OpenGroup["changes"][number]>,
+    depth = 0,
+): FileTreeNode[] {
+    const directory = files?.directories.get(directoryPath);
+    if (directory === undefined) return [];
+    const entries = [...directory.entries].sort((left, right) => {
+        if (left.kind !== right.kind) return left.kind === "directory" ? -1 : 1;
+        return fileNameCompare(left.name, right.name);
+    });
+    return entries.map((entry) => {
+        const change = changesByPath.get(entry.path);
+        const facts = {
+            ...(change?.status === undefined ? {} : { gitStatus: change.status }),
+            ...(change?.addedLines === undefined ? {} : { addedLines: change.addedLines }),
+            ...(change?.deletedLines === undefined ? {} : { deletedLines: change.deletedLines }),
+        };
+        if (entry.kind === "file")
+            return {
+                id: entry.path,
+                kind: "file" as const,
+                name: entry.name,
+                ...facts,
+            };
+        const expanded = fileTreeExpanded(expansion, entry.path, depth);
+        const child = files?.directories.get(entry.path);
+        return {
+            id: entry.path,
+            kind: "directory" as const,
+            name: entry.name,
+            expanded,
+            ...(expanded
+                ? {
+                      children: workspaceFileTreeNodes(
+                          files,
+                          entry.path,
+                          expansion,
+                          changesByPath,
+                          depth + 1,
+                      ),
+                      hasMore: child?.loading !== true && child?.nextCursor !== undefined,
+                      loading: child === undefined || (child.loading && child.entries.length === 0),
+                  }
+                : {}),
+        };
+    });
+}
+
 function RigPanelBody(props: {
     activity?: RigConversationSnapshot;
     browserContent?: BrowserContentRenderer;
@@ -3883,6 +3913,8 @@ function RigPanelBody(props: {
     onPanelFileClose: () => void;
     onScopeChange: (scope: RigFileScope) => void;
     onToggle: (path: string, expanded: boolean) => void;
+    onDirectoryPrefetch: (path: string) => void;
+    onLoadMore: (path: string) => void;
     /** Moves one view out of this panel and into the main content. */
     onViewTransfer: (viewId: string) => void;
     /** Closes one panel view through the same route used by Cmd-W. */
@@ -3900,36 +3932,34 @@ function RigPanelBody(props: {
     workspaceFilesLoading: boolean;
 }) {
     const all = props.scope === "all";
-    // A checkout can hold twenty thousand paths, and putting them in reading
-    // order costs a locale comparison per step. That is affordable once per
-    // listing and not affordable once per keystroke elsewhere in the window, so
-    // the entries are held against the two store values they are actually built
-    // from. Everything downstream is then a walk rather than a sort.
-    const workspacePaths = props.workspaceFiles?.paths;
-    const entries: FileTreeBuildEntry[] = useMemo(() => {
-        const changesByPath = new Map(props.changes.map((change) => [change.path, change]));
-        return all
-            ? (workspacePaths ?? []).map((path: string) => {
-                  const change = changesByPath.get(path);
-                  return change ? changeEntry(change) : { path };
-              })
-            : props.changes.map(changeEntry);
-    }, [all, props.changes, workspacePaths]);
-    // The whole checkout lands showing its top level and what is directly
-    // inside it. A column of shut folders makes the reader open three of them
-    // before the listing says anything a flat list would not have said sooner.
+    const entries: FileTreeBuildEntry[] = useMemo(
+        () => props.changes.map(changeEntry),
+        [props.changes],
+    );
     const expansion: FileTreeExpansion = useMemo(
-        () => ({ opened: props.expanded, closed: props.collapsed, defaultDepth: 1 }),
-        [props.expanded, props.collapsed],
+        () => ({
+            opened: props.expanded,
+            closed: props.collapsed,
+            // All Files starts closed because every disclosure is a real daemon
+            // read. Changes is already complete in memory and can open one level.
+            defaultDepth: all ? 0 : 1,
+        }),
+        [all, props.expanded, props.collapsed],
+    );
+    const changesByPath = useMemo(
+        () => new Map(props.changes.map((change) => [change.path, change])),
+        [props.changes],
     );
     const nodes: FileTreeNode[] = useMemo(
         () =>
-            props.layout === "tree" ? fileTreeBuild(entries, expansion) : fileTreeFlatten(entries),
-        [entries, expansion, props.layout],
+            all
+                ? workspaceFileTreeNodes(props.workspaceFiles, "", expansion, changesByPath)
+                : props.layout === "tree"
+                  ? fileTreeBuild(entries, expansion)
+                  : fileTreeFlatten(entries),
+        [all, changesByPath, entries, expansion, props.layout, props.workspaceFiles],
     );
     const loading = all && props.workspaceFilesLoading;
-    // The listing's own total, summed from the rows it is about to draw, so the
-    // number over the list and the numbers in it can never disagree.
     const addedLines = props.changes.reduce((sum, change) => sum + (change.addedLines ?? 0), 0);
     const deletedLines = props.changes.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0);
     const count = entries.length;
@@ -4080,8 +4110,8 @@ function RigPanelBody(props: {
                     />
                     {props.panel.activeViewId === "files" ? (
                         <FileBrowser
-                            // The whole-checkout listing is not a diff, so it states
-                            // how many files it holds and nothing about lines.
+                            // Only Changes has a complete total and line delta;
+                            // All Files stays visually focused on its lazy tree.
                             {...(all ? {} : { addedLines, deletedLines })}
                             count={count}
                             emptyLabel={all ? "No files." : "No changed files."}
@@ -4098,12 +4128,9 @@ function RigPanelBody(props: {
                                           "Rig must reconnect before opening files.",
                                   }
                                 : {})}
-                            // A truncated listing says so rather than passing off
-                            // part of a repository as the whole of it.
-                            {...(all && props.workspaceFiles?.truncated
-                                ? { note: "Showing the first 20,000 files." }
-                                : {})}
                             onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
+                            onDirectoryPrefetch={props.onDirectoryPrefetch}
+                            onLoadMore={props.onLoadMore}
                             {...(props.rigAvailability === undefined
                                 ? { onOpen: props.onFileOpen }
                                 : {})}

@@ -256,19 +256,21 @@ export interface RigSessionListStore {
     groupConversationRefusal(groupId: RigGroupId): string | undefined;
 
     /**
-     * Starts the first conversation in a worktree once its checkout is ready,
-     * resolving with that conversation's address. It is split from
-     * `worktreeCreate` so addressing the worktree does not wait on the host at
-     * all.
+     * Starts the first conversation in a worktree, resolving at once with that
+     * conversation's address. It is split from `worktreeCreate` so addressing
+     * the worktree does not wait on the host at all.
      *
-     * Happy waits until the catalog reports a ready, present workspace with a
-     * canonical nonempty path. The daemon does not queue an agent created
-     * against an initializing checkout, so creating it earlier would open a
-     * session that can never become usable.
+     * The address is real from the first moment: the connection names the agent
+     * itself and announces it locally, so the workspace has its tab, its id, and
+     * its composer while the checkout is still being prepared. The daemon does
+     * not queue an agent created against an initializing checkout, so the
+     * request alone waits for the catalog to report a ready, present workspace
+     * at a canonical nonempty path — and everything addressed to the session
+     * meanwhile queues behind that request. A checkout that never arrives
+     * withdraws the session rather than leaving one that can never run.
      *
      * `create` configures that conversation. Its `cwd` and `worktreeId` are
-     * supplied here from the named checkout, since only this call knows where
-     * the host put it.
+     * supplied here, since only this call knows which checkout is meant.
      */
     worktreeSessionStart(
         worktreeId: RigWorktreeId,
@@ -902,6 +904,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const sessionCreateRun = async (
         input: RigSessionCreateInput,
+        checkoutReady?: Promise<unknown>,
     ): Promise<RigSessionLocation | undefined> => {
         const worktree =
             input.worktreeId === undefined
@@ -915,21 +918,24 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         if (groupId === undefined)
             throw new UserError("That project or workspace is no longer listed.");
         const sessionId = connectMutationTrack(
-            deps.connectActions.createSession({
-                cwd: input.cwd,
-                ...(input.providerId === undefined ? {} : { providerId: input.providerId }),
-                ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
-                ...(input.effort === undefined ? {} : { effort: input.effort }),
-                ...(input.serviceTier === undefined ? {} : { serviceTier: input.serviceTier }),
-                ...(input.permissionMode === undefined
-                    ? {}
-                    : { permissionMode: input.permissionMode }),
-                ...(project === undefined ? {} : { projectId: project.id }),
-                ...(input.worktreeId === undefined ? {} : { workspaceId: input.worktreeId }),
-                ...(project?.requiredSecretKind === "github"
-                    ? { gitSecret: { kind: "github" as const } }
-                    : {}),
-            }),
+            deps.connectActions.createSession(
+                {
+                    cwd: input.cwd,
+                    ...(input.providerId === undefined ? {} : { providerId: input.providerId }),
+                    ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
+                    ...(input.effort === undefined ? {} : { effort: input.effort }),
+                    ...(input.serviceTier === undefined ? {} : { serviceTier: input.serviceTier }),
+                    ...(input.permissionMode === undefined
+                        ? {}
+                        : { permissionMode: input.permissionMode }),
+                    ...(project === undefined ? {} : { projectId: project.id }),
+                    ...(input.worktreeId === undefined ? {} : { workspaceId: input.worktreeId }),
+                    ...(project?.requiredSecretKind === "github"
+                        ? { gitSecret: { kind: "github" as const } }
+                        : {}),
+                },
+                checkoutReady,
+            ),
         ) as RigSessionId;
         const location = { groupId, sessionId };
         output({ type: "sessionCreated", location });
@@ -1053,13 +1059,24 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }),
         worktreeSessionStart: (worktreeId, create) =>
             mutate(async () => {
-                const pathed = await worktreePathed(worktreeId);
-                if (disposed) return undefined;
-                return sessionCreateRun({
-                    ...create,
-                    cwd: pathed.path,
-                    worktreeId: pathed.id,
-                });
+                // The session is named now and requested when the checkout is
+                // there. Waiting here instead would leave the reader looking at
+                // a workspace with no tab in it for as long as the checkout
+                // takes, and then rebuild the surface around them when it
+                // arrived. The daemon is still never asked for an agent in a
+                // workspace it is preparing: the wait moved behind the name
+                // rather than in front of it.
+                const pathed = worktreePathed(worktreeId);
+                // The wait now belongs to the creation rather than to this
+                // call, so it is marked handled here: a create refused before
+                // it is passed on must not leave this rejection with nobody
+                // listening to it.
+                void pathed.catch(() => undefined);
+                // Whatever the host has already said about where the checkout
+                // is going. It is the workspace's id that names the agent's
+                // home, so a checkout with no path yet costs nothing.
+                const known = catalog.worktrees.find((entry) => entry.id === worktreeId);
+                return sessionCreateRun({ ...create, cwd: known?.path ?? "", worktreeId }, pathed);
             }),
         worktreeArchive: (projectId, worktreeId) =>
             mutate(async () => {

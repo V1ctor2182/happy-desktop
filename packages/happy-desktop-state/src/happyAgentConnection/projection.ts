@@ -533,16 +533,11 @@ function projectMessage(
                 ...base,
                 id,
                 kind: "tool_call",
-                toolCallId: id,
+                toolCallId: block.id,
                 name: block.name,
                 arguments: block.arguments ?? {},
                 argumentsComplete: true,
-                status:
-                    block.status === "completed"
-                        ? "succeeded"
-                        : block.status === "failed"
-                          ? "failed"
-                          : "running",
+                status: projectToolStatus(block.status, runStatus),
                 ...(block.result === undefined ? {} : { result: stringify(block.result) }),
                 ...(block.presentation === undefined
                     ? {}
@@ -564,12 +559,7 @@ function projectMessage(
                     replacedMessages: block.replacedMessageIds.length,
                 },
                 argumentsComplete: true,
-                status:
-                    block.status === "completed"
-                        ? "succeeded"
-                        : block.status === "failed"
-                          ? "failed"
-                          : "running",
+                status: projectToolStatus(block.status, runStatus),
                 presentation: {
                     kind: "compaction",
                     trigger: block.trigger,
@@ -581,6 +571,16 @@ function projectMessage(
         }
     }
     return elements;
+}
+
+function projectToolStatus(
+    status: "running" | "completed" | "failed",
+    runStatus: Run["status"],
+): "running" | "succeeded" | "failed" | "interrupted" {
+    if (status === "completed") return "succeeded";
+    if (status === "failed") return "failed";
+    if (runStatus === "running") return "running";
+    return runStatus === "failed" ? "failed" : "interrupted";
 }
 
 function projectRunEnd(run: Run): Extract<ChatElement, { kind: "group_end" }> | undefined {

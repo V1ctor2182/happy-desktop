@@ -397,6 +397,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             }
         },
         async getMessages(agentId: string, query: MessageHistoryQuery = {}, ...rest: unknown[]) {
+            const cursor = latestCursor;
             await record("getMessages", [agentId, query, ...rest]);
             const history = historyOf(agentId);
             let runs = [...history.runs].sort(
@@ -406,9 +407,10 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (query.before !== undefined) {
                 const boundary = runs.findIndex((run) => run.id === query.before);
                 runs = boundary < 0 ? [] : runs.slice(0, boundary);
-                return { runs, hasMore: false };
+                return { cursor, runs, hasMore: false };
             }
             return {
+                cursor,
                 runs,
                 hasMore: hasMore.get(agentId) ?? false,
             };

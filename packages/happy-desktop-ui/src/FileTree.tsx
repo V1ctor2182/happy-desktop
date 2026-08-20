@@ -79,6 +79,8 @@ export type FileTreeProps = {
      * out what the row was showing at the time.
      */
     onToggle?: (id: string, expanded: boolean) => void;
+    /** Directory hover/focus intent, used by lazy callers to warm its first page. */
+    onDirectoryPrefetch?: (id: string) => void;
     /** Directory paging request (the "Show more" affordance). */
     onLoadMore?: (id: string) => void;
     /** Why file-row selection/opening is unavailable while directory disclosure remains local. */
@@ -456,6 +458,7 @@ interface FileTreeRowViewProps {
     onSelect?: (id: string, modifiers: FileTreeSelectModifiers) => void;
     onOpen?: (id: string) => void;
     onToggle?: (id: string, expanded: boolean) => void;
+    onDirectoryPrefetch?: (id: string) => void;
     onLoadMore?: (id: string) => void;
     filesUnavailable?: string;
     onFocusRow: (id: string) => void;
@@ -475,7 +478,17 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
     // Pulled apart up front so the element callback is a plain local: handed
     // to `ref` straight off the props object, it makes every other property
     // read on that object look like a ref read during render.
-    const { row, onElement, onFocusRow, onKeyDown, onLoadMore, onOpen, onSelect, onToggle } = props;
+    const {
+        row,
+        onDirectoryPrefetch,
+        onElement,
+        onFocusRow,
+        onKeyDown,
+        onLoadMore,
+        onOpen,
+        onSelect,
+        onToggle,
+    } = props;
     const node = row.node;
     const directory = node.kind === "directory";
     const status = node.gitStatus ? GIT_STATUS[node.gitStatus] : undefined;
@@ -553,8 +566,14 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                 if (row.kind === "entry" && !directory && props.filesUnavailable === undefined)
                     onOpen?.(node.id);
             }}
-            onFocus={() => onFocusRow(row.id)}
+            onFocus={() => {
+                onFocusRow(row.id);
+                if (row.kind === "entry" && directory) onDirectoryPrefetch?.(node.id);
+            }}
             onKeyDown={onKeyDown}
+            onPointerEnter={() => {
+                if (row.kind === "entry" && directory) onDirectoryPrefetch?.(node.id);
+            }}
             ref={onElement}
             title={!directory ? props.filesUnavailable : undefined}
             role="treeitem"
@@ -644,6 +663,7 @@ export function FileTree(props: FileTreeProps) {
         "onSelect",
         "onOpen",
         "onToggle",
+        "onDirectoryPrefetch",
         "onLoadMore",
         "filesUnavailable",
         "indent",
@@ -834,6 +854,7 @@ export function FileTree(props: FileTreeProps) {
             onFocusRow={focusedRowSet}
             filesUnavailable={local.filesUnavailable}
             onKeyDown={keyDown}
+            onDirectoryPrefetch={local.onDirectoryPrefetch}
             onLoadMore={local.onLoadMore}
             onOpen={local.onOpen}
             onSelect={local.onSelect}

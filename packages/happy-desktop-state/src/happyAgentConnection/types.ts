@@ -668,7 +668,19 @@ export interface RigConnection {
     };
     createWorkspace(input: CreateWorkspaceInput): MutationId;
     archiveWorkspace(projectId: string, workspaceId: string): MutationId;
-    createSession(input: CreateSessionInput): MutationId;
+    /**
+     * Names the agent and returns that name at once, so the session can be
+     * addressed and drawn before the daemon has been asked for it.
+     *
+     * `checkoutReady` holds the request itself back without holding the name
+     * back. The daemon will not take an agent into a workspace it is still
+     * preparing, so a session created with one is announced locally now and
+     * requested when that promise settles; rejecting it withdraws the session
+     * the way any refused creation is withdrawn. Everything else addressed to
+     * this agent — its draft, its first message — queues behind the creation
+     * either way, so a caller supplying it need do nothing else.
+     */
+    createSession(input: CreateSessionInput, checkoutReady?: Promise<unknown>): MutationId;
     markSessionRead(sessionId: string): MutationId;
     sendMessage(sessionId: string, message: string | SendMessageInput): MutationId;
     stopBackgroundProcess(sessionId: string, projectedProcessId: number): MutationId;
