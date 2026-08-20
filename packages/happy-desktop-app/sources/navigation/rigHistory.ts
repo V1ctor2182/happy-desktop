@@ -35,6 +35,11 @@ export interface RigHistoryPersistence {
  * The browser's stack can only be pushed onto and walked — an entry naming
  * something that stopped existing cannot be taken out of it, or even read. These
  * entries are an array, so such an entry is removed outright.
+ *
+ * Where the window has a Navigation API, each entry is mirrored as a real
+ * browser entry so the browser's own Back and Forward walk this stack; a mirror
+ * whose entry was removed is recognised by key and stepped over. Without one,
+ * the URL is rewritten in place and only this stack moves the window.
  */
 export interface RigRouterHistory extends RouterHistory {
     /**
@@ -111,22 +116,6 @@ function documentRoute(restored: RigHistoryDocument | undefined): RigRoute | und
 }
 
 /**
- * Mirrors the place into the document's URL, always in place. This window's
- * stack is the only one there is: growing a second one in the document would be
- * a stack we do not walk, cannot remove entries from, and would have to keep in
- * step with the one we own.
- */
-function urlSync(path: string): void {
-    if (typeof window === "undefined") return;
-    try {
-        window.history.replaceState(null, "", `#${path}`);
-    } catch {
-        // A document refusing a URL rewrite still navigates; only the address
-        // shown in developer tools goes stale.
-    }
-}
-
-/**
  * Creates the navigation stack for one window. Given somewhere to keep it, the
  * window reopens where it was left. The stored stack is parsed rather than
  * trusted, so a damaged record costs the reader their position and nothing else.
@@ -151,6 +140,22 @@ export function rigHistoryCreate(
     let states: LocationState[] = entries.map(() => stateOf());
     let index = initial.index;
 
+    // The browser-side mirror. Each entry's browser twin is named by the key
+    // the browser issued for it; an entry restored from persistence has none.
+    const nav = typeof window === "undefined" ? undefined : window.navigation;
+    let slots: (string | undefined)[] = entries.map(() => undefined);
+    // Mirrors whose entries were archived away: walked over, never shown.
+    const forgotten = new Set<string>();
+    // Raised around this module's own URL writes, so the navigate listener
+    // acts only on movement it did not cause.
+    let writing = false;
+    // URL writes wait for an in-flight browser traversal to land.
+    let landing: { readonly key: string } | undefined;
+    let mirrorWrites: { action: "push" | "replace"; path: string; state: LocationState }[] = [];
+    const ownTraversals = new Map<string, number>();
+    let browserDispose = (): void => {};
+    if (nav?.currentEntry) slots[index] = nav.currentEntry.key;
+
     const persist = (): void => {
         if (!persistence) return;
         // The window kept has to contain the cursor: trimming past it would
@@ -162,8 +167,176 @@ export function rigHistoryCreate(
         });
     };
 
+    const urlWrite = (action: () => void): void => {
+        writing = true;
+        try {
+            action();
+        } catch {
+            // A document refusing a URL rewrite still navigates; only the
+            // address shown goes stale.
+        } finally {
+            writing = false;
+        }
+    };
+
+    const urlReplace = (path: string): void => {
+        if (typeof window === "undefined") return;
+        urlWrite(() => window.history.replaceState(null, "", `#${path}`));
+    };
+
+    const slotClaim = (at: number, key: string): void => {
+        const displaced = slots[at];
+        if (displaced !== undefined && displaced !== key) forgotten.add(displaced);
+        const previous = slots.indexOf(key);
+        if (previous !== -1 && previous !== at) slots[previous] = undefined;
+        slots[at] = key;
+        forgotten.delete(key);
+    };
+
+    const slotsForget = (removed: readonly (string | undefined)[]): void => {
+        for (const key of removed) if (key !== undefined) forgotten.add(key);
+    };
+
+    /** Drops browser keys that a branch-changing push or entry cap disposed. */
+    const mirrorPrune = (): void => {
+        if (!nav) return;
+        const present = new Set(nav.entries().map((entry) => entry.key));
+        for (let at = 0; at < slots.length; at++) {
+            const key = slots[at];
+            if (key !== undefined && !present.has(key)) slots[at] = undefined;
+        }
+        for (const key of forgotten) if (!present.has(key)) forgotten.delete(key);
+    };
+
+    const mirrorFlush = (): void => {
+        const writes = mirrorWrites;
+        mirrorWrites = [];
+        for (const write of writes) {
+            const at = states.indexOf(write.state);
+            if (at === -1) continue;
+            if (write.action === "push") mirrorPushAt(at, write.path);
+            else mirrorReplaceAt(at, write.path);
+        }
+        if (nav?.currentEntry?.key !== slots[index]) mirrorAlign();
+    };
+
+    const landingFail = (own: { readonly key: string }): void => {
+        if (landing !== own) return;
+        landing = undefined;
+        if (mirrorWrites.length > 0) mirrorFlush();
+        else mirrorReplaceAt(index, rigRoutePath(entries[index]));
+    };
+
+    /** Steps the browser to a mirror; false when the browser dropped it. */
+    const slotTraverse = (key: string, own?: { readonly key: string }): boolean => {
+        if (!nav) return false;
+        if (!nav.entries().some((entry) => entry.key === key)) return false;
+        const release = (): void => {
+            if (own === undefined) return;
+            const count = ownTraversals.get(key) ?? 0;
+            if (count <= 1) ownTraversals.delete(key);
+            else ownTraversals.set(key, count - 1);
+        };
+        if (own !== undefined) ownTraversals.set(key, (ownTraversals.get(key) ?? 0) + 1);
+        try {
+            const moved = nav.traverseTo(key);
+            if (own !== undefined) void moved.committed?.catch(() => landingFail(own));
+            const finished = moved.finished ?? moved.committed;
+            if (finished) void finished.then(release, release);
+            else release();
+            return true;
+        } catch {
+            release();
+            return false;
+        }
+    };
+
+    const mirrorReplaceAt = (at: number, path: string): void => {
+        if (nav?.currentEntry) {
+            const current = nav.currentEntry.key;
+            slotClaim(at, current);
+        }
+        urlReplace(path);
+        mirrorPrune();
+    };
+
+    /** Makes the current browser entry the mirror of one virtual entry. */
+    const mirrorReplace = (path: string): void => {
+        if (landing === undefined) mirrorReplaceAt(index, path);
+        else mirrorWrites.push({ action: "replace", path, state: states[index] });
+    };
+
+    const mirrorPushAt = (at: number, path: string): boolean => {
+        if (!nav) {
+            urlReplace(path);
+            return true;
+        }
+        // An address set from outside already made a browser entry holding
+        // this place; claim it rather than add a twin behind it.
+        const current = nav.currentEntry;
+        const standing = current?.url
+            ? rigRoutePathParse(new URL(current.url).hash.slice(1))
+            : undefined;
+        if (
+            current !== null &&
+            !slots.includes(current.key) &&
+            standing !== undefined &&
+            rigRouteSame(standing, entries[at])
+        ) {
+            slotClaim(at, current.key);
+            mirrorPrune();
+            return true;
+        }
+        const before = current?.key;
+        urlWrite(() => window.history.pushState(null, "", `#${path}`));
+        mirrorPrune();
+        const after = nav.currentEntry;
+        if (after === null || after.key === before) return false;
+        slotClaim(at, after.key);
+        return true;
+    };
+
+    const mirrorPush = (path: string): boolean | undefined => {
+        if (landing !== undefined) {
+            mirrorWrites.push({ action: "push", path, state: states[index] });
+            return undefined;
+        }
+        return mirrorPushAt(index, path);
+    };
+
+    const mirrorSurvivor = (from: number, here: number): string | undefined => {
+        if (!nav) return undefined;
+        const all = nav.entries();
+        const direction = from < here ? -1 : 1;
+        for (let at = from; at >= 0 && at < all.length; at += direction)
+            if (slots.includes(all[at].key)) return all[at].key;
+        for (let at = from - direction; at >= 0 && at < all.length; at -= direction)
+            if (slots.includes(all[at].key)) return all[at].key;
+        return undefined;
+    };
+
+    /** Brings the browser to where this stack stands after a local move. */
+    const mirrorAlign = (): void => {
+        const path = rigRoutePath(entries[index]);
+        if (!nav) {
+            urlReplace(path);
+            return;
+        }
+        const current = nav.currentEntry?.key;
+        const slot = slots[index];
+        if (slot !== undefined && slot !== current) {
+            if (landing?.key === slot) return;
+            const own = { key: slot };
+            landing = own;
+            if (slotTraverse(slot, own)) return;
+            if (landing === own) landing = undefined;
+            slots[index] = undefined;
+        }
+        mirrorReplace(path);
+    };
+
     const settle = (): void => {
-        urlSync(rigRoutePath(entries[index]));
+        mirrorAlign();
         persist();
     };
 
@@ -176,6 +349,7 @@ export function rigHistoryCreate(
             settle();
         },
         createHref: (path) => `#${path}`,
+        destroy: () => browserDispose(),
         forward: () => {
             index = Math.min(index + 1, entries.length - 1);
             settle();
@@ -195,64 +369,199 @@ export function rigHistoryCreate(
         },
         pushState: (path, state) => {
             // Somewhere new from part-way back abandons what was ahead.
+            let removedSlots: (string | undefined)[] = [];
             if (index < entries.length - 1) {
                 entries.splice(index + 1);
                 states.splice(index + 1);
+                removedSlots = slots.splice(index + 1);
             }
             entries.push(routeOf(path));
             states.push(state as LocationState);
+            slots.push(undefined);
             index = entries.length - 1;
-            settle();
+            const result = mirrorPush(path);
+            if (result !== true) slotsForget(removedSlots);
+            persist();
         },
         replaceState: (path, state) => {
+            const previousState = states[index];
             entries[index] = routeOf(path);
             states[index] = state as LocationState;
-            settle();
+            for (const write of mirrorWrites)
+                if (write.state === previousState) write.state = states[index];
+            mirrorReplace(path);
+            persist();
         },
         setBlockers: (next) => {
             blockers = next;
         },
     });
 
-    // An address arriving in the URL after startup is the same request as one
-    // sitting there at startup. Only an address from outside reaches here, since
-    // `replaceState` raises no such event, so it is honoured rather than
-    // mirrored back — otherwise the URL is writable and inert.
-    if (typeof window !== "undefined") {
-        window.addEventListener("hashchange", () => {
+    // Traversals identify their virtual destination before commitment. URL
+    // writes wait for `currententrychange`; outside addresses are adopted there.
+    if (nav) {
+        const navigate = (event: NavigateEvent): void => {
+            if (writing || !event.destination.sameDocument) return;
+            if (event.navigationType !== "traverse") return;
+            const key = event.destination.key;
+            if (ownTraversals.has(key)) return;
+            if (key === landing?.key) return;
+            const at = slots.indexOf(key);
+            if (at === index) return;
+            if (at !== -1) {
+                const own = { key };
+                landing = own;
+                event.signal.addEventListener("abort", () => landingFail(own), { once: true });
+                const step = at - index;
+                index = at;
+                persist();
+                history.notify({ index: step, type: "GO" });
+                return;
+            }
+            if (!forgotten.has(key)) return;
+
+            // Archived: step over the ghost to the nearest surviving mirror,
+            // preferring the direction of travel.
+            const target = mirrorSurvivor(
+                event.destination.index,
+                nav.currentEntry?.index ?? event.destination.index,
+            );
+            if (!event.cancelable) return;
+            event.preventDefault();
+            if (target !== undefined && target !== nav.currentEntry?.key)
+                queueMicrotask(() => slotTraverse(target));
+        };
+
+        const currentEntryChange = (event: NavigationCurrentEntryChangeEvent): void => {
+            if (writing) return;
+            mirrorPrune();
+            const current = nav.currentEntry;
+            if (current === null) return;
+
+            const landed = landing?.key === current.key;
+            if (landed) {
+                landing = undefined;
+                if (mirrorWrites.length > 0) {
+                    mirrorFlush();
+                    return;
+                }
+            }
+
+            if (ownTraversals.has(current.key) && current.key !== slots[index]) {
+                mirrorAlign();
+                return;
+            }
+
+            if (forgotten.has(current.key)) {
+                const target = mirrorSurvivor(current.index, event.from.index);
+                if (target !== undefined && target !== current.key) {
+                    slotTraverse(target);
+                } else if (target === undefined) {
+                    mirrorReplace(rigRoutePath(entries[index]));
+                }
+                return;
+            }
+
+            const route = current.url
+                ? rigRoutePathParse(new URL(current.url).hash.slice(1))
+                : undefined;
+
+            // An outside replace reuses the physical key, so it replaces the
+            // virtual place too. Treating it as a push would create a twin.
+            if (event.navigationType === "replace") {
+                if (route !== undefined && !rigRouteSame(entries[index], route))
+                    history.replace(rigRoutePath(route));
+                else if (!slots.includes(current.key)) {
+                    slotClaim(index, current.key);
+                    persist();
+                }
+                return;
+            }
+
+            if (slots.includes(current.key)) return;
+            if (route === undefined) return;
+
+            // This committed browser entry predates this history instance or
+            // came from an outside hash write. Adopt its real key directly.
+            const same = rigRouteSame(entries[index], route);
+            if (index < entries.length - 1) {
+                entries.splice(index + 1);
+                states.splice(index + 1);
+                const removed = slots.splice(index + 1);
+                // A push already disposed its forward branch; a traversal did
+                // not, so those live browser entries become ghosts.
+                if (event.navigationType === "traverse") slotsForget(removed);
+            }
+            if (same) {
+                slotClaim(index, current.key);
+                persist();
+                history.notify({ type: "REPLACE" });
+                return;
+            }
+
+            entries.push(route);
+            states.push(stateOf());
+            slots.push(undefined);
+            index = entries.length - 1;
+            slotClaim(index, current.key);
+            persist();
+            history.notify({ type: "PUSH" });
+        };
+
+        nav.addEventListener("navigate", navigate);
+        nav.addEventListener("currententrychange", currentEntryChange);
+        browserDispose = () => {
+            nav.removeEventListener("navigate", navigate);
+            nav.removeEventListener("currententrychange", currentEntryChange);
+        };
+    } else if (typeof window !== "undefined") {
+        // An address arriving in the URL after startup is the same request as
+        // one sitting there at startup. Only an address from outside reaches
+        // here, since `replaceState` raises no such event.
+        const hashChange = (): void => {
             const route = rigRoutePathParse(window.location.hash.slice(1));
             // A hash naming no place, and the reflection of a step already
             // taken, are both nothing to act on.
             if (route === undefined || rigRouteSame(entries[index], route)) return;
             history.push(rigRoutePath(route));
-        });
+        };
+        window.addEventListener("hashchange", hashChange);
+        browserDispose = () => window.removeEventListener("hashchange", hashChange);
     }
 
     return Object.assign(history, {
         groupForget: (rigId: string, groupId: string): boolean => {
             const keptEntries: RigRoute[] = [];
             const keptStates: LocationState[] = [];
+            const keptSlots: (string | undefined)[] = [];
             let keptIndex = -1;
             for (let at = 0; at < entries.length; at++) {
                 const route = entries[at];
-                if (rigRouteInGroup(route, rigId, groupId)) continue;
+                const slot = slots[at];
+                if (rigRouteInGroup(route, rigId, groupId)) {
+                    if (slot !== undefined) forgotten.add(slot);
+                    continue;
+                }
                 // Removing what sat between two visits to one place would leave
                 // it twice in a row, and a Back that appears to do nothing.
                 const previous = keptEntries[keptEntries.length - 1];
                 if (previous === undefined || !rigRouteSame(previous, route)) {
                     keptEntries.push(route);
                     keptStates.push(states[at]);
-                }
+                    keptSlots.push(slot);
+                } else if (slot !== undefined) forgotten.add(slot);
                 if (at <= index) keptIndex = keptEntries.length - 1;
             }
             if (keptEntries.length === entries.length) return false;
             if (keptEntries.length === 0) {
                 entries = [RIG_ROUTE_HOME];
                 states = [stateOf()];
+                slots = [undefined];
                 index = 0;
             } else {
                 entries = keptEntries;
                 states = keptStates;
+                slots = keptSlots;
                 index = keptIndex === -1 ? 0 : keptIndex;
             }
             settle();
