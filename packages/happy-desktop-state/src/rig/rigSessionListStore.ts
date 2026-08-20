@@ -21,6 +21,7 @@ import {
     rigHappyAgentComputeRequest,
     rigHappyAgentProjectComputeProject,
 } from "./rigHappyAgentProject.js";
+import { rigWorkspaceGeneratedName } from "./rigWorkspaceNames.js";
 import type {
     RigGroupId,
     RigProjectCatalog,
@@ -1042,7 +1043,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                         // No base is named: a ref given here is taken as a
                         // deliberate choice and forked verbatim, while leaving
                         // it out has Happy Agent fork the project's trunk.
-                        name: "Workspace",
+                        name: rigWorkspaceGeneratedName(catalog, projectId),
                         projectId,
                         ...(project?.requiredSecretKind === "github"
                             ? { secret: { kind: "github" as const } }

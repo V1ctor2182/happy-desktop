@@ -8,8 +8,8 @@ export interface CopyButtonProps {
     /** What the button offers to copy, for example "Copy command". */
     readonly label: string;
     readonly style?: CSSProperties;
-    /** Exact text handed to the clipboard. */
-    readonly text: string;
+    /** Exact text handed to the clipboard, read lazily when deriving it is expensive. */
+    readonly text: string | (() => string);
 }
 
 /** How long the copied check stays before the button offers the copy again. */
@@ -28,7 +28,8 @@ export function CopyButton(props: CopyButtonProps) {
     const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const copy = async () => {
         try {
-            await navigator.clipboard.writeText(props.text);
+            const text = typeof props.text === "function" ? props.text() : props.text;
+            await navigator.clipboard.writeText(text);
             setCopied(true);
             if (copiedTimer.current !== undefined) clearTimeout(copiedTimer.current);
             copiedTimer.current = setTimeout(() => {

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { CopyButton } from "../../CopyButton";
 import { RigSettingsSection } from "./RigSettingsShell";
 
@@ -38,17 +39,55 @@ function logText(props: RigDebugLogPanelProps): string {
     return entries.join("\n\n");
 }
 
+const ESTIMATED_ENTRY_HEIGHT = 68;
+const ENTRY_GAP = 17;
+const CONTENT_INSET = 12;
+const SCROLLPORT_HEIGHT = 320;
+
+function discardedText(count: number): string {
+    return `… ${count.toLocaleString("en-US")} earlier ${count === 1 ? "entry" : "entries"} discarded from the retained buffer`;
+}
+
 /** Live, copyable connection and state diagnostics for one Rig. */
 export function RigDebugLogPanel(props: RigDebugLogPanelProps) {
-    const scrollport = useRef<HTMLPreElement>(null);
-    const text = logText(props);
+    const scrollport = useRef<HTMLDivElement>(null);
+    const following = useRef(true);
+    const discardedOffset = props.discardedEntries > 0 ? 1 : 0;
+    const itemCount = props.entries.length + discardedOffset;
     const lastEntryId = props.entries.at(-1)?.id;
-
-    // eslint-disable-next-line happy2-react/no-layout-effect -- incoming diagnostics change scrollHeight; the explicitly following log must reach its newest line before paint
+    const itemKey = (index: number): number | string =>
+        index < discardedOffset
+            ? "discarded"
+            : (props.entries[index - discardedOffset]?.id ?? index);
+    // TanStack Virtual deliberately owns mutable measurement functions. This
+    // leaf stays outside compiler memoization while its retained entries keep
+    // their stable ids and DOM identity.
+    // eslint-disable-next-line react-hooks/incompatible-library
+    const virtualizer = useVirtualizer({
+        anchorTo: "end",
+        count: itemCount,
+        directDomUpdates: true,
+        directDomUpdatesMode: "transform",
+        estimateSize: () => ESTIMATED_ENTRY_HEIGHT,
+        followOnAppend: true,
+        gap: ENTRY_GAP,
+        getItemKey: itemKey,
+        getScrollElement: () => scrollport.current,
+        initialOffset: () =>
+            CONTENT_INSET * 2 +
+            itemCount * ESTIMATED_ENTRY_HEIGHT +
+            Math.max(0, itemCount - 1) * ENTRY_GAP,
+        initialRect: { width: 0, height: SCROLLPORT_HEIGHT },
+        overscan: 4,
+        paddingEnd: CONTENT_INSET,
+        paddingStart: CONTENT_INSET,
+        scrollEndThreshold: ENTRY_GAP * 2,
+        useFlushSync: false,
+    });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a full retained buffer appends without changing its item count; the virtual scroll integration must follow that new keyed row before paint only while the reader remains at the end
     useLayoutEffect(() => {
-        const element = scrollport.current;
-        if (element) element.scrollTop = element.scrollHeight;
-    }, [lastEntryId]);
+        if (following.current) virtualizer.scrollToEnd();
+    }, [lastEntryId, virtualizer]);
 
     return (
         <RigSettingsSection
@@ -70,23 +109,47 @@ export function RigDebugLogPanel(props: RigDebugLogPanelProps) {
                     <CopyButton
                         data-happy-desktop-ui="rig-debug-log-copy"
                         label="Copy debug log"
-                        text={text}
+                        text={() => logText(props)}
                     />
                 </header>
-                <pre
+                <div
                     aria-label="Live Rig debug log"
                     aria-live="off"
                     className="happy2-rig-debug-log__scrollport"
                     data-happy-desktop-ui="rig-debug-log-scrollport"
+                    onScroll={() => {
+                        following.current = virtualizer.isAtEnd(ENTRY_GAP * 2);
+                    }}
                     ref={scrollport}
                     role="log"
                     // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the scrollable log needs a keyboard focus stop so arrow/Page keys can read retained output
                     tabIndex={0}
                 >
-                    <code className="happy2-rig-debug-log__content">
-                        {text || "Waiting for internal state events…"}
-                    </code>
-                </pre>
+                    <div className="happy2-rig-debug-log__content" ref={virtualizer.containerRef}>
+                        {itemCount === 0 ? (
+                            <code className="happy2-rig-debug-log__empty">
+                                Waiting for internal state events…
+                            </code>
+                        ) : (
+                            virtualizer.getVirtualItems().map((item) => {
+                                const entry = props.entries[item.index - discardedOffset];
+                                const text = entry
+                                    ? entryText(entry)
+                                    : discardedText(props.discardedEntries);
+                                return (
+                                    <pre
+                                        className="happy2-rig-debug-log__entry"
+                                        data-index={item.index}
+                                        key={item.key}
+                                        ref={virtualizer.measureElement}
+                                    >
+                                        <code>{text}</code>
+                                    </pre>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
             </section>
         </RigSettingsSection>
     );

@@ -83,11 +83,42 @@
 }
 
 .happy2-rig-debug-log__content {
-    display: block;
+    position: relative;
     min-height: 100%;
-    padding: 12px;
+    width: 100%;
     color: inherit;
     font: inherit;
     white-space: inherit;
     word-break: inherit;
+}
+
+/* Entries leave the flow because only the visible portion of the retained
+   log exists in the DOM; the virtualizer positions each row where the full
+   listing would have put it. */
+.happy2-rig-debug-log__entry {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 0;
+    padding: 0 12px;
+    color: inherit;
+    font: inherit;
+    white-space: inherit;
+    word-break: inherit;
+}
+
+.happy2-rig-debug-log__entry code,
+.happy2-rig-debug-log__empty {
+    color: inherit;
+    font: inherit;
+    white-space: inherit;
+    word-break: inherit;
+}
+
+.happy2-rig-debug-log__empty {
+    display: block;
+    padding: 12px;
 }
