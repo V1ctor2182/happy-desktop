@@ -199,74 +199,30 @@ describe("what a window keeps between runs", () => {
     });
 });
 
-describe("the browser's own back and forward", () => {
-    /**
-     * A real browser tab moving through the entries this window stamped. jsdom
-     * has no back/forward of its own, so the entry the browser landed on is put
-     * in place and `popstate` fired, which is exactly what a browser does.
-     */
-    function browserMovesTo(ticket: number) {
-        window.history.replaceState({ happyTicket: ticket }, "", "");
-        window.dispatchEvent(new PopStateEvent("popstate", { state: { happyTicket: ticket } }));
-    }
-
-    it("moves on the first press after the window navigated itself", () => {
-        const history = rigHistoryCreate({ nativeEntries: true });
-        history.push("/chats/r1");
-
-        browserMovesTo(0);
-
-        expect(stack(history)).toBe("/");
-    });
-
-    it("lands where a jump of several entries at once points", () => {
-        const history = rigHistoryCreate({ nativeEntries: true });
-        history.push("/chats/r1");
-        history.push("/chats/r1/g1");
-        history.push("/chats/r1/g1/c1");
-
-        browserMovesTo(1);
-        expect(stack(history)).toBe("/chats/r1");
-        browserMovesTo(3);
-        expect(stack(history)).toBe("/chats/r1/g1/c1");
-    });
-
-    it("cannot be sent off the end by an entry the archive outlived", () => {
-        const history = rigHistoryCreate({ nativeEntries: true });
-        history.push("/chats/r1");
-        history.push("/chats/r1/g1");
-        history.push("/chats/r1/g1/c1");
-        history.groupForget("r1", "g1");
-
-        // The browser still holds the entries the stack no longer has.
-        browserMovesTo(3);
-
-        expect(stack(history)).toBe("/chats/r1");
-        // And the window is still working afterwards rather than left pointing
-        // past the end of its own stack, which is a Back that throws instead of
-        // moving.
-        history.back();
-        expect(stack(history)).toBe("/");
-    });
-
-    it("ignores an entry this window never stamped", () => {
-        const history = rigHistoryCreate({ nativeEntries: true });
-        history.push("/chats/r1");
-
-        window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
-
-        expect(stack(history)).toBe("/chats/r1");
-    });
-
-    it("is not listened for at all in the desktop shell", () => {
+/**
+ * The document holds no second stack. Back and Forward are delivered to this
+ * window as a direction, so nothing the document raises is another way to move —
+ * and nothing this window does grows a browser entry that would then have to be
+ * kept in step with the array above.
+ */
+describe("the document's own history", () => {
+    it("is not a second way to move", () => {
         const history = rigHistoryCreate();
         history.push("/chats/r1");
 
-        browserMovesTo(0);
+        window.dispatchEvent(new PopStateEvent("popstate", { state: { happyTicket: 0 } }));
 
-        // The shell delivers back and forward itself; a stray document event is
-        // not a second way to move.
         expect(stack(history)).toBe("/chats/r1");
+    });
+
+    it("does not grow an entry per step this window takes", () => {
+        const before = window.history.length;
+        const history = rigHistoryCreate();
+        history.push("/chats/r1");
+        history.push("/chats/r1/g1");
+        history.push("/chats/r1/g1/c1");
+
+        expect(window.history.length).toBe(before);
     });
 });
 

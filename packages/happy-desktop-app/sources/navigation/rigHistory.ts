@@ -111,17 +111,15 @@ function documentRoute(restored: RigHistoryDocument | undefined): RigRoute | und
 }
 
 /**
- * Mirrors the place into the document's URL. A browser tab keeps one native
- * entry per step so its own Back and Forward have something to move between,
- * each stamped with its depth for `popstate` to read back. The desktop shell
- * supplies those inputs itself and grows no second stack.
+ * Mirrors the place into the document's URL, always in place. This window's
+ * stack is the only one there is: growing a second one in the document would be
+ * a stack we do not walk, cannot remove entries from, and would have to keep in
+ * step with the one we own.
  */
-function urlSync(path: string, step: "push" | "replace", ticket: number): void {
+function urlSync(path: string): void {
     if (typeof window === "undefined") return;
     try {
-        const url = `#${path}`;
-        if (step === "push") window.history.pushState({ happyTicket: ticket }, "", url);
-        else window.history.replaceState({ happyTicket: ticket }, "", url);
+        window.history.replaceState(null, "", `#${path}`);
     } catch {
         // A document refusing a URL rewrite still navigates; only the address
         // shown in developer tools goes stale.
@@ -137,8 +135,6 @@ export function rigHistoryCreate(
     options: {
         readonly persistence?: RigHistoryPersistence;
         readonly initialEntries?: readonly RigRoute[];
-        /** Keep a native entry per step, so a browser tab's buttons work. */
-        readonly nativeEntries?: boolean;
     } = {},
 ): RigRouterHistory {
     const persistence = options.persistence;
@@ -166,9 +162,8 @@ export function rigHistoryCreate(
         });
     };
 
-    const nativeEntries = options.nativeEntries ?? false;
-    const settle = (step: "push" | "replace" = "replace"): void => {
-        urlSync(rigRoutePath(entries[index]), nativeEntries ? step : "replace", index);
+    const settle = (): void => {
+        urlSync(rigRoutePath(entries[index]));
         persist();
     };
 
@@ -207,7 +202,7 @@ export function rigHistoryCreate(
             entries.push(routeOf(path));
             states.push(state as LocationState);
             index = entries.length - 1;
-            settle("push");
+            settle();
         },
         replaceState: (path, state) => {
             entries[index] = routeOf(path);
@@ -219,33 +214,15 @@ export function rigHistoryCreate(
         },
     });
 
-    // A browser tab's own buttons move through the entries `settle` stamped, and
-    // the stamp says where to stand — which is also what lands a long-press menu
-    // jumping several at once. It is clamped because the stack can have shrunk
-    // since, when a group was forgotten out from under it.
-    if (nativeEntries && typeof window !== "undefined") {
-        window.addEventListener("popstate", () => {
-            const state = window.history.state as { happyTicket?: unknown } | null;
-            if (typeof state?.happyTicket !== "number") return;
-            const moved = Math.min(Math.max(state.happyTicket, 0), entries.length - 1);
-            if (moved === index) return;
-            index = moved;
-            // The URL is already where the browser put it; only the record lags.
-            persist();
-            history.notify({ type: "REPLACE" });
-        });
-    }
-
     // An address arriving in the URL after startup is the same request as one
     // sitting there at startup. Only an address from outside reaches here, since
-    // `pushState`/`replaceState` raise no such event, so it is honoured rather
-    // than mirrored back — otherwise the URL is writable and inert.
+    // `replaceState` raises no such event, so it is honoured rather than
+    // mirrored back — otherwise the URL is writable and inert.
     if (typeof window !== "undefined") {
         window.addEventListener("hashchange", () => {
             const route = rigRoutePathParse(window.location.hash.slice(1));
             // A hash naming no place, and the reflection of a step already
-            // taken, are both nothing to act on. The second is what a browser's
-            // Back raises alongside the `popstate` answered above.
+            // taken, are both nothing to act on.
             if (route === undefined || rigRouteSame(entries[index], route)) return;
             history.push(rigRoutePath(route));
         });

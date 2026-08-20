@@ -654,12 +654,7 @@ if (mediaPreviewBridge) {
         // The local router outlives any single daemon connection, so it is created
         // here and the session store navigates through it when a conversation it
         // created should be opened.
-        const rigHistory = rigHistoryCreate({
-            // A browser tab's own buttons are real and need native entries to
-            // move between; the desktop shell sends directions over the bridge.
-            nativeEntries: window.happyDesktop === undefined,
-            persistence: desktopHistoryPersistence(),
-        });
+        const rigHistory = rigHistoryCreate({ persistence: desktopHistoryPersistence() });
         const rigRouter = rigRouterCreate(rigHistory);
         // The shell's Back and Forward arrive as a direction and are walked here.
         desktopBridge.navigationStepSubscribe((step) => {
