@@ -219,7 +219,14 @@ export function ConversationDock(props: ConversationDockProps) {
                         ? {}
                         : { focusKey: props.composerFocusKey })}
                     hint="Enter to send"
-                    mentions={mentionsOf(composer)}
+                    {...(composer.capabilities.mentions
+                        ? {
+                              mentions: mentionsOf(composer),
+                              ...(composer.mentionQuery === undefined
+                                  ? {}
+                                  : { mentionQuery: composer.mentionQuery }),
+                          }
+                        : {})}
                     footerControl={props.composerFooterControl}
                     modelControl={props.composerControls}
                     onAttachmentPreviewOpen={setPreviewAttachmentId}

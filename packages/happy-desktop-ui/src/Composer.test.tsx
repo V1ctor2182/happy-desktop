@@ -938,7 +938,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         .render(
             () => (
                 <MentionPicker
-                    mentions={mentions}
+                    mentions={[]}
                     data-testid="picker-empty"
                     onSelect={(agent) => picked.push(agent.id)}
                     query="zq"

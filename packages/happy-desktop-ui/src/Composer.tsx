@@ -119,8 +119,10 @@ export type MentionPickerProps = {
     "data-testid"?: string;
     /** Visible heading for the picker (default "Mentions"). */
     label?: string;
+    /** Exactly the candidates to show; whoever owns the query decides them. */
     mentions?: Mentionable[];
     onSelect: (mention: Mentionable) => void;
+    /** The token these candidates answer, named in the empty state. */
     query: string;
     style?: CSSProperties;
 };
@@ -131,14 +133,13 @@ function filterMentions(mentions: Mentionable[], query: string) {
         : mentions;
 }
 /**
- * Raised popover listing mention candidates, filtered by `query`. It spans the
+ * Raised popover listing the mention candidates it is given. It spans the
  * composer it belongs to and wears the command picker's geometry — quiet
  * section headings over one-line 32px rows — so `@` and `/` are one surface.
  */
 export function MentionPicker(props: MentionPickerProps) {
     const candidates = () => props.mentions ?? [];
-    const filtered = () => filterMentions(candidates(), props.query);
-    const activeId = () => props.activeId ?? filtered()[0]?.id;
+    const activeId = () => props.activeId ?? candidates()[0]?.id;
     const row = (mention: Mentionable) => (
         <button
             aria-selected={mention.id === activeId() ? "true" : "false"}
@@ -197,8 +198,8 @@ export function MentionPicker(props: MentionPickerProps) {
             >
                 {props.label ?? "Mentions"}
             </div>
-            {filtered().length > 0 ? (
-                filtered().map(row)
+            {candidates().length > 0 ? (
+                candidates().map(row)
             ) : (
                 <div
                     className="happy2-mention-picker__empty"
@@ -281,7 +282,21 @@ export type ComposerProps = {
     onFocusChange?: (focused: boolean) => void;
     /** Called when a mention is inserted from the picker. */
     onMentionSelect?: (mention: Mentionable) => void;
+    /**
+     * Mention candidates. Passing an array — even an empty one — is what makes
+     * this composer a mentioning one: the `@` action, the token detection, and
+     * the picker all follow the prop being present rather than the list having
+     * anything in it, so a list that is still being searched cannot take the
+     * affordance away.
+     */
     mentions?: Mentionable[];
+    /**
+     * The active `@` token when the owner detects it and searches for the
+     * candidates itself. Supplying it turns off the local name filter: the list
+     * already answers this token, and matching it again here would throw away
+     * everything the search matched some other way than by substring.
+     */
+    mentionQuery?: string;
     /** Visible heading above the mention candidates (default "Mentions"). */
     mentionPickerLabel?: string;
     /** Optional controlled model-selection control, rendered in the composer toolbar. */
@@ -451,7 +466,7 @@ export function Composer(props: ComposerProps) {
     const textareaEl = useRef<HTMLTextAreaElement>(null);
     const wasBusy = useRef(Boolean(props.disabled || props.pending));
     const [mentionStart, setMentionStart] = useState<number | null>(null);
-    const [mentionQuery, setMentionQuery] = useState("");
+    const [typedMentionQuery, setTypedMentionQuery] = useState("");
     const [activeIndex, setActiveIndex] = useState(0);
     /*
      * Which command Enter would run. It is an index rather than an id because
@@ -467,8 +482,13 @@ export function Composer(props: ComposerProps) {
     const restoreFocusAfterSend = useRef(false);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const busy = Boolean(props.disabled || props.pending);
+    const mentionsSupported = () => props.mentions !== undefined;
     const mentions = () => props.mentions ?? [];
-    const filtered = () => filterMentions(mentions(), mentionQuery);
+    const mentionQuery = () => props.mentionQuery ?? typedMentionQuery;
+    const filtered = () =>
+        props.mentionQuery === undefined
+            ? filterMentions(mentions(), typedMentionQuery)
+            : mentions();
     const mentionOpen = () => !busy && mentionStart !== null && mentions().length > 0;
     const activeMention = () => {
         const list = filtered();
@@ -553,7 +573,7 @@ export function Composer(props: ComposerProps) {
     };
     const closeMention = () => {
         setMentionStart(null);
-        setMentionQuery("");
+        setTypedMentionQuery("");
         setActiveIndex(0);
     };
     const closeEmoji = () => {
@@ -629,19 +649,25 @@ export function Composer(props: ComposerProps) {
         focusAt(nextCaret);
     };
     const detectMention = (el: HTMLTextAreaElement) => {
-        if (mentions().length === 0) return;
+        // Tracked whenever this composer mentions at all, not only while it has
+        // candidates in hand: the first `@` of a searched list is typed before
+        // any result exists, and the token it opened is what the picker needs
+        // once the results arrive.
+        if (!mentionsSupported()) return;
         const caret = el.selectionStart ?? el.value.length;
         const before = el.value.slice(0, caret);
-        const match = /(^|[\s([{])@([\w-]*)$/.exec(before);
+        // Everything up to the next space belongs to the token, so a path
+        // typed into a file mention keeps it open past its first slash.
+        const match = /(^|[\s([{])@(\S*)$/.exec(before);
         if (!match) {
             closeMention();
             return;
         }
         const query = match[2] ?? "";
         const start = caret - query.length - 1;
-        if (mentionStart !== start || mentionQuery !== query) setActiveIndex(0);
+        if (mentionStart !== start || typedMentionQuery !== query) setActiveIndex(0);
         setMentionStart(start);
-        setMentionQuery(query);
+        setTypedMentionQuery(query);
     };
     const selectMention = (mention: Mentionable) => {
         const el = textareaEl.current;
@@ -658,7 +684,7 @@ export function Composer(props: ComposerProps) {
     };
     const triggerMention = () => {
         const el = textareaEl.current;
-        if (!el || busy || mentions().length === 0) return;
+        if (!el || busy || !mentionsSupported()) return;
         closeEmoji();
         el.focus();
         const caret = el.selectionStart ?? props.value.length;
@@ -668,7 +694,7 @@ export function Composer(props: ComposerProps) {
         const next = before + insertion + props.value.slice(el.selectionEnd ?? caret);
         props.onValueChange(next);
         setMentionStart(caret + insertion.length - 1);
-        setMentionQuery("");
+        setTypedMentionQuery("");
         setActiveIndex(0);
         const nextCaret = caret + insertion.length;
         focusAt(nextCaret);
@@ -1060,7 +1086,7 @@ export function Composer(props: ComposerProps) {
                                 variant="ghost"
                             />
                         ) : null}
-                        {mentions().length > 0 ? (
+                        {mentionsSupported() ? (
                             <Button
                                 aria-label="Mention someone"
                                 disabled={busy}
@@ -1144,9 +1170,9 @@ export function Composer(props: ComposerProps) {
                         <MentionPicker
                             activeId={activeMention()?.id}
                             label={props.mentionPickerLabel}
-                            mentions={mentions()}
+                            mentions={filtered()}
                             onSelect={selectMention}
-                            query={mentionQuery}
+                            query={mentionQuery()}
                         />
                     </div>
                 ) : null}

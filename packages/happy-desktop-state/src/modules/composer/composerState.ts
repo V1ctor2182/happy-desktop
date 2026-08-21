@@ -279,17 +279,22 @@ export function composerStoreCreate(
             const previous = get();
             if (previous.text === text) return;
             const derived = draftDerive(text, previous.capabilities);
-            const mentionClosed = derived.mentionQuery !== previous.mentionQuery;
+            const mentionQueryChanged = derived.mentionQuery !== previous.mentionQuery;
+            // A narrowed token keeps the candidates it already has until the
+            // owner answers the new one. Emptying the list on every keystroke
+            // makes the picker blink out and back for as long as the reader is
+            // typing; the standing list is refined in place instead.
+            const mentionEnded = derived.mentionQuery === undefined;
             set({
                 text,
                 revision: previous.revision + 1,
                 submission: { status: "idle" },
                 textUpdatedAt: now(),
                 ...derived,
-                ...(mentionClosed ? { mentionCandidates: [] } : {}),
+                ...(mentionEnded ? { mentionCandidates: [] } : {}),
             });
             output({ type: "textUpdated", scopeId, text });
-            if (mentionClosed)
+            if (mentionQueryChanged)
                 output({ type: "mentionQueryUpdated", scopeId, query: derived.mentionQuery });
         },
 
