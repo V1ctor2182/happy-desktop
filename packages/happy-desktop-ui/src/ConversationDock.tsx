@@ -1,5 +1,4 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import type { ComposerSnapshot } from "happy-desktop-state";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
@@ -8,6 +7,7 @@ import { Composer, type Mentionable } from "./Composer";
 import type { ComposerAttachmentPreview } from "./ComposerAttachmentPreviews";
 import { Lightbox } from "./Lightbox";
 import { ModalOverlay } from "./ModalOverlay";
+import { WindowOverlay } from "./WindowOverlay";
 
 export type ConversationDockProps = {
     className?: string;
@@ -238,11 +238,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     value={composer.text}
                 />
             </div>
-            {mediaOverlay
-                ? typeof document === "undefined"
-                    ? mediaOverlay
-                    : createPortal(mediaOverlay, document.body)
-                : null}
+            {mediaOverlay ? <WindowOverlay>{mediaOverlay}</WindowOverlay> : null}
         </div>
     );
 }

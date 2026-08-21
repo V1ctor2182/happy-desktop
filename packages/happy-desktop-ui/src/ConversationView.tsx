@@ -40,6 +40,7 @@ import {
 } from "./messageTextLayout";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
 import { Spinner } from "./Spinner";
+import { WindowOverlay } from "./WindowOverlay";
 
 export type ConversationViewProps = {
     /**
@@ -112,8 +113,10 @@ export type ConversationViewProps = {
     composerFooterControl?: ReactNode;
     /**
      * A modal-class surface (settings dialog, picker) hosted above this one.
-     * The owner decides whether it is open; this surface only gives it a place
-     * in the tree so it stacks over the whole conversation.
+     * The owner decides whether it is open; this surface only says where it
+     * belongs in the product. It is rendered in the window's own overlay lane,
+     * so it stacks over the whole window rather than over the conversation's
+     * corner of it.
      */
     overlay?: ReactNode;
     /**
@@ -641,7 +644,7 @@ export function ConversationView(props: ConversationViewProps) {
                 running={props.running}
             />
 
-            {props.overlay}
+            {props.overlay ? <WindowOverlay>{props.overlay}</WindowOverlay> : null}
         </section>
     );
 }

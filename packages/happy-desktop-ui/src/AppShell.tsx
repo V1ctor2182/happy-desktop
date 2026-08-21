@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import {
+    useContext,
     useLayoutEffect,
     useRef,
     useState,
@@ -10,6 +11,7 @@ import {
 import { KeyCap } from "./Badge";
 import { Icon } from "./Icon";
 import { commandShortcut, commandShortcutMatches, windowShortcutBlocked } from "./keyboardShortcut";
+import { WindowOverlayHostContext } from "./WindowOverlay";
 export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     children: ReactNode;
     /**
@@ -279,6 +281,14 @@ function ResizeHandle(props: {
  */
 export function AppShell(props: AppShellProps) {
     const shell = useRef<HTMLDivElement>(null);
+    // The overlay lane below, held as state rather than in a ref because the
+    // surfaces that portal into it render from this shell's own subtree and
+    // must be told once the node they hang from exists.
+    const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
+    // A surface that covers the window belongs to the window. An embedded shell
+    // owns only a workspace inside another one, so it hands the lane it was
+    // given straight on rather than opening one of its own.
+    const outerOverlayHost = useContext(WindowOverlayHostContext);
     const [local, rest] = partitionComponentProps(props, [
         "children",
         "className",
@@ -539,162 +549,183 @@ export function AppShell(props: AppShellProps) {
         minWidth: `${sidebarLayoutMin + WORKSPACE_MIN_WIDTH}px`,
     };
     return (
-        <div
-            {...rest}
-            className={["happy-desktop-app-shell", local.className].filter(Boolean).join(" ")}
-            data-embedded={local.embedded ? "" : undefined}
-            data-happy-desktop-ui="app-shell"
-            data-shortcut-hints={shortcutHintsVisible ? "" : undefined}
-            data-sidebar-collapsed={sidebarHidden ? "" : undefined}
-            data-window-controls={local.windowControls ? "" : undefined}
-            data-window-full-screen={local.windowFullScreen ? "" : undefined}
-            ref={shell}
-            style={local.style}
-        >
-            {local.windowControls ? (
-                <div
-                    aria-hidden="true"
-                    className="happy-desktop-app-shell__window-controls"
-                    data-happy-desktop-ui="app-shell-window-controls"
-                >
-                    <span
-                        className="happy-desktop-app-shell__traffic-light-reservation"
-                        data-happy-desktop-ui="title-bar-controls"
-                    />
-                </div>
-            ) : null}
-            {local.windowControls && !local.sidebar && !local.titleBar ? (
-                <div
-                    aria-hidden="true"
-                    className="happy-desktop-app-shell__standalone-title-bar"
-                    data-happy-desktop-ui="app-shell-standalone-title-bar"
-                />
-            ) : null}
-            {local.titleBar ? (
-                <div
-                    className="happy-desktop-app-shell__title-bar"
-                    data-happy-desktop-ui="app-shell-title-bar"
-                >
-                    {local.titleBar}
-                </div>
-            ) : null}
-            <div className="happy-desktop-app-shell__body" data-happy-desktop-ui="app-shell-body">
-                {local.rail ? (
+        <WindowOverlayHostContext.Provider value={local.embedded ? outerOverlayHost : overlayHost}>
+            <div
+                {...rest}
+                className={["happy-desktop-app-shell", local.className].filter(Boolean).join(" ")}
+                data-embedded={local.embedded ? "" : undefined}
+                data-happy-desktop-ui="app-shell"
+                data-shortcut-hints={shortcutHintsVisible ? "" : undefined}
+                data-sidebar-collapsed={sidebarHidden ? "" : undefined}
+                data-window-controls={local.windowControls ? "" : undefined}
+                data-window-full-screen={local.windowFullScreen ? "" : undefined}
+                ref={shell}
+                style={local.style}
+            >
+                {local.windowControls ? (
                     <div
-                        className="happy-desktop-app-shell__rail"
-                        data-happy-desktop-ui="app-shell-rail"
+                        aria-hidden="true"
+                        className="happy-desktop-app-shell__window-controls"
+                        data-happy-desktop-ui="app-shell-window-controls"
                     >
-                        {local.rail}
+                        <span
+                            className="happy-desktop-app-shell__traffic-light-reservation"
+                            data-happy-desktop-ui="title-bar-controls"
+                        />
+                    </div>
+                ) : null}
+                {local.windowControls && !local.sidebar && !local.titleBar ? (
+                    <div
+                        aria-hidden="true"
+                        className="happy-desktop-app-shell__standalone-title-bar"
+                        data-happy-desktop-ui="app-shell-standalone-title-bar"
+                    />
+                ) : null}
+                {local.titleBar ? (
+                    <div
+                        className="happy-desktop-app-shell__title-bar"
+                        data-happy-desktop-ui="app-shell-title-bar"
+                    >
+                        {local.titleBar}
                     </div>
                 ) : null}
                 <div
-                    className="happy-desktop-app-shell__content"
-                    data-happy-desktop-ui="app-shell-content"
+                    className="happy-desktop-app-shell__body"
+                    data-happy-desktop-ui="app-shell-body"
                 >
-                    <main
-                        className="happy-desktop-app-shell__main"
-                        data-happy-desktop-ui="app-shell-main"
-                        style={mainStyle}
-                    >
-                        {revealFloating ? null : reveal}
-                        {local.sidebar ? (
-                            <div
-                                className="happy-desktop-app-shell__sidebar"
-                                data-collapsed={
-                                    sidebarInteractive && sidebarCollapsed ? "" : undefined
-                                }
-                                data-happy-desktop-ui="app-shell-sidebar"
-                                data-resizable={sidebarInteractive ? "" : undefined}
-                                style={sidebarStyle}
-                            >
-                                {local.sidebar}
-                                {sidebarInteractive ? (
-                                    <button
-                                        aria-label={local.sidebarCollapseLabel ?? "Hide sidebar"}
-                                        aria-keyshortcuts={
-                                            shortcutHintsInteractive
-                                                ? SIDEBAR_SHORTCUT.aria
-                                                : undefined
-                                        }
-                                        className="happy-desktop-app-shell__sidebar-collapse"
-                                        data-happy-desktop-ui="app-shell-sidebar-collapse"
-                                        data-shortcut-hint={shortcutHintsEnabled ? "" : undefined}
-                                        onClick={() => setSidebarCollapsed(true)}
-                                        type="button"
-                                    >
-                                        {/* Matches the reveal control above; see
-                                            the note there for why 16. */}
-                                        <Icon name="sidebar-collapse" size={16} />
-                                        {shortcutHintsEnabled ? (
-                                            <KeyCap
-                                                className="happy2-shortcut-hint--floating"
-                                                decorative
-                                                keys={SIDEBAR_SHORTCUT.caps}
-                                            />
-                                        ) : null}
-                                    </button>
-                                ) : null}
-                                {showSidebarHandle ? (
-                                    <ResizeHandle
-                                        edge="right"
-                                        label={local.sidebarResizeLabel ?? "Resize sidebar"}
-                                        max={sidebarMax}
-                                        min={sidebarMin}
-                                        onResize={setSidebarWidth}
-                                        value={sidebarWidth}
-                                    />
-                                ) : null}
-                            </div>
-                        ) : null}
+                    {local.rail ? (
                         <div
-                            className="happy-desktop-app-shell__workspace"
-                            data-happy-desktop-ui="app-shell-workspace"
+                            className="happy-desktop-app-shell__rail"
+                            data-happy-desktop-ui="app-shell-rail"
                         >
-                            {local.children}
+                            {local.rail}
                         </div>
-                    </main>
-                    {local.panel ? (
-                        <aside
-                            className="happy-desktop-app-shell__panel"
-                            data-happy-desktop-ui="app-shell-panel"
-                            data-resizable={panelResizable ? "" : undefined}
-                            style={panelStyle}
+                    ) : null}
+                    <div
+                        className="happy-desktop-app-shell__content"
+                        data-happy-desktop-ui="app-shell-content"
+                    >
+                        <main
+                            className="happy-desktop-app-shell__main"
+                            data-happy-desktop-ui="app-shell-main"
+                            style={mainStyle}
                         >
-                            {panelResizable ? (
-                                <ResizeHandle
-                                    edge="left"
-                                    label={local.panelResizeLabel ?? "Resize panel"}
-                                    max={panelMax}
-                                    min={panelMin}
-                                    onResize={previewPanelWidth}
-                                    onResizeEnd={settlePanelWidth}
-                                    value={panelWidth}
-                                />
-                            ) : null}
-                            <div
-                                className="happy-desktop-app-shell__panel-content"
-                                data-happy-desktop-ui="app-shell-panel-content"
-                            >
-                                {local.panel}
-                            </div>
-                            {local.panelFooter ? (
+                            {revealFloating ? null : reveal}
+                            {local.sidebar ? (
                                 <div
-                                    className="happy-desktop-app-shell__panel-footer"
-                                    data-floating={local.panelFooterFloating ? "" : undefined}
-                                    data-happy-desktop-ui="app-shell-panel-footer"
+                                    className="happy-desktop-app-shell__sidebar"
+                                    data-collapsed={
+                                        sidebarInteractive && sidebarCollapsed ? "" : undefined
+                                    }
+                                    data-happy-desktop-ui="app-shell-sidebar"
+                                    data-resizable={sidebarInteractive ? "" : undefined}
+                                    style={sidebarStyle}
                                 >
-                                    {local.panelFooter}
+                                    {local.sidebar}
+                                    {sidebarInteractive ? (
+                                        <button
+                                            aria-label={
+                                                local.sidebarCollapseLabel ?? "Hide sidebar"
+                                            }
+                                            aria-keyshortcuts={
+                                                shortcutHintsInteractive
+                                                    ? SIDEBAR_SHORTCUT.aria
+                                                    : undefined
+                                            }
+                                            className="happy-desktop-app-shell__sidebar-collapse"
+                                            data-happy-desktop-ui="app-shell-sidebar-collapse"
+                                            data-shortcut-hint={
+                                                shortcutHintsEnabled ? "" : undefined
+                                            }
+                                            onClick={() => setSidebarCollapsed(true)}
+                                            type="button"
+                                        >
+                                            {/* Matches the reveal control above; see
+                                            the note there for why 16. */}
+                                            <Icon name="sidebar-collapse" size={16} />
+                                            {shortcutHintsEnabled ? (
+                                                <KeyCap
+                                                    className="happy2-shortcut-hint--floating"
+                                                    decorative
+                                                    keys={SIDEBAR_SHORTCUT.caps}
+                                                />
+                                            ) : null}
+                                        </button>
+                                    ) : null}
+                                    {showSidebarHandle ? (
+                                        <ResizeHandle
+                                            edge="right"
+                                            label={local.sidebarResizeLabel ?? "Resize sidebar"}
+                                            max={sidebarMax}
+                                            min={sidebarMin}
+                                            onResize={setSidebarWidth}
+                                            value={sidebarWidth}
+                                        />
+                                    ) : null}
                                 </div>
                             ) : null}
-                        </aside>
-                    ) : null}
+                            <div
+                                className="happy-desktop-app-shell__workspace"
+                                data-happy-desktop-ui="app-shell-workspace"
+                            >
+                                {local.children}
+                            </div>
+                        </main>
+                        {local.panel ? (
+                            <aside
+                                className="happy-desktop-app-shell__panel"
+                                data-happy-desktop-ui="app-shell-panel"
+                                data-resizable={panelResizable ? "" : undefined}
+                                style={panelStyle}
+                            >
+                                {panelResizable ? (
+                                    <ResizeHandle
+                                        edge="left"
+                                        label={local.panelResizeLabel ?? "Resize panel"}
+                                        max={panelMax}
+                                        min={panelMin}
+                                        onResize={previewPanelWidth}
+                                        onResizeEnd={settlePanelWidth}
+                                        value={panelWidth}
+                                    />
+                                ) : null}
+                                <div
+                                    className="happy-desktop-app-shell__panel-content"
+                                    data-happy-desktop-ui="app-shell-panel-content"
+                                >
+                                    {local.panel}
+                                </div>
+                                {local.panelFooter ? (
+                                    <div
+                                        className="happy-desktop-app-shell__panel-footer"
+                                        data-floating={local.panelFooterFloating ? "" : undefined}
+                                        data-happy-desktop-ui="app-shell-panel-footer"
+                                    >
+                                        {local.panelFooter}
+                                    </div>
+                                ) : null}
+                            </aside>
+                        ) : null}
+                    </div>
                 </div>
-            </div>
-            {/* Last, after every drag surface in the body. Native draggable
+                {/* Last, after every drag surface in the body. Native draggable
                 regions are collected in tree order and later rectangles win, so
                 a control that punches a hole in one has to come after it — the
                 same order the sidebar's own toggle already sits in. */}
-            {revealFloating ? reveal : null}
-        </div>
+                {revealFloating ? reveal : null}
+                {/* The window's overlay lane. A modal-class surface written
+                deep in the product hangs here instead, so its z-index is
+                resolved against the window rather than against whatever
+                positioned layer it happened to be opened from — see
+                `WindowOverlay`. The node draws nothing and takes no room. */}
+                {local.embedded ? null : (
+                    <div
+                        className="happy-desktop-app-shell__overlays"
+                        data-happy-desktop-ui="app-shell-overlays"
+                        ref={setOverlayHost}
+                    />
+                )}
+            </div>
+        </WindowOverlayHostContext.Provider>
     );
 }

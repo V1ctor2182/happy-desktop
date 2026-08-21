@@ -211,6 +211,35 @@
     padding-left: calc(var(--happy-desktop-app-shell-chrome-inset) + 44px);
 }
 
+/* And on the surface that takes the whole window. A `fill` overlay covers the
+   native title bar as well, so the Lightbox's header is the row the traffic
+   lights land on: it becomes the same 40px band of window furniture as every
+   other heading here, which puts the file's name and the controls beside it on
+   the lights' own axis rather than 6px under it. Its 28px controls keep the
+   band's y=6, exactly as the sidebar toggle does. */
+.happy-desktop-app-shell[data-window-controls] .happy2-lightbox__header {
+    min-height: 40px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* The lane held clear of the lights themselves. In full screen they are gone
+   and the header keeps its own 16px inset, which is why only this half of the
+   reservation is scoped away from it. */
+.happy-desktop-app-shell[data-window-controls]:not([data-window-full-screen])
+    .happy2-lightbox__header {
+    padding-left: var(--happy-desktop-app-shell-chrome-inset);
+}
+
+/* The window's overlay lane: a place in the shell's own stacking context for a
+   surface that covers the window, and nothing else. It draws nothing, takes no
+   room, and lays out none of its contents — everything hung here is fixed to
+   the window — so `display: contents` keeps it out of the shell's column
+   entirely rather than leaving a zero-height flex item in it. */
+.happy-desktop-app-shell__overlays {
+    display: contents;
+}
+
 .happy-desktop-app-shell__title-bar {
     box-sizing: border-box;
     flex: none;
