@@ -99,6 +99,12 @@ export type ConversationViewProps = {
     scrollPosition?: MessageListScrollPosition;
     /** Reports the reading position, including the final one before unmount. */
     onScrollPositionChange?: (position: MessageListScrollPosition) => void;
+    /**
+     * The oldest loaded entry is on screen and older ones are wanted: the
+     * reader scrolled to the top of the transcript, or the whole loaded
+     * transcript fits on screen and they have nothing left to scroll.
+     */
+    onStartReached?: () => void;
     /** Header controls composed by the surface owner. */
     headerActions?: ReactNode;
     /**
@@ -537,6 +543,7 @@ export function ConversationView(props: ConversationViewProps) {
                     // restore its own position instead of inheriting one.
                     key={props.conversationId}
                     onScrollPositionChange={props.onScrollPositionChange}
+                    onStartReached={props.onStartReached}
                     paddingEnd={24}
                     virtualize
                 >

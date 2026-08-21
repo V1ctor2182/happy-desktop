@@ -3348,16 +3348,19 @@ function RigConversationSurface(props: {
             {...(props.notice === undefined ? {} : { notice: props.notice })}
             scrollPosition={conversation.scrollPosition}
             onScrollPositionChange={(position) => {
-                if (
-                    props.rigOnline() &&
-                    position.scrollTop <= 64 &&
-                    !conversation.transcriptComplete
-                )
-                    workspace.historyLoadMore();
                 workspace.conversationScrollUpdate(
                     conversation.conversationId as RigSessionId,
                     position,
                 );
+            }}
+            // Reaching the oldest loaded entry is the whole request for the page
+            // before it. The transcript reports it whether the reader scrolled
+            // there or a short history put them there on arrival — a long run
+            // fills a whole page on its own, and the transcript it opens with
+            // can be shorter than the pane it sits in.
+            onStartReached={() => {
+                if (props.rigOnline() && !conversation.transcriptComplete)
+                    workspace.historyLoadMore();
             }}
             composerControls={
                 <>

@@ -687,6 +687,19 @@ export type MessageListProps = {
     initialScrollPosition?: MessageListScrollPosition;
     /** Reports user scrolling and the final position before this list detaches. */
     onScrollPositionChange?: (position: MessageListScrollPosition) => void;
+    /**
+     * The oldest loaded row is on screen, so an owner holding older content
+     * loads it here.
+     *
+     * Scrolling to the top says this, and so does a transcript with nothing to
+     * scroll: a page whose rows all fit the scrollport leaves the reader no
+     * gesture that could ever ask for what came before them, and it is the list
+     * — the only thing that knows its own geometry — that has to say so. That
+     * short list is asked for again after each commit that leaves it short, so
+     * a history arriving a page at a time keeps loading until it fills the
+     * scrollport or the owner stops answering.
+     */
+    onStartReached?: () => void;
     style?: CSSProperties;
     /**
      * Enables TanStack Virtual for this list's entire mounted lifetime. Callers
@@ -705,6 +718,8 @@ export interface MessageListScrollPosition {
 }
 /** A reader returning this close to the bottom (px) can resume following. */
 const FOLLOW_BOTTOM_THRESHOLD = 8;
+/** A reader this close to the top (px) is looking at the oldest loaded row. */
+const START_REACHED_THRESHOLD = 64;
 /** Transcript clearances represented inside the virtualizer's coordinate space. */
 const MESSAGE_LIST_PADDING_START = 12;
 const MESSAGE_LIST_PADDING_END_DEFAULT = 8;
@@ -756,6 +771,11 @@ export function MessageList(props: MessageListProps) {
     const measurements = useRef(restore.current?.measurements);
     const positionChange = useRef(props.onScrollPositionChange);
     positionChange.current = props.onScrollPositionChange;
+    const startReached = useRef(props.onStartReached);
+    startReached.current = props.onStartReached;
+    /* The content height the unscrollable list last asked about, so a commit
+       that brought nothing new does not ask again. */
+    const startReportedHeight = useRef(-1);
     const estimateVersion = useRef(props.estimateVersion);
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
     const rowWidthModel = useRef(restore.current?.rowWidth ?? 0);
@@ -779,6 +799,11 @@ export function MessageList(props: MessageListProps) {
     const scrollTopWrite = (element: HTMLElement, value: number) => {
         element.scrollTop = value;
         expectedScrollTop.current = element.scrollTop;
+    };
+    const startReachedReport = (element: HTMLElement) => {
+        if (element.scrollTop > START_REACHED_THRESHOLD) return;
+        startReportedHeight.current = element.scrollHeight;
+        startReached.current?.();
     };
     const entryItems = Children.toArray(props.children);
     const footerIndex = props.footer === undefined ? undefined : entryItems.length;
@@ -1020,6 +1045,16 @@ export function MessageList(props: MessageListProps) {
         if (!element) return;
         if (following.current) scrollTopWrite(element, element.scrollHeight - element.clientHeight);
         else scrollHeightBaseline.current = element.scrollHeight;
+        /* A transcript that fits the scrollport has no scrolling left to do, so
+           no gesture of the reader's will ever reach past its oldest row. Ask
+           for the page before it here — once per content height, so a commit
+           that added nothing does not ask twice. A list that does scroll is the
+           reader's to drive, and asks from `onScroll` instead. */
+        if (
+            element.scrollHeight - element.clientHeight <= START_REACHED_THRESHOLD &&
+            element.scrollHeight !== startReportedHeight.current
+        )
+            startReachedReport(element);
     });
     // eslint-disable-next-line happy2-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {
@@ -1237,6 +1272,7 @@ export function MessageList(props: MessageListProps) {
                 virtualizer.shouldAdjustScrollPositionOnItemSizeChange = parkedItemSizeAdjustment;
             }
             positionReport();
+            startReachedReport(element);
         };
         element.addEventListener("scroll", onScroll, { passive: true });
         element.addEventListener("scrollend", onScrollEnd);
@@ -1304,6 +1340,10 @@ export function MessageList(props: MessageListProps) {
                       else if (nextHeight !== previousHeight)
                           scrollTopWrite(element, element.scrollTop + previousHeight - nextHeight);
                       positionReport();
+                      /* A taller scrollport can swallow the rest of a short
+                         history, taking the reader's last way of asking for
+                         what came before it with it. */
+                      startReachedReport(element);
                   });
         viewportObserver?.observe(element);
         return () => {
