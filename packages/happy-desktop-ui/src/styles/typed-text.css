@@ -35,13 +35,6 @@
 }
 
 .happy2-typed-text[data-typing] {
-    /* The caret that rides the typing edge: a 1px column painted over the
-       label rather than a border or shadow, so it never occupies layout width
-       of its own and is never clipped away with the text ahead of it. */
-    background-image: linear-gradient(currentcolor, currentcolor);
-    background-repeat: no-repeat;
-    background-size: 1px 100%;
-
     /* No fill mode: once typed, the label is unclipped again and stops
        depending on the `ch` estimate for what it reveals.
 
@@ -58,20 +51,15 @@
 @keyframes happy2-typed-text-type {
     from {
         clip-path: inset(0 100% 0 0);
-        background-position-x: 0;
     }
 
     to {
         clip-path: inset(0 0 0 0);
-        background-position-x: 100%;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .happy2-typed-text[data-typing] {
-        /* The caret only means something while something is being typed, so a
-           label that no longer types does not keep one parked at its left edge. */
-        background-image: none;
         animation: none;
     }
 }

@@ -72,13 +72,7 @@ function usageProject(
     return [...providerIds].map((providerId) => ({
         checkedAt: capturedAt,
         providerId,
-        usage: {
-            capturedAt,
-            models: modelsProject(usage, providerId),
-            ...(vendorProject(providerId) === undefined
-                ? {}
-                : { vendor: vendorProject(providerId) }),
-        },
+        usage: { capturedAt, models: modelsProject(usage, providerId) },
     }));
 }
 
@@ -136,12 +130,4 @@ function tokenCountsProject(counts: happyAgentProtocol.ModelUsage): RigProviderT
         inputTokens: counts.input,
         outputTokens: counts.output,
     };
-}
-
-function vendorProject(providerId: string): "claude" | "codex" | "grok" | undefined {
-    const normalized = providerId.toLocaleLowerCase();
-    if (normalized.includes("claude") || normalized.includes("anthropic")) return "claude";
-    if (normalized.includes("codex") || normalized.includes("openai")) return "codex";
-    if (normalized.includes("grok") || normalized.includes("xai")) return "grok";
-    return undefined;
 }

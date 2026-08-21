@@ -502,3 +502,4 @@ export {
     type RigProfileSettingsProps,
 } from "./pages/settings/RigProfileSettings";
 export { RigUsageSettings, type RigUsageSettingsProps } from "./pages/settings/RigUsageSettings";
+export { providerAccountName } from "./pages/settings/providerAccountName";

@@ -2,9 +2,6 @@ import { createStore } from "zustand/vanilla";
 import type { UserError } from "../types.js";
 import { rigUserError } from "./rigSupport.js";
 
-/** Which vendor an account belongs to; the windows it reports differ by vendor. */
-export type RigProviderVendor = "claude" | "codex" | "grok";
-
 /** One rate-limit or spend window a provider reports, as a share already spent. */
 export interface RigProviderUsageWindow {
     /** How much of the window is gone, 0–100. */
@@ -27,7 +24,6 @@ export interface RigProviderUsageCredits {
 
 /** One provider reading, carrying plan quota or absolute token usage when reported. */
 export interface RigProviderUsageReading {
-    readonly vendor?: RigProviderVendor;
     /** When the daemon took this reading, in milliseconds. */
     readonly capturedAt: number;
     readonly planName?: string;
@@ -63,6 +59,10 @@ export interface RigProviderModelTokenUsage {
  * One provider account as the usage surface shows it. A provider with no reading
  * is still listed: knowing an account is configured but unread is different from
  * not having it at all, and the reason lives on the same row.
+ *
+ * The account is named by its configured id, which is the only name it has. Two
+ * accounts with the same vendor behind them are two rows here, so the id is what
+ * tells them apart and nothing may collapse them onto a vendor's name.
  */
 export interface RigProviderUsageEntry {
     readonly providerId: string;

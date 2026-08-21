@@ -35,7 +35,6 @@ const usageAccounts: readonly RigProviderUsageEntry[] = [
         providerId: "claude",
         checkedAt: 1_700_000_000_000,
         usage: {
-            vendor: "claude",
             capturedAt: 1_700_000_000_000,
             planName: "Max 20×",
             exhausted: false,
@@ -95,10 +94,9 @@ const usageAccounts: readonly RigProviderUsageEntry[] = [
         },
     },
     {
-        providerId: "codex",
+        providerId: "work_codex",
         checkedAt: 1_700_000_000_000,
         usage: {
-            vendor: "codex",
             capturedAt: 1_699_999_400_000,
             planName: "Pro",
             exhausted: true,
@@ -133,14 +131,15 @@ const usageAccounts: readonly RigProviderUsageEntry[] = [
 
 /**
  * What the daemon actually reports today: absolute token counts by model, with
- * no plan share behind them, plus an account that has spent nothing at all.
+ * no plan share behind them. Two of these accounts are the same vendor with
+ * different credentials, which is why an account is named by its own id — a
+ * vendor's name would print "Codex" twice and hide which one is spending.
  */
 const usageTokensOnly: readonly RigProviderUsageEntry[] = [
     {
-        providerId: "claude",
+        providerId: "kirill_claude",
         checkedAt: 1_700_000_000_000,
         usage: {
-            vendor: "claude",
             capturedAt: 1_700_000_000_000,
             models: [
                 {
@@ -189,9 +188,39 @@ const usageTokensOnly: readonly RigProviderUsageEntry[] = [
         },
     },
     {
-        providerId: "codex",
+        providerId: "bulka_codex",
         checkedAt: 1_700_000_000_000,
-        usage: { vendor: "codex", capturedAt: 1_700_000_000_000, models: [] },
+        usage: {
+            capturedAt: 1_700_000_000_000,
+            models: [
+                {
+                    modelId: "openai/gpt-5.6-sol",
+                    day: {
+                        inputTokens: 61_000,
+                        outputTokens: 22_800,
+                        cacheReadTokens: 1_940_000,
+                        cacheWriteTokens: 88_000,
+                    },
+                    week: {
+                        inputTokens: 604_000,
+                        outputTokens: 214_000,
+                        cacheReadTokens: 18_300_000,
+                        cacheWriteTokens: 903_000,
+                    },
+                    month: {
+                        inputTokens: 2_310_000,
+                        outputTokens: 806_000,
+                        cacheReadTokens: 71_500_000,
+                        cacheWriteTokens: 3_420_000,
+                    },
+                },
+            ],
+        },
+    },
+    {
+        providerId: "bulka_happy_codex",
+        checkedAt: 1_700_000_000_000,
+        usage: { capturedAt: 1_700_000_000_000, models: [] },
     },
 ];
 
@@ -201,14 +230,13 @@ const usageUnread: readonly RigProviderUsageEntry[] = [
         providerId: "claude",
         checkedAt: 1_700_000_000_000,
         usage: {
-            vendor: "claude",
             capturedAt: 1_700_000_000_000,
             planName: "Pro",
             exhausted: false,
             fiveHour: { usedPercent: 8, resetsAt: 1_700_012_000_000 },
         },
     },
-    { providerId: "codex" },
+    { providerId: "work_codex" },
 ];
 
 const usageReadingTime = (capturedAt: number) =>
@@ -722,7 +750,7 @@ export function RigSettingsBlueprintPage() {
                 </RigSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Token counts with no plan share behind them: one account listing what each model spent per rolling window, and one that has spent nothing"
+                detail="Token counts with no plan share behind them: what each model spent per rolling window, two accounts of the same vendor kept apart by their own names, and one that has spent nothing"
                 label="Rig settings — usage tokens only"
                 number="08a"
             >

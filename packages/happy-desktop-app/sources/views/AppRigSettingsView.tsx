@@ -37,6 +37,7 @@ import {
     RigProfileSettings,
     RigSettingsShell,
     RigUsageSettings,
+    providerAccountName,
     type RigProviderRow,
     type RigSettingsCategory,
 } from "happy-desktop-ui";
@@ -654,7 +655,7 @@ function modelOptions(
             .filter((model) => !settings.disabledModels.has(rigModelKey(provider.id, model.id)))
             .map((model) => ({
                 disabled: provider.disabledReason !== undefined,
-                label: `${providerName(provider.id)} · ${model.name}`,
+                label: `${providerAccountName(provider.id)} · ${model.name}`,
                 value: rigModelKey(provider.id, model.id),
             })),
     );
@@ -676,17 +677,8 @@ function providerRows(
             modelId: model.id,
             name: model.name,
         })),
-        name: providerName(provider.id),
+        name: providerAccountName(provider.id),
         serviceTiers: provider.serviceTiers.map((tier) => (tier === "fast" ? "Fast" : tier)),
         status: provider.disabledReason ?? "ready",
     }));
-}
-
-/** The daemon reports a provider by id only, so the display name is that id, titled. */
-function providerName(id: string): string {
-    return id
-        .split(/[_-]/)
-        .filter(Boolean)
-        .map((part) => part[0]?.toUpperCase() + part.slice(1))
-        .join(" ");
 }

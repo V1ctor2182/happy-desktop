@@ -3,7 +3,6 @@ import type {
     RigProviderTokenCounts,
     RigProviderUsageEntry,
     RigProviderUsageWindow,
-    RigProviderVendor,
     UserError,
 } from "happy-desktop-state";
 import { Badge } from "../../Badge";
@@ -12,6 +11,7 @@ import { EmptyState } from "../../EmptyState";
 import type { UsageWindowTone } from "../../usageTone";
 import { usagePercentClamp, usageWindowTone } from "../../usageTone";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
+import { providerAccountName } from "./providerAccountName";
 import { RigSettingsSection } from "./RigSettingsShell";
 
 export interface RigUsageSettingsProps {
@@ -37,12 +37,6 @@ const TONE_LABELS: Record<UsageTone, string> = {
     spent: "Spent",
     unread: "Not read yet",
     error: "Could not be read",
-};
-
-const VENDOR_LABELS: Record<RigProviderVendor, string> = {
-    claude: "Claude",
-    codex: "Codex",
-    grok: "Grok",
 };
 
 /** The rolling windows a token count is reported for, widest reading last. */
@@ -172,7 +166,7 @@ function ProviderSection(props: {
                         className="happy2-rig-usage-settings__name"
                         data-happy-desktop-ui="rig-usage-settings-provider-name"
                     >
-                        {providerLabel(provider)}
+                        {providerAccountName(provider.providerId)}
                     </span>
                     {usage?.planName ? (
                         <span className="happy2-rig-usage-settings__plan">{usage.planName}</span>
@@ -442,18 +436,6 @@ function providerTone(provider: RigProviderUsageEntry): UsageTone {
     return usageWindowTone(
         Math.max(...windows.map((window) => usagePercentClamp(window.usedPercent))),
     );
-}
-
-/**
- * What to call an account. An account that has been read names its own vendor;
- * one that has not is left with its configured id, so an id that is already a
- * vendor's name is given that vendor's spelling rather than appearing beside
- * the others in lower case.
- */
-function providerLabel(provider: RigProviderUsageEntry): string {
-    const vendor = provider.usage?.vendor;
-    if (vendor) return VENDOR_LABELS[vendor];
-    return VENDOR_LABELS[provider.providerId as RigProviderVendor] ?? provider.providerId;
 }
 
 function resetTimeRemaining(resetsAt: number, currentTime: number): string {
