@@ -742,12 +742,18 @@ function messageListRowWidth(
 ): number {
     return estimate?.(scrollportWidth) ?? scrollportWidth;
 }
-type MessageListVirtualAnchor = {
-    readonly index: number;
-    readonly itemOffset: number;
-    readonly key: Key;
-    readonly viewportInset: number;
-};
+type MessageListVirtualAnchor =
+    | {
+          readonly type: "item";
+          readonly index: number;
+          readonly itemOffset: number;
+          readonly key: Key;
+          readonly viewportInset: number;
+      }
+    | {
+          readonly type: "scrollTop";
+          readonly scrollTop: number;
+      };
 /**
  * Scrolling message column. A `margin-top: auto` spacer bottom-anchors sparse
  * histories while long histories scroll chronologically from the top.
@@ -898,7 +904,8 @@ export function MessageList(props: MessageListProps) {
             else if (offset > start + size) lower = index + 1;
             else return { index, key, size, start };
         }
-        const index = Math.min(lower, items.length - 1);
+        const index = lower;
+        if (index >= items.length) return undefined;
         const item = modeledItemAtIndex(index);
         return item ? { ...item, index, key: itemKeyAt(index) } : undefined;
     }
@@ -910,17 +917,25 @@ export function MessageList(props: MessageListProps) {
         const viewportInset = Math.min(VIRTUAL_ANCHOR_INSET, viewportHeight);
         const point = scrollTop + Math.max(0, viewportHeight - viewportInset);
         const item = modeledItemAtOffset(point);
-        if (!item) return undefined;
+        if (!item) return { scrollTop, type: "scrollTop" };
         return {
             index: item.index,
             itemOffset: Math.max(0, Math.min(point - item.start, item.size)),
             key: item.key,
+            type: "item",
             viewportInset,
         };
     }
+    const modelAnchorCaptureCurrent = useRef(modelAnchorCapture);
+    modelAnchorCaptureCurrent.current = modelAnchorCapture;
     function modelAnchorRestore(anchor: MessageListVirtualAnchor, viewportHeight: number) {
         const element = list.current;
         if (!element || following.current) return false;
+        if (anchor.type === "scrollTop") {
+            scrollTopWrite(element, anchor.scrollTop);
+            readerAnchor.current = anchor;
+            return true;
+        }
         let index = itemKeyAt(anchor.index) === anchor.key ? anchor.index : items.length;
         if (index === items.length) {
             for (let candidate = 0; candidate < items.length; candidate += 1) {
@@ -938,7 +953,7 @@ export function MessageList(props: MessageListProps) {
         const itemOffset = Math.min(anchor.itemOffset, item.size);
         const point = item.start + itemOffset;
         scrollTopWrite(element, point - Math.max(0, viewportHeight - anchor.viewportInset));
-        readerAnchor.current = { ...anchor, index, itemOffset };
+        readerAnchor.current = { ...anchor, index, itemOffset, type: "item" };
         return true;
     }
     function rowSizeModelRecalculate(nextRowWidth: number) {
@@ -1056,7 +1071,7 @@ export function MessageList(props: MessageListProps) {
             const pending = pendingAnchor.current;
             pendingAnchor.current = undefined;
             modelAnchorRestore(pending.anchor, pending.viewportHeight);
-        } else scrollHeightBaseline.current = element.scrollHeight;
+        }
         /* A transcript that fits the scrollport has no scrolling left to do, so
            no gesture of the reader's will ever reach past its oldest row. Ask
            for the page before it here — once per content height, so a commit
@@ -1123,6 +1138,7 @@ export function MessageList(props: MessageListProps) {
             if (event.deltaY < 0) {
                 escapedFromFollow.current = true;
                 following.current = false;
+                readerAnchor.current = { scrollTop: element.scrollTop, type: "scrollTop" };
             } else if (event.deltaY > 0) {
                 const bottomOffset = Math.max(
                     0,
@@ -1193,7 +1209,9 @@ export function MessageList(props: MessageListProps) {
             pendingAnchor.current = undefined;
             readerAnchor.current = following.current
                 ? undefined
-                : modelAnchorCapture(viewportHeight, element.scrollTop);
+                : bottomOffset <= FOLLOW_BOTTOM_THRESHOLD
+                  ? { scrollTop: element.scrollTop, type: "scrollTop" }
+                  : modelAnchorCaptureCurrent.current(viewportHeight, element.scrollTop);
             positionReport();
             startReachedReport(element);
         };
@@ -1225,7 +1243,7 @@ export function MessageList(props: MessageListProps) {
             element.removeEventListener("touchstart", onGeometryScrollIntent);
             element.removeEventListener("wheel", onWheel);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- modelAnchorCapture reads the current modeled rows, while this effect deliberately owns one scrollport-listener lifetime
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- modelAnchorCaptureCurrent reads the current modeled rows, while this effect deliberately owns one scrollport-listener lifetime
     }, [virtualized, virtualizer]);
     return (
         <ScrollArea

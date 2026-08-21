@@ -1,6 +1,6 @@
 import { gymPrepare, gymRun } from "./gym.js";
 import { gymProfilesList } from "./manifest.js";
-import { gymRunClean } from "./paths.js";
+import { gymRunClean, gymRunsRootResolve } from "./paths.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -152,7 +152,7 @@ Workloads:
   long-chat-scroll, session-switch-load, highlight-warm, changed-files-warm,
   streaming, mixed-replay, memory-idle, window-edge-resize, archive-reconcile, all
 
-The default root is workspace/.context/happy-desktop-gym/runs/<profile>-<uuid>.
+The default root is ${gymRunsRootResolve()}/g-<run-id>.
 Only roots carrying the Gym ownership marker can be cleaned.`);
 }
 

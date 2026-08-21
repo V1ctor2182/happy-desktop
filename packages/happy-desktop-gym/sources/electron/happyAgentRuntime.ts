@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
 
 import {
-    gymHappyAgentLauncherWrite,
+    gymHappyAgentCommandCreate,
     gymRunProfileWrite,
-    happyAgentEntrypointResolve,
+    happyAgentExecutableResolve,
 } from "./paths.js";
 import { GymHappyAgentClient } from "./happyAgentProtocol.js";
 import type { GymInferenceServer, GymRunPaths, HappyAgentRuntime } from "./types.js";
@@ -21,16 +21,22 @@ export async function happyAgentRuntimeCreate(
     paths: GymRunPaths,
     inference: GymInferenceServer,
 ): Promise<StartedHappyAgentRuntime> {
-    const happyAgentEntrypoint = happyAgentEntrypointResolve(paths.workspaceRoot);
-    const command = await gymHappyAgentLauncherWrite(paths, happyAgentEntrypoint);
+    const happyAgentExecutable = await happyAgentExecutableResolve();
+    const command = await gymHappyAgentCommandCreate(paths, happyAgentExecutable);
+    const publicConfig = join(paths.root, "Happy", "Config");
     await Promise.all(
         [
-            join(paths.home, "happy", "config"),
+            publicConfig,
             join(paths.home, ".config"),
             join(paths.home, ".cache"),
             join(paths.home, ".local", "share"),
             join(paths.home, ".local", "state"),
         ].map((directory) => mkdir(directory, { recursive: true })),
+    );
+    await writeFile(
+        join(publicConfig, "happy.toml"),
+        "[settings]\nhappy_integration = false\n",
+        "utf8",
     );
     const environment = environmentCreate(paths, inference);
     await gymRunProfileWrite(paths, environment);
@@ -39,13 +45,13 @@ export async function happyAgentRuntimeCreate(
     // Happy Agent from that attempt still owns this run's socket and retains the old
     // inference endpoint. Stop only this isolated run's daemon before starting
     // its next lifetime so a retry cannot silently attach to stale transport.
-    await execFileAsync(command, ["daemon", "stop"], {
-        cwd: paths.workspace,
+    await execFileAsync(command, ["stop"], {
+        cwd: paths.root,
         env: environment,
         timeout: 15_000,
         maxBuffer: 2 * 1024 * 1024,
     }).catch(() => undefined);
-    await unlink(join(paths.home, ".happy", "agent", "server.sock")).catch(() => undefined);
+    await unlink(paths.socketPath).catch(() => undefined);
     const runtime = new LocalHappyAgentRuntime(paths, command, environment, inference);
     await runtime.start();
     return runtime;
@@ -79,14 +85,12 @@ class LocalHappyAgentRuntime implements StartedHappyAgentRuntime {
         return this.#environment;
     }
 
-    /* Current Happy Agent derives its private transport from HOME. The gym owns this
-       isolated HOME, so these paths cannot attach to the user's daemon. */
     get socketPath(): string {
-        return join(this.#paths.home, ".happy", "agent", "server.sock");
+        return this.#paths.socketPath;
     }
 
     get tokenPath(): string {
-        return join(this.#paths.home, ".happy", "agent", "token");
+        return this.#paths.tokenPath;
     }
 
     get token(): string {
@@ -100,8 +104,8 @@ class LocalHappyAgentRuntime implements StartedHappyAgentRuntime {
     }
 
     async start(): Promise<void> {
-        await execFileAsync(this.#command, ["daemon", "start"], {
-            cwd: this.#paths.workspace,
+        await execFileAsync(this.#command, ["start"], {
+            cwd: this.#paths.root,
             env: this.#environment,
             timeout: 30_000,
             maxBuffer: 2 * 1024 * 1024,
@@ -115,8 +119,8 @@ class LocalHappyAgentRuntime implements StartedHappyAgentRuntime {
     }
 
     async stop(): Promise<void> {
-        await execFileAsync(this.#command, ["daemon", "stop"], {
-            cwd: this.#paths.workspace,
+        await execFileAsync(this.#command, ["stop"], {
+            cwd: this.#paths.root,
             env: this.#environment,
             timeout: 15_000,
             maxBuffer: 2 * 1024 * 1024,
@@ -134,6 +138,7 @@ function environmentCreate(
 ): Record<string, string> {
     const safeSystemPath = "/usr/bin:/bin:/usr/sbin:/sbin";
     return {
+        HAPPY_HOME_DIR: paths.happyHome,
         HOME: paths.home,
         LANG: "C.UTF-8",
         LOGNAME: "happy-desktop-gym",
@@ -145,20 +150,13 @@ function environmentCreate(
         XDG_CONFIG_HOME: join(paths.home, ".config"),
         XDG_DATA_HOME: join(paths.home, ".local", "share"),
         XDG_STATE_HOME: join(paths.home, ".local", "state"),
-        HAPPY_AGENT_CONFIGURATION_DIRECTORY: join(paths.home, "happy", "config"),
-        HAPPY_AGENT_DISABLE_HAPPY_SYNC: "1",
-        HAPPY_AGENT_GYM_DISPLAY_WORKSPACE: "/workspace",
-        HAPPY_AGENT_GYM_HOME_PATH: paths.home,
-        HAPPY_AGENT_GYM_INFERENCE_URL: inference.url,
-        HAPPY_AGENT_GYM_PROVIDER_OVERRIDES: "codex",
-        HAPPY_AGENT_GYM_RUNTIME: "just-bash",
-        HAPPY_AGENT_GYM_TOKEN: inference.token,
-        HAPPY_AGENT_GYM_WORKSPACE_PATH: paths.happyAgentWorkspacePath,
-        HAPPY_AGENT_MODEL: "openai/gpt-5.6-sol",
-        HAPPY_AGENT_PERMISSION_MODE: "full_access",
-        HAPPY_AGENT_PROVIDER: "codex",
+        HAPPY_AGENT_PROJECTS_DIRECTORY: paths.projects,
+        HAPPY_AGENT_SERVER_SOCKET_PATH: paths.socketPath,
+        HAPPY_AGENT_SERVER_TOKEN_PATH: paths.tokenPath,
+        HAPPY_AGENT_WORKSPACES_DIRECTORY: paths.workspaces,
+        HAPPY_GYM_INFERENCE_URL: inference.url,
+        HAPPY_GYM_TOKEN: inference.token,
         TMPDIR: paths.tmp,
-        OPENAI_API_KEY: "happy-desktop-gym-local-only",
     };
 }
 

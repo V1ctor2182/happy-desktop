@@ -70,11 +70,16 @@ export interface GymManifest {
 export interface GymRunPaths {
     readonly workspaceRoot: string;
     readonly root: string;
+    /** The isolated Happy root passed to the daemon as `HAPPY_HOME_DIR`. */
+    readonly happyHome: string;
     readonly home: string;
     readonly tmp: string;
-    readonly workspace: string;
-    readonly happyAgentServer: string;
+    readonly projects: string;
+    readonly workspaces: string;
+    /** `<happyHome>/agent`, containing only this run's daemon state. */
+    readonly agentHome: string;
     readonly socketPath: string;
+    readonly tokenPath: string;
     readonly electronUserData: string;
     /**
      * The actual ready worktree mounted as `/workspace` for JustBash. It is
@@ -98,7 +103,6 @@ export interface GymOwnerMarker {
     readonly profile: GymProfile;
     readonly createdAt: string;
     readonly artifactDirectory?: string;
-    readonly socketPath?: string;
 }
 
 export interface GymProject {

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 /*
@@ -10,18 +11,13 @@ import { join, resolve } from "node:path";
  * HOME intact so subscription discovery can exercise the credentials already
  * used by Claude, Codex, and Grok on this machine.
  *
- * One lever reaches the daemon in ordinary mode, and it is deliberate:
+ * The whole sandbox lives under the host temporary directory. Its explicit
+ * HAPPY_HOME_DIR keeps the daemon, distribution, desktop configuration, notes,
+ * token, and short Unix socket together under one disposable root. Ordinary
+ * mode also moves HOME there so onboarding cannot read the user's files.
  *
- *   HOME  moves ~/.happy/agent (the daemon's own state and its socket),
- *         ~/.happy/dist (the agent Happy installs), ~/.happy/desktop (the
- *         desktop's config), and ~/.happy/notes. Because the socket is derived
- *         from HOME rather than from TMPDIR, moving HOME is what makes this a
- *         different daemon rather than the global one wearing a new hat.
- *
- * `--real-home` uses the narrower HAPPY_HOME_DIR lever instead. The desktop
- * carries that one through its login-shell discovery specifically so the
- * sandbox daemon and downloaded distribution move while provider credential
- * paths still resolve from the real HOME.
+ * `--real-home` keeps only HOME unchanged so provider credential paths still
+ * resolve from the real home while Happy itself remains in the sandbox.
  *
  * A sandbox HOME also means a sandbox shell profile, and the app reads the
  * machine's Node and coding assistants out of the user's real login shell on
@@ -49,6 +45,10 @@ for (const argument of process.argv.slice(2)) {
 }
 if (options.realHome && options.noNode) {
     console.error("--real-home and --no-node cannot be combined.");
+    process.exit(2);
+}
+if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/u.test(options.name)) {
+    console.error("--name must contain 1–32 letters, numbers, underscores, or dashes.");
     process.exit(2);
 }
 
@@ -82,20 +82,19 @@ if (running) {
     process.exit(1);
 }
 
-const home = join(workspace, ".happy-sandbox", options.name);
+const home = join(tmpdir(), "hds", options.name);
 const happyHome = join(home, ".happy");
 const temporary = join(home, "tmp");
 
 // macOS refuses a unix socket path over 104 bytes, and the daemon's is
 // `<HOME>/.happy/agent/server.sock`. Better to say so here than to watch the
 // daemon fail to bind for reasons that look like nothing at all.
-const socketPath = join(home, ".happy", "agent", "server.sock");
-if (socketPath.length > 100) {
-    console.error(
-        `The sandbox socket path is ${socketPath.length} bytes, which macOS will refuse:`,
-    );
+const socketPath = join(happyHome, "agent", "server.sock");
+const socketPathBytes = Buffer.byteLength(socketPath);
+if (socketPathBytes > 103) {
+    console.error(`The sandbox socket path is ${socketPathBytes} bytes, which macOS will refuse:`);
     console.error(`  ${socketPath}`);
-    console.error("Move the checkout somewhere shorter, or use a shorter --name.");
+    console.error("Use a shorter TMPDIR or --name.");
     process.exit(1);
 }
 
@@ -134,13 +133,11 @@ function sandboxAgentBinaries(sandboxHome) {
 }
 
 function sandboxEnvironment() {
-    const environment = { ...process.env, TMPDIR: temporary };
+    const environment = { ...process.env, HAPPY_HOME_DIR: happyHome, TMPDIR: temporary };
     delete environment.HAPPY_AGENT_SERVER_SOCKET_PATH;
     delete environment.HAPPY_AGENT_SERVER_TOKEN_PATH;
-    if (options.realHome) environment.HAPPY_HOME_DIR = happyHome;
-    else {
+    if (!options.realHome) {
         environment.HOME = home;
-        delete environment.HAPPY_HOME_DIR;
     }
     return environment;
 }

@@ -1,34 +1,39 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, readdir, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import {
+    access,
+    mkdir,
+    readFile,
+    readlink,
+    readdir,
+    rm,
+    symlink,
+    unlink,
+    writeFile,
+} from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { homedir } from "node:os";
 
 import type { GymOwnerMarker, GymProfile, GymRunPaths } from "./types.js";
 
 const OWNER_MARKER = ".happy-desktop-gym-owner.json";
-const RUNS_DIRECTORY = ".context/happy-desktop-gym/runs";
+const RUNS_DIRECTORY = "hdg";
+const MAX_UNIX_SOCKET_PATH_BYTES = 103;
+const SEMANTIC_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const SAFE_SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 const SAFE_PROFILE_ENVIRONMENT = new Set([
+    "HAPPY_HOME_DIR",
     "HOME",
     "LANG",
     "LOGNAME",
-    "OPENAI_API_KEY",
     "PATH",
-    "HAPPY_AGENT_CONFIGURATION_DIRECTORY",
-    "HAPPY_AGENT_DISABLE_HAPPY_SYNC",
-    "HAPPY_AGENT_GYM_DISPLAY_WORKSPACE",
-    "HAPPY_AGENT_GYM_HOME_PATH",
-    "HAPPY_AGENT_GYM_INFERENCE_URL",
-    "HAPPY_AGENT_GYM_PROVIDER_OVERRIDES",
-    "HAPPY_AGENT_GYM_RUNTIME",
-    "HAPPY_AGENT_GYM_TOKEN",
-    "HAPPY_AGENT_GYM_WORKSPACE_PATH",
-    "HAPPY_AGENT_MODEL",
-    "HAPPY_AGENT_PERMISSION_MODE",
-    "HAPPY_AGENT_PROVIDER",
-    "HAPPY_AGENT_SERVER_DIRECTORY",
+    "HAPPY_AGENT_PROJECTS_DIRECTORY",
     "HAPPY_AGENT_SERVER_SOCKET_PATH",
+    "HAPPY_AGENT_SERVER_TOKEN_PATH",
+    "HAPPY_AGENT_WORKSPACES_DIRECTORY",
+    "HAPPY_GYM_INFERENCE_URL",
+    "HAPPY_GYM_TOKEN",
     "SHELL",
     "TERM",
     "TMPDIR",
@@ -43,6 +48,11 @@ export function workspaceRootResolve(): string {
     return resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 }
 
+/** Short, host-temporary ownership root shared by every desktop Gym run. */
+export function gymRunsRootResolve(): string {
+    return resolve(tmpdir(), RUNS_DIRECTORY);
+}
+
 export async function gymRunPathsCreate(
     profile: GymProfile,
     requestedRoot?: string,
@@ -50,31 +60,22 @@ export async function gymRunPathsCreate(
 ): Promise<{ readonly paths: GymRunPaths; readonly marker: GymOwnerMarker }> {
     const workspaceRoot = workspaceRootResolve();
     const runId = randomUUID();
-    const root = resolve(
-        workspaceRoot,
-        requestedRoot ?? join(RUNS_DIRECTORY, `${profile}-${runId}`),
-    );
-    assertSafeRunRoot(root, workspaceRoot);
+    const root = resolve(requestedRoot ?? join(gymRunsRootResolve(), `g-${runId.slice(0, 8)}`));
+    assertSafeRunRoot(root);
     const artifacts = artifactDirectoryResolve(root, workspaceRoot, requestedArtifactDirectory);
-    let rootExisted = true;
-    try {
-        await access(root);
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") rootExisted = false;
-        else throw error;
-    }
-    if (rootExisted) {
-        throw new Error(`Refusing to use an existing Gym root without a fresh run path: ${root}`);
-    }
     await assertArtifactDirectoryFresh(artifacts, requestedArtifactDirectory !== undefined);
-    await mkdir(root, { recursive: true });
-
-    const socketPath = join(workspaceRoot, ".context", `g-${runId.slice(0, 8)}.sock`);
+    const paths = runPathsResolve(root, workspaceRoot, artifacts);
+    socketPathAssert(paths.socketPath);
+    await mkdir(gymRunsRootResolve(), { recursive: true });
     try {
-        await access(socketPath);
-        throw new Error(`Refusing to reuse an existing Gym socket path: ${socketPath}`);
+        await mkdir(root);
     } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+            throw new Error(
+                `Refusing to use an existing Gym root without a fresh run path: ${root}`,
+            );
+        }
+        throw error;
     }
     const marker: GymOwnerMarker = {
         kind: "happy-desktop-gym-run",
@@ -83,41 +84,27 @@ export async function gymRunPathsCreate(
         profile,
         createdAt: new Date().toISOString(),
         artifactDirectory: artifacts,
-        socketPath,
     };
-    const paths: GymRunPaths = {
-        workspaceRoot,
-        root,
-        home: join(root, "home"),
-        tmp: join(root, "tmp"),
-        workspace: join(root, "workspace"),
-        happyAgentServer: join(root, "happy-agent-server"),
-        socketPath,
-        electronUserData: join(root, "electron-user-data"),
-        happyAgentWorkspacePath: join(root, "workspace"),
-        bin: join(root, "bin"),
-        artifacts,
-        marker: join(root, OWNER_MARKER),
-        manifest: join(root, "manifest.json"),
-        inferenceLog: join(root, "inference.ndjson"),
-        streamLog: join(root, "stream-events.ndjson"),
-        cluster: join(root, "session-cluster.json"),
-    };
-    await Promise.all([
-        mkdir(paths.home, { recursive: true }),
-        mkdir(paths.tmp, { recursive: true }),
-        mkdir(paths.workspace, { recursive: true }),
-        mkdir(paths.happyAgentServer, { recursive: true }),
-        mkdir(paths.electronUserData, { recursive: true }),
-        mkdir(paths.bin, { recursive: true }),
-        mkdir(paths.artifacts, { recursive: true }),
-    ]);
-    await writeFile(paths.marker, `${JSON.stringify(marker, null, 2)}\n`, "utf8");
-    return { paths, marker };
+    try {
+        await Promise.all([
+            mkdir(paths.home, { recursive: true }),
+            mkdir(paths.tmp, { recursive: true }),
+            mkdir(paths.projects, { recursive: true }),
+            mkdir(paths.workspaces, { recursive: true }),
+            mkdir(paths.agentHome, { recursive: true }),
+            mkdir(paths.bin, { recursive: true }),
+            mkdir(paths.artifacts, { recursive: true }),
+        ]);
+        await writeFile(paths.marker, `${JSON.stringify(marker, null, 2)}\n`, "utf8");
+        return { paths, marker };
+    } catch (error) {
+        await rm(root, { force: true, recursive: true });
+        throw error;
+    }
 }
 
 export async function gymRunMarkerRead(root: string): Promise<GymOwnerMarker> {
-    const marker = await readOwnerMarker(resolve(workspaceRootResolve(), root));
+    const marker = await readOwnerMarker(resolve(root));
     if (marker === undefined) {
         throw new Error(`The requested path is not an owned Gym run: ${root}`);
     }
@@ -125,30 +112,17 @@ export async function gymRunMarkerRead(root: string): Promise<GymOwnerMarker> {
 }
 
 export async function gymRunPathsRead(root: string): Promise<GymRunPaths> {
-    const rootPath = resolve(workspaceRootResolve(), root);
+    const rootPath = resolve(root);
     const marker = await gymRunMarkerRead(rootPath);
     const workspaceRoot = workspaceRootResolve();
-    assertSafeRunRoot(rootPath, workspaceRoot);
-    const socketPath = marker.socketPath ?? join(rootPath, "happy-agent-server", "server.sock");
-    socketPathValidate(socketPath, workspaceRoot, rootPath);
-    return {
+    assertSafeRunRoot(rootPath);
+    const paths = runPathsResolve(
+        rootPath,
         workspaceRoot,
-        root: rootPath,
-        home: join(rootPath, "home"),
-        tmp: join(rootPath, "tmp"),
-        workspace: join(rootPath, "workspace"),
-        happyAgentServer: join(rootPath, "happy-agent-server"),
-        socketPath,
-        electronUserData: join(rootPath, "electron-user-data"),
-        happyAgentWorkspacePath: join(rootPath, "workspace"),
-        bin: join(rootPath, "bin"),
-        artifacts: artifactDirectoryResolve(rootPath, workspaceRoot, marker.artifactDirectory),
-        marker: join(rootPath, OWNER_MARKER),
-        manifest: join(rootPath, "manifest.json"),
-        inferenceLog: join(rootPath, "inference.ndjson"),
-        streamLog: join(rootPath, "stream-events.ndjson"),
-        cluster: join(rootPath, "session-cluster.json"),
-    };
+        artifactDirectoryResolve(rootPath, workspaceRoot, marker.artifactDirectory),
+    );
+    socketPathAssert(paths.socketPath);
+    return paths;
 }
 
 export function gymRunPathsWithHappyAgentWorkspace(
@@ -159,15 +133,17 @@ export function gymRunPathsWithHappyAgentWorkspace(
 }
 
 export async function gymRunClean(root: string): Promise<void> {
-    const resolved = resolve(workspaceRootResolve(), root);
+    const resolved = resolve(root);
     const marker = await gymRunMarkerRead(resolved);
-    assertSafeRunRoot(resolved, workspaceRootResolve());
+    assertSafeRunRoot(resolved);
     if (marker.kind !== "happy-desktop-gym-run" || marker.schemaVersion !== 1) {
         throw new Error(`Unsupported Gym ownership marker at ${resolved}`);
     }
-    const workspaceRoot = workspaceRootResolve();
-    const socketPath = marker.socketPath ?? join(resolved, "happy-agent-server", "server.sock");
-    socketPathValidate(socketPath, workspaceRoot, resolved);
+    const socketPath = runPathsResolve(
+        resolved,
+        workspaceRootResolve(),
+        join(resolved, "artifacts"),
+    ).socketPath;
     await unlink(socketPath).catch(() => undefined);
     await rm(resolved, { force: true, recursive: true, maxRetries: 3, retryDelay: 50 });
 }
@@ -194,32 +170,20 @@ export async function gymRunProfileWrite(
     ]);
 }
 
-export async function gymHappyAgentLauncherWrite(
+export async function gymHappyAgentCommandCreate(
     paths: GymRunPaths,
-    happyAgentEntrypoint: string,
+    happyAgentExecutable: string,
 ): Promise<string> {
-    const launcher = join(paths.bin, "happy-agent");
-    await symlink(process.execPath, join(paths.bin, "node")).catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    });
-    const source = `#!/usr/bin/env node
-import { spawnSync } from "node:child_process";
-const allowed = new Set(${JSON.stringify([...SAFE_PROFILE_ENVIRONMENT])});
-const environment = Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => allowed.has(name)),
-);
-const result = spawnSync(process.execPath, [${JSON.stringify(happyAgentEntrypoint)}, ...process.argv.slice(2)], {
-  env: environment,
-  stdio: "inherit",
-});
-if (result.error) {
-  console.error(result.error);
-  process.exit(1);
-}
-process.exit(result.status ?? 1);
-`;
-    await writeFile(launcher, source, { encoding: "utf8", mode: 0o755 });
-    return launcher;
+    const command = join(paths.bin, "happy-agent");
+    try {
+        const existing = await readlink(command);
+        if (existing === happyAgentExecutable) return command;
+        await unlink(command);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    await symlink(happyAgentExecutable, command);
+    return command;
 }
 
 export function electronEntrypointResolve(workspaceRoot = workspaceRootResolve()): {
@@ -241,21 +205,43 @@ export function electronEntrypointResolve(workspaceRoot = workspaceRootResolve()
     };
 }
 
-export function happyAgentEntrypointResolve(workspaceRoot = workspaceRootResolve()): string {
-    const configured = process.env.HAPPY_DESKTOP_AGENT_ENTRYPOINT?.trim();
-    return (
-        configured ||
-        join(
-            workspaceRoot,
-            "packages",
-            "happy-desktop-electron",
-            "node_modules",
-            "@slopus",
-            "rig",
-            "dist",
-            "main.js",
-        )
-    );
+export async function happyAgentExecutableResolve(): Promise<string> {
+    const configured = process.env.HAPPY_DESKTOP_AGENT_EXECUTABLE?.trim();
+    if (configured) {
+        if (!isAbsolute(configured)) {
+            throw new Error("HAPPY_DESKTOP_AGENT_EXECUTABLE must be an absolute path.");
+        }
+        await executableAssert(configured);
+        return configured;
+    }
+
+    const sourceHappyHome = happyHomeResolve(process.env, homedir());
+    const configPath = join(sourceHappyHome, "dist", "config.json");
+    let selectedVersion: string;
+    try {
+        const parsed: unknown = JSON.parse(await readFile(configPath, "utf8"));
+        if (
+            typeof parsed !== "object" ||
+            parsed === null ||
+            !("selectedVersion" in parsed) ||
+            typeof parsed.selectedVersion !== "string" ||
+            !SEMANTIC_VERSION_PATTERN.test(parsed.selectedVersion)
+        ) {
+            throw new Error(`Happy Agent selection is invalid at ${configPath}.`);
+        }
+        selectedVersion = parsed.selectedVersion;
+    } catch (error) {
+        if (error instanceof SyntaxError || (error as NodeJS.ErrnoException).code === "ENOENT") {
+            throw new Error(
+                "No selected Happy Agent installation was found. Set HAPPY_DESKTOP_AGENT_EXECUTABLE to an installed happy-agent binary.",
+                { cause: error },
+            );
+        }
+        throw error;
+    }
+    const executable = join(sourceHappyHome, "dist", "version", selectedVersion, "happy-agent");
+    await executableAssert(executable);
+    return executable;
 }
 
 function artifactDirectoryResolve(root: string, workspaceRoot: string, requested?: string): string {
@@ -267,18 +253,6 @@ function artifactDirectoryResolve(root: string, workspaceRoot: string, requested
         );
     }
     return directory;
-}
-
-function socketPathValidate(socketPath: string, workspaceRoot: string, root: string): void {
-    const workspaceContext = resolve(workspaceRoot, ".context");
-    if (
-        !pathWithin(workspaceContext, socketPath) &&
-        !pathWithin(join(root, "happy-agent-server"), socketPath)
-    ) {
-        throw new Error(
-            "Gym socket paths must stay inside the run .happy-agent-server directory or .context.",
-        );
-    }
 }
 
 function pathWithin(parent: string, candidate: string): boolean {
@@ -300,19 +274,62 @@ async function assertArtifactDirectoryFresh(directory: string, requested: boolea
     }
 }
 
-function assertSafeRunRoot(root: string, workspaceRoot: string): void {
+function assertSafeRunRoot(root: string): void {
     const normalized = resolve(root);
-    const forbidden = new Set([
-        resolve("/"),
-        resolve(homedir()),
-        workspaceRoot,
-        resolve(workspaceRoot, "packages"),
-    ]);
-    if (forbidden.has(normalized)) {
-        throw new Error(`Refusing to use a broad or source directory as a Gym root: ${root}`);
+    if (dirname(normalized) !== gymRunsRootResolve()) {
+        throw new Error(`Gym roots must be direct children of ${gymRunsRootResolve()}: ${root}`);
     }
-    if (!isAbsolute(normalized) || normalized.length < 8) {
-        throw new Error(`Gym root must be an explicit absolute directory: ${root}`);
+}
+
+function runPathsResolve(root: string, workspaceRoot: string, artifacts: string): GymRunPaths {
+    const happyHome = join(root, ".happy");
+    const agentHome = join(happyHome, "agent");
+    return {
+        workspaceRoot,
+        root,
+        happyHome,
+        home: join(root, "home"),
+        tmp: join(root, "tmp"),
+        projects: join(root, "projects"),
+        workspaces: join(root, "workspaces"),
+        agentHome,
+        socketPath: join(agentHome, "server.sock"),
+        tokenPath: join(agentHome, "token"),
+        electronUserData: join(root, "electron-user-data"),
+        happyAgentWorkspacePath: join(root, "workspaces"),
+        bin: join(root, "bin"),
+        artifacts,
+        marker: join(root, OWNER_MARKER),
+        manifest: join(root, "manifest.json"),
+        inferenceLog: join(root, "inference.ndjson"),
+        streamLog: join(root, "stream-events.ndjson"),
+        cluster: join(root, "session-cluster.json"),
+    };
+}
+
+function socketPathAssert(socketPath: string): void {
+    if (process.platform === "win32") return;
+    const bytes = Buffer.byteLength(socketPath);
+    if (bytes <= MAX_UNIX_SOCKET_PATH_BYTES) return;
+    throw new Error(
+        `Gym socket path is ${String(bytes)} bytes; Unix permits ${String(MAX_UNIX_SOCKET_PATH_BYTES)}: ${socketPath}`,
+    );
+}
+
+function happyHomeResolve(environment: NodeJS.ProcessEnv, homeDirectory: string): string {
+    const configured = environment.HAPPY_HOME_DIR?.trim();
+    if (!configured) return join(homeDirectory, ".happy");
+    const expanded = configured.startsWith("~")
+        ? join(homeDirectory, configured.slice(1))
+        : configured;
+    return isAbsolute(expanded) ? expanded : join(homeDirectory, expanded);
+}
+
+async function executableAssert(path: string): Promise<void> {
+    try {
+        await access(path, constants.X_OK);
+    } catch (error) {
+        throw new Error(`Happy Agent executable is unavailable at ${path}.`, { cause: error });
     }
 }
 
@@ -328,9 +345,7 @@ async function readOwnerMarker(root: string): Promise<GymOwnerMarker | undefined
             typeof parsed.runId !== "string" ||
             typeof parsed.profile !== "string" ||
             typeof parsed.createdAt !== "string" ||
-            (parsed.artifactDirectory !== undefined &&
-                typeof parsed.artifactDirectory !== "string") ||
-            (parsed.socketPath !== undefined && typeof parsed.socketPath !== "string")
+            (parsed.artifactDirectory !== undefined && typeof parsed.artifactDirectory !== "string")
         ) {
             throw new Error(`Invalid Gym ownership marker at ${root}`);
         }

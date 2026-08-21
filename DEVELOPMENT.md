@@ -49,7 +49,9 @@ pnpm dev:sandbox [--reset] [--no-node] [--name=x]
 Runs the desktop against a throwaway home directory so onboarding can be
 replayed as often as needed without touching the Happy Agent you actually work in.
 `--reset` wipes the sandbox, `--no-node` simulates a machine without a discoverable Node runtime,
-and `--name=x` keeps several sandboxes apart.
+and `--name=x` keeps several sandboxes apart. The complete sandbox lives at
+`<system-temp>/hds/<name>`; its Happy home and Unix socket are
+`<system-temp>/hds/<name>/.happy` and `.happy/agent/server.sock` respectively.
 
 To test subscription discovery against the Claude, Codex, and Grok authentication
 in your real home while keeping Happy Agent itself isolated:
@@ -58,7 +60,8 @@ in your real home while keeping Happy Agent itself isolated:
 pnpm dev:sandbox:subscriptions --reset
 ```
 
-This leaves `HOME` unchanged and redirects only `HAPPY_HOME_DIR` into the sandbox.
+This leaves `HOME` unchanged and redirects `HAPPY_HOME_DIR` into the same
+temporary sandbox.
 
 ## Profiling
 

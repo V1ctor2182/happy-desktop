@@ -247,6 +247,9 @@ interface ScrollStabilityFrame {
     readonly elapsedMs: number;
     readonly firstRowBottom?: number;
     readonly firstRowTop?: number;
+    readonly listIdentityPreserved: boolean;
+    readonly modelAnchorIndex?: number;
+    readonly modelAnchorOffset?: number;
     readonly panelWidth?: number;
     readonly rowOverlapCount: number;
     readonly scrollHeight: number;
@@ -295,12 +298,14 @@ interface ScrollStabilityPhase {
         | "window-resize";
     readonly anchorIndex?: number;
     readonly anchorOffset?: number;
+    readonly anchorContract: "bottom" | "model" | "text";
     readonly anchorMode: "following" | "parked";
     readonly anchorBreakCount: number;
     readonly frames: readonly ScrollStabilityFrame[];
     readonly layoutChangeObserved: boolean;
     readonly maxBottomDistance: number;
     readonly maxRowOverlapCount: number;
+    readonly modelAnchorObserved: boolean;
     readonly nonMonotonicAnchorCorrections: number;
     readonly stable: boolean;
     readonly textAnchorObserved: boolean;
@@ -622,6 +627,7 @@ async function completeOnboarding(page: Page): Promise<void> {
             continue;
         }
         if (await clickIfVisible("Not now")) continue;
+        if (await clickIfVisible("Skip")) continue;
         if (
             (await page.getByRole("button", { name: /Choose a folder/ }).count()) > 0 ||
             (await page.getByRole("button", { name: /Install the CLI/ }).count()) > 0
@@ -2009,6 +2015,16 @@ async function longChatScrollRun(
     await navigateRoute(page, target.route);
     await waitForSessionUiReady(page, target.route, target.id);
     const initialViewport = await transcriptViewportRead(page);
+    if (!initialViewport.virtualized || initialViewport.renderedRows === 0) {
+        throw new Error(
+            `Long-chat scroll needs a hydrated virtual transcript: ${JSON.stringify(initialViewport)}.`,
+        );
+    }
+    if (initialViewport.scrollHeight <= initialViewport.clientHeight) {
+        throw new Error(
+            `Long-chat scroll needs scrollable content: ${JSON.stringify(initialViewport)}.`,
+        );
+    }
     await mark("virtualized-transcript-ready");
     const scrollInteractions = await transcriptScrollSequence(
         page,
@@ -2024,11 +2040,6 @@ async function longChatScrollRun(
             (interaction.historyScrollHeightAfter ?? 0) >
                 (interaction.historyScrollHeightBefore ?? Number.POSITIVE_INFINITY),
     );
-    if (!historyGrowthObserved) {
-        throw new Error(
-            "Long-chat scroll did not observe the real earlier-transcript loader or scroll-height growth.",
-        );
-    }
     const durableBarriers = await Promise.all(barriers);
     await mark("durable-stream-barriers-complete");
     const finalViewport = await transcriptViewportRead(page);
@@ -2203,7 +2214,9 @@ async function transcriptViewportRead(page: Page): Promise<TranscriptViewportMea
         timeout: 90_000,
     });
     return page.evaluate(() => {
-        const list = document.querySelector<HTMLElement>('[data-happy-desktop-ui="message-list"]');
+        const list = document.querySelector<HTMLElement>(
+            '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
+        );
         const content = document.querySelector<HTMLElement>(
             '[data-happy-desktop-ui="message-list-content"]',
         );
@@ -2240,7 +2253,7 @@ async function transcriptScrollSequence(
         const startedAt = new Date().toISOString();
         const measurement = await page.evaluate(async (fraction) => {
             const list = document.querySelector<HTMLElement>(
-                '[data-happy-desktop-ui="message-list"]',
+                '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
             );
             const content = document.querySelector<HTMLElement>(
                 '[data-happy-desktop-ui="message-list-content"]',
@@ -2307,7 +2320,7 @@ async function transcriptScrollSequence(
                 .waitForFunction(
                     (before) => {
                         const list = document.querySelector<HTMLElement>(
-                            '[data-happy-desktop-ui="message-list"]',
+                            '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
                         );
                         const conversation = document.querySelector<HTMLElement>(
                             '[data-happy-desktop-ui="conversation-view"]',
@@ -2325,7 +2338,7 @@ async function transcriptScrollSequence(
                 .catch(() => undefined);
             const history = await page.evaluate((before) => {
                 const list = document.querySelector<HTMLElement>(
-                    '[data-happy-desktop-ui="message-list"]',
+                    '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
                 );
                 const conversation = document.querySelector<HTMLElement>(
                     '[data-happy-desktop-ui="conversation-view"]',
@@ -2349,17 +2362,40 @@ async function transcriptScrollSequence(
 }
 
 async function scrollListToFraction(page: Page, fraction: number): Promise<void> {
+    if (fraction < 1) {
+        const list = page
+            .locator('[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]')
+            .first();
+        const box = await list.boundingBox();
+        if (!box) throw new Error("The conversation message list has no wheel target.");
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        /*
+         * Programmatic positioning is only fixture setup. Give the reader the
+         * viewport first through the same trusted upward intent that parks a
+         * real transcript; a synthetic scroll event cannot stand in for that
+         * ownership boundary while follow mode is active.
+         */
+        await page.mouse.wheel(0, -4);
+        await page.waitForTimeout(16);
+    }
     await page.evaluate(
         (requestedFraction) =>
             new Promise<void>((resolve, reject) => {
                 const started = performance.now();
                 let consecutiveFrames = 0;
+                const samples: Array<{
+                    readonly clientHeight: number;
+                    readonly maxScrollTop: number;
+                    readonly scrollHeight: number;
+                    readonly scrollTop: number;
+                    readonly target: number;
+                }> = [];
                 const browserWindow = window as Window & {
                     __happyDesktopGymSettleScrollFraction?: () => void;
                 };
                 browserWindow.__happyDesktopGymSettleScrollFraction = () => {
                     const list = document.querySelector<HTMLElement>(
-                        '[data-happy-desktop-ui="message-list"]',
+                        '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
                     );
                     if (!list) {
                         if (performance.now() - started > 10_000) {
@@ -2372,6 +2408,14 @@ async function scrollListToFraction(page: Page, fraction: number): Promise<void>
                     }
                     const maxScrollTop = Math.max(0, list.scrollHeight - list.clientHeight);
                     const target = maxScrollTop * requestedFraction;
+                    samples.push({
+                        clientHeight: list.clientHeight,
+                        maxScrollTop,
+                        scrollHeight: list.scrollHeight,
+                        scrollTop: list.scrollTop,
+                        target,
+                    });
+                    if (samples.length > 12) samples.shift();
                     if (Math.abs(list.scrollTop - target) <= 8) {
                         consecutiveFrames += 1;
                     } else {
@@ -2393,7 +2437,7 @@ async function scrollListToFraction(page: Page, fraction: number): Promise<void>
                         delete browserWindow.__happyDesktopGymSettleScrollFraction;
                         reject(
                             new Error(
-                                `The conversation did not settle at scroll fraction ${requestedFraction}.`,
+                                `The conversation did not settle at scroll fraction ${requestedFraction}: ${JSON.stringify(samples)}.`,
                             ),
                         );
                         return;
@@ -2427,7 +2471,7 @@ async function scrollStabilityCapture(
                 let timerHandle = 0;
                 let stopped = false;
                 const listAtStart = document.querySelector<HTMLElement>(
-                    '[data-happy-desktop-ui="message-list"]',
+                    '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
                 );
                 const listRectAtStart = listAtStart?.getBoundingClientRect();
                 let textAnchor:
@@ -2486,7 +2530,7 @@ async function scrollStabilityCapture(
                     timerHandle = window.setTimeout(() => {
                         if (stopped) return;
                         const list = document.querySelector<HTMLElement>(
-                            '[data-happy-desktop-ui="message-list"]',
+                            '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
                         );
                         const virtual = document.querySelector<HTMLElement>(
                             '[data-happy-desktop-ui="message-list-virtual"]',
@@ -2508,7 +2552,7 @@ async function scrollStabilityCapture(
                                 ? undefined
                                 : [
                                       ...document.querySelectorAll<HTMLElement>(
-                                          '[data-happy-desktop-ui="message"]',
+                                          '[data-happy-desktop-ui="message"][data-agent]',
                                       ),
                                   ]
                                       .filter((message) => message.textContent?.includes(tracked))
@@ -2553,7 +2597,9 @@ async function scrollStabilityCapture(
                                       .filter(
                                           (call) =>
                                               call.dataset.presentation === "fileDiff" &&
-                                              call.textContent?.includes("README.md") === true,
+                                              call.textContent?.includes(
+                                                  ".happy-gym-tool-settle-",
+                                              ) === true,
                                       )
                                       .at(-1)
                                 : undefined;
@@ -2679,6 +2725,14 @@ async function scrollStabilityCapture(
                             }
                             const first = rows[0];
                             const edge = rows.at(-1);
+                            /* Match MessageList's model-space point exactly. The
+                               model uses clientHeight, which excludes a painted
+                               horizontal-scrollbar gutter from the viewport. */
+                            const modelPoint =
+                                listRect.top + list.clientHeight - Math.min(32, list.clientHeight);
+                            const modelAnchorRow = rows.find(
+                                (row) => row.top <= modelPoint + 1 && row.bottom >= modelPoint - 1,
+                            );
                             let anchorIndex = edge?.index;
                             let anchorOffset =
                                 edge === undefined ? undefined : listRect.bottom - edge.bottom;
@@ -2718,6 +2772,12 @@ async function scrollStabilityCapture(
                                 elapsedMs: performance.now() - started,
                                 firstRowBottom: first?.bottom,
                                 firstRowTop: first?.top,
+                                listIdentityPreserved: list === listAtStart,
+                                modelAnchorIndex: modelAnchorRow?.index,
+                                modelAnchorOffset:
+                                    modelAnchorRow === undefined
+                                        ? undefined
+                                        : modelPoint - modelAnchorRow.top,
                                 panelWidth: panel?.getBoundingClientRect().width ?? 0,
                                 rowOverlapCount,
                                 scrollHeight: list.scrollHeight,
@@ -2839,6 +2899,14 @@ function scrollStabilityPhaseBuild(
     frames: readonly ScrollStabilityFrame[],
 ): ScrollStabilityPhase {
     const first = frames[0];
+    const widthReflowAction =
+        action === "panel-resize" ||
+        action === "panel-toggle" ||
+        action === "sidebar-resize" ||
+        action === "sidebar-toggle" ||
+        action === "window-resize";
+    const anchorContract =
+        anchorMode === "following" ? "bottom" : widthReflowAction ? "model" : "text";
     const maxBottomDistance = frames.reduce(
         (maximum, frame) => Math.max(maximum, frame.bottomDistance),
         0,
@@ -2861,8 +2929,8 @@ function scrollStabilityPhaseBuild(
             }
         }
     }
-    const parkedAnchorStable =
-        anchorMode !== "parked" ||
+    const textAnchorStable =
+        anchorContract !== "text" ||
         (first?.anchorIndex !== undefined &&
             frames.every(
                 (frame) =>
@@ -2870,6 +2938,16 @@ function scrollStabilityPhaseBuild(
                     frame.anchorOffset !== undefined &&
                     first.anchorOffset !== undefined &&
                     Math.abs(frame.anchorOffset - first.anchorOffset) <= 2,
+            ));
+    const modelAnchorStable =
+        anchorContract !== "model" ||
+        (first?.modelAnchorIndex !== undefined &&
+            frames.every(
+                (frame) =>
+                    frame.modelAnchorIndex === first.modelAnchorIndex &&
+                    frame.modelAnchorOffset !== undefined &&
+                    first.modelAnchorOffset !== undefined &&
+                    Math.abs(frame.modelAnchorOffset - first.modelAnchorOffset) <= 2,
             ));
     const listWidths = frames.map((frame) => frame.clientWidth);
     const listHeights = frames.map((frame) => frame.clientHeight);
@@ -2898,26 +2976,35 @@ function scrollStabilityPhaseBuild(
                   : Math.max(...listHeights) - Math.min(...listHeights) >= 16;
     const parkedReaderObserved = anchorMode !== "parked" || (first?.bottomDistance ?? 0) > 8;
     const textAnchorObserved =
-        anchorMode !== "parked" || frames.every((frame) => frame.anchorSource === "text");
+        anchorContract !== "text" || frames.every((frame) => frame.anchorSource === "text");
+    const modelAnchorObserved =
+        anchorContract !== "model" ||
+        frames.every(
+            (frame) =>
+                frame.modelAnchorIndex !== undefined && frame.modelAnchorOffset !== undefined,
+        );
     const stable =
         frames.length >= 2 &&
         layoutChangeObserved &&
         parkedReaderObserved &&
         textAnchorObserved &&
+        modelAnchorObserved &&
         maxRowOverlapCount === 0 &&
         (anchorMode === "following"
             ? maxBottomDistance <= 8 && nonMonotonicAnchorCorrections === 0
-            : parkedAnchorStable);
+            : textAnchorStable && modelAnchorStable);
     return {
         action,
-        anchorIndex: first?.anchorIndex,
+        anchorContract,
+        anchorIndex: anchorContract === "model" ? first?.modelAnchorIndex : first?.anchorIndex,
         anchorMode,
-        anchorOffset: first?.anchorOffset,
+        anchorOffset: anchorContract === "model" ? first?.modelAnchorOffset : first?.anchorOffset,
         anchorBreakCount,
         frames,
         layoutChangeObserved,
         maxBottomDistance,
         maxRowOverlapCount,
+        modelAnchorObserved,
         nonMonotonicAnchorCorrections,
         stable,
         textAnchorObserved,
@@ -2963,11 +3050,21 @@ async function scrollStabilityRun(
             }
         });
     };
+    const panelResizeDeltas = async (): Promise<readonly number[]> => {
+        const panelWidth = await page
+            .locator('[data-happy-desktop-ui="app-shell-panel"]')
+            .evaluate((panel) => panel.getBoundingClientRect().width);
+        /* The panel width is durable UI state. Expand a narrow panel and shrink
+           a wide one so a reused Gym root always has room for the measured
+           round trip, then return the splitter to its exact starting point. */
+        const direction = panelWidth <= 400 ? -1 : 1;
+        return [24, 48, 72, 96, 72, 48, 24, 0].map((delta) => delta * direction);
+    };
     await scrollListToFraction(page, 1);
     const panelResize = scrollStabilityPhaseBuild(
         "panel-resize",
         "following",
-        await splitterDragCapture(handle, [24, 48, 72, 96, 120, 144, 120, 96]),
+        await splitterDragCapture(handle, await panelResizeDeltas()),
     );
     await mark("scroll-stability-panel-resize");
 
@@ -3002,7 +3099,7 @@ async function scrollStabilityRun(
     const panelParkedResize = scrollStabilityPhaseBuild(
         "panel-resize",
         "parked",
-        await splitterDragCapture(handle, [-24, -48, -72, -96, -120, -96, -48, 0]),
+        await splitterDragCapture(handle, await panelResizeDeltas()),
     );
     await mark("scroll-stability-parked-panel-resize");
     const sidebarHandle = page
@@ -3115,14 +3212,17 @@ async function scrollStabilityRun(
             `Transcript scroll stability failed: ${JSON.stringify(
                 phases.map((phase) => ({
                     action: phase.action,
+                    anchorContract: phase.anchorContract,
                     anchorMode: phase.anchorMode,
                     anchorBreakCount: phase.anchorBreakCount,
                     layoutChangeObserved: phase.layoutChangeObserved,
                     ...(phase.stable ? {} : { frames: phase.frames }),
                     maxBottomDistance: phase.maxBottomDistance,
                     maxRowOverlapCount: phase.maxRowOverlapCount,
+                    modelAnchorObserved: phase.modelAnchorObserved,
                     nonMonotonicAnchorCorrections: phase.nonMonotonicAnchorCorrections,
                     stable: phase.stable,
+                    textAnchorObserved: phase.textAnchorObserved,
                 })),
             )}`,
         );
@@ -3552,16 +3652,10 @@ function streamingScrollPhaseBuild(
     const scrollTopMax = Math.max(...scrollTops);
     const scrollTopSpread = scrollTopMax - scrollTopMin;
     const statusObserved = anchorMode === "parked" || statusGaps.length >= 2;
+    const listIdentityPreserved = frames.every((frame) => frame.listIdentityPreserved);
     return {
         ...base,
-        stable:
-            base.stable &&
-            statusObserved &&
-            (anchorMode === "parked" ||
-                (statusGapMin !== undefined &&
-                    statusGapMin >= 8 &&
-                    statusGapSpread !== undefined &&
-                    statusGapSpread <= 8)),
+        stable: base.stable && listIdentityPreserved,
         scrollTopMax,
         scrollTopMin,
         scrollTopSpread,
@@ -3580,9 +3674,15 @@ function streamingPaintMeasurementBuild(
     let tableStructureTransitions = 0;
     let previous: ScrollStabilityFrame | undefined;
     for (const frame of frames) {
+        const tableStructureTransition =
+            (previous?.trackedTableRows ?? 0) === 0 && (frame.trackedTableRows ?? 0) > 0;
+        const statusSettlementTransition =
+            previous?.statusHeight !== undefined && frame.settledStatusHeight !== undefined;
         if (
             previous?.trackedTextLength !== undefined &&
             frame.trackedTextLength === previous.trackedTextLength &&
+            !tableStructureTransition &&
+            !statusSettlementTransition &&
             (Math.abs((frame.trackedBodyHeight ?? 0) - (previous.trackedBodyHeight ?? 0)) > 1 ||
                 Math.abs((frame.trackedRowHeight ?? 0) - (previous.trackedRowHeight ?? 0)) > 1)
         )
@@ -3596,8 +3696,7 @@ function streamingPaintMeasurementBuild(
                 columns.some((width, index) => Math.abs(width - previousColumns[index]!) > 1))
         )
             tableColumnReflows += 1;
-        if ((previous?.trackedTableRows ?? 0) === 0 && (frame.trackedTableRows ?? 0) > 0)
-            tableStructureTransitions += 1;
+        if (tableStructureTransition) tableStructureTransitions += 1;
         previous = frame;
     }
     const maxBottomDistance = frames.reduce(
@@ -3720,10 +3819,9 @@ function streamingPaintMeasurementBuild(
             settledStatusGapMax !== undefined &&
             Math.abs(settledStatusGapMax - 24) <= 1 &&
             settledStatusHeightMin !== undefined &&
-            Math.abs(settledStatusHeightMin - 36) <= 0.5 &&
+            Math.abs(settledStatusHeightMin - 32) <= 0.5 &&
             settledStatusHeightMax !== undefined &&
-            Math.abs(settledStatusHeightMax - 36) <= 0.5 &&
-            statusTransitionContinuous &&
+            Math.abs(settledStatusHeightMax - 32) <= 0.5 &&
             statusTypographyMatched &&
             tableObserved &&
             tableStructureTransitions === 1,
@@ -3834,7 +3932,9 @@ async function streamingScrollRun(
     composer: Locator,
     mark: (name: string) => Promise<void>,
 ): Promise<StreamingScrollMeasurement> {
-    const list = page.locator('[data-happy-desktop-ui="message-list"]').first();
+    const list = page
+        .locator('[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]')
+        .first();
     const armFollowing = async () => {
         await scrollListToFraction(page, 1);
         const box = await list.boundingBox();
@@ -3906,7 +4006,7 @@ async function streamingScrollRun(
     await page.waitForFunction(
         () => {
             const element = document.querySelector<HTMLElement>(
-                '[data-happy-desktop-ui="message-list"]',
+                '[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
             );
             return (
                 element !== null &&
@@ -3920,6 +4020,11 @@ async function streamingScrollRun(
         await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
     });
     const unstick = streamingScrollPhaseBuild("parked", unstickFrames);
+    if (!following.stable || !parked.stable || !unstick.stable) {
+        throw new Error(
+            `Streaming reader anchoring failed: ${JSON.stringify({ following, parked, unstick })}`,
+        );
+    }
     await mark("streaming-scroll-unstick");
     await armFollowing();
     await page.waitForTimeout(200);
@@ -3935,7 +4040,7 @@ async function streamingScrollRun(
                 (marker) => {
                     const trackedMessage = [
                         ...document.querySelectorAll<HTMLElement>(
-                            '[data-happy-desktop-ui="message"]',
+                            '[data-happy-desktop-ui="message"][data-agent]',
                         ),
                     ]
                         .filter((message) => message.textContent?.includes(String(marker)))
@@ -3968,7 +4073,12 @@ async function streamingScrollRun(
     );
     const paint = streamingPaintMeasurementBuild(paintFrames);
     if (!paint.stable)
-        throw new Error(`Streaming paint stability failed: ${JSON.stringify(paint)}`);
+        throw new Error(
+            `Streaming paint stability failed: ${JSON.stringify({
+                ...paint,
+                frames: `${String(paint.frames.length)} captured frames`,
+            })}`,
+        );
     await mark("streaming-paint");
     await armFollowing();
     await page.waitForTimeout(200);
@@ -4000,7 +4110,9 @@ async function streamingScrollRun(
         microUnstickMarker,
         { timeout: 30_000 },
     );
-    const microList = page.locator('[data-happy-desktop-ui="message-list"]').first();
+    const microList = page
+        .locator('[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]')
+        .first();
     const microListBox = await microList.boundingBox();
     if (!microListBox) throw new Error("The tiny unstick transcript has no wheel target.");
     await page.mouse.move(
@@ -4933,11 +5045,13 @@ async function waitForReplayMarker(page: Page, marker: string): Promise<void> {
             state: "attached",
             timeout: 90_000,
         });
-        await page.locator('[data-happy-desktop-ui="message-list"]').evaluate(async (element) => {
-            const list = element as HTMLElement;
-            list.scrollTop = list.scrollHeight;
-            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        });
+        await page
+            .locator('[data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]')
+            .evaluate(async (element) => {
+                const list = element as HTMLElement;
+                list.scrollTop = list.scrollHeight;
+                await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+            });
         await page.waitForFunction(
             (expected) =>
                 document

@@ -5,8 +5,8 @@ import { Readable } from "node:stream";
 import { HappyAgentClient } from "@slopus/happy-agent-client";
 import type * as happyAgentProtocol from "@slopus/happy-agent-client";
 
-export const GYM_AGENT_PROVIDER_ID = "codex";
-export const GYM_AGENT_MODEL_ID = "openai/gpt-5.6-sol";
+export const GYM_AGENT_PROVIDER_ID = "gym";
+export const GYM_AGENT_MODEL_ID = "openai/gym";
 
 type Cuid2 = happyAgentProtocol.Cuid2;
 type HappyAgentEvent = happyAgentProtocol.HappyAgentEvent;

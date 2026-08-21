@@ -62,7 +62,7 @@ export async function gitFixturesCreate(
     };
     const repositories = await Promise.all(
         Array.from({ length: manifest.target.regularProjects }, (_, index) =>
-            createRepository(paths.workspace, index, manifest, gitEnvironment),
+            createRepository(paths.projects, index, manifest, gitEnvironment),
         ),
     );
     const projects: GymProject[] = [];

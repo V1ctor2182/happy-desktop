@@ -242,6 +242,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
         if (scriptKey.includes("gym-tool-settle")) {
             if (!this.#toolCallEmittedScriptKeys.has(scriptKey)) {
                 this.#toolCallEmittedScriptKeys.add(scriptKey);
+                const fixturePath = `.happy-gym-tool-settle-${scriptKey}.txt`;
                 return {
                     content: [
                         {
@@ -254,10 +255,8 @@ class DeterministicInferenceServer implements GymInferenceServer {
                             arguments: {
                                 patch: [
                                     "*** Begin Patch",
-                                    "*** Update File: README.md",
-                                    "@@",
-                                    "-export const renderer = 'pierre';",
-                                    "+export const renderer = 'pierre-gym';",
+                                    `*** Add File: ${fixturePath}`,
+                                    `+Deterministic Gym tool settlement for ${scriptKey}.`,
                                     "*** End Patch",
                                 ].join("\n"),
                             },

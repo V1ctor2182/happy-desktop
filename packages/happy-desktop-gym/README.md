@@ -5,11 +5,72 @@ isolated, host-native Electron performance gym for Happy Agent.
 
 ## Electron Happy Agent gym
 
-The gym creates a disposable run under
-`.context/happy-desktop-gym/runs/<profile>-<uuid>` by default. It writes an
-ownership marker, temporary `HOME`/`TMPDIR`/Happy Agent server directory/Electron
-user-data directory, deterministic Git repositories and real Happy Agent worktrees,
-then seeds agents and durable transcripts through the Happy Agent `/v0` API.
+The gym creates one disposable run under `<system-temp>/hdg/g-<run-id>` by
+default. Every mutable path belongs to that one short root: `HOME`, `TMPDIR`,
+`HAPPY_HOME_DIR`, the Happy Agent socket and token, Electron user data,
+deterministic Git repositories, real Happy Agent worktrees, and profiler
+artifacts. A stopped, prepared run has this representative shape:
+
+```text
+<system-temp>/hdg/g-1234abcd/
+├── .happy/
+│   ├── agent/
+│   │   ├── agent.sqlite{,-shm,-wal,.lock}
+│   │   ├── auto-agent.sqlite{,-shm,-wal,.lock}
+│   │   ├── daemon.log
+│   │   ├── observation/agent.log
+│   │   ├── runtime.toml
+│   │   └── token
+├── Happy/
+│   ├── Config/
+│   │   ├── AGENTS.md
+│   │   ├── SECURITY.md
+│   │   └── happy.toml
+│   └── Generated/
+├── home/
+│   ├── .cache/
+│   ├── .config/
+│   ├── .local/
+│   ├── .bash_profile
+│   └── .zprofile
+├── tmp/
+├── projects/
+│   └── gym-project-01/
+├── workspaces/
+│   └── gym-project-01/gym-project-01-work-02/
+├── bin/
+│   └── happy-agent -> <selected installed Happy Agent>
+├── artifacts/
+├── electron-user-data/
+├── electron-user-data-<build>/
+├── .happy-desktop-gym-owner.json
+├── manifest.json
+├── inference.ndjson
+├── stream-events.ndjson
+├── session-cluster.json
+├── achieved.json
+└── prepared.json
+```
+
+While the daemon is live it creates `.happy/agent/server.sock`, its PID file,
+and its internal module sockets beneath the same agent directory; shutdown
+removes the live socket. Electron first creates the empty `electron-user-data/`
+launch base, then the development app selects `electron-user-data-<build>/` for
+its actual profile. The installed Agent adds extracted runtime assets beneath
+`tmp`, but nothing gets a parallel external root.
+
+`HAPPY_HOME_DIR=<run>/.happy` is the authoritative Agent boundary. The Agent
+derives its socket and token there; the launcher also names those same two paths
+explicitly to tell Electron this particular daemon is owned by Gym, not by the
+desktop's install/update lifecycle. All three values remain within the one run
+root. The launcher supplies an exact allowlisted environment and uses the
+run-owned `Happy/Config/happy.toml` with
+`settings.happy_integration = false`, and supplies no Happy credentials.
+Consequently a local desktop Gym does not start the optional Happy account/mobile
+session mirror or pollute the developer's production account.
+
+The gym writes an ownership marker, then seeds agents and durable transcripts
+through the Happy Agent `/v0` API.
 It never writes daemon storage directly. Preparation proves the exact
 project/worktree catalog, durable agent transcript, and seeded-turn invariants
 through that public API. The live event journal drives the streaming workloads;
@@ -30,7 +91,7 @@ Build the app once, then prepare and run:
 ```sh
 pnpm --dir packages/happy-desktop-electron build:profile:optimized
 pnpm --dir packages/happy-desktop-gym gym:electron prepare --profile smoke
-pnpm --dir packages/happy-desktop-gym gym:electron run --root .context/happy-desktop-gym/runs/<run> --workload all
+pnpm --dir packages/happy-desktop-gym gym:electron run --root <printed-run-root> --workload all
 ```
 
 `build:profile:optimized` enables the checked-in React DevTools profiling bridge
@@ -67,12 +128,13 @@ Run it repeatedly against one already-prepared root:
 
 ```sh
 pnpm --dir packages/happy-desktop-gym gym:electron run \
-  --root .context/happy-desktop-gym/runs/<run> \
+  --root <printed-run-root> \
   --workload window-edge-resize
 ```
 
-When Happy Desktop does not have a bundled Happy Agent package, point the gym at an
-existing Happy Agent build with `HAPPY_DESKTOP_AGENT_ENTRYPOINT=/absolute/path/to/dist/main.js`.
+The Gym selects the Happy Agent installation recorded by the current Happy home.
+To use another installed executable, set
+`HAPPY_DESKTOP_AGENT_EXECUTABLE=/absolute/path/to/happy-agent`.
 
 `mixed-replay` is the end-to-end lane. It reads the existing
 `gold-five-minute-session.v1.json` recording for its real submitted-message
@@ -102,10 +164,13 @@ panel and sidebar splitters, folding each panel away and restoring it, resizing 
 native window, and growing and shrinking the multiline composer.
 Following readers must stay within 8px of the bottom without a temporary
 break-and-recovery correction or overlapping virtual rows; parked readers must
-retain the same lowest visible text glyph and bottom-edge offset through splitter
-drags in both directions, panel/sidebar toggles, window resizing, and composer
-resizing. The recorded `scrollStability` phases distinguish natural text rewrap
-during width changes from a lost scroll anchor.
+retain the same authoritative model-space row and offset through splitter drags in
+both directions, panel/sidebar toggles, and window resizing. That is the product's
+one-observer width-reflow contract: text naturally rewraps inside the stable row
+without DOM-range tracking or per-row measurement. Composer height changes do not
+rewrap text, so they retain the exact lowest visible text glyph and bottom-edge
+offset. The recorded `scrollStability` phases name the contract they enforce and
+distinguish natural text rewrap from a lost scroll anchor.
 The standalone `streaming` workload submits through the real composer six times. A
 following send must remain exactly pinned while the working status and response
 stream grow, including a stable status-to-composer gap; a parked send must retain
@@ -117,8 +182,10 @@ forms a real GFM table over SSE. The prospective header must remain progressivel
 visible as text before it becomes a table; its own columns may reflow as rows arrive.
 Every painted frame must nevertheless keep the completed prefix node, the transcript
 at the bottom, and the status-to-composer gap stable. The capture continues through
-the settled `Completed in` row and requires it to retain the live status's 36px slot,
-24px composer gap, 14px/20px typography, and color without a correction frame.
+the settled `Completed in` row and separately requires its 32px activity slot, 24px
+composer gap, 14px/20px typography, and color to stay stable without a correction
+frame. The explicit live-status to settled-summary structural transition is not
+treated as a same-node resize.
 A fifth response executes a real `apply_patch` in the mounted worktree and measures
 the painted generic-running → settled-file-diff transition. The 32px activity row
 and its 20px text/stats line must stay equal while unchanged visible-row spacing
@@ -152,18 +219,20 @@ not downloaded it yet, point `HAPPY_DESKTOP_ELECTRON_EXECUTABLE` at an installed
 host Electron executable. The measured app is never moved into Docker.
 
 Profiles are deterministic and versioned: `smoke`, `realistic`, and `stress`.
-Use `--root` and `--artifact-dir` to choose explicit paths. Artifact paths must
-remain in the run root or workspace `.context`.
+An explicit `--root` must be a direct child of `<system-temp>/hdg`; omitting it
+is the simplest and safest option. `--artifact-dir` is the sole intentional
+escape hatch: artifacts may stay in the run root or be written to the
+workspace's `.context` directory.
 
 ```sh
 pnpm --dir packages/happy-desktop-gym gym:electron prepare --profile realistic
-pnpm --dir packages/happy-desktop-gym gym:electron run --root /absolute/run/root --workload mixed-replay
-pnpm --dir packages/happy-desktop-gym gym:electron clean --root /absolute/run/root
+pnpm --dir packages/happy-desktop-gym gym:electron run --root <printed-run-root> --workload mixed-replay
+pnpm --dir packages/happy-desktop-gym gym:electron clean --root <printed-run-root>
 ```
 
-`clean` refuses paths without the Gym ownership marker and refuses broad source
-directories. Keep a run for inspection, or clean it explicitly after collecting
-the artifacts.
+`clean` refuses paths outside the system temporary Gym directory and paths
+without the Gym ownership marker. Keep a run for inspection, or clean it
+explicitly after collecting the artifacts.
 
 ## Browser rendering harness
 

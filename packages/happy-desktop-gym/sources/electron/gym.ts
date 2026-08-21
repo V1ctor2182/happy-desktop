@@ -4,12 +4,7 @@ import { join } from "node:path";
 import { catalogSnapshotRead, durableHistorySeed } from "./history.js";
 import { gymInferenceServerCreate } from "./inferenceServer.js";
 import { gymManifestRead } from "./manifest.js";
-import {
-    gymRunPathsCreate,
-    gymRunPathsRead,
-    gymRunPathsWithHappyAgentWorkspace,
-    gymRunProfileWrite,
-} from "./paths.js";
+import { gymRunPathsCreate, gymRunPathsRead, gymRunPathsWithHappyAgentWorkspace } from "./paths.js";
 import { gitFixturesCreate } from "./fixtures.js";
 import { happyAgentRuntimeCreate, type StartedHappyAgentRuntime } from "./happyAgentRuntime.js";
 import { electronWorkloadsRun } from "./workloads.js";
@@ -59,10 +54,6 @@ export async function gymPrepare(options: {
     let runtime: StartedHappyAgentRuntime | undefined;
     try {
         await inference.start();
-        await gymRunProfileWrite(runPaths, {
-            HAPPY_AGENT_GYM_INFERENCE_URL: inference.url,
-            HAPPY_AGENT_GYM_TOKEN: inference.token,
-        });
         runtime = await happyAgentRuntimeCreate(runPaths, inference);
         const fixtures = await gitFixturesCreate(runPaths, manifest, runtime.client);
         const projects = fixtures.projects;
@@ -164,10 +155,6 @@ export async function gymRun(options: {
     let electron: ElectronRunResult | undefined;
     try {
         await inference.start();
-        await gymRunProfileWrite(paths, {
-            HAPPY_AGENT_GYM_INFERENCE_URL: inference.url,
-            HAPPY_AGENT_GYM_TOKEN: inference.token,
-        });
         runtime = await happyAgentRuntimeCreate(paths, inference);
         electron = await electronWorkloadsRun({
             paths,
