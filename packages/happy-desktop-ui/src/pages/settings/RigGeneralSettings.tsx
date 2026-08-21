@@ -1,5 +1,6 @@
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
+import { Button } from "../../Button";
 import { FormRow } from "../../FormRow";
 import { SegmentedControl } from "../../SegmentedControl";
 import { Select, type SelectOption } from "../../Select";
@@ -29,12 +30,25 @@ export type RigGeneralSettingsProps = {
     experimentalFeaturesEnabled: boolean;
     /** Whether active session, project, and workspace titles shimmer. */
     titleShimmerEnabled: boolean;
+    /** The managed Happy Agent installation, absent outside the native desktop shell. */
+    agent?: {
+        availableVersion?: string;
+        error?: string;
+        installedVersion?: string;
+        managed: boolean;
+        message?: string;
+        operation: "idle" | "checking" | "downloading" | "upgrading";
+        runningVersion?: string;
+        runtime: "stopped" | "starting" | "ready";
+        updateAvailable: boolean;
+    };
     onAppearanceChange: (appearance: RigAppearanceChoice) => void;
     onExperimentalFeaturesChange: (enabled: boolean) => void;
     onTitleShimmerChange: (enabled: boolean) => void;
     onDefaultModelChange: (key: string) => void;
     onEffortChange: (effort: string) => void;
     onPermissionModeChange: (mode: string) => void;
+    onAgentUpgrade?: () => void;
 };
 
 const appearanceSegments = [
@@ -173,6 +187,56 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                     label="Default access mode"
                 />
             </RigSettingsSection>
+            {props.agent ? (
+                <RigSettingsSection
+                    description="The verified local runtime Happy uses for coding sessions. Updates are checked automatically."
+                    title="Happy Agent"
+                >
+                    <FormRow
+                        control={
+                            <Box className="happy2-rig-settings__agent-control">
+                                <span className="happy2-rig-settings__agent-version">
+                                    {!props.agent.managed
+                                        ? "External"
+                                        : props.agent.installedVersion
+                                          ? `v${props.agent.installedVersion}`
+                                          : "Not installed"}
+                                </span>
+                                {props.agent.managed &&
+                                props.agent.updateAvailable &&
+                                props.onAgentUpgrade ? (
+                                    <Button
+                                        loading={props.agent.operation === "upgrading"}
+                                        onClick={props.onAgentUpgrade}
+                                        size="small"
+                                        variant="secondary"
+                                    >
+                                        {props.agent.availableVersion
+                                            ? `Update to ${props.agent.availableVersion}`
+                                            : "Update"}
+                                    </Button>
+                                ) : props.agent.operation === "checking" ? (
+                                    <Box className="happy2-rig-settings__pending">
+                                        <Spinner size={16} />
+                                        <span>Checking…</span>
+                                    </Box>
+                                ) : null}
+                            </Box>
+                        }
+                        description={agentDescription(props.agent)}
+                        label="Installed version"
+                    />
+                    <FormRow
+                        control={
+                            <span className="happy2-rig-settings__agent-runtime">
+                                {agentRuntimeLabel(props.agent.runtime, props.agent.runningVersion)}
+                            </span>
+                        }
+                        description="Follows the daemon Happy is connected to"
+                        label="Daemon"
+                    />
+                </RigSettingsSection>
+            ) : null}
             <RigSettingsSection
                 description="Work that is still being built. It can change or disappear between releases."
                 title="Experimental features"
@@ -194,4 +258,28 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
             </RigSettingsSection>
         </>
     );
+}
+
+function agentDescription(agent: NonNullable<RigGeneralSettingsProps["agent"]>): string {
+    if (!agent.managed) return "This daemon is supplied by an external development environment.";
+    if (agent.error)
+        return `Happy Agent reported: ${agent.error} Update checks continue automatically.`;
+    return (
+        agent.message ??
+        (agent.updateAvailable ? "A newer verified release is ready." : "Up to date.")
+    );
+}
+
+function agentRuntimeLabel(
+    runtime: NonNullable<RigGeneralSettingsProps["agent"]>["runtime"],
+    runningVersion: string | undefined,
+): string {
+    switch (runtime) {
+        case "ready":
+            return runningVersion ? `Running · v${runningVersion}` : "Running";
+        case "starting":
+            return "Starting";
+        case "stopped":
+            return "Stopped";
+    }
 }

@@ -15,6 +15,7 @@ export interface LocalOnboardingStore {
     get(): LocalOnboardingViewSnapshot;
     subscribe(listener: () => void): () => void;
     connectRetry(): void;
+    daemonDownload(): void;
     projectChoose(): void;
     profileNameUpdate(value: string): void;
     profileEmailUpdate(value: string): void;
@@ -110,6 +111,13 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
         connectRetry() {
             attempt(bridge.runtimeRetry(), "Happy could not ask Rig to start again.");
         },
+        daemonDownload() {
+            if (snapshot.pending) return;
+            attempt(
+                bridge.daemonDownload().then(() => bridge.runtimeRetry()),
+                "Happy could not download Happy Agent.",
+            );
+        },
         projectChoose() {
             attempt(bridge.onboardingProjectChoose(), "Happy could not open a project.");
         },
@@ -154,6 +162,12 @@ export function localOnboardingView(
         case "rigMissing":
             return {
                 kind: "rig-missing",
+                ...(message ? { message } : {}),
+            };
+        case "daemonDownload":
+            return {
+                busy,
+                kind: "daemon-download",
                 ...(message ? { message } : {}),
             };
         case "connecting":

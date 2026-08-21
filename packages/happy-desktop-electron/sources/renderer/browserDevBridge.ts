@@ -103,6 +103,20 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         directoryPick: async () => undefined,
         desktopConfigGet: () => request<DesktopConfig>("desktopConfigGet"),
         desktopConfigWrite: (config) => request<void>("desktopConfigWrite", config),
+        daemonDownload: async () => {
+            throw new Error("Happy Agent downloads are available in the Electron desktop window.");
+        },
+        daemonGet: async () => ({
+            installation: "installed",
+            managed: false,
+            operation: "idle",
+            runtime: "ready",
+            updateAvailable: false,
+        }),
+        daemonSubscribe: () => () => undefined,
+        daemonUpgrade: async () => {
+            throw new Error("Happy Agent updates are available in the Electron desktop window.");
+        },
         debugGet: async () => unsupportedDebugSnapshot,
         debugAllStart: async () => nativeDebugUnavailable(),
         debugAllStop: async () => nativeDebugUnavailable(),

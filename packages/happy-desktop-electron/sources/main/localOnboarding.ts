@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ProjectRegistrationError } from "happy-desktop-state";
 import type {
+    DesktopDaemonSnapshot,
     DesktopRuntimeSnapshot,
     LocalOnboardingFreshness,
     LocalOnboardingSnapshot,
@@ -176,7 +177,14 @@ export interface LocalOnboardingRuntime {
     ): Promise<{ readonly path: string }>;
 }
 
+/** The downloaded-daemon state first-run setup follows without owning it. */
+export interface LocalOnboardingDaemon {
+    get(): DesktopDaemonSnapshot;
+    subscribe(listener: (snapshot: DesktopDaemonSnapshot) => void): () => void;
+}
+
 export interface LocalOnboardingOptions {
+    readonly daemon?: LocalOnboardingDaemon;
     readonly recordPath: string;
     readonly runtime: LocalOnboardingRuntime;
     readonly probe?: () => Promise<LocalRuntimeProbe>;
@@ -254,6 +262,7 @@ export class LocalOnboarding implements Disposable {
      * rather than queued behind the first.
      */
     private durablePending = false;
+    private daemonUnsubscribe?: () => void;
     private runtimeUnsubscribe?: () => void;
     private snapshotValue: LocalOnboardingSnapshot = {
         busy: true,
@@ -271,6 +280,7 @@ export class LocalOnboarding implements Disposable {
             version: recordVersion,
         };
         const onboarding = new LocalOnboarding(options, record);
+        onboarding.daemonUnsubscribe = options.daemon?.subscribe(() => onboarding.refresh());
         onboarding.runtimeUnsubscribe = options.runtime.subscribe(() => onboarding.refresh());
         // The first look at the machine is the same decision as every later one:
         // it happens because Happy is being asked to run here, not because this
@@ -394,6 +404,8 @@ export class LocalOnboarding implements Disposable {
         this.closed = true;
         this.pollStop();
         this.probeRetryStop();
+        this.daemonUnsubscribe?.();
+        this.daemonUnsubscribe = undefined;
         this.runtimeUnsubscribe?.();
         this.runtimeUnsubscribe = undefined;
         this.listeners.clear();
@@ -535,10 +547,13 @@ export class LocalOnboarding implements Disposable {
             // the command is missing, and a connection that was replaced can each
             // mean a different `rig` than the one the last probe found.
             const arrived = previous === undefined || previous.startsWith("away:");
-            if (arrived || runtime.phase === "error" || runtime.phase === "ready")
+            if (
+                !this.options.daemon &&
+                (arrived || runtime.phase === "error" || runtime.phase === "ready")
+            )
                 void this.probeRun();
         }
-        this.connectionNudge(runtime);
+        if (!this.options.daemon) this.connectionNudge(runtime);
         this.freshnessSynchronize(runtime);
         this.publish();
     }
@@ -682,6 +697,7 @@ export class LocalOnboarding implements Disposable {
 
     private snapshotBuild(): LocalOnboardingSnapshot {
         const probe = this.probed;
+        const daemon = this.options.daemon?.get();
         const runtime = this.options.runtime.get();
         const ready = runtime.phase === "ready" && runtime.mode === "local";
         const node =
@@ -697,6 +713,7 @@ export class LocalOnboarding implements Disposable {
               }
             : undefined;
         const stage = this.stageDerive({
+            daemon,
             local: runtimeLocal(runtime),
             node: !!node,
             probed: !!probe,
@@ -707,7 +724,11 @@ export class LocalOnboarding implements Disposable {
         const providers = stage === "providersMissing" ? [] : undefined;
         const retrying = runtime.phase === "error" && runtime.retrying === true;
         return {
-            busy: this.busy || stage === "checking" || stage === "examining",
+            busy:
+                this.busy ||
+                stage === "checking" ||
+                stage === "examining" ||
+                (stage === "daemonDownload" && daemon?.operation === "downloading"),
             freshness: this.freshness,
             ...(message ? { message } : {}),
             ...(providers ? { providers } : {}),
@@ -720,6 +741,7 @@ export class LocalOnboarding implements Disposable {
     }
 
     private stageDerive(facts: {
+        readonly daemon?: DesktopDaemonSnapshot;
         readonly local: boolean;
         readonly node: boolean;
         readonly rig: boolean;
@@ -727,6 +749,14 @@ export class LocalOnboarding implements Disposable {
         readonly probed: boolean;
     }): LocalOnboardingSnapshot["stage"] {
         if (!facts.local) return "inactive";
+        if (facts.daemon) {
+            if (facts.daemon.installation === "missing" || facts.daemon.operation === "downloading")
+                return "daemonDownload";
+            if (!facts.ready) {
+                const runtime = this.options.runtime.get();
+                return runtime.phase === "error" ? "connectFailed" : "connecting";
+            }
+        }
         if (!facts.ready) {
             if (!facts.probed) return "checking";
             if (!facts.node) return "nodeMissing";
@@ -758,6 +788,10 @@ export class LocalOnboarding implements Disposable {
         runtime: DesktopRuntimeSnapshot,
     ): string | undefined {
         if (this.message) return this.message;
+        if (stage === "daemonDownload") {
+            const daemon = this.options.daemon?.get();
+            return daemon?.error ?? daemon?.message;
+        }
         if (stage === "checking") return this.probeMessage;
         if (stage === "connectFailed" && runtime.phase === "error") return runtime.message;
         if (stage === "connectFailed") return onboardingFailureMessage(this.rigOnboarding);

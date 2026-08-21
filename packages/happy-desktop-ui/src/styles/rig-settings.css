@@ -105,6 +105,26 @@
     line-height: 20px;
 }
 
+.happy2-rig-settings__agent-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy2-rig-settings__agent-version {
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    font-synthesis: none;
+    line-height: 20px;
+}
+
+.happy2-rig-settings__agent-runtime {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
 /*
  * The editor a whole document is edited in, inside a category that is otherwise
  * rows. It is given a height rather than left to grow: the settings body is one

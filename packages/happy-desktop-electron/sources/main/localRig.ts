@@ -64,10 +64,23 @@ export interface LocalRigConnector {
     connect(): Promise<LocalRigConnection>;
 }
 
+/** The selected standalone Happy Agent release used by the packaged desktop. */
+export interface LocalDaemonBinarySource {
+    launchEnvironment(): Promise<NodeJS.ProcessEnv>;
+    selectedBinary(): Promise<{ readonly path: string; readonly version: string } | undefined>;
+}
+
 export class RigCommandMissingError extends Error {
     constructor() {
         super("Happy could not find a global Rig command in the login shell.");
         this.name = "RigCommandMissingError";
+    }
+}
+
+export class HappyAgentBinaryMissingError extends Error {
+    constructor() {
+        super("Happy Agent has not been downloaded yet.");
+        this.name = "HappyAgentBinaryMissingError";
     }
 }
 
@@ -202,6 +215,7 @@ export function localRigConnectorCreate(
         readonly host?: RigProcessHost;
         readonly environment?: NodeJS.ProcessEnv;
         readonly configuredShell?: string;
+        readonly daemonBinary?: LocalDaemonBinarySource;
         readonly wait?: (milliseconds: number) => Promise<void>;
         readonly clientCreate?: RigDaemonClientCreate;
     } = {},
@@ -212,6 +226,7 @@ export function localRigConnectorCreate(
     const clientCreate: RigDaemonClientCreate =
         options.clientCreate ?? ((input) => new RigDaemonClient(input));
     const debug = options.debug ?? (() => undefined);
+    const daemonBinary = options.daemonBinary;
     const launchDiscover = async (): Promise<RigLaunchContext> => {
         const launch = await rigLoginEnvironmentDiscover(
             host,
@@ -241,6 +256,30 @@ export function localRigConnectorCreate(
             const defaultDaemonPaths = rigDaemonPathsResolve(baseEnvironment);
             const runningDaemon = await sharedDaemonAttach(defaultDaemonPaths, clientCreate, wait);
             if (runningDaemon) return localRigConnectionCreate(runningDaemon, wait);
+
+            if (daemonBinary) {
+                const selected = await daemonBinary.selectedBinary();
+                if (!selected) throw new HappyAgentBinaryMissingError();
+                const environment = await daemonBinary.launchEnvironment();
+                const daemonPaths = rigDaemonPathsResolve(environment);
+                let startError: unknown;
+                try {
+                    debug(`Happy Agent executable: ${selected.path}`);
+                    await host.execFile(selected.path, ["start"], { env: environment });
+                } catch (error) {
+                    startError = error;
+                }
+                const daemon = await sharedDaemonAttach(daemonPaths, clientCreate, wait, 10_000);
+                if (!daemon) {
+                    throw new Error(
+                        startError
+                            ? `Happy Agent could not be started: ${errorMessage(startError)}`
+                            : "Timed out while waiting for Happy Agent.",
+                        startError ? { cause: startError } : undefined,
+                    );
+                }
+                return localRigConnectionCreate(daemon, wait);
+            }
 
             const launch = await launchDiscover();
             const discoveredDaemonPaths = rigDaemonPathsResolve(launch.environment);

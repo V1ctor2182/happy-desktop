@@ -58,7 +58,7 @@ import {
     mediaPreviewResolve,
     mediaPreviewTitle,
 } from "./mediaPreviewWindow";
-import { localRigConnectorCreate } from "./localRig";
+import { localRigConnectorCreate, localRuntimeProbe } from "./localRig";
 import { LocalOnboarding } from "./localOnboarding";
 import { NotesStore } from "./notesStore";
 import {
@@ -76,6 +76,7 @@ import { desktopMainInspectorStart } from "./desktopInspector";
 import { DesktopProfilerController } from "./desktopProfilerController";
 import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
+import { DesktopDaemonController } from "./desktopDaemonController";
 
 if (process.platform !== "darwin") {
     console.error("Happy Place desktop is available only on macOS.");
@@ -234,6 +235,7 @@ if (desktopDebugEnabled) {
 }
 
 let runtime: DesktopRuntime;
+let daemonController: DesktopDaemonController;
 let desktopConfigStore: DesktopConfigStore;
 let desktopDebugController: DesktopDebugController | undefined;
 let desktopDebugDaemonAttemptedConnectionId: number | undefined;
@@ -268,6 +270,12 @@ function desktopDebugPublish(snapshot: DesktopDebugSnapshot): void {
     const window = windowLifecycle.get();
     if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
     window.webContents.send(desktopIpc.debugChanged, snapshot);
+}
+
+function desktopDaemonSenderRequire(sender: WebContents): void {
+    const presenting = windowLifecycle.get();
+    if (!presenting || presenting.webContents !== sender)
+        throw new Error("This window cannot control Happy Agent.");
 }
 
 function desktopDebugSenderRequire(sender: WebContents): void {
@@ -1267,7 +1275,29 @@ void app
         // Apply the remembered source before the first window is created, so
         // its native background and Chromium guests start in the chosen theme.
         nativeTheme.themeSource = desktopConfigStore.get().appearance;
-        const connector = localRigConnectorCreate({ debug: desktopDebugLog });
+        const launchEnvironment = await localRuntimeProbe().then(
+            (probe) => probe.environment,
+            () => process.env,
+        );
+        const managedDaemon = !(
+            launchEnvironment.RIG_SERVER_SOCKET_PATH?.trim() &&
+            launchEnvironment.RIG_SERVER_TOKEN_PATH?.trim()
+        );
+        daemonController = await DesktopDaemonController.create({
+            environment: launchEnvironment,
+            launchEnvironment: async () => launchEnvironment,
+            managed: managedDaemon,
+        });
+        daemonController.subscribe((snapshot) => {
+            const window = windowLifecycle.get();
+            if (window && !window.isDestroyed())
+                window.webContents.send(desktopIpc.daemonChanged, snapshot);
+        });
+        const connector = localRigConnectorCreate({
+            daemonBinary: daemonController,
+            debug: desktopDebugLog,
+            environment: launchEnvironment,
+        });
         const rendererOrigin =
             desktopFlavor.kind === "local-web"
                 ? desktopFlavor.rendererOrigin
@@ -1339,6 +1369,7 @@ void app
         // its own: the daemon is started, connected, and left running by the
         // runtime alone, and setup only reads its state and asks it to try again.
         onboarding = await LocalOnboarding.create({
+            ...(managedDaemon ? { daemon: daemonController } : {}),
             directoryPick: () => directoryPickShow(windowLifecycle.get()),
             // Which window setup is working for. A native picker outlives the
             // window that opened it, so setup reads this again before it acts on
@@ -1357,6 +1388,7 @@ void app
             update: (snapshot) => runtime.updateSet(snapshot),
         });
         runtime.subscribe((snapshot) => {
+            daemonController.runtimeSet(snapshot);
             desktopDebugRuntimeLog(snapshot);
             if (
                 browserProxyConnectionId !== undefined &&
@@ -1379,11 +1411,24 @@ void app
             desktopDebugDaemonStartIfReady(snapshot);
             desktopProfilerController.refresh();
         });
+        daemonController.runtimeSet(runtime.get());
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
         ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
         ipcMain.handle(desktopIpc.desktopConfigWrite, (_event, config: unknown) =>
             desktopConfigStore.write(config),
         );
+        ipcMain.handle(desktopIpc.daemonGet, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.get();
+        });
+        ipcMain.handle(desktopIpc.daemonDownload, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.download();
+        });
+        ipcMain.handle(desktopIpc.daemonUpgrade, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.upgrade();
+        });
         ipcMain.handle(desktopIpc.debugGet, (event) => {
             desktopDebugSenderRequire(event.sender);
             return debugController.get();
@@ -1562,7 +1607,10 @@ void app
         applicationMenuInstall(runtime.get());
         desktopDebugRuntimeLog(runtime.get());
         desktopDebugDaemonStartIfReady(runtime.get());
-        const updateCheck = () => void updater.check().catch(() => undefined);
+        const updateCheck = () => {
+            void updater.check().catch(() => undefined);
+            void daemonController.checkForUpdate().catch(() => undefined);
+        };
         const updateCheckInterval = setInterval(updateCheck, updateCheckIntervalMs);
         updateCheckInterval.unref();
         app.once("will-quit", () => clearInterval(updateCheckInterval));

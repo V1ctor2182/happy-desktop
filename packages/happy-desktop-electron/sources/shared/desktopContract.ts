@@ -81,6 +81,19 @@ export interface DesktopUpdateSnapshot {
     status: "idle" | "checking" | "available" | "downloading" | "downloaded" | "error";
 }
 
+/** The machine-local Happy Agent installation and the daemon currently serving it. */
+export interface DesktopDaemonSnapshot {
+    readonly availableVersion?: string;
+    readonly error?: string;
+    readonly installation: "missing" | "installed";
+    readonly installedVersion?: string;
+    readonly managed: boolean;
+    readonly message?: string;
+    readonly operation: "idle" | "checking" | "downloading" | "upgrading";
+    readonly runtime: "stopped" | "starting" | "ready";
+    readonly updateAvailable: boolean;
+}
+
 export type DesktopRuntimeSnapshot =
     | {
           phase: "choosing";
@@ -200,6 +213,8 @@ export type LocalOnboardingStage =
     | "nodeMissing"
     /** Node is present but the global `rig` command is unavailable. */
     | "rigMissing"
+    /** Happy Agent is not installed yet; the renderer may ask the shell to download it. */
+    | "daemonDownload"
     /** `rig` exists; the normal user daemon is being started or connected to. */
     | "connecting"
     /** The daemon could not be reached; the desktop runtime carries the reason. */
@@ -470,6 +485,10 @@ export interface HappyDesktopBridge {
     directoryPick(): Promise<string | undefined>;
     desktopConfigGet(): Promise<DesktopConfig>;
     desktopConfigWrite(config: DesktopConfig): Promise<void>;
+    daemonDownload(): Promise<void>;
+    daemonGet(): Promise<DesktopDaemonSnapshot>;
+    daemonSubscribe(listener: (snapshot: DesktopDaemonSnapshot) => void): () => void;
+    daemonUpgrade(): Promise<void>;
     debugGet(): Promise<DesktopDebugSnapshot>;
     debugAllStart(): Promise<DesktopDebugSnapshot>;
     debugAllStop(): Promise<DesktopDebugSnapshot>;
@@ -560,6 +579,10 @@ export const desktopIpc = {
     zoomChanged: "happy2:zoom:changed",
     desktopConfigGet: "happy2:desktop-config:get",
     desktopConfigWrite: "happy2:desktop-config:write",
+    daemonChanged: "happy2:daemon:changed",
+    daemonDownload: "happy2:daemon:download",
+    daemonGet: "happy2:daemon:get",
+    daemonUpgrade: "happy2:daemon:upgrade",
     debugAllStart: "happy2:debug:all-start",
     debugAllStop: "happy2:debug:all-stop",
     debugChanged: "happy2:debug:changed",

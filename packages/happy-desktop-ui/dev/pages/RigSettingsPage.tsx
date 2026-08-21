@@ -223,6 +223,16 @@ export function RigSettingsBlueprintPage() {
                     title="General"
                 >
                     <RigGeneralSettings
+                        agent={{
+                            availableVersion: "0.3.1",
+                            installedVersion: "0.3.0",
+                            managed: true,
+                            message: "Happy Agent 0.3.1 is available.",
+                            operation: "idle",
+                            runningVersion: "0.3.0",
+                            runtime: "ready",
+                            updateAvailable: true,
+                        }}
                         appearance="system"
                         defaultModelKey="codex:openai/gpt-5.6-sol"
                         effort="medium"
@@ -230,6 +240,7 @@ export function RigSettingsBlueprintPage() {
                         experimentalFeaturesEnabled
                         modelOptions={modelOptions}
                         onAppearanceChange={noop}
+                        onAgentUpgrade={noop}
                         onExperimentalFeaturesChange={noop}
                         onDefaultModelChange={noop}
                         onEffortChange={noop}

@@ -10,6 +10,8 @@ export {
     type AppRigViewProps,
 } from "./AppRigView";
 export {
+    type AppRigDaemonSnapshot,
+    type AppRigDaemonStore,
     type AppRigDebugSnapshot,
     type AppRigDebugStore,
     type AppRigDebugTargetSnapshot,

@@ -93,6 +93,25 @@ export interface AppRigDebugStore {
     rendererInspectorStop(): void;
 }
 
+/** The managed Happy Agent installation projected into General settings. */
+export interface AppRigDaemonSnapshot {
+    readonly availableVersion?: string;
+    readonly error?: string;
+    readonly installedVersion?: string;
+    readonly managed: boolean;
+    readonly message?: string;
+    readonly operation: "idle" | "checking" | "downloading" | "upgrading";
+    readonly runningVersion?: string;
+    readonly runtime: "stopped" | "starting" | "ready";
+    readonly updateAvailable: boolean;
+}
+
+export interface AppRigDaemonStore {
+    daemonUpgrade(): void;
+    get(): AppRigDaemonSnapshot;
+    subscribe(listener: () => void): () => void;
+}
+
 export interface AppRigProfilerCapabilities {
     readonly liveDebuggerAttach: boolean;
     readonly nativeTrace: boolean;
@@ -143,6 +162,8 @@ const PERMISSION_MODES: readonly RigPermissionMode[] = [
 
 export interface AppRigSettingsViewProps {
     appearance: AppearanceStore;
+    /** Managed Happy Agent controls, present only in the native desktop shell. */
+    daemon?: AppRigDaemonStore;
     /**
      * Whether this window offers the features that are not finished yet. Absent
      * in a host that remembers no such choice, which withholds them.
@@ -279,6 +300,18 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         profilerStore.get,
         profilerStore.get,
     );
+    const daemonStore = (props.section === "general" ? props.daemon : undefined) ?? daemonStoreNoop;
+    const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
+    const daemonView: AppRigDaemonSnapshot = {
+        ...daemon,
+        ...(host?.version ? { runningVersion: host.version } : {}),
+        runtime:
+            host?.status === "connected"
+                ? "ready"
+                : host?.status === "connecting"
+                  ? "starting"
+                  : "stopped",
+    };
     const catalog = models.type === "ready" ? models.catalog : undefined;
     const selection = defaultSelection(catalog, settings);
     const model = catalog?.providers
@@ -438,6 +471,9 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                 />
             ) : (
                 <RigGeneralSettings
+                    {...(props.daemon
+                        ? { agent: daemonView, onAgentUpgrade: daemonStore.daemonUpgrade }
+                        : {})}
                     appearance={appearance.mode}
                     defaultModelKey={
                         selection.modelId
@@ -542,6 +578,17 @@ const profilerStoreNoop: AppRigProfilerStore = {
     get: () => profilerUnavailable,
     profilerStart: () => undefined,
     profilerStop: () => undefined,
+    subscribe: noSubscribe,
+};
+const daemonUnavailable: AppRigDaemonSnapshot = {
+    managed: false,
+    operation: "idle",
+    runtime: "stopped",
+    updateAvailable: false,
+};
+const daemonStoreNoop: AppRigDaemonStore = {
+    daemonUpgrade: () => undefined,
+    get: () => daemonUnavailable,
     subscribe: noSubscribe,
 };
 

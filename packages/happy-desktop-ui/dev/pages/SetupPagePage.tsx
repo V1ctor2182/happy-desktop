@@ -135,6 +135,25 @@ export function SetupPagePage() {
                     <DimensionRule label="Missing fields collapse; the column stays centred" />
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="Managed first install · one verified download action, with no terminal prerequisite"
+                label="Download Happy Agent"
+                number="06"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <SetupPage
+                            action={{ label: "Download and start", onSelect: noop }}
+                            copy="Happy downloads the published release for this Mac, verifies its checksum, and keeps each version isolated before starting it."
+                            scene="robot"
+                            title="Download Happy Agent."
+                        />
+                    </div>
+                    <DimensionRule label="One native action · download status stays on the same button" />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

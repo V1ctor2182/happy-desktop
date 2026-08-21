@@ -5,6 +5,7 @@ export type LocalOnboardingView =
     | { readonly kind: "checking"; readonly message?: string }
     | { readonly kind: "node-missing" }
     | { readonly kind: "rig-missing"; readonly message?: string }
+    | { readonly busy: boolean; readonly kind: "daemon-download"; readonly message?: string }
     | { readonly kind: "connecting" }
     | { readonly kind: "connect-failed"; readonly message: string; readonly retrying: boolean }
     | {
@@ -26,6 +27,7 @@ export type LocalOnboardingView =
 export interface LocalOnboardingScreenProps {
     readonly view: LocalOnboardingView;
     onConnectRetry(): void;
+    onDaemonDownload(): void;
     onProjectChoose(): void;
     onProfileNameChange(value: string): void;
     onProfileEmailChange(value: string): void;
@@ -118,6 +120,24 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 data-testid="local-onboarding-screen"
                 scene="robot"
                 title="Rig is required."
+            />
+        );
+
+    if (view.kind === "daemon-download")
+        return (
+            <SetupPage
+                action={{
+                    busy: view.busy,
+                    label: view.busy ? "Downloading…" : "Download and start",
+                    onSelect: props.onDaemonDownload,
+                }}
+                copy={
+                    view.message ??
+                    "Happy downloads the published release for this Mac, verifies its checksum, and keeps each version isolated before starting it."
+                }
+                data-testid="local-onboarding-screen"
+                scene="robot"
+                title="Download Happy Agent."
             />
         );
 

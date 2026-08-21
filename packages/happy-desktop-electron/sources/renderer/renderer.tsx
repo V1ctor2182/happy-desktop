@@ -8,6 +8,7 @@ import {
     rigRouterGroupOpen,
     rigRouterGroupForget,
     rigRouterCreate,
+    type AppRigDaemonStore,
     type AppRigUpdate,
     type AppRigDebugStore,
     type AppRigProfilerStore,
@@ -75,6 +76,7 @@ import { desktopPreferencesCreate } from "./desktopPreferences";
 import { desktopHistoryPersistence } from "./desktopHistory";
 import { desktopDebugStoreCreate } from "./desktopDebugStore";
 import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
+import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
@@ -206,6 +208,7 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
  */
 function RigBoundary(props: {
     appearance: AppearanceStore;
+    daemon?: AppRigDaemonStore;
     debug: AppRigDebugStore;
     profiler: AppRigProfilerStore;
     bridge: HappyDesktopBridge;
@@ -232,6 +235,7 @@ function RigBoundary(props: {
                 // A development window says which checkout it came from; the
                 // packaged product supplies nothing and shows nothing.
                 buildIdentity: props.bridge.buildIdentity,
+                ...(props.daemon ? { daemon: props.daemon } : {}),
                 debug: props.debug,
                 profiler: props.profiler,
                 htmlPreview: props.htmlPreview,
@@ -309,6 +313,7 @@ function DesktopOnboardingGate(props: {
     return (
         <LocalOnboardingScreen
             onConnectRetry={() => props.store.connectRetry()}
+            onDaemonDownload={() => props.store.daemonDownload()}
             onProfileCreate={() => props.store.profileCreate()}
             onProfileEmailChange={(value) => props.store.profileEmailUpdate(value)}
             onProfileNameChange={(value) => props.store.profileNameUpdate(value)}
@@ -364,6 +369,7 @@ function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
 
 interface DesktopRendererProps {
     appearance: AppearanceStore;
+    daemon?: AppRigDaemonStore;
     debug: AppRigDebugStore;
     profiler: AppRigProfilerStore;
     onboarding: LocalOnboardingStore;
@@ -420,6 +426,7 @@ function DesktopScreens(props: DesktopRendererProps) {
             // the workspace below it is never rebuilt by the change.
             ready={snapshot?.phase === "ready"}
             rigs={props.rigs}
+            {...(props.daemon ? { daemon: props.daemon } : {})}
             {...(snapshot?.update ? { update: snapshot.update } : {})}
         >
             <DesktopRuntimeContent {...props} hostedUpdate={hostedUpdate} snapshot={snapshot} />
@@ -454,6 +461,7 @@ function DesktopScreens(props: DesktopRendererProps) {
  */
 function DesktopProtocolGate(props: {
     children: ReactNode;
+    daemon?: AppRigDaemonStore;
     onUpdateInstall(): void;
     /** False while the runtime still owns the window with a screen of its own. */
     ready: boolean;
@@ -461,6 +469,8 @@ function DesktopProtocolGate(props: {
     update?: DesktopUpdateSnapshot;
 }) {
     const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
+    const daemonStore = props.daemon ?? unavailableDaemonStore;
+    const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const mismatch = props.ready
         ? directory.rigs.find((rig) => rig.id === LOCAL_RIG_ID)?.protocolMismatch
         : undefined;
@@ -492,17 +502,47 @@ function DesktopProtocolGate(props: {
             />
         );
     }
-    // The daemon is behind, which is not something Happy can fix from here: it
-    // is a global npm package on this machine, so the command is the answer.
+    const upgrading = daemon.operation === "upgrading";
     return (
         <SetupPage
-            copy={`Rig on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy needs at least ${mismatch.supportedMinimum}. Update Rig, then start Happy again.`}
+            {...(daemon.updateAvailable || upgrading
+                ? {
+                      action: {
+                          busy: upgrading,
+                          label: upgrading
+                              ? "Updating Happy Agent…"
+                              : `Update to ${daemon.availableVersion ?? "latest"}`,
+                          onSelect: daemonStore.daemonUpgrade,
+                      },
+                  }
+                : {})}
+            copy={`Happy Agent on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy needs at least ${mismatch.supportedMinimum}. ${
+                !daemon.managed
+                    ? "This daemon is supplied by an external development environment; update it there and reconnect."
+                    : daemon.error
+                      ? `Happy could not check for its update: ${daemon.error}`
+                      : daemon.updateAvailable || upgrading
+                        ? "Install the verified update to reconnect with the current protocol."
+                        : "Happy is checking for a compatible update automatically."
+            }`}
             data-testid="desktop-protocol-screen"
             scene="owl"
-            title="Rig is out of date."
+            title="Happy Agent is out of date."
         />
     );
 }
+
+const unavailableDaemonSnapshot = {
+    managed: false,
+    operation: "idle",
+    runtime: "stopped",
+    updateAvailable: false,
+} as const;
+const unavailableDaemonStore: AppRigDaemonStore = {
+    daemonUpgrade: () => undefined,
+    get: () => unavailableDaemonSnapshot,
+    subscribe: () => () => undefined,
+};
 
 function DesktopRuntimeContent(
     props: DesktopRendererProps & {
@@ -563,6 +603,7 @@ function DesktopRuntimeContent(
         <RigBoundary
             appearance={props.appearance}
             bridge={props.bridge}
+            {...(props.daemon ? { daemon: props.daemon } : {})}
             debug={props.debug}
             profiler={props.profiler}
             browserContent={props.browserContent}
@@ -685,6 +726,7 @@ if (mediaPreviewBridge) {
         appearance.subscribe(() => preferences.appearanceChanged(appearance.get().mode));
         const debug = desktopDebugStoreCreate(desktopBridge);
         const profiler = desktopProfilerStoreCreate(desktopBridge);
+        const daemon = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
         // Defaults and model picker memory belong to the desktop, not one daemon.
         // The state stores stay synchronous while the bridge persists their typed
         // snapshots through the main process.
@@ -745,6 +787,7 @@ if (mediaPreviewBridge) {
                 <CodeHighlightWorkers>
                     <DesktopRenderer
                         appearance={appearance}
+                        {...(daemon ? { daemon } : {})}
                         debug={debug}
                         profiler={profiler}
                         onboarding={onboardingStore}

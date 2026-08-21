@@ -38,6 +38,7 @@ import {
     AppRigSettingsView,
     RIG_SETTINGS_DEFAULT_CATEGORY,
     rigSettingsCategoryExists,
+    type AppRigDaemonStore,
     type AppRigDebugStore,
     type AppRigProfilerStore,
 } from "../views/AppRigSettingsView";
@@ -62,6 +63,7 @@ export interface RigRouterContext {
      */
     readonly mediaWindow?: MediaWindowOpener;
     readonly debug?: AppRigDebugStore;
+    readonly daemon?: AppRigDaemonStore;
     readonly profiler?: AppRigProfilerStore;
     readonly rigs: AppRigDirectoryStore;
     /** This build's development identity; absent in the packaged product. */
@@ -358,6 +360,7 @@ function RigSettingsRoute() {
     return (
         <AppRigSettingsView
             appearance={context.appearance}
+            {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.debug ? { debug: context.debug } : {})}
             {...(context.profiler ? { profiler: context.profiler } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
