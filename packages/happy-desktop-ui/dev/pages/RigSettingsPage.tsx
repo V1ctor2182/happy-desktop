@@ -42,6 +42,56 @@ const usageAccounts: readonly RigProviderUsageEntry[] = [
             fiveHour: { usedPercent: 42, resetsAt: 1_700_007_200_000 },
             weekly: { usedPercent: 81, resetsAt: 1_700_400_000_000 },
             monthly: { usedPercent: 34, resetsAt: 1_702_000_000_000 },
+            models: [
+                {
+                    modelId: "anthropic/opus-5",
+                    hour: {
+                        inputTokens: 18_400,
+                        outputTokens: 6_200,
+                        cacheReadTokens: 412_000,
+                        cacheWriteTokens: 24_000,
+                    },
+                    day: {
+                        inputTokens: 214_000,
+                        outputTokens: 71_500,
+                        cacheReadTokens: 5_120_000,
+                        cacheWriteTokens: 268_000,
+                    },
+                    week: {
+                        inputTokens: 1_420_000,
+                        outputTokens: 486_000,
+                        cacheReadTokens: 33_800_000,
+                        cacheWriteTokens: 1_740_000,
+                    },
+                    month: {
+                        inputTokens: 5_180_000,
+                        outputTokens: 1_760_000,
+                        cacheReadTokens: 121_400_000,
+                        cacheWriteTokens: 6_320_000,
+                    },
+                },
+                {
+                    modelId: "anthropic/sonnet-5",
+                    day: {
+                        inputTokens: 9_800,
+                        outputTokens: 3_100,
+                        cacheReadTokens: 142_000,
+                        cacheWriteTokens: 7_400,
+                    },
+                    week: {
+                        inputTokens: 86_000,
+                        outputTokens: 29_400,
+                        cacheReadTokens: 1_180_000,
+                        cacheWriteTokens: 62_000,
+                    },
+                    month: {
+                        inputTokens: 402_000,
+                        outputTokens: 138_000,
+                        cacheReadTokens: 5_640_000,
+                        cacheWriteTokens: 291_000,
+                    },
+                },
+            ],
         },
     },
     {
@@ -55,12 +105,93 @@ const usageAccounts: readonly RigProviderUsageEntry[] = [
             fiveHour: { usedPercent: 100, resetsAt: 1_700_003_000_000 },
             weekly: { usedPercent: 96 },
             credits: { available: true, unlimited: false, remainingCents: 1_450 },
+            models: [
+                {
+                    modelId: "openai/gpt-5.6-sol",
+                    month: {
+                        inputTokens: 2_940_000,
+                        outputTokens: 812_000,
+                        cacheReadTokens: 44_100_000,
+                        cacheWriteTokens: 0,
+                    },
+                    week: {
+                        inputTokens: 740_000,
+                        outputTokens: 203_000,
+                        cacheReadTokens: 11_200_000,
+                        cacheWriteTokens: 0,
+                    },
+                },
+            ],
         },
     },
     {
         providerId: "grok",
         checkedAt: 1_700_000_000_000,
         error: "The Grok account could not be read: the assistant is signed out.",
+    },
+];
+
+/**
+ * What the daemon actually reports today: absolute token counts by model, with
+ * no plan share behind them, plus an account that has spent nothing at all.
+ */
+const usageTokensOnly: readonly RigProviderUsageEntry[] = [
+    {
+        providerId: "claude",
+        checkedAt: 1_700_000_000_000,
+        usage: {
+            vendor: "claude",
+            capturedAt: 1_700_000_000_000,
+            models: [
+                {
+                    modelId: "anthropic/opus-5",
+                    hour: {
+                        inputTokens: 12_300,
+                        outputTokens: 4_100,
+                        cacheReadTokens: 286_000,
+                        cacheWriteTokens: 15_800,
+                    },
+                    day: {
+                        inputTokens: 188_000,
+                        outputTokens: 62_400,
+                        cacheReadTokens: 4_310_000,
+                        cacheWriteTokens: 221_000,
+                    },
+                    week: {
+                        inputTokens: 1_090_000,
+                        outputTokens: 361_000,
+                        cacheReadTokens: 26_700_000,
+                        cacheWriteTokens: 1_380_000,
+                    },
+                    month: {
+                        inputTokens: 4_260_000,
+                        outputTokens: 1_410_000,
+                        cacheReadTokens: 98_200_000,
+                        cacheWriteTokens: 5_070_000,
+                    },
+                },
+                {
+                    modelId: "anthropic/fable-5",
+                    week: {
+                        inputTokens: 42_000,
+                        outputTokens: 14_300,
+                        cacheReadTokens: 611_000,
+                        cacheWriteTokens: 31_200,
+                    },
+                    month: {
+                        inputTokens: 151_000,
+                        outputTokens: 52_800,
+                        cacheReadTokens: 2_240_000,
+                        cacheWriteTokens: 114_000,
+                    },
+                },
+            ],
+        },
+    },
+    {
+        providerId: "codex",
+        checkedAt: 1_700_000_000_000,
+        usage: { vendor: "codex", capturedAt: 1_700_000_000_000, models: [] },
     },
 ];
 
@@ -591,9 +722,29 @@ export function RigSettingsBlueprintPage() {
                 </RigSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
+                detail="Token counts with no plan share behind them: one account listing what each model spent per rolling window, and one that has spent nothing"
+                label="Rig settings — usage tokens only"
+                number="08a"
+            >
+                <RigSettingsShell
+                    activeCategoryId="usage"
+                    categories={categories}
+                    description={usageDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Usage"
+                >
+                    <RigUsageSettings
+                        currentTime={1_700_000_000_000}
+                        providers={usageTokensOnly}
+                        readingTime={usageReadingTime}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
                 detail="Before the first reading arrives, so an empty account list is not claimed early"
                 label="Rig settings — usage loading"
-                number="08a"
+                number="08b"
             >
                 <RigSettingsShell
                     activeCategoryId="usage"
@@ -609,7 +760,7 @@ export function RigSettingsBlueprintPage() {
             <FullScreenSpecimen
                 detail="No assistant is signed in on this machine, so the category sends the reader where accounts are actually made"
                 label="Rig settings — usage empty"
-                number="08b"
+                number="08c"
             >
                 <RigSettingsShell
                     activeCategoryId="usage"
@@ -625,7 +776,7 @@ export function RigSettingsBlueprintPage() {
             <FullScreenSpecimen
                 detail="The reading failed; what was already read stays legible beneath the banner, and an account never read says so rather than reading as unspent"
                 label="Rig settings — usage error and unread"
-                number="08c"
+                number="08d"
             >
                 <RigSettingsShell
                     activeCategoryId="usage"

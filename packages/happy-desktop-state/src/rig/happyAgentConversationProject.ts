@@ -24,6 +24,63 @@ import { rigCompactionSubject } from "./rigTokenFormat.js";
 
 type RigProfile = NonNullable<Extract<ChatElement, { kind: "user_message" }>["profile"]>;
 
+/**
+ * What one turn's rows were projected from, so the next projection can tell
+ * whether they still stand.
+ *
+ * The transcript is rebuilt from the whole element list on every update the
+ * daemon sends, and during a run that is once per streamed fragment. Rebuilding
+ * the settled turns above the live one produced identical rows out of identical
+ * rows, and then cost the reader a deep comparison of every tool call, every
+ * argument tree, and every diff line to discover that nothing had moved. A turn
+ * whose elements are the same objects at the same place in the transcript keeps
+ * the rows it already has, and the work of an update falls to the turn that
+ * actually changed.
+ */
+interface ConversationGroupCache {
+    /** Exactly the elements these rows were projected from, by reference. */
+    readonly elements: readonly ChatElement[];
+    /** Where the turn began, since a row's sequence is its place in the whole. */
+    readonly startIndex: number;
+    /** The lookahead this turn's footer depended on. */
+    readonly nextOpensOmitted: boolean;
+    /** Questions this turn claimed, re-announced whenever its rows are reused. */
+    readonly matchedUserInputIds: readonly string[];
+    readonly entries: readonly ConversationEntry[];
+}
+
+/**
+ * Everything a projection depends on besides the elements themselves. All of it
+ * is small and changes rarely, so one comparison of these decides whether any
+ * cached turn may be reused at all — no turn has to track them itself.
+ */
+interface ConversationContext {
+    readonly sessionId: string;
+    readonly showReasoning: boolean;
+    readonly ephemeral: readonly ConversationEntry[];
+    readonly pendingUserInputs: readonly RigUserInputRequest[];
+    readonly answeredUserInputs: readonly RigAnsweredUserInput[];
+    readonly expandedGroupIds: ReadonlySet<string>;
+    readonly subagents: readonly RigSubagentSummary[];
+    readonly sentImages?: HappyAgentConversationInput["sentImages"];
+}
+
+/**
+ * One conversation's projection memory. It holds only what the last projection
+ * produced, so dropping it costs a rebuild and never correctness.
+ */
+export interface HappyAgentConversationCache {
+    context?: ConversationContext;
+    elements?: readonly ChatElement[];
+    entries?: readonly ConversationEntry[];
+    groups: Map<number, ConversationGroupCache>;
+}
+
+/** Creates the projection memory owned by one conversation. */
+export function happyAgentConversationCacheCreate(): HappyAgentConversationCache {
+    return { groups: new Map() };
+}
+
 export interface HappyAgentConversationInput {
     readonly elements: readonly ChatElement[];
     readonly sessionId: string;
@@ -45,6 +102,12 @@ export interface HappyAgentConversationInput {
         string,
         readonly { readonly mediaType: string; readonly data: string }[]
     >;
+    /**
+     * Projection memory from the last call, owned by the conversation. Omitting
+     * it projects everything from scratch, which is what a one-off caller — a
+     * blueprint page, a test — wants.
+     */
+    readonly cache?: HappyAgentConversationCache;
 }
 
 /** Current human profile carried by one attributed Rig message. */
@@ -73,6 +136,26 @@ function profileAuthor(
 export function happyAgentConversationProject(
     input: HappyAgentConversationInput,
 ): readonly ConversationEntry[] {
+    const cache = input.cache;
+    const context: ConversationContext = {
+        sessionId: input.sessionId,
+        showReasoning: input.showReasoning,
+        ephemeral: input.ephemeral,
+        pendingUserInputs: input.pendingUserInputs,
+        answeredUserInputs: input.answeredUserInputs,
+        expandedGroupIds: input.expandedGroupIds,
+        subagents: input.subagents,
+        ...(input.sentImages === undefined ? {} : { sentImages: input.sentImages }),
+    };
+    const contextStands =
+        cache?.context !== undefined && conversationContextEqual(cache.context, context);
+    // Nothing about this conversation moved: the elements are the same array and
+    // everything projected alongside them is unchanged. This is every update
+    // that is not transcript content — an activity tick, a background process,
+    // a context measurement — and it costs one comparison.
+    if (contextStands && cache?.entries !== undefined && cache.elements === input.elements)
+        return cache.entries;
+
     const entries: ConversationEntry[] = [];
     const userInputs = new Map<string, ProjectableUserInput>();
     for (const request of input.pendingUserInputs)
@@ -82,52 +165,219 @@ export function happyAgentConversationProject(
     for (const request of input.answeredUserInputs)
         userInputs.set(request.requestId, { state: "answered", request });
     const matchedUserInputIds = new Set<string>();
+    // One pass over the transcript settles both things the turn loop below needs
+    // to know up front: where each turn begins, and which user rows are
+    // collaboration transport rather than dialogue — which a turn's footer has
+    // to know about the turn *after* it.
+    const starts: number[] = [];
     const omittedInboundMessageIds = new Set<string>();
-    for (const element of input.elements) {
-        if (element.kind !== "user_message") continue;
-        if (userMessageOmit(element, input)) omittedInboundMessageIds.add(element.id);
+    let openGroupId: string | undefined;
+    for (let index = 0; index < input.elements.length; index += 1) {
+        const element = input.elements[index]!;
+        if (index === 0 || element.groupId !== openGroupId) {
+            starts.push(index);
+            openGroupId = element.groupId;
+        }
+        if (element.kind === "user_message" && userMessageOmit(element, input))
+            omittedInboundMessageIds.add(element.id);
     }
-    const delegatedChildByRow = rigDelegatedChildrenByRow({
-        parentSessionId: input.sessionId,
-        parentToolCalls: input.elements.flatMap((element) =>
-            element.kind === "tool_call"
-                ? [{ rowId: element.id, toolCallId: element.toolCallId }]
-                : [],
-        ),
-        subagents: input.subagents,
-    });
+    // A session with no children has no row to place one on, so the whole
+    // placement pass — and the scan of every element that feeds it — is skipped.
+    const delegatedChildByRow =
+        input.subagents.length === 0
+            ? NO_DELEGATED_CHILDREN
+            : rigDelegatedChildrenByRow({
+                  parentSessionId: input.sessionId,
+                  parentToolCalls: input.elements.flatMap((element) =>
+                      element.kind === "tool_call"
+                          ? [{ rowId: element.id, toolCallId: element.toolCallId }]
+                          : [],
+                  ),
+                  subagents: input.subagents,
+              });
 
-    for (let start = 0; start < input.elements.length; ) {
-        const groupId = input.elements[start]!.groupId;
-        let end = start + 1;
-        while (end < input.elements.length && input.elements[end]!.groupId === groupId) end += 1;
-        entries.push(
-            ...rigConnectGroupProject(
-                input.elements.slice(start, end),
-                input,
-                userInputs,
-                matchedUserInputIds,
-                omittedInboundMessageIds,
-                delegatedChildByRow,
-                groupOpensWithOnlyOmittedUserMessages(
-                    input.elements,
-                    end,
-                    omittedInboundMessageIds,
-                ),
-            ),
+    /* Keyed by position rather than by group id: a pending question is filed
+       under the run it belongs to and lands after that run's own rows, so an id
+       alone would name two turns. A turn that keeps its place keeps its key. */
+    const groups = new Map<number, ConversationGroupCache>();
+    for (let group = 0; group < starts.length; group += 1) {
+        const start = starts[group]!;
+        const end = starts[group + 1] ?? input.elements.length;
+        const nextOpensOmitted = groupOpensWithOnlyOmittedUserMessages(
+            input.elements,
+            end,
+            omittedInboundMessageIds,
         );
-        start = end;
+        const startIndex = entries.length;
+        const cached = contextStands ? cache?.groups.get(group) : undefined;
+        if (
+            cached !== undefined &&
+            cached.startIndex === startIndex &&
+            cached.nextOpensOmitted === nextOpensOmitted &&
+            sameElements(cached.elements, input.elements, start, end)
+        ) {
+            for (const requestId of cached.matchedUserInputIds) matchedUserInputIds.add(requestId);
+            for (const entry of cached.entries) entries.push(entry);
+            groups.set(group, cached);
+            continue;
+        }
+        const elements = input.elements.slice(start, end);
+        const matchedBefore = matchedUserInputIds.size;
+        const projected = rigConnectGroupProject(
+            elements,
+            input,
+            userInputs,
+            matchedUserInputIds,
+            omittedInboundMessageIds,
+            delegatedChildByRow,
+            nextOpensOmitted,
+        );
+        // A row's sequence is its place in the finished transcript, so it is
+        // assigned here rather than in one pass at the end: a turn whose rows
+        // are kept must keep the sequence it was projected with too.
+        const sequenced = projected.map((entry, index) => resequence(entry, startIndex + index));
+        for (const entry of sequenced) entries.push(entry);
+        groups.set(group, {
+            elements,
+            startIndex,
+            nextOpensOmitted,
+            matchedUserInputIds:
+                matchedUserInputIds.size === matchedBefore
+                    ? NO_MATCHED_USER_INPUTS
+                    : [...matchedUserInputIds].slice(matchedBefore),
+            entries: sequenced,
+        });
     }
 
-    for (const entry of input.ephemeral) entries.push(entry);
+    for (const entry of input.ephemeral) entries.push(resequence(entry, entries.length));
     // Older connectors may report a pending request before its tool element is
     // available. Keep that question actionable at the end until the transcript
     // catches up; answered records never append out of sequence.
     for (const request of input.pendingUserInputs) {
         if (matchedUserInputIds.has(request.requestId)) continue;
-        entries.push(userInputRequestProject({ state: "pending", request }, ""));
+        entries.push(
+            resequence(userInputRequestProject({ state: "pending", request }, ""), entries.length),
+        );
     }
-    return entries.map(resequence);
+    if (cache) {
+        cache.context = context;
+        cache.elements = input.elements;
+        cache.entries = entries;
+        cache.groups = groups;
+    }
+    return entries;
+}
+
+const NO_DELEGATED_CHILDREN: ReadonlyMap<string, RigPlaceableSubagent> = new Map();
+const NO_MATCHED_USER_INPUTS: readonly string[] = [];
+
+/** Whether a cached turn's rows came from exactly these elements. */
+function sameElements(
+    cached: readonly ChatElement[],
+    elements: readonly ChatElement[],
+    start: number,
+    end: number,
+): boolean {
+    if (cached.length !== end - start) return false;
+    for (let index = 0; index < cached.length; index += 1)
+        if (cached[index] !== elements[start + index]) return false;
+    return true;
+}
+
+/**
+ * Whether everything a projection reads besides the elements is unchanged.
+ *
+ * All of it is small — a handful of questions, the children this session
+ * spawned, the turns the reader has opened — so it is compared in full rather
+ * than tracked. Anything here changing rebuilds the transcript once, which is
+ * exactly the moment a rebuild is warranted.
+ */
+function conversationContextEqual(left: ConversationContext, right: ConversationContext): boolean {
+    return (
+        left.sessionId === right.sessionId &&
+        left.showReasoning === right.showReasoning &&
+        left.sentImages === right.sentImages &&
+        listEqual(left.ephemeral, right.ephemeral, referenceEqual) &&
+        setEqual(left.expandedGroupIds, right.expandedGroupIds) &&
+        listEqual(left.pendingUserInputs, right.pendingUserInputs, userInputRequestEqual) &&
+        listEqual(left.answeredUserInputs, right.answeredUserInputs, answeredUserInputEqual) &&
+        listEqual(left.subagents, right.subagents, subagentEqual)
+    );
+}
+
+function referenceEqual<T>(left: T, right: T): boolean {
+    return left === right;
+}
+
+function setEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+    if (left === right) return true;
+    if (left.size !== right.size) return false;
+    for (const value of left) if (!right.has(value)) return false;
+    return true;
+}
+
+function listEqual<T>(
+    left: readonly T[],
+    right: readonly T[],
+    equal: (left: T, right: T) => boolean,
+): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1)
+        if (!equal(left[index]!, right[index]!)) return false;
+    return true;
+}
+
+function userInputRequestEqual(left: RigUserInputRequest, right: RigUserInputRequest): boolean {
+    return (
+        left === right ||
+        (left.requestId === right.requestId &&
+            listEqual(left.questions, right.questions, requestQuestionEqual))
+    );
+}
+
+function answeredUserInputEqual(left: RigAnsweredUserInput, right: RigAnsweredUserInput): boolean {
+    if (left === right) return true;
+    return (
+        left.requestId === right.requestId &&
+        left.createdAt === right.createdAt &&
+        left.resolvedAt === right.resolvedAt &&
+        left.answers === right.answers &&
+        listEqual(left.questions, right.questions, requestQuestionEqual)
+    );
+}
+
+function requestQuestionEqual(
+    left: RigUserInputRequest["questions"][number],
+    right: RigUserInputRequest["questions"][number],
+): boolean {
+    return (
+        left === right ||
+        (left.id === right.id &&
+            left.header === right.header &&
+            left.question === right.question &&
+            left.multiSelect === right.multiSelect &&
+            left.required === right.required &&
+            left.options === right.options)
+    );
+}
+
+/** The fields a delegated row is drawn from; see `rigDelegationEntryProject`. */
+function subagentEqual(left: RigSubagentSummary, right: RigSubagentSummary): boolean {
+    if (left === right) return true;
+    return (
+        left.id === right.id &&
+        left.parentSessionId === right.parentSessionId &&
+        left.parentToolCallId === right.parentToolCallId &&
+        left.description === right.description &&
+        left.taskName === right.taskName &&
+        left.modelId === right.modelId &&
+        left.status === right.status &&
+        left.createdAt === right.createdAt &&
+        left.activeSince === right.activeSince &&
+        left.elapsedMs === right.elapsedMs &&
+        left.totalTokens === right.totalTokens
+    );
 }
 
 type ProjectableUserInput =

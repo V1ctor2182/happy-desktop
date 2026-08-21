@@ -27,32 +27,72 @@ import type { AgentTurnTraceSummary } from "../types.js";
  *
  * Locally created entries that the incoming list does not yet contain are kept
  * (a send in flight is still on screen), and the result is ordered by sequence.
+ *
+ * The two lists usually agree for most of their length, because the producer
+ * hands back the very objects it produced before for every turn it did not
+ * touch. So only the rows past that agreement are indexed, matched, compared, or
+ * checked for order: an update during a run reconciles the turn it changed, not
+ * the transcript above it. Everything this skips is provably settled — those
+ * rows are the same objects in the same places, and they were ordered when this
+ * function returned them.
  */
 export function entriesMerge<Entry extends ConversationEntry>(
     current: readonly Entry[],
     incoming: readonly Entry[],
 ): readonly Entry[] {
-    const existingById = new Map(current.map((entry) => [entryKey(entry), entry]));
-    const existingByMutation = new Map(
-        current
-            .filter((entry) => entry.kind === "message" && entry.clientMutationId !== undefined)
-            .map((entry) => [(entry as ConversationMessageEntry).clientMutationId!, entry]),
-    );
+    const settled = sharedPrefixLength(current, incoming);
+    if (settled === current.length && settled === incoming.length) return current;
+
+    const existingById = new Map<string, Entry>();
+    const existingByMutation = new Map<string, Entry>();
+    for (let index = settled; index < current.length; index += 1) {
+        const entry = current[index]!;
+        existingById.set(entryKey(entry), entry);
+        const mutationId =
+            entry.kind === "message"
+                ? (entry as ConversationMessageEntry).clientMutationId
+                : undefined;
+        if (mutationId !== undefined) existingByMutation.set(mutationId, entry);
+    }
     const consumed = new Set<Entry>();
-    const next = incoming.map((entry) => {
+    const next: Entry[] = incoming.slice();
+    for (let index = settled; index < next.length; index += 1) {
+        const entry = next[index]!;
         const mutationId = entry.kind === "message" ? entry.clientMutationId : undefined;
         const previous =
             existingById.get(entryKey(entry)) ??
-            (mutationId ? existingByMutation.get(mutationId) : undefined);
-        if (previous) consumed.add(previous);
-        if (previous && entryEquivalent(previous, entry)) return previous;
-        return entry;
-    });
-    for (const entry of current)
+            (mutationId === undefined ? undefined : existingByMutation.get(mutationId));
+        if (previous === undefined) continue;
+        consumed.add(previous);
+        if (entryEquivalent(previous, entry)) next[index] = previous;
+    }
+    for (let index = settled; index < current.length; index += 1) {
+        const entry = current[index]!;
         if (!consumed.has(entry) && entry.kind === "message" && entry.delivery !== "sent")
             next.push(entry);
-    next.sort(entryCompare);
+    }
+    // The producer emits rows in order and a retained local send belongs last,
+    // so the list is almost always already ordered. Checking costs one pass over
+    // the rows that moved; sorting one that needs it costs what it always did.
+    if (!entriesOrdered(next, settled)) next.sort(entryCompare);
     return sameReferences(current, next) ? current : next;
+}
+
+/** How far two lists hold the very same rows, in the very same order. */
+function sharedPrefixLength(
+    left: readonly ConversationEntry[],
+    right: readonly ConversationEntry[],
+): number {
+    const limit = Math.min(left.length, right.length);
+    let index = 0;
+    while (index < limit && left[index] === right[index]) index += 1;
+    return index;
+}
+
+function entriesOrdered(entries: readonly ConversationEntry[], from: number): boolean {
+    for (let index = Math.max(1, from); index < entries.length; index += 1)
+        if (entryCompare(entries[index - 1]!, entries[index]!) > 0) return false;
+    return true;
 }
 
 /** Whether two entries render identically, so the existing object may be kept. */
@@ -97,14 +137,50 @@ export function entryCompare(left: ConversationEntry, right: ConversationEntry):
     if (leftLocal !== rightLocal) return leftLocal ? 1 : -1;
     if (leftLocal && left.kind === "message" && right.kind === "message")
         return left.message.createdAt.localeCompare(right.message.createdAt);
-    const leftSequence = entrySequence(left);
-    const rightSequence = entrySequence(right);
-    try {
-        const difference = BigInt(leftSequence) - BigInt(rightSequence);
-        return difference < 0n ? -1 : difference > 0n ? 1 : 0;
-    } catch {
-        return leftSequence.localeCompare(rightSequence);
+    return sequenceCompare(entrySequence(left), entrySequence(right));
+}
+
+const ZERO = 48;
+const NINE = 57;
+
+/**
+ * Orders two sequence keys as the arbitrary-precision integers they are.
+ *
+ * They are decimal strings of unbounded length, zero-padded to whatever width
+ * their producer chose, so neither string order nor a number will do. Comparing
+ * the digits directly gives the same answer `BigInt` gave without parsing one
+ * per comparison — which, across an ordering pass over a long transcript, was
+ * two allocations for every step of the sort. A key that is not a plain decimal
+ * string keeps the lexical fallback it always had.
+ */
+function sequenceCompare(left: string, right: string): number {
+    const leftStart = significandStart(left);
+    const rightStart = significandStart(right);
+    if (leftStart < 0 || rightStart < 0) return left.localeCompare(right);
+    const leftDigits = left.length - leftStart;
+    const rightDigits = right.length - rightStart;
+    if (leftDigits !== rightDigits) return leftDigits < rightDigits ? -1 : 1;
+    for (let index = 0; index < leftDigits; index += 1) {
+        const leftDigit = left.charCodeAt(leftStart + index);
+        const rightDigit = right.charCodeAt(rightStart + index);
+        if (leftDigit !== rightDigit) return leftDigit < rightDigit ? -1 : 1;
     }
+    return 0;
+}
+
+/**
+ * Where a decimal string's significant digits begin, or `-1` when it is not a
+ * decimal string at all. An empty key and a key of only zeros both mean zero, so
+ * both report the end of the string and compare as no digits.
+ */
+function significandStart(value: string): number {
+    let index = 0;
+    while (index < value.length && value.charCodeAt(index) === ZERO) index += 1;
+    for (let scan = index; scan < value.length; scan += 1) {
+        const code = value.charCodeAt(scan);
+        if (code < ZERO || code > NINE) return -1;
+    }
+    return index;
 }
 
 function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolean {

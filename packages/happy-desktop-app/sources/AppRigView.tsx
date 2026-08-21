@@ -83,7 +83,6 @@ import {
     ChangedFileDiff,
     ComposerFooterBar,
     ComposerModelControl,
-    ComposerPanel,
     ConversationView,
     DeferredPane,
     EmptyState,
@@ -584,6 +583,7 @@ function toolTabsPlaced(
 function panelCloseTargetFind(panel: RigPanelSnapshot): string | undefined {
     if (!panel.open || panel.activeViewId === "files") return undefined;
     if (panel.activeViewId === "activity") return "activity";
+    if (panel.activeViewId === "usage") return "usage";
     if (panel.activeViewId === "preview") return panel.previewEntryId ? "preview" : undefined;
     if (panel.activeViewId === "file") return panel.fileViewOpen ? "file" : undefined;
     const tab = panel.tabs.find(
@@ -1954,6 +1954,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     };
     const panelViewClose = (viewId: string) => {
         if (viewId === "activity") props.workspace.activityPanelClose();
+        else if (viewId === "usage") props.workspace.usagePanelClose();
         else if (viewId === "preview") props.workspace.panel.previewClose();
         else if (viewId === "file") props.workspace.filePanelClose();
         else props.workspace.panel.tabClose(viewId as RigPanelTabId);
@@ -2115,6 +2116,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                               }
                             : {})}
                         onActivityOpen={() => props.workspace.activityPanelOpen()}
+                        onUsageOpen={() => props.workspace.usagePanelOpen()}
                         {...(openGroup
                             ? {
                                   onSubagentSelect: (sessionId: string) => {
@@ -3301,27 +3303,6 @@ function RigConversationSurface(props: {
                 ) : undefined
             }
             composer={conversation.composer}
-            composerAboveControl={
-                <>
-                    {/* Usage is a compact reading carried by the write end. The
-                        activity summary lives under the latest message in the
-                        transcript, so it does not add another composer-adjacent
-                        row here. */}
-                    {conversation.usagePanelOpen ? (
-                        <ComposerPanel
-                            onClose={() => workspace.usagePanelClose()}
-                            {...(conversation.usageLoading ? { status: "Updating…" } : {})}
-                            title="Session usage"
-                        >
-                            <RigUsagePanel
-                                error={conversation.usageError}
-                                loading={conversation.usageLoading}
-                                usage={conversation.usage}
-                            />
-                        </ComposerPanel>
-                    ) : null}
-                </>
-            }
             composerDisabled={props.readOnly}
             composerSubmitDisabled={sendRefusal !== undefined}
             {...(sendRefusal === undefined ? {} : { composerUnavailable: sendRefusal })}
@@ -3910,8 +3891,10 @@ function RigPanelBody(props: {
     layout: RigFileLayout;
     /** Reference clock for elapsed subagent activity. */
     now: number;
-    /** Selects Activity through the workspace so Usage closes first. */
+    /** Selects Activity through the owning workspace. */
     onActivityOpen: () => void;
+    /** Selects the session Usage tab through the owning workspace. */
+    onUsageOpen: () => void;
     /** Stops one background process from the Activity tab. */
     onActivityProcessStop?: (processId: number) => void;
     /** Opens one delegated child session from the Activity tab. */
@@ -4003,6 +3986,9 @@ function RigPanelBody(props: {
         { closable: false, icon: "files", id: "files", label: "Files" },
         ...(activityTabShown
             ? [{ closable: true, icon: "agents" as const, id: "activity", label: "Activity" }]
+            : []),
+        ...(props.panel.usageViewOpen
+            ? [{ closable: true, icon: "clock" as const, id: "usage", label: "Usage" }]
             : []),
         ...(props.panel.fileViewOpen && panelFile
             ? [
@@ -4097,6 +4083,7 @@ function RigPanelBody(props: {
                     onSelect={(tabId) => {
                         if (tabId === "files") props.store.filesSelect();
                         else if (tabId === "activity") props.onActivityOpen();
+                        else if (tabId === "usage") props.onUsageOpen();
                         else if (tabId === "preview" && props.panel.previewEntryId)
                             props.store.previewOpen(props.panel.previewEntryId);
                         else if (tabId === RIG_PANEL_FILE_VIEW_ID) props.store.fileViewOpen();
@@ -4108,7 +4095,10 @@ function RigPanelBody(props: {
                     // tool-call preview is bound to an entry of the conversation
                     // the main content is showing; neither has a form over there.
                     transferable={(tab) =>
-                        tab.id !== "files" && tab.id !== "activity" && tab.id !== "preview"
+                        tab.id !== "files" &&
+                        tab.id !== "activity" &&
+                        tab.id !== "usage" &&
+                        tab.id !== "preview"
                     }
                     transferTargets={PANEL_TRANSFER_TARGETS}
                 >
@@ -4186,6 +4176,22 @@ function RigPanelBody(props: {
                                 title="No session activity"
                             />
                         )
+                    ) : props.panel.activeViewId === "usage" ? (
+                        props.activity ? (
+                            <RigUsagePanel
+                                error={props.activity.usageError}
+                                loading={props.activity.usageLoading}
+                                placement="panel"
+                                usage={props.activity.usage}
+                            />
+                        ) : (
+                            <EmptyState
+                                description="Open a session to see its token, cost, context, and quota usage."
+                                icon="clock"
+                                size="panel"
+                                title="No session usage"
+                            />
+                        )
                     ) : props.panel.activeViewId === "preview" ? (
                         props.previewTool ? (
                             <ToolCallPreview tool={props.previewTool} />
@@ -4210,7 +4216,7 @@ function RigPanelBody(props: {
                         )
                     ) : activeToolTab ? null : ( // Already drawn above, for every kind of tool.
                         <EmptyState
-                            description="Select Files, a preview, or a live tool tab."
+                            description="Select Files, Activity, Usage, a preview, or a live tool tab."
                             icon="files"
                             size="panel"
                             title="Nothing selected"

@@ -90,14 +90,32 @@ function modelsProject(
     for (const window of WINDOWS)
         for (const modelId of Object.keys(usage[window][providerId] ?? {})) modelIds.add(modelId);
 
-    return [...modelIds].map(
-        (modelId): RigProviderModelTokenUsage => ({
-            modelId,
-            ...countsFor(usage.hour, providerId, modelId, "hour"),
-            ...countsFor(usage.day, providerId, modelId, "day"),
-            ...countsFor(usage.week, providerId, modelId, "week"),
-            ...countsFor(usage.month, providerId, modelId, "month"),
-        }),
+    return [...modelIds]
+        .map(
+            (modelId): RigProviderModelTokenUsage => ({
+                modelId,
+                ...countsFor(usage.hour, providerId, modelId, "hour"),
+                ...countsFor(usage.day, providerId, modelId, "day"),
+                ...countsFor(usage.week, providerId, modelId, "week"),
+                ...countsFor(usage.month, providerId, modelId, "month"),
+            }),
+        )
+        .sort((left, right) => {
+            // The daemon reports models keyed by an object, so their order is
+            // whatever insertion produced. The account's heaviest model is the
+            // one worth reading first, and the name settles a tie so the list
+            // does not reshuffle between two readings that spent the same.
+            const spent = monthTokens(right) - monthTokens(left);
+            return spent === 0 ? left.modelId.localeCompare(right.modelId) : spent;
+        });
+}
+
+/** Everything one model consumed over the widest window the daemon reports. */
+function monthTokens(model: RigProviderModelTokenUsage): number {
+    const counts = model.month;
+    if (counts === undefined) return 0;
+    return (
+        counts.inputTokens + counts.outputTokens + counts.cacheReadTokens + counts.cacheWriteTokens
     );
 }
 

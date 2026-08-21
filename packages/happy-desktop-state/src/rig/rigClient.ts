@@ -521,7 +521,6 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     if (current.count <= 0) {
                         current.count = 0;
                         chatDeactivate(current);
-                        current.store?.usagePanelClose();
                     }
                 },
             };

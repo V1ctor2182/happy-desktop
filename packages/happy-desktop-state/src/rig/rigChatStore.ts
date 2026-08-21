@@ -2,7 +2,6 @@ import { createStore } from "zustand/vanilla";
 import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
-    entryKey,
     type ConversationAttachment,
     type ConversationEntry,
     type ConversationRequestSubmission,
@@ -15,7 +14,10 @@ import type {
     SessionUsage,
 } from "../happyAgentConnection/index.js";
 import { UserError } from "../types.js";
-import { happyAgentConversationProject } from "./happyAgentConversationProject.js";
+import {
+    happyAgentConversationCacheCreate,
+    happyAgentConversationProject,
+} from "./happyAgentConversationProject.js";
 import { rigMenusDerive } from "./rigMenusStore.js";
 import {
     rigSelectionEffortUpdate,
@@ -486,7 +488,6 @@ export interface RigChatSnapshot {
     readonly modelLocked: boolean;
     readonly showReasoning: boolean;
     readonly expandedTurnIds: ReadonlySet<string>;
-    readonly usagePanelOpen: boolean;
     readonly usage?: RigSessionUsage;
     readonly usageLoading: boolean;
     readonly usageError?: string;
@@ -525,8 +526,6 @@ export interface RigChatStore {
     compact(): Promise<void>;
     backgroundProcessStop(processId: number): Promise<void>;
     usageGet(): Promise<RigSessionUsage>;
-    usagePanelOpen(): void;
-    usagePanelClose(): void;
     activityPanelToggle(): void;
     activityPanelShow(): void;
     activityPanelClose(): void;
@@ -536,7 +535,6 @@ export interface RigChatStore {
     imageClose(): void;
     reasoningToggle(): void;
     turnTraceToggle(turnId: string): void;
-    viewClear(): void;
     [Symbol.dispose](): void;
 }
 
@@ -612,7 +610,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         detachedBackgroundProcessIds: new Set<number>(),
         showReasoning: false,
         expandedTurnIds: new Set<string>(),
-        usagePanelOpen: false,
         usageLoading: false,
         activityPanelOpen: false,
     }));
@@ -630,18 +627,23 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let mutationRejection: MutationRejectedDelta | undefined;
     const pendingMutationIds = new Set<string>();
     const pendingMutationOrder: string[] = [];
-    const sentImages = new Map<string, readonly RigImageInput[]>();
+    /* Replaced rather than edited, so the transcript projection can settle
+       "were these the images the last projection saw?" by identity. */
+    let sentImages: ReadonlyMap<string, readonly RigImageInput[]> = new Map();
     let sentImageBytes = 0;
+    const conversationCache = happyAgentConversationCacheCreate();
+    /* Nothing is projected into this conversation from outside it, and the
+       projection compares what it was given last time, so the empty list is one
+       object rather than a new one per commit. */
+    const NO_EPHEMERAL: readonly ConversationEntry[] = [];
     let runStatus: "idle" | "running" = "idle";
     let runId: string | undefined;
     let runStartedAt: number | undefined;
     let turnElapsedMs: number | undefined;
     let showReasoning = false;
     let expandedTurnIds: ReadonlySet<string> = new Set();
-    let usagePanelOpen = false;
     let activityPanelOpen = false;
     let openImageRef: RigImageRef | undefined;
-    let clearedIds = new Set<string>();
     const requestSubmissions = new Map<string, ConversationRequestSubmission>();
     const requestSelections = new Map<string, Readonly<Record<string, readonly string[]>>>();
 
@@ -667,11 +669,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             connected === undefined
                 ? []
                 : happyAgentConversationProject({
+                      cache: conversationCache,
                       elements,
                       sentImages,
                       sessionId,
                       showReasoning,
-                      ephemeral: [],
+                      ephemeral: NO_EPHEMERAL,
                       pendingUserInputs,
                       answeredUserInputs: transcriptAnsweredUserInputs,
                       expandedGroupIds: expandedTurnIds,
@@ -719,14 +722,13 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                       },
                       ...withHistory,
                   ];
-        const visible =
-            clearedIds.size === 0
-                ? withMutation
-                : withMutation.filter((entry) => !clearedIds.has(entryKey(entry)));
-        const entries = entriesMerge(previous.entries, visible);
+        const entries = entriesMerge(previous.entries, withMutation);
         const waitingForModel = waitingForModelProject(connected, transcriptElements, runStatus);
         const usage =
             connected?.usage === undefined ? undefined : transcriptUsageProject(connected.usage);
+        const workingLabel = workingLabelProject(connected, waitingForModel);
+        const workingWait = workingWaitProject(connected);
+        const openImage = openImageProject(entries, openImageRef);
         const next: RigChatSnapshot = {
             sessionId,
             ready: connected !== undefined && connected.historyLoading !== true,
@@ -741,12 +743,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             entries,
             runStatus,
             workingPhase: workingPhaseProject(connected, waitingForModel),
-            ...(workingLabelProject(connected, waitingForModel) === undefined
-                ? {}
-                : { workingLabel: workingLabelProject(connected, waitingForModel)! }),
-            ...(workingWaitProject(connected) === undefined
-                ? {}
-                : { workingWait: workingWaitProject(connected)! }),
+            ...(workingLabel === undefined ? {} : { workingLabel }),
+            ...(workingWait === undefined ? {} : { workingWait }),
             ...(runId === undefined ? {} : { runId }),
             ...(runStartedAt === undefined ? {} : { runStartedAt }),
             ...(turnElapsedMs === undefined ? {} : { turnElapsedMs }),
@@ -768,7 +766,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             modelLocked: connected?.modelLocked ?? false,
             showReasoning,
             expandedTurnIds,
-            usagePanelOpen,
             ...(usage === undefined ? {} : { usage }),
             usageLoading: false,
             contextGauge: contextGaugeDerive(
@@ -782,14 +779,17 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                       },
             ),
             activityPanelOpen,
-            ...(openImageProject(entries, openImageRef) === undefined
-                ? {}
-                : { openImage: openImageProject(entries, openImageRef)! }),
+            ...(openImage === undefined ? {} : { openImage }),
             ...(connected === undefined
                 ? {}
                 : { menus: rigMenusDerive(deps.catalog, transcriptSelectionOf(connected)) }),
         };
-        if (!deepEqual(previous, next)) store.setState(next, true);
+        /* The transcript answers for itself: `entriesMerge` returns the very
+           list it was given when nothing moved, so a new one is a change and
+           needs no further inspection. Only when the transcript stood still is
+           the rest of the snapshot worth comparing — and then the comparison
+           settles the transcript on one reference rather than walking it. */
+        if (entries !== previous.entries || !deepEqual(previous, next)) store.setState(next, true);
     };
 
     const start = (): void => {
@@ -875,13 +875,15 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
 
     const sentImagesRemember = (messageId: string, images: readonly RigImageInput[]): void => {
         const bytes = images.reduce((total, image) => total + image.data.length, 0);
-        sentImages.set(messageId, images);
+        const next = new Map(sentImages);
+        next.set(messageId, images);
         sentImageBytes += bytes;
-        for (const [oldest, held] of sentImages) {
+        for (const [oldest, held] of next) {
             if (sentImageBytes <= SENT_IMAGE_BUDGET_BYTES || oldest === messageId) break;
-            sentImages.delete(oldest);
+            next.delete(oldest);
             sentImageBytes -= held.reduce((total, image) => total + image.data.length, 0);
         }
+        sentImages = next;
     };
 
     const answerInputRun = (input: RigUserInputAnswers): Promise<void> =>
@@ -1050,26 +1052,13 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 ? Promise.reject(new UserError("Usage is not available yet."))
                 : Promise.resolve(transcriptUsageProject(usage));
         },
-        usagePanelOpen() {
-            if (usagePanelOpen) return;
-            usagePanelOpen = true;
-            activityPanelOpen = false;
-            commit();
-        },
-        usagePanelClose() {
-            if (!usagePanelOpen) return;
-            usagePanelOpen = false;
-            commit();
-        },
         activityPanelToggle() {
             activityPanelOpen = !activityPanelOpen;
-            if (activityPanelOpen) usagePanelOpen = false;
             commit();
         },
         activityPanelShow() {
             if (activityPanelOpen) return;
             activityPanelOpen = true;
-            usagePanelOpen = false;
             commit();
         },
         activityPanelClose() {
@@ -1104,10 +1093,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             expandedTurnIds = next;
             commit();
         },
-        viewClear() {
-            clearedIds = new Set(store.getState().entries.map(entryKey));
-            commit();
-        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
@@ -1117,7 +1102,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             listeners.clear();
             pendingMutationIds.clear();
             pendingMutationOrder.length = 0;
-            sentImages.clear();
+            sentImages = new Map();
+            sentImageBytes = 0;
+            conversationCache.context = undefined;
+            conversationCache.elements = undefined;
+            conversationCache.entries = undefined;
+            conversationCache.groups = new Map();
             requestSubmissions.clear();
             requestSelections.clear();
         },

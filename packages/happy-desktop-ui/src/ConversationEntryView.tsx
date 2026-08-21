@@ -514,16 +514,29 @@ function thumbhashDataUrl(hash: string): string | undefined {
     }
 }
 
+/**
+ * The clock every transcript row is stamped with. Building one of these is the
+ * expensive part of formatting a time, and every row in view rebuilt two of them
+ * on every frame of a live turn, so the formatter is made once and the rows
+ * share it. `conversationRowHeight` keeps its own copy of this same shape, and
+ * the two must stay identical or a row is measured against a width it does not
+ * print.
+ */
+const MESSAGE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+});
+
 function messageTime(value: string): string | undefined {
     if (value.trim().length === 0) return undefined;
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return undefined;
-    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+    return MESSAGE_TIME_FORMATTER.format(date);
 }
 
 function eventTime(value: number | undefined): string | undefined {
     if (value === undefined || !Number.isFinite(value)) return undefined;
-    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(value);
+    return MESSAGE_TIME_FORMATTER.format(value);
 }
 
 function initialsOf(displayName: string | undefined): string {

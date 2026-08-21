@@ -423,11 +423,22 @@ function headTail(text: string, budget: number): { lines: string[]; omitted: num
     };
 }
 
+/**
+ * Whether a tool's arguments have anything to show, answered without
+ * serializing them. A call still being generated grows its arguments with every
+ * frame of the stream, and the row only asks this to decide whether it can be
+ * opened at all — so the question is settled from the shape rather than from a
+ * string the row is about to throw away.
+ */
+function jsonPresent(value: ConversationJson): boolean {
+    if (value === null) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "object") return Object.keys(value).length > 0;
+    return true;
+}
+
 function boundedJson(value: ConversationJson): string | undefined {
-    if (value === null) return undefined;
-    if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
-        return undefined;
-    if (Array.isArray(value) && value.length === 0) return undefined;
+    if (!jsonPresent(value)) return undefined;
     const text = JSON.stringify(value, null, 2);
     return text.length > JSON_BUDGET ? `${text.slice(0, JSON_BUDGET)}\n… truncated` : text;
 }
@@ -582,7 +593,11 @@ function AgentToolActivity(props: {
         !tool.failed;
     const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;
 
-    const argsJson = presentation ? undefined : boundedJson(tool.arguments);
+    /* Only a row that is open, and open on its arguments, ever prints them.
+       Serializing them anyway cost the whole argument tree on every frame of a
+       call still being generated — for a transcript row that never shows a body
+       at all, and for a closed row nobody has asked to see. */
+    const argsPresent = presentation === undefined && jsonPresent(tool.arguments);
     const execOutput =
         presentation?.type === "execCommand"
             ? headTail(presentation.output, EXEC_HEAD_TAIL)
@@ -623,7 +638,7 @@ function AgentToolActivity(props: {
               ? presentation.output.trim().length > 0
               : presentation?.type === "backgroundTerminalInteraction"
                 ? presentation.input.trim().length > 0
-                : Boolean(argsJson);
+                : argsPresent;
 
     // MCP results render as capped dim rows (≤5, then "… N more"); an interrupted
     // call collapses to a single "Interrupted." row, matching the TUI.
@@ -934,12 +949,12 @@ function AgentToolActivity(props: {
                           ))
                         : null}
 
-                    {argsJson ? (
+                    {argsPresent ? (
                         <pre
                             className="happy2-agent-activity__args"
                             data-happy-desktop-ui="agent-activity-args"
                         >
-                            {argsJson}
+                            {boundedJson(tool.arguments)}
                         </pre>
                     ) : null}
                 </div>

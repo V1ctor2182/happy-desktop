@@ -29,6 +29,7 @@ import type { RigDebugLogInput } from "../rig/rigDebugLogStore.js";
 import {
     applyChanges,
     defaultMode,
+    elementsReuse,
     modeOf,
     projectElements,
     projectGroups,
@@ -94,6 +95,8 @@ interface SessionEntry {
     /** Cumulative block offset of the provider segment currently streaming per agent message. */
     messageBlockOffsets: Map<string, number>;
     runs: Map<string, Run>;
+    /** `runs` in transcript order, rebuilt only when a run is added or replaced. */
+    runsOrdered?: readonly Run[];
     hasMore: boolean;
     loading: Promise<void> | undefined;
     loadRequestedRevision: number;
@@ -280,6 +283,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         }
     };
 
+    /**
+     * The session's runs in transcript order. Ordering them is the one part of
+     * building a projection input that is not a pointer copy, and a run only
+     * changes when a turn starts or ends — never on the stream of updates inside
+     * one — so the order is kept until something actually replaces a run.
+     */
+    const runsOrderedOf = (entry: SessionEntry): readonly Run[] => {
+        const cached = entry.runsOrdered;
+        if (cached !== undefined) return cached;
+        const ordered = [...entry.runs.values()].sort(runCompare);
+        entry.runsOrdered = ordered;
+        return ordered;
+    };
+
     const projectionOf = (entry: SessionEntry): SessionProjectionInput | undefined => {
         if (entry.agent === undefined || config === undefined) return undefined;
         return {
@@ -295,7 +312,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             ...(entry.context === undefined ? {} : { context: entry.context }),
             ...(entry.activity === undefined ? {} : { activity: entry.activity }),
             ...(entry.question === undefined ? {} : { question: entry.question }),
-            runs: [...entry.runs.values()].sort(runCompare),
+            runs: runsOrderedOf(entry),
             ...(entry.usage === undefined ? {} : { usage: entry.usage }),
             workspace: entry.workspace ?? workspaceOf(entry.agent.workspaceId),
         };
@@ -309,7 +326,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         if (entry.loadMoreError !== undefined) {
             session = { ...session, loadMoreError: entry.loadMoreError };
         }
-        const elements = projectElements(projection);
+        // An event that changed nothing in the transcript still rebuilds this
+        // array, out of the same row objects. Handing back the previous array
+        // lets every reader downstream settle it with one comparison.
+        const elements = elementsReuse(entry.store.elements(), projectElements(projection));
         const deltas = entry.store.replace(elements, session);
         for (const subscriber of entry.subscribers) {
             if (subscriber.closed) continue;
@@ -614,6 +634,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 entry.messages.clear();
                 entry.messageBlockOffsets.clear();
                 entry.runs.clear();
+                entry.runsOrdered = undefined;
                 entry.corruptedMessageIds.clear();
                 ingestHistory(entry, history.runs, bootstrap.pending);
                 for (const message of pendingSends) {
@@ -1192,6 +1213,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             return;
         }
         entry.runs.set(run.id, run);
+        entry.runsOrdered = undefined;
         publishSession(entry);
     };
 
@@ -2626,7 +2648,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     async function loadEarlier(entry: SessionEntry, token: string): Promise<void> {
         if (entry.loadingMore || !entry.hasMore) return;
-        const oldest = [...entry.runs.values()].sort(runCompare)[0];
+        const oldest = runsOrderedOf(entry)[0];
         if (oldest === undefined || oldest.id !== token) return;
         entry.loadingMore = true;
         entry.loadMoreError = undefined;
@@ -2821,6 +2843,7 @@ function ingestHistory(
         for (const message of run.messages)
             entry.messages.set(message.id, { message, runId: run.id });
     }
+    entry.runsOrdered = undefined;
     for (const message of pending) entry.messages.set(message.id, { message, runId: null });
 }
 

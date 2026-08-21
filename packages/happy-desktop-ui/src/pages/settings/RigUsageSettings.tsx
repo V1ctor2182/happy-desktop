@@ -1,4 +1,6 @@
 import type {
+    RigProviderModelTokenUsage,
+    RigProviderTokenCounts,
     RigProviderUsageEntry,
     RigProviderUsageWindow,
     RigProviderVendor,
@@ -43,6 +45,20 @@ const VENDOR_LABELS: Record<RigProviderVendor, string> = {
     grok: "Grok",
 };
 
+/** The rolling windows a token count is reported for, widest reading last. */
+const TOKEN_WINDOWS = [
+    { key: "hour", label: "Hour" },
+    { key: "day", label: "Day" },
+    { key: "week", label: "Week" },
+    { key: "month", label: "Month" },
+] as const;
+
+const TOKENS = new Intl.NumberFormat("en-US");
+const TOKENS_COMPACT = new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+});
+
 /**
  * The Usage category: how much of each provider account's plan this machine has
  * spent.
@@ -57,6 +73,12 @@ const VENDOR_LABELS: Record<RigProviderVendor, string> = {
  * the measure between the name and the number keeps the three readings about
  * one window together, which a name at the far left and a number at the far
  * right could not do.
+ *
+ * Beneath the windows an account lists what it actually spent, by model and by
+ * rolling window. A plan share and a token count answer different questions —
+ * "may I keep working" and "on what did this machine spend" — so the counts stay
+ * their own reading rather than being folded into a bar, and they are never
+ * summed across models, whose tokens are not comparable quantities.
  *
  * Colour answers "can I keep working" and nothing else. Each account carries one
  * dot in the status vocabulary the rest of the app uses — green for room left,
@@ -191,38 +213,59 @@ function ProviderSection(props: {
                     <span>This account has not been read yet.</span>
                 </p>
             ) : (
-                <div className="happy2-rig-usage-settings__windows">
-                    <UsageWindow
-                        currentTime={props.currentTime}
-                        label="5 hours"
-                        window={usage.fiveHour}
-                    />
-                    <UsageWindow
-                        currentTime={props.currentTime}
-                        label="Week"
-                        window={usage.weekly}
-                    />
-                    <UsageWindow
-                        currentTime={props.currentTime}
-                        label="Month"
-                        window={usage.monthly}
-                    />
-                    {usage.credits ? (
-                        <div
-                            className="happy2-rig-usage-settings__credits"
-                            data-happy-desktop-ui="rig-usage-settings-credits"
-                        >
-                            <span className="happy2-rig-usage-settings__window-label">Credits</span>
-                            <span className="happy2-rig-usage-settings__credits-value">
-                                {creditsText(
-                                    usage.credits.available,
-                                    usage.credits.unlimited,
-                                    usage.credits.remainingCents,
-                                )}
-                            </span>
+                <>
+                    {hasWindows(provider) ? (
+                        <div className="happy2-rig-usage-settings__windows">
+                            <UsageWindow
+                                currentTime={props.currentTime}
+                                label="5 hours"
+                                window={usage.fiveHour}
+                            />
+                            <UsageWindow
+                                currentTime={props.currentTime}
+                                label="Week"
+                                window={usage.weekly}
+                            />
+                            <UsageWindow
+                                currentTime={props.currentTime}
+                                label="Month"
+                                window={usage.monthly}
+                            />
+                            {usage.credits ? (
+                                <div
+                                    className="happy2-rig-usage-settings__credits"
+                                    data-happy-desktop-ui="rig-usage-settings-credits"
+                                >
+                                    <span className="happy2-rig-usage-settings__window-label">
+                                        Credits
+                                    </span>
+                                    <span className="happy2-rig-usage-settings__credits-value">
+                                        {creditsText(
+                                            usage.credits.available,
+                                            usage.credits.unlimited,
+                                            usage.credits.remainingCents,
+                                        )}
+                                    </span>
+                                </div>
+                            ) : null}
                         </div>
                     ) : null}
-                </div>
+
+                    {usage.models && usage.models.length > 0 ? (
+                        <ModelTokens models={usage.models} />
+                    ) : null}
+
+                    {!hasWindows(provider) && !(usage.models && usage.models.length > 0) ? (
+                        <p className="happy2-rig-usage-settings__note" data-note="idle">
+                            <Ionicon
+                                className="happy2-rig-usage-settings__note-icon"
+                                name="remove-outline"
+                                size={16}
+                            />
+                            <span>This account has spent nothing this machine can see.</span>
+                        </p>
+                    ) : null}
+                </>
             )}
         </section>
     );
@@ -283,6 +326,101 @@ function UsageWindow(props: {
                 {reset ?? ""}
             </span>
         </div>
+    );
+}
+
+/**
+ * What the account spent, one row per model and one column per rolling window.
+ *
+ * Models are the rows because tokens from two models are not the same quantity:
+ * there is no honest total across them, so the reading stops at the model that
+ * earned it. A cell is that model's whole spend in that window — input, output,
+ * and both halves of the cache — rounded for scanning, with the exact counts on
+ * the cell for anyone who needs them. A window a model spent nothing in is a
+ * dash rather than a zero, so the numbers that exist are what the eye lands on.
+ */
+function ModelTokens(props: { models: readonly RigProviderModelTokenUsage[] }) {
+    return (
+        // Tokens by model are a genuine two-dimensional matrix: four numeric
+        // columns must share one measured width down every model row, which a
+        // flex row per model could not guarantee.
+        <table
+            className="happy2-rig-usage-settings__models"
+            data-happy-desktop-ui="rig-usage-settings-models"
+        >
+            <thead>
+                <tr>
+                    <th scope="col">Model</th>
+                    {TOKEN_WINDOWS.map((window) => (
+                        <th data-column="window" key={window.key} scope="col">
+                            {window.label}
+                        </th>
+                    ))}
+                </tr>
+            </thead>
+            <tbody>
+                {props.models.map((model) => (
+                    <tr
+                        className="happy2-rig-usage-settings__model-row"
+                        data-happy-desktop-ui="rig-usage-settings-model"
+                        key={model.modelId}
+                    >
+                        <th
+                            className="happy2-rig-usage-settings__model"
+                            scope="row"
+                            title={model.modelId}
+                        >
+                            {model.modelId}
+                        </th>
+                        {TOKEN_WINDOWS.map((window) => {
+                            const counts = model[window.key];
+                            return (
+                                <td
+                                    className="happy2-rig-usage-settings__tokens"
+                                    data-happy-desktop-ui="rig-usage-settings-tokens"
+                                    data-empty={counts === undefined ? "" : undefined}
+                                    key={window.key}
+                                    {...(counts ? { title: tokensTitle(counts) } : {})}
+                                >
+                                    {counts === undefined
+                                        ? "—"
+                                        : TOKENS_COMPACT.format(tokensTotal(counts))}
+                                </td>
+                            );
+                        })}
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
+/** Everything one model consumed in a window; cache is spend too, so it counts. */
+function tokensTotal(counts: RigProviderTokenCounts): number {
+    return (
+        counts.inputTokens + counts.outputTokens + counts.cacheReadTokens + counts.cacheWriteTokens
+    );
+}
+
+/** The exact counts behind a rounded cell, for the reader who wants them. */
+function tokensTitle(counts: RigProviderTokenCounts): string {
+    return [
+        `Input ${TOKENS.format(counts.inputTokens)}`,
+        `Output ${TOKENS.format(counts.outputTokens)}`,
+        `Cache read ${TOKENS.format(counts.cacheReadTokens)}`,
+        `Cache write ${TOKENS.format(counts.cacheWriteTokens)}`,
+    ].join(" · ");
+}
+
+/** Whether this account reported any plan share at all, credits included. */
+function hasWindows(provider: RigProviderUsageEntry): boolean {
+    const usage = provider.usage;
+    if (usage === undefined) return false;
+    return (
+        usage.fiveHour !== undefined ||
+        usage.weekly !== undefined ||
+        usage.monthly !== undefined ||
+        usage.credits !== undefined
     );
 }
 

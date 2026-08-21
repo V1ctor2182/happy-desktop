@@ -10,6 +10,27 @@
  * frames it, so there is no title row, no fill, and no border here.
  */
 
+.happy2-rig-usage-panel-scroll {
+    container-type: inline-size;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    overflow: auto;
+}
+
+.happy2-rig-usage-panel-scroll__content {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+    width: 100%;
+    padding: 12px 8px;
+    box-sizing: border-box;
+}
+
 .happy2-rig-usage {
     display: flex;
     flex-direction: column;
@@ -91,6 +112,28 @@
 .happy2-rig-usage__num {
     text-align: right;
     padding: 6px 8px;
+}
+
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__table {
+    table-layout: fixed;
+    font-size: 11px;
+}
+
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__table thead th,
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__model,
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__num {
+    padding-right: 3px;
+    padding-left: 3px;
+}
+
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__table thead th:first-child {
+    width: 84px;
+}
+
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__model {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .happy2-rig-usage__row:not(:last-child) th,
@@ -200,4 +243,36 @@
     text-align: right;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__quota-window {
+    flex-wrap: wrap;
+    column-gap: 8px;
+    row-gap: 4px;
+}
+
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__quota-percent {
+    width: 36px;
+}
+
+.happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__quota-reset {
+    flex-basis: 100%;
+    width: auto;
+}
+
+@container (max-width: 300px) {
+    .happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__table {
+        font-size: 10px;
+    }
+
+    .happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__table thead th,
+    .happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__model,
+    .happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__num {
+        padding-right: 2px;
+        padding-left: 2px;
+    }
+
+    .happy2-rig-usage[data-placement="panel"] .happy2-rig-usage__table thead th:first-child {
+        width: 64px;
+    }
 }

@@ -14,16 +14,22 @@ export type RigUsagePanelProps = {
     loading?: boolean;
     /** Displayable error from a failed load; replaces the body when set. */
     error?: string;
+    /** `panel` fills and scrolls a side-panel tab; the default is inline content. */
+    placement?: "content" | "panel";
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
 };
 
 const TOKENS = new Intl.NumberFormat("en-US");
+const TOKENS_COMPACT = new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+});
 const COST = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
-function formatTokens(value: number): string {
-    return TOKENS.format(value);
+function formatTokens(value: number, compact = false): string {
+    return (compact ? TOKENS_COMPACT : TOKENS).format(value);
 }
 
 function formatCost(value: number): string {
@@ -46,19 +52,28 @@ function formatReset(resetsAt: number): string {
     });
 }
 
-function GroupRow(props: { group: RigUsageGroup }) {
+function GroupRow(props: { compact: boolean; group: RigUsageGroup }) {
     const { group } = props;
+    const cacheTokens = group.cacheReadTokens + group.cacheWriteTokens;
+    const number = (value: number) => formatTokens(value, props.compact);
+    const exactTitle = (value: number) => (props.compact ? formatTokens(value) : undefined);
     return (
         <tr className="happy2-rig-usage__row" data-happy-desktop-ui="rig-usage-group">
-            <th className="happy2-rig-usage__model" scope="row">
+            <th className="happy2-rig-usage__model" scope="row" title={group.modelId}>
                 {group.modelId}
             </th>
-            <td className="happy2-rig-usage__num">{formatTokens(group.inputTokens)}</td>
-            <td className="happy2-rig-usage__num">{formatTokens(group.outputTokens)}</td>
-            <td className="happy2-rig-usage__num">
-                {formatTokens(group.cacheReadTokens + group.cacheWriteTokens)}
+            <td className="happy2-rig-usage__num" title={exactTitle(group.inputTokens)}>
+                {number(group.inputTokens)}
             </td>
-            <td className="happy2-rig-usage__num">{formatTokens(group.totalTokens)}</td>
+            <td className="happy2-rig-usage__num" title={exactTitle(group.outputTokens)}>
+                {number(group.outputTokens)}
+            </td>
+            <td className="happy2-rig-usage__num" title={exactTitle(cacheTokens)}>
+                {number(cacheTokens)}
+            </td>
+            <td className="happy2-rig-usage__num" title={exactTitle(group.totalTokens)}>
+                {number(group.totalTokens)}
+            </td>
             <td className="happy2-rig-usage__num">{formatCost(group.cost)}</td>
         </tr>
     );
@@ -118,8 +133,8 @@ function QuotaRow(props: { quota: RigUsageQuota }) {
  * state and starts no work of its own.
  *
  * It is a content block rather than a card: the reading is named and framed by
- * whatever carries it — `ComposerPanel` above the composer — so it neither
- * repeats that title nor draws a second border inside the first one.
+ * the side-panel tab or other surface that carries it, so it neither repeats
+ * that title nor draws a second border inside the first one.
  *
  * A rate-limit window is drawn with the same grammar the provider-usage page
  * uses — name, measure, share, reset, in fixed columns, and monochrome until
@@ -128,11 +143,13 @@ function QuotaRow(props: { quota: RigUsageQuota }) {
  */
 export function RigUsagePanel(props: RigUsagePanelProps) {
     const { usage } = props;
-    return (
+    const panel = props.placement === "panel";
+    const content = (
         <section
             className={["happy2-rig-usage", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="rig-usage-panel"
             data-loading={props.loading ? "" : undefined}
+            data-placement={panel ? "panel" : undefined}
             data-testid={props["data-testid"]}
             style={props.style}
         >
@@ -182,6 +199,7 @@ export function RigUsagePanel(props: RigUsagePanelProps) {
                             <tbody>
                                 {usage.groups.map((group) => (
                                     <GroupRow
+                                        compact={panel}
                                         group={group}
                                         key={`${group.providerId}:${group.modelId}`}
                                     />
@@ -216,5 +234,15 @@ export function RigUsagePanel(props: RigUsagePanelProps) {
                 </>
             )}
         </section>
+    );
+    return panel ? (
+        <div
+            className="happy2-rig-usage-panel-scroll"
+            data-happy-desktop-ui="rig-usage-panel-scroll"
+        >
+            <div className="happy2-rig-usage-panel-scroll__content">{content}</div>
+        </div>
+    ) : (
+        content
     );
 }

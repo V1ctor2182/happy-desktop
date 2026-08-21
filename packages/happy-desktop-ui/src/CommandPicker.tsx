@@ -100,7 +100,7 @@ export function CommandPicker(props: CommandPickerProps) {
 type CommandMeta = { description: string; icon: IconName };
 
 /**
- * How each Rig session command reads in the picker. A command the host offers
+ * How each Rig session command reads in the picker. A command the composer offers
  * but this table does not know still appears, wearing its own label.
  */
 const COMMAND_META: Record<string, CommandMeta> = {
@@ -115,22 +115,19 @@ const COMMAND_META: Record<string, CommandMeta> = {
     ps: { description: "List running background terminals", icon: "terminal" },
     compact: { description: "Summarize older messages to free context", icon: "filter" },
     abort: { description: "Stop the current response", icon: "close" },
-    clear: { description: "Clear the visible conversation", icon: "trash" },
 };
 
-/** Presents the host's offered commands as picker rows, in the order given. */
+/** Presents the composer's supported commands as picker rows, in the order given. */
 export function commandPickerItems(
     commands: readonly ComposerCommand[],
 ): readonly CommandPickerItem[] {
-    return commands
-        .filter((command) => command.id !== "new" && command.id !== "fork")
-        .map((command) => {
-            const meta = COMMAND_META[command.id];
-            return {
-                id: command.id,
-                slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
-                description: meta?.description ?? command.description ?? "",
-                icon: meta?.icon ?? "spark",
-            };
-        });
+    return commands.map((command) => {
+        const meta = COMMAND_META[command.id];
+        return {
+            id: command.id,
+            slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
+            description: meta?.description ?? command.description ?? "",
+            icon: meta?.icon ?? "spark",
+        };
+    });
 }

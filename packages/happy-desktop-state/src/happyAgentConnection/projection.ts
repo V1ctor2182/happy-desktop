@@ -173,67 +173,125 @@ export function projectSession(input: SessionProjectionInput): SessionState {
     };
 }
 
+/**
+ * Reuses the previous element list when this projection produced the very same
+ * rows. Every element below is kept against the durable object it was projected
+ * from, so an event that changed nothing in the transcript — an activity tick, a
+ * process update, a context measurement — rebuilds an array of identical
+ * references and this hands the old one back instead. Downstream, one reference
+ * comparison then replaces the whole conversation projection.
+ */
+export function elementsReuse(
+    previous: readonly ChatElement[],
+    next: readonly ChatElement[],
+): readonly ChatElement[] {
+    if (previous === next) return previous;
+    if (previous.length !== next.length) return next;
+    for (let index = 0; index < next.length; index += 1)
+        if (previous[index] !== next[index]) return next;
+    return previous;
+}
+
+/**
+ * The waiting placeholder a running run shows before it has produced anything.
+ * It is a function of the run alone, and a run object is replaced rather than
+ * edited, so it is projected once per run.
+ */
+const inferenceElements = new WeakMap<Run, Extract<ChatElement, { kind: "inference" }>>();
+function projectInference(run: Run): Extract<ChatElement, { kind: "inference" }> {
+    const cached = inferenceElements.get(run);
+    if (cached !== undefined) return cached;
+    const element = {
+        id: `inference:${run.id}`,
+        groupId: run.id,
+        runId: run.id,
+        createdAt: run.startedAt,
+        kind: "inference",
+        state: "waiting",
+    } as const;
+    inferenceElements.set(run, element);
+    return element;
+}
+
+/** The pending question's row, projected once per question version. */
+const questionElements = new WeakMap<Question, Extract<ChatElement, { kind: "tool_call" }>>();
+function projectQuestionElement(question: Question): Extract<ChatElement, { kind: "tool_call" }> {
+    const cached = questionElements.get(question);
+    if (cached !== undefined) return cached;
+    const element = {
+        id: `question:${question.id}`,
+        groupId: question.runId,
+        runId: question.runId,
+        createdAt: question.createdAt,
+        kind: "tool_call",
+        toolCallId: question.id,
+        name: "request_user_input",
+        arguments: {
+            questions: question.questions,
+        },
+        argumentsComplete: true,
+        status: "running",
+    } as const;
+    questionElements.set(question, element);
+    return element;
+}
+
 export function projectElements(input: SessionProjectionInput): readonly ChatElement[] {
     const messagesByRun = new Map<string, TranscriptMessage[]>();
     const pending: TranscriptMessage[] = [];
     for (const entry of input.messages) {
         if (entry.runId === null) pending.push(entry);
         else {
-            const entries = messagesByRun.get(entry.runId) ?? [];
-            entries.push(entry);
-            messagesByRun.set(entry.runId, entries);
+            const entries = messagesByRun.get(entry.runId);
+            if (entries === undefined) messagesByRun.set(entry.runId, [entry]);
+            else entries.push(entry);
         }
     }
 
     const elements: ChatElement[] = [];
     for (const run of input.runs) {
-        const messages = messagesByRun.get(run.id) ?? [];
-        messages.sort(compareMessages);
-        for (const entry of messages) {
-            elements.push(...projectMessage(entry, run.id, run.status));
+        const messages = messagesByRun.get(run.id);
+        const before = elements.length;
+        if (messages !== undefined) {
+            // Messages arrive in order and a run holds a handful of them.
+            // Confirming that order costs one comparison each; entering the sort
+            // itself, once for every run in the transcript, cost more than
+            // everything else this loop does.
+            if (!messagesOrdered(messages)) messages.sort(compareMessages);
+            for (const entry of messages)
+                for (const element of projectMessage(entry, run.id, run.status))
+                    elements.push(element);
         }
-        if (
-            run.status === "running" &&
-            !elements.some(
-                (element) =>
-                    element.runId === run.id &&
-                    element.kind !== "user_message" &&
-                    element.kind !== "inference",
-            )
-        ) {
-            elements.push({
-                id: `inference:${run.id}`,
-                groupId: run.id,
-                runId: run.id,
-                createdAt: run.startedAt,
-                kind: "inference",
-                state: "waiting",
-            });
+        if (run.status === "running" && !runProduced(elements, before, run.id)) {
+            elements.push(projectInference(run));
         }
         const end = projectRunEnd(run);
         if (end !== undefined) elements.push(end);
     }
-    for (const entry of pending.sort(compareMessages)) {
-        elements.push(...projectMessage(entry, `pending:${entry.message.id}`, "running"));
-    }
-    if (input.question?.status === "pending") {
-        const runId = input.question.runId;
-        elements.push({
-            id: `question:${input.question.id}`,
-            groupId: runId,
-            runId,
-            createdAt: input.question.createdAt,
-            kind: "tool_call",
-            toolCallId: input.question.id,
-            name: "request_user_input",
-            arguments: {
-                questions: input.question.questions,
-            },
-            argumentsComplete: true,
-            status: "running",
-        });
-    }
+    if (!messagesOrdered(pending)) pending.sort(compareMessages);
+    for (const entry of pending)
+        for (const element of projectMessage(entry, `pending:${entry.message.id}`, "running"))
+            elements.push(element);
+    if (input.question?.status === "pending") elements.push(projectQuestionElement(input.question));
     return elements;
+}
+
+/**
+ * Whether a run has already put something of its own in the transcript. Only
+ * this run's own rows can answer that, and they are the ones just appended, so
+ * the scan starts where they did rather than at the top of the transcript.
+ */
+function runProduced(elements: readonly ChatElement[], from: number, runId: string): boolean {
+    for (let index = from; index < elements.length; index += 1) {
+        const element = elements[index]!;
+        if (
+            element.runId === runId &&
+            element.kind !== "user_message" &&
+            element.kind !== "inference"
+        )
+            return true;
+    }
+    return false;
 }
 
 export function projectGroups(
@@ -463,7 +521,42 @@ function projectSubagents(
     });
 }
 
+/**
+ * Rows a message projected into, kept against the message itself.
+ *
+ * A message is replaced rather than edited when anything about it changes, so a
+ * message this client has already projected produces the identical rows and can
+ * hand them back. This is what keeps a streamed update proportional to the one
+ * message that moved: every other message in the transcript returns the very
+ * objects the previous projection produced, and the conversation projection,
+ * entry merge, and equality checks downstream all settle on reference identity
+ * instead of walking the content again.
+ *
+ * The run is part of the key because the same message projects differently
+ * inside a run that is still going: an agent's text is `complete` only once its
+ * run has stopped.
+ */
+interface MessageElements {
+    readonly runId: string;
+    readonly runStatus: Run["status"];
+    readonly elements: readonly ChatElement[];
+}
+const messageElements = new WeakMap<Message, MessageElements>();
+
 function projectMessage(
+    entry: TranscriptMessage,
+    runId: string,
+    runStatus: Run["status"],
+): readonly ChatElement[] {
+    const cached = messageElements.get(entry.message);
+    if (cached !== undefined && cached.runId === runId && cached.runStatus === runStatus)
+        return cached.elements;
+    const elements = messageElementsProject(entry, runId, runStatus);
+    messageElements.set(entry.message, { runId, runStatus, elements });
+    return elements;
+}
+
+function messageElementsProject(
     entry: TranscriptMessage,
     runId: string,
     runStatus: Run["status"],
@@ -588,7 +681,17 @@ function projectToolStatus(
     return runStatus === "failed" ? "failed" : "interrupted";
 }
 
+/** A settled run's footer, projected once per run for the same reason. */
+const runEndElements = new WeakMap<Run, Extract<ChatElement, { kind: "group_end" }>>();
 function projectRunEnd(run: Run): Extract<ChatElement, { kind: "group_end" }> | undefined {
+    const cached = runEndElements.get(run);
+    if (cached !== undefined) return cached;
+    const element = runEndProject(run);
+    if (element !== undefined) runEndElements.set(run, element);
+    return element;
+}
+
+function runEndProject(run: Run): Extract<ChatElement, { kind: "group_end" }> | undefined {
     if (run.status === "running" || run.endedAt === null) return undefined;
     const reason =
         run.reason === "abort"
@@ -792,6 +895,12 @@ function orderCompare<T extends { id: string; orderKey: string | null }>(
         return right.orderKey === null ? left.id.localeCompare(right.id) : 1;
     if (right.orderKey === null) return -1;
     return left.orderKey.localeCompare(right.orderKey);
+}
+
+function messagesOrdered(messages: readonly TranscriptMessage[]): boolean {
+    for (let index = 1; index < messages.length; index += 1)
+        if (compareMessages(messages[index - 1]!, messages[index]!) > 0) return false;
+    return true;
 }
 
 function compareMessages(left: TranscriptMessage, right: TranscriptMessage): number {

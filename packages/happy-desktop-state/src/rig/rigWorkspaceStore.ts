@@ -102,7 +102,6 @@ export const rigComposerCommands: readonly ComposerCommand[] = [
     { id: "ps", label: "/ps", description: "List background terminals." },
     { id: "compact", label: "/compact", description: "Compact the conversation." },
     { id: "abort", label: "/abort", description: "Stop the current run." },
-    { id: "clear", label: "/clear", description: "Clear the visible conversation." },
 ];
 
 /** Number of `@`-mention candidates a local composer asks the workspace for. */
@@ -157,7 +156,6 @@ export interface RigConversationSnapshot {
     readonly showReasoning: boolean;
     /** Finished turns the reader expanded, so their trace entries stay listed. */
     readonly expandedTurnIds: ReadonlySet<string>;
-    readonly usagePanelOpen: boolean;
     readonly usage?: RigSessionUsage;
     readonly usageLoading: boolean;
     readonly usageError?: string;
@@ -750,7 +748,7 @@ export interface RigProjectComputeSnapshot {
 /**
  * What the workspace asks its owner to navigate to. The store never decides
  * which conversation is open — it reports that a conversation it just created
- * (through the compose action or `/fork`) is the one to address next, and the
+ * through the compose action is the one to address next, and the
  * router turns that into a URL.
  */
 export type RigWorkspaceOutput =
@@ -1156,9 +1154,6 @@ export interface RigWorkspaceStore {
      * between sessions, not weeks later on another machine.
      */
     conversationScrollUpdate(conversationId: RigSessionId, position: RigScrollPosition): void;
-    /** View-only clear of the active conversation's visible entries (TUI `/clear`). */
-    viewClear(): void;
-
     [Symbol.dispose](): void;
 }
 
@@ -1659,7 +1654,6 @@ export function rigWorkspaceStoreCreate(
             activityAvailable,
             showReasoning: chat.showReasoning,
             expandedTurnIds: chat.expandedTurnIds,
-            usagePanelOpen: chat.usagePanelOpen,
             ...(chat.usage ? { usage: chat.usage } : {}),
             usageLoading: chat.usageLoading,
             ...(chat.usageError !== undefined ? { usageError: chat.usageError } : {}),
@@ -2618,7 +2612,7 @@ export function rigWorkspaceStoreCreate(
             void operation.catch(() => undefined);
         };
         // The commands that start work go through the same guard the buttons
-        // for them do; `abort`, `clear`, and the panels do not, because none of
+        // for them do; `abort` and the panels do not, because none of
         // them touches the checkout. Both of the guarded ones speak to the
         // session rather than to the directory, so a workspace still being
         // prepared takes them and the host runs them when it is ready.
@@ -2630,12 +2624,8 @@ export function rigWorkspaceStoreCreate(
             case "abort":
                 swallow(store.runAbort());
                 return;
-            case "clear":
-                store.viewClear();
-                return;
             case "usage":
-                store.usagePanelOpen();
-                panel.activityHide();
+                panel.usageSelect();
                 return;
             case "tasks":
             case "agents":
@@ -4494,11 +4484,8 @@ export function rigWorkspaceStoreCreate(
             writeGuard(openGroupConversationRefusal(), () => withChat((store) => store.compact())),
         historyLoadMore: () => chatStore?.historyLoadMore(),
         usageGet: () => withChat((store) => store.usageGet()),
-        usagePanelOpen: () => {
-            chatStore?.usagePanelOpen();
-            panel.activityHide();
-        },
-        usagePanelClose: () => chatStore?.usagePanelClose(),
+        usagePanelOpen: () => panel.usageSelect(),
+        usagePanelClose: () => panel.usageClose(),
         activityPanelOpen: () => {
             chatStore?.activityPanelShow();
             panel.activitySelect();
@@ -4880,8 +4867,6 @@ export function rigWorkspaceStoreCreate(
             // reader is in the middle of scrolling. It is read once, on mount.
             scrollPositions = new Map(scrollPositions).set(conversationId, position);
         },
-        viewClear: () => chatStore?.viewClear(),
-
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
@@ -4960,7 +4945,6 @@ function conversationAcquiring(
         activityAvailable: false,
         showReasoning: false,
         expandedTurnIds: NO_TURNS,
-        usagePanelOpen: false,
         usageLoading: false,
         activityPanelOpen: false,
         ...(menus ? { menus } : {}),

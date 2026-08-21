@@ -71,9 +71,20 @@ export function RigUsagePanelPage() {
             </Specimen>
 
             <Specimen
+                detail="the closeable right-sidebar tab at its narrow working width, with compact model totals and wrapped reset times"
+                label="Side panel"
+                number="02"
+                stage="surface"
+            >
+                <div style={{ display: "flex", height: "520px", width: "280px" }}>
+                    <RigUsagePanel placement="panel" usage={usage} />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="first load in flight, no snapshot yet"
                 label="Loading"
-                number="02"
+                number="03"
                 stage="surface"
             >
                 <div style={{ width: "560px" }}>
@@ -81,7 +92,7 @@ export function RigUsagePanelPage() {
                 </div>
             </Specimen>
 
-            <Specimen detail="load failed" label="Error" number="03" stage="surface">
+            <Specimen detail="load failed" label="Error" number="04" stage="surface">
                 <div style={{ width: "560px" }}>
                     <RigUsagePanel error="Usage is unavailable for this session." />
                 </div>
