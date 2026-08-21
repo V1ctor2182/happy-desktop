@@ -247,12 +247,16 @@ export function rigInboxStoreCreate(deps: RigInboxStoreDeps): RigInboxStore {
             answerSubmit(item, answers);
         },
         itemMessageUpdate(itemId, text) {
-            const messages = new Map(store.getState().messages);
+            const current = store.getState();
+            if (current.messages.get(itemId) === text) return;
+            const messages = new Map(current.messages);
             messages.set(itemId, text);
             store.setState({ messages }, false);
         },
         itemSelectionUpdate(itemId, answers) {
-            const selections = new Map(store.getState().selections);
+            const current = store.getState();
+            if (current.selections.get(itemId) === answers) return;
+            const selections = new Map(current.selections);
             selections.set(itemId, answers);
             store.setState({ selections }, false);
         },

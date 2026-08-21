@@ -96,13 +96,24 @@ export function rigProfileStoreCreate(deps: RigProfileStoreDeps): RigProfileStor
         const fields = adopt
             ? { email: profile?.email ?? "", name: profile?.name ?? "" }
             : { email: current.email, name: current.name };
+        const dirty = dirtyAgainst(profile, fields);
+        const photo = profile?.photo;
+        if (
+            fields.email === current.email &&
+            fields.name === current.name &&
+            dirty === current.dirty &&
+            current.loading === false &&
+            current.error === undefined &&
+            current.photo === photo
+        )
+            return;
         store.setState({
             ...current,
             ...fields,
-            dirty: dirtyAgainst(profile, fields),
+            dirty,
             loading: false,
             error: undefined,
-            ...(profile?.photo === undefined ? { photo: undefined } : { photo: profile.photo }),
+            ...(photo === undefined ? { photo: undefined } : { photo }),
         });
     };
 
@@ -113,6 +124,12 @@ export function rigProfileStoreCreate(deps: RigProfileStoreDeps): RigProfileStor
             email: fields.email ?? current.email,
             name: fields.name ?? current.name,
         };
+        if (
+            next.email === current.email &&
+            next.name === current.name &&
+            current.saveError === undefined
+        )
+            return;
         store.setState({
             ...current,
             ...next,

@@ -1,5 +1,10 @@
 import { createStore } from "zustand/vanilla";
-import { rigPermissionLabel, rigServiceTierLabel, rigThinkingLabel } from "./rigSupport.js";
+import {
+    referencesPreserve,
+    rigPermissionLabel,
+    rigServiceTierLabel,
+    rigThinkingLabel,
+} from "./rigSupport.js";
 import type {
     RigEffortOption,
     RigMenusSnapshot,
@@ -91,6 +96,106 @@ export function rigMenusDerive(
     };
 }
 
+/** Keeps every unchanged picker collection and row stable across a fresh derivation. */
+export function rigMenusReferencesPreserve(
+    previous: RigMenusSnapshot,
+    next: RigMenusSnapshot,
+): RigMenusSnapshot {
+    const modelOptions = referencesPreserve(previous.modelOptions, next.modelOptions);
+    const effortOptions = referencesPreserve(previous.effortOptions, next.effortOptions);
+    const permissionModeOptions = referencesPreserve(
+        previous.permissionModeOptions,
+        next.permissionModeOptions,
+    );
+    const serviceTierOptions = referencesPreserve(
+        previous.serviceTierOptions,
+        next.serviceTierOptions,
+    );
+    if (
+        modelOptions === previous.modelOptions &&
+        effortOptions === previous.effortOptions &&
+        permissionModeOptions === previous.permissionModeOptions &&
+        serviceTierOptions === previous.serviceTierOptions &&
+        next.currentProviderId === previous.currentProviderId &&
+        next.currentModelId === previous.currentModelId &&
+        next.currentEffort === previous.currentEffort &&
+        next.currentPermissionMode === previous.currentPermissionMode &&
+        next.currentServiceTier === previous.currentServiceTier
+    )
+        return previous;
+    return {
+        ...next,
+        modelOptions,
+        effortOptions,
+        permissionModeOptions,
+        serviceTierOptions,
+    };
+}
+
+function currentOptionsUpdate<T extends { readonly current: boolean }>(
+    options: readonly T[],
+    current: (option: T) => boolean,
+): readonly T[] {
+    let changed = false;
+    const next = options.map((option) => {
+        const selected = current(option);
+        if (option.current === selected) return option;
+        changed = true;
+        return { ...option, current: selected };
+    });
+    return changed ? next : options;
+}
+
+/** Reprojects one selection while touching only the option family whose current row changed. */
+export function rigMenusSelectionProject(
+    catalog: RigModelCatalog,
+    previous: RigMenusSnapshot,
+    selection: RigSelection,
+): RigMenusSnapshot {
+    if (
+        previous.currentProviderId === selection.providerId &&
+        previous.currentModelId === selection.modelId &&
+        previous.currentEffort === selection.effort &&
+        previous.currentPermissionMode === selection.permissionMode &&
+        previous.currentServiceTier === selection.serviceTier
+    )
+        return previous;
+
+    if (
+        previous.currentProviderId !== selection.providerId ||
+        previous.currentModelId !== selection.modelId
+    )
+        return rigMenusReferencesPreserve(previous, rigMenusDerive(catalog, selection));
+
+    return {
+        ...previous,
+        effortOptions:
+            previous.currentEffort === selection.effort
+                ? previous.effortOptions
+                : currentOptionsUpdate(
+                      previous.effortOptions,
+                      (option) => option.level === selection.effort,
+                  ),
+        permissionModeOptions:
+            previous.currentPermissionMode === selection.permissionMode
+                ? previous.permissionModeOptions
+                : currentOptionsUpdate(
+                      previous.permissionModeOptions,
+                      (option) => option.mode === selection.permissionMode,
+                  ),
+        serviceTierOptions:
+            previous.currentServiceTier === selection.serviceTier
+                ? previous.serviceTierOptions
+                : currentOptionsUpdate(
+                      previous.serviceTierOptions,
+                      (option) => option.tier === (selection.serviceTier ?? null),
+                  ),
+        currentEffort: selection.effort,
+        currentPermissionMode: selection.permissionMode,
+        currentServiceTier: selection.serviceTier,
+    };
+}
+
 export interface RigMenusStore {
     get(): RigMenusSnapshot;
     subscribe(listener: () => void): () => void;
@@ -116,7 +221,8 @@ export function rigMenusStoreCreate(options: RigMenusStoreOptions): RigMenusStor
         get: () => store.getState(),
         subscribe: (listener) => store.subscribe(listener),
         menusSelectionUpdate(selection) {
-            store.setState(rigMenusDerive(catalog, selection), true);
+            const previous = store.getState();
+            store.setState(rigMenusSelectionProject(catalog, previous, selection), true);
         },
     };
 }

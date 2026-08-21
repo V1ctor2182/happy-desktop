@@ -70,7 +70,7 @@ export function titleShimmerStoreCreate(persistence?: TitleShimmerPersistence): 
             if (override === enabled) return;
             override = enabled;
             const changed = snapshot.titleShimmerEnabled !== enabled;
-            snapshot = { titleShimmerEnabled: enabled };
+            if (changed) snapshot = { titleShimmerEnabled: enabled };
             try {
                 persistence?.write({ titleShimmerEnabled: enabled });
             } catch {

@@ -215,6 +215,7 @@ export function noteStoreCreate(
             markdown = value;
         },
         noteTitleUpdate(value) {
+            if ((title ?? snapshot.note?.title) === value) return;
             title = value;
             publish({
                 ...snapshot,

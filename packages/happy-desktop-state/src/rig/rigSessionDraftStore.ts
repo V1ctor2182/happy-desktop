@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import { rigMenusDerive } from "./rigMenusStore.js";
+import { rigMenusDerive, rigMenusSelectionProject } from "./rigMenusStore.js";
 import type {
     RigMenusSnapshot,
     RigModelCatalog,
@@ -194,7 +194,15 @@ export function rigSessionDraftStoreCreate(options: RigSessionDraftOptions): Rig
     });
     const store = createStore<RigSessionDraftSnapshot>()(() => snapshotOf(seed));
     const selectionSet = (selection: RigSelection): void => {
-        store.setState(snapshotOf(selection), true);
+        const previous = store.getState();
+        if (rigSelectionEqual(previous.selection, selection)) return;
+        store.setState(
+            {
+                selection,
+                menus: rigMenusSelectionProject(catalog, previous.menus, selection),
+            },
+            true,
+        );
     };
 
     return {

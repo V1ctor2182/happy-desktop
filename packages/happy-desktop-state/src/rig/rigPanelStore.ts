@@ -301,16 +301,19 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             return;
         // Unchanged rows keep their identity so a tab strip re-renders only the
         // tab that actually changed.
+        const projectedTabs = next.tabs.every((tab, index) => tabSame(snapshot.tabs[index], tab))
+            ? snapshot.tabs
+            : next.tabs.map((tab, index) => {
+                  const before = snapshot.tabs[index];
+                  return before !== undefined && tabSame(before, tab) ? before : tab;
+              });
         snapshot = {
             activeViewId: next.activeViewId,
             activityViewDismissed: next.activityViewDismissed,
             activityViewOpen: next.activityViewOpen,
             fileViewOpen: next.fileViewOpen,
             open: next.open,
-            tabs: next.tabs.map((tab, index) => {
-                const before = snapshot.tabs[index];
-                return before !== undefined && tabSame(before, tab) ? before : tab;
-            }),
+            tabs: projectedTabs,
             ...(next.previewEntryId === undefined ? {} : { previewEntryId: next.previewEntryId }),
             ...(next.terminalRefusal === undefined
                 ? {}

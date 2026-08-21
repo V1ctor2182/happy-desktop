@@ -8,6 +8,7 @@
         "./testing": "./src/testing/index.ts"
     },
     "scripts": {
+        "benchmark": "node --import tsx benchmarks/object-update.bench.ts",
         "build": "tsc --project tsconfig.json",
         "test": "vitest run",
         "test:watch": "vitest",

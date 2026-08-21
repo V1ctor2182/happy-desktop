@@ -150,21 +150,36 @@ export function rigProviderUsageStoreCreate(
         unsubscribeSource = deps.source.subscribe(
             (reading) => {
                 if (disposed) return;
+                const current = store.getState();
+                const error =
+                    reading.error === undefined
+                        ? undefined
+                        : current.error?.message === reading.error
+                          ? current.error
+                          : rigUserError(reading.error);
+                if (
+                    current.providers === reading.providers &&
+                    current.loading === reading.loading &&
+                    current.loadedAt === reading.loadedAt &&
+                    current.error === error
+                )
+                    return;
                 store.setState(
                     {
                         providers: reading.providers,
                         loading: reading.loading,
                         ...(reading.loadedAt === undefined ? {} : { loadedAt: reading.loadedAt }),
-                        ...(reading.error === undefined
-                            ? {}
-                            : { error: rigUserError(reading.error) }),
+                        ...(error === undefined ? {} : { error }),
                     },
                     true,
                 );
             },
             (error) => {
                 if (disposed) return;
-                store.setState({ error: rigUserError(error), loading: false }, false);
+                const current = store.getState();
+                const failure = rigUserError(error);
+                if (current.loading === false && current.error?.message === failure.message) return;
+                store.setState({ error: failure, loading: false }, false);
             },
         );
     };
