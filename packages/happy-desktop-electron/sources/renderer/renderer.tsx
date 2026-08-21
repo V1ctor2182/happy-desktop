@@ -762,6 +762,10 @@ if (mediaPreviewBridge) {
             groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
             groupForget: (rigId, groupId) => rigRouterGroupForget(rigRouter, rigId, groupId),
             modelPreferencePersistence: preferences.preferencePersistence,
+            // A shell is told which background it is drawing on when it starts and
+            // never hears about it again, so every terminal takes the appearance
+            // showing at the moment it is opened and keeps it.
+            terminalColorScheme: () => appearance.get().appearance,
         });
         let materialized = "";
         rigs.subscribe(() => {

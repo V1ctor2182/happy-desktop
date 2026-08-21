@@ -135,9 +135,41 @@ export function TerminalPanelPage() {
                 </div>
             </Specimen>
             <Specimen
+                detail="started in dark · keeps that appearance whatever the surrounding theme is"
+                label="Pinned dark"
+                number="05"
+                stage="app"
+            >
+                <div style={frame}>
+                    <TerminalPanel
+                        colorScheme="dark"
+                        grid={grid}
+                        height={280}
+                        status="connected"
+                        {...handlers}
+                    />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="started in light · keeps that appearance whatever the surrounding theme is"
+                label="Pinned light"
+                number="06"
+                stage="app"
+            >
+                <div style={frame}>
+                    <TerminalPanel
+                        colorScheme="light"
+                        grid={grid}
+                        height={280}
+                        status="connected"
+                        {...handlers}
+                    />
+                </div>
+            </Specimen>
+            <Specimen
                 detail="no height · fills a 320 × 360 panel column · no divider"
                 label="Filling a panel column"
-                number="05"
+                number="07"
                 stage="app"
             >
                 <div style={{ ...frame, width: "320px" }}>

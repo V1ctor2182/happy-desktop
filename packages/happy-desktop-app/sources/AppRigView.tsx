@@ -4362,6 +4362,7 @@ function RigTerminalScreen(props: {
     const snapshot = useSyncExternalStore(terminal.subscribe, terminal.get, terminal.get);
     return (
         <TerminalPanel
+            colorScheme={snapshot.colorScheme}
             exitCode={snapshot.exitCode}
             {...(snapshot.grid ? { grid: snapshot.grid } : {})}
             {...(snapshot.error ? { error: snapshot.error.message } : {})}

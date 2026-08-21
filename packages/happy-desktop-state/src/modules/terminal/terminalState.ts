@@ -74,6 +74,15 @@ export interface TerminalGridSnapshot {
 export type TerminalDriverStatus = "connecting" | "connected" | "disconnected";
 
 /**
+ * The appearance a terminal is running in. It is settled when the terminal is
+ * created and never changes afterwards: it seeds the emulator on both ends, and
+ * the programs inside read it back through the terminal's own colour queries, so
+ * a running shell cannot be moved to the other appearance. Switching the app's
+ * theme therefore leaves every open terminal exactly as it was.
+ */
+export type TerminalColorScheme = "dark" | "light";
+
+/**
  * The store-side sink a terminal driver pushes authoritative updates into. The
  * driver owns the wire protocol and terminal emulation; it never touches the
  * store directly, only this neutral callback surface, so product state stays
@@ -118,6 +127,8 @@ export type TerminalDriverCreate = (options: {
     readonly replica: TerminalReplica;
     readonly cols: number;
     readonly rows: number;
+    /** The appearance the terminal was created in; it seeds the emulator. */
+    readonly colorScheme: TerminalColorScheme;
 }) => TerminalDriver;
 
 export interface TerminalSnapshot {

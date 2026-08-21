@@ -7,6 +7,7 @@ import {
 } from "@slopus/ghostty-web";
 import type {
     TerminalCellSnapshot,
+    TerminalColorScheme,
     TerminalConnection,
     TerminalDriver,
     TerminalDriverCreate,
@@ -25,7 +26,11 @@ interface Size {
     rows: number;
 }
 
-type EmulatorCreate = (cols: number, rows: number) => Promise<TerminalEmulator>;
+type EmulatorCreate = (
+    cols: number,
+    rows: number,
+    colorScheme: TerminalColorScheme,
+) => Promise<TerminalEmulator>;
 
 /**
  * Builds a terminal driver over an injected emulator factory. Production wires
@@ -39,6 +44,7 @@ export function terminalDriverCreateWith(emulatorCreate: EmulatorCreate): Termin
             options.replica,
             options.cols,
             options.rows,
+            options.colorScheme,
             emulatorCreate,
         );
 }
@@ -75,6 +81,7 @@ class GhosttyTerminalDriver implements TerminalDriver {
         private readonly replica: TerminalReplica,
         cols: number,
         rows: number,
+        private readonly colorScheme: TerminalColorScheme,
         private readonly emulatorCreate: EmulatorCreate,
     ) {
         this.desiredSize = { cols, rows };
@@ -137,7 +144,11 @@ class GhosttyTerminalDriver implements TerminalDriver {
 
     private async start(): Promise<void> {
         try {
-            this.emulator = await this.emulatorCreate(this.desiredSize.cols, this.desiredSize.rows);
+            this.emulator = await this.emulatorCreate(
+                this.desiredSize.cols,
+                this.desiredSize.rows,
+                this.colorScheme,
+            );
         } catch {
             if (!this.closed) this.replica.error("The terminal emulator failed to load.");
             return;

@@ -17,6 +17,15 @@ import { TerminalPanelRenderer } from "./terminalPanelRenderer";
 export interface TerminalPanelProps {
     /** The current renderable grid, once output or recovery has arrived. */
     grid?: TerminalGridSnapshot;
+    /**
+     * The appearance the shell was started in. A terminal keeps it for as long as
+     * it runs: the programs inside were told which background they are drawing
+     * on and picked their colours against it, so the grid is painted in that
+     * appearance even after the window's theme is switched to the other one.
+     * Omitting it follows the surrounding theme, which is what a blueprint or a
+     * terminal with nothing running in it wants.
+     */
+    colorScheme?: "dark" | "light";
     status: "connecting" | "connected" | "disconnected" | "exited" | "error";
     error?: string;
     exitCode?: number | null;
@@ -398,7 +407,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
             {collapsed ? null : (
                 <div
                     aria-label={availability ? `Terminal output. ${availability}` : undefined}
-                    className="happy2-terminal-panel__screen"
+                    className={
+                        props.colorScheme
+                            ? `happy2-terminal-panel__screen happy2-theme-${props.colorScheme}`
+                            : "happy2-terminal-panel__screen"
+                    }
                     data-focused={focused && !readOnly ? "" : undefined}
                     data-happy-desktop-ui="terminal-screen"
                     onClick={screenClick}

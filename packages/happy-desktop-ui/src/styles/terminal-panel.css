@@ -97,6 +97,13 @@
     white-space: nowrap;
 }
 
+/*
+ * The grid states its own surface rather than showing the panel's through it.
+ * A running terminal carries the appearance it was started in — the panel may
+ * be handed the other one by a theme switch — and a cell left on the default
+ * background has to land on the background its program was told about. In the
+ * ordinary case the two tokens resolve to the same colour and nothing changes.
+ */
 .happy2-terminal-panel__screen {
     position: relative;
     box-sizing: border-box;
@@ -105,6 +112,7 @@
     width: 100%;
     overflow: auto;
     padding: 0;
+    background: var(--surface);
     color: var(--text);
     font-family: var(--happy2-font-mono);
     font-size: 14px;

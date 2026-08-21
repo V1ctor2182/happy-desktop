@@ -1,4 +1,7 @@
-import type { TerminalDriverCreate } from "../modules/terminal/terminalState.js";
+import type {
+    TerminalColorScheme,
+    TerminalDriverCreate,
+} from "../modules/terminal/terminalState.js";
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import { UserError } from "../types.js";
 import { rigProjectAddError } from "./rigProjectRegistration.js";
@@ -247,6 +250,13 @@ export interface RigClientDeps {
      * app with no emulator to offer should do.
      */
     readonly terminalDriverCreate?: TerminalDriverCreate;
+    /**
+     * The appearance a terminal opened right now should run in, read once per
+     * terminal. It is a function rather than a value because the window's theme
+     * changes over the life of this client, and each terminal keeps whichever
+     * appearance was current when it started.
+     */
+    readonly terminalColorScheme: () => TerminalColorScheme;
 }
 
 interface ChatBinding {
@@ -537,6 +547,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 {
                     client: deps.client,
                     hostServices: deps.hostServices,
+                    colorScheme: deps.terminalColorScheme(),
                     ...(deps.terminalDriverCreate
                         ? { driverCreate: deps.terminalDriverCreate }
                         : {}),

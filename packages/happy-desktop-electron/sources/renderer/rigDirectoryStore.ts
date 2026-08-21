@@ -5,6 +5,7 @@ import type {
     RigProjectAddSnapshot,
     RigProjectGroup,
     RigSessionLocation,
+    TerminalColorScheme,
 } from "happy-desktop-state";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
 import {
@@ -53,6 +54,12 @@ export interface RigDirectoryDeps {
     readonly groupForget: (rigId: string, groupId: string) => void;
     /** Desktop-wide model memory for this window's Rig connection. */
     readonly modelPreferencePersistence: RigModelPreferencePersistence;
+    /**
+     * The window's current appearance, read whenever a terminal is opened. A
+     * terminal runs in the appearance it was started in for the rest of its life,
+     * so this is read once per shell rather than followed.
+     */
+    readonly terminalColorScheme: () => TerminalColorScheme;
 }
 
 interface LocalRig {
@@ -178,6 +185,7 @@ export function rigDirectoryStoreCreate(
             rigHttpUrl,
             connectEndpoint: `${rigHttpUrl.replace(/\/$/, "")}/rig-connect`,
             modelPreferencePersistence: deps.modelPreferencePersistence,
+            terminalColorScheme: deps.terminalColorScheme,
             deps: {
                 conversationOpen: (location) => deps.conversationOpen(LOCAL_RIG_ID, location),
                 groupOpen: (groupId) => deps.groupOpen(LOCAL_RIG_ID, groupId),

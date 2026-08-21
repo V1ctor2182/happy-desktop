@@ -1,4 +1,5 @@
 import type {
+    TerminalColorScheme,
     TerminalDriver,
     TerminalDriverCreate,
     TerminalGridSnapshot,
@@ -21,6 +22,13 @@ export interface RigTerminalSnapshot {
     readonly title: string;
     readonly cols: number;
     readonly rows: number;
+    /**
+     * The appearance this shell was started in, as the daemon settled it. It is
+     * fixed for the terminal's whole life, so a view paints the grid in this
+     * appearance rather than in whichever theme the window is showing now: the
+     * colours the programs inside chose were chosen against this background.
+     */
+    readonly colorScheme: TerminalColorScheme;
     readonly exitCode: number | null;
     readonly error?: UserError;
 }
@@ -42,6 +50,12 @@ export interface RigTerminalHandle extends RigTerminalStore, Disposable {}
 export interface RigTerminalDeps {
     readonly client: Pick<HappyAgentClient, "getAgent" | "openTerminal" | "stopTerminal">;
     readonly hostServices: Pick<RigHostServices, "terminalConnect">;
+    /**
+     * The appearance to start this shell in, read once by whoever opens it. The
+     * daemon settles it at creation and never changes it, so the theme the window
+     * happens to be in later is none of this terminal's business.
+     */
+    readonly colorScheme: TerminalColorScheme;
     /**
      * Builds the driver that owns the terminal protocol and the VT emulator. It is
      * injected because that machinery is a browser/Node concern living in the app
@@ -87,6 +101,7 @@ export function rigTerminalOpen(
         title: "",
         cols,
         rows,
+        colorScheme: deps.colorScheme,
         exitCode: null,
     };
     const set = (next: Partial<RigTerminalSnapshot>): void => {
@@ -152,7 +167,11 @@ export function rigTerminalOpen(
         .getAgent(sessionId)
         .then(({ agent }) => {
             workspaceId = agent.workspaceId as RigGroupId;
-            return deps.client.openTerminal(agent.workspaceId, { cols, rows });
+            return deps.client.openTerminal(agent.workspaceId, {
+                cols,
+                rows,
+                colorScheme: deps.colorScheme,
+            });
         })
         .then(
             ({ terminal }) => {
@@ -164,7 +183,14 @@ export function rigTerminalOpen(
                     return;
                 }
                 terminalId = terminal.id as RigTerminalId;
-                set({ exitCode: terminal.exitCode, cols: terminal.cols, rows: terminal.rows });
+                set({
+                    exitCode: terminal.exitCode,
+                    cols: terminal.cols,
+                    rows: terminal.rows,
+                    // The daemon's settled scheme is the authority, not the request:
+                    // it is what seeded the terminal the programs inside are talking to.
+                    colorScheme: terminal.colorScheme,
+                });
                 driver = driverCreate({
                     connect: () =>
                         deps.hostServices.terminalConnect(
@@ -177,6 +203,7 @@ export function rigTerminalOpen(
                     // instead of collapsing into a no-op against a size never applied.
                     cols: terminal.cols,
                     rows: terminal.rows,
+                    colorScheme: terminal.colorScheme,
                     replica: {
                         statusUpdate: (status) => {
                             if (!disposed && snapshot.status !== "exited")

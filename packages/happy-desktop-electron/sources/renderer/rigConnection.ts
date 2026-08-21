@@ -27,6 +27,7 @@ import {
     type RigWorkspaceMemoryPersistence,
     type RigWorkspaceStore,
     type ServerCompatibility,
+    type TerminalColorScheme,
 } from "happy-desktop-state";
 import { completionChimePlay } from "./completionChime";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
@@ -209,6 +210,11 @@ export function rigConnectionOpen(input: {
     readonly rigId: string;
     readonly rigHttpUrl: string;
     readonly connectEndpoint: string;
+    /**
+     * The window's appearance right now, read again for every terminal this
+     * connection opens. A terminal is started in it and keeps it afterwards.
+     */
+    readonly terminalColorScheme: () => TerminalColorScheme;
 }): RigConnectionHandle {
     let disposed = false;
     let session: RigSession | undefined;
@@ -268,6 +274,7 @@ export function rigConnectionOpen(input: {
             return () => mutationListeners.delete(listener);
         },
         terminalDriverCreate,
+        terminalColorScheme: input.terminalColorScheme,
     });
 
     const modelsLoad = (): void => {

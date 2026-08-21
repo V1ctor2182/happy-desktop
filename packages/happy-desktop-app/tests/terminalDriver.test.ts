@@ -178,6 +178,7 @@ it("drives the real Rig protocol: input, output, resize, exit", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
     expect(observed.statuses).toContain("connected");
@@ -228,6 +229,7 @@ it("reconnects the real protocol after the channel drops", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
     expect(observed.statuses).toContain("connected");
@@ -273,6 +275,7 @@ it("preserves pending input across a manual reconnect", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
     expect(observed.statuses).toContain("connected");
@@ -308,6 +311,7 @@ it("applies a resize requested before the protocol is ready", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     // Resize immediately, before the emulator loads or the welcome arrives.
     driver.resize(120, 40);
@@ -336,6 +340,7 @@ it("coalesces rapid resizes to at most one in flight", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
     expect(observed.statuses).toContain("connected");
@@ -372,6 +377,7 @@ it("keeps the server semantic grid authoritative in grid mode", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
     expect(observed.statuses).toContain("connected");
@@ -409,6 +415,7 @@ it("tears down on exit, retains the final grid, and never reconnects", async () 
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
     protocol.publishUpdate(Buffer.from("done"), serverGrid("done"));
@@ -441,6 +448,7 @@ it("reports a construction failure without an uncaught error", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
     expect(observed.statuses).toContain("disconnected");
@@ -467,6 +475,7 @@ it("splits a paste larger than the 64 KiB input frame limit", async () => {
         replica: observed.replica,
         cols: 80,
         rows: 24,
+        colorScheme: "dark",
     });
     await tick();
 

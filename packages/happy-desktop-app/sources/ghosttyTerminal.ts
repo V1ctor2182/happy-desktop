@@ -2,6 +2,7 @@ import { createGhosttyTerminal, type GhosttyTerminal } from "@slopus/ghostty-was
 import type { GhosttyColor, GhosttyRow, GhosttySnapshot, GhosttyStyle } from "@slopus/ghostty-wasm";
 import type {
     TerminalCellSnapshot,
+    TerminalColorScheme,
     TerminalGridSnapshot,
     TerminalRowSnapshot,
 } from "happy-desktop-state";
@@ -39,9 +40,19 @@ export interface TerminalEmulator {
     dispose(): void;
 }
 
-/** Creates a Ghostty WebAssembly emulator sized to the initial grid. */
-export async function ghosttyEmulatorCreate(cols: number, rows: number): Promise<TerminalEmulator> {
-    const terminal = await createGhosttyTerminal({ cols, rows, colorScheme: "dark" });
+/**
+ * Creates a Ghostty WebAssembly emulator sized to the initial grid, in the
+ * appearance the terminal was created in. The scheme decides the default
+ * foreground and background this replica resolves and the colours it answers a
+ * program's own colour queries with, so it must be the one the daemon settled
+ * rather than whichever theme the window is showing.
+ */
+export async function ghosttyEmulatorCreate(
+    cols: number,
+    rows: number,
+    colorScheme: TerminalColorScheme,
+): Promise<TerminalEmulator> {
+    const terminal = await createGhosttyTerminal({ cols, rows, colorScheme });
     return new GhosttyTerminalEmulator(terminal);
 }
 
