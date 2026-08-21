@@ -75,10 +75,13 @@
 
 /* Full-bleed scrollport; the child owns the readable inset. */
 .happy2-tool-call-preview__scroll {
-    display: flex;
     flex: 1 1 0%;
     min-width: 0;
     min-height: 0;
+}
+
+.happy2-tool-call-preview__scroll-viewport {
+    display: flex;
     overflow: auto;
 }
 
@@ -150,10 +153,13 @@
 }
 
 .happy2-tool-call-preview__terminal {
-    display: flex;
     flex: 1 1 0%;
     min-width: 0;
     min-height: 160px;
+}
+
+.happy2-tool-call-preview__terminal-viewport {
+    display: flex;
     overflow-x: hidden;
     overflow-y: auto;
 }

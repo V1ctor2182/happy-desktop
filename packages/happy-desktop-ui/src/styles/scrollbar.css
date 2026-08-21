@@ -1,150 +1,205 @@
 /*
- * The scrollbar. A scrolling surface gets this one — a panel in the application
- * chrome, a card with its own hairline vocabulary, the command palette, a code
- * or diff pane. A surface may state where its bar sits (the composer puts its
- * own in its padding, below) but not what it looks like.
+ * One custom-painted scrollbar for every Happy-owned scrollport. The browser
+ * still owns scrolling; only its chrome is hidden. Ordinary surfaces place the
+ * fixed 8px track beside content when it overflows, file/code surfaces overlay
+ * it, and the composer alone keeps the lane before overflow.
  *
- * The message history is the standing exception, and it is a product decision
- * rather than an oversight: it states its own bar in message.css, which also
- * takes it out of these pseudo-elements entirely (see the engine note below).
- * Leave it alone unless asked — the width it reserves is the measure every
- * message in the thread is laid out against.
- *
- * It belongs to the design system rather than to an application, because it is
- * the other half of the panel inset contract (see --happy2-panel-inset), and
- * that contract is about what the eye sees rather than what the box model says.
- * A scrollport's content box is inset symmetrically, but the bar drawn beside
- * it pads its own thumb, and that padding lands on the reader's side of the
- * gap: measured on real pixels, the platform's own thin bar put 3px of nothing
- * between the content edge and its thumb, so a row sat 6px from the panel's
- * left edge and 9px from the mark on its right. The geometry below is stated
- * rather than inherited so the thumb's ink begins exactly at the content edge
- * and the two gaps are the same 6px.
- *
- * Keeping it here also means the Blueprint draws the scrollbar the product
- * draws, so a panel can be reviewed with and without one instead of only ever
- * being measured against macOS's invisible overlay bar.
- *
- * The bar is quiet until the pointer is over the surface it belongs to. A
- * scrollport that nobody is pointing at says nothing; hovering it — anywhere in
- * it, since hover reaches every ancestor of the element under the pointer —
- * fades the thumb in. This is one rule for the whole product rather than a
- * per-surface choice, so no panel can be the one that always shows its bar —
- * including the composer's draft, which takes this bar like everything else.
- *
- * The engine split is not decoration. Chromium and WebKit draw this bar from
- * the `::-webkit-scrollbar` pseudo-elements, and both of them ignore those
- * pseudo-elements entirely for any element that also sets `scrollbar-width` or
- * `scrollbar-color` — so declaring the standard properties unconditionally, as
- * this file used to, silently threw the whole custom geometry away and left us
- * with the platform's bar and its asymmetric padding. The standard properties
- * are therefore declared only where the pseudo-elements do not exist, which is
- * Firefox, and there the thumb's inset is the engine's to choose.
+ * Automatic bars answer trusted reader input, hold for two seconds, and fade
+ * for 480ms. Always-visible bars have three deliberately close neutral levels:
+ * quiet, active surface, and direct track interaction. Geometry never changes.
  */
 
-@supports not selector(::-webkit-scrollbar) {
-    * {
-        scrollbar-color: transparent transparent;
-        scrollbar-width: thin;
-    }
-
-    *:hover {
-        scrollbar-color: var(--scrollbar-thumb) transparent;
-    }
+@property --happy2-scrollbar-color {
+    syntax: "<color>";
+    inherits: true;
+    initial-value: transparent;
 }
 
-/*
- * The track is the ink plus the clear space that holds it off the panel's outer
- * edge; both numbers are in theme.css. The thumb is a comfortable pointer target
- * well beyond its ink, because the whole track takes the press.
- */
-::-webkit-scrollbar {
+[data-scrollbar-visibility="automatic"] {
+    --happy2-scrollbar-rest-color: transparent;
+    --happy2-scrollbar-surface-color: transparent;
+}
+
+[data-scrollbar-visibility="always"] {
+    --happy2-scrollbar-rest-color: var(--happy2-scrollbar-quiet-color);
+    --happy2-scrollbar-surface-color: var(--happy2-scrollbar-active-color);
+}
+
+[data-scrollbar-host] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-rest-color);
+}
+
+[data-scrollbar-host][data-scrollbar-surface] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-surface-color);
+}
+
+[data-scrollbar-host][data-scrollbar-active=""] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-active-color);
+    transition: none;
+}
+
+[data-scrollbar-host][data-scrollbar-active="idle"] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-rest-color);
+    transition: --happy2-scrollbar-color 480ms linear;
+}
+
+[data-scrollbar-visibility="always"] [data-scrollbar-host][data-scrollbar-hover],
+[data-scrollbar-visibility="automatic"]
+    [data-scrollbar-host][data-scrollbar-active][data-scrollbar-hover],
+[data-scrollbar-host][data-scrollbar-dragging] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-interaction-color);
+}
+
+/* The composer is the sole always-visible exception in Automatic mode. */
+[data-scrollbar-host][data-scrollbar-always] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-quiet-color);
+}
+
+[data-scrollbar-host][data-scrollbar-always][data-scrollbar-surface],
+[data-scrollbar-host][data-scrollbar-always][data-scrollbar-active=""] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-active-color);
+}
+
+[data-scrollbar-host][data-scrollbar-always][data-scrollbar-hover],
+[data-scrollbar-host][data-scrollbar-always][data-scrollbar-dragging] {
+    --happy2-scrollbar-color: var(--happy2-scrollbar-interaction-color);
+}
+
+/* Viewport + two optional tracks + their corner are a genuine 2D control. */
+[data-scrollbar-host][data-scrollbar-placement] {
+    /* eslint-disable-next-line happy2-layout/use-flex-layout -- A scroll viewport and its two perpendicular tracks form a two-dimensional control with a shared corner. */
+    display: grid;
+    position: relative;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.happy2-scroll-area__viewport,
+[data-scrollbar-host] > [data-scrollbar-viewport] {
+    grid-row: 1;
+    grid-column: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Only registered Happy scrollports lose native chrome. Pierre's internal
+   horizontal code columns retain their documented shadow-DOM fallback. */
+[data-scrollbar-viewport] {
+    scrollbar-width: none;
+}
+
+[data-scrollbar-viewport]::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.happy2-scrollbar__track {
+    position: relative;
+    z-index: 2;
+    display: none;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    cursor: default;
+    pointer-events: none;
+    touch-action: none;
+}
+
+.happy2-scrollbar__track[data-axis="vertical"] {
+    grid-row: 1;
+    grid-column: 2;
     width: var(--happy2-scrollbar-track);
+    margin-bottom: var(--happy2-scrollbar-end-inset, 0px);
+}
+
+.happy2-scrollbar__track[data-axis="horizontal"] {
+    grid-row: 2;
+    grid-column: 1;
     height: var(--happy2-scrollbar-track);
 }
 
-::-webkit-scrollbar-track,
-::-webkit-scrollbar-corner {
-    background: transparent;
+[data-scrollbar-host][data-scrollbar-overflow-y] > .happy2-scrollbar__track[data-axis="vertical"],
+[data-scrollbar-host][data-scrollbar-placement="stable-gutter"]
+    > .happy2-scrollbar__track[data-axis="vertical"],
+[data-scrollbar-host][data-scrollbar-overflow-x] > .happy2-scrollbar__track[data-axis="horizontal"],
+[data-scrollbar-host][data-scrollbar-placement="stable-gutter"]
+    > .happy2-scrollbar__track[data-axis="horizontal"] {
+    display: block;
 }
 
-/*
- * The ink is inset from the panel's outer edge and flush against the content,
- * so the gap a reader sees between the last thing in a row and the bar is the
- * scrollport's own inset and nothing else. `background-clip: padding-box` is
- * what makes a transparent border read as that inset.
- *
- * The radii are stated per corner and per axis, and they are not decorative. A
- * background clipped to the padding box is rounded by the *inner* radius, and
- * that reduction happens independently on each axis: a corner's horizontal
- * radius loses the border beside it, its vertical radius loses the border above
- * or below it. The inset border sits on one side only, so a single number per
- * corner cannot survive it — one number on the trailing corners came out as an
- * ellipse, a cap that ran further along the bar than across it and read as the
- * thumb being sliced away at both ends. The two-axis form adds the border back
- * only on the axis that lost it: half the ink everywhere, plus the inset on the
- * horizontal radii of the trailing corners, which leaves the bar a true round
- * cap at each end. A pill radius cannot do this either — it clamps to half the
- * border box first, and the inner radius comes out a pixel or so on the bordered
- * side.
- */
-::-webkit-scrollbar-thumb {
-    background-color: transparent;
-    background-clip: padding-box;
-    transition: background-color 120ms ease;
+[data-scrollbar-host]:not([data-scrollbar-overflow-y])
+    > .happy2-scrollbar__track[data-axis="vertical"]
+    > .happy2-scrollbar__thumb,
+[data-scrollbar-host]:not([data-scrollbar-overflow-x])
+    > .happy2-scrollbar__track[data-axis="horizontal"]
+    > .happy2-scrollbar__thumb {
+    display: none;
 }
 
-/*
- * The pair below is one mechanism, and neither half does anything without the
- * other.
- *
- * Blink and WebKit resolve a custom scrollbar's style from the scroller, and
- * they resolve it again only when the scroller's own computed style changes. A
- * rule that would change nothing but the thumb's pseudo-element is therefore
- * never noticed: measured in Chromium, `:hover::-webkit-scrollbar-thumb` alone
- * left the thumb exactly as it had been painted before the pointer arrived —
- * both when it was meant to appear and when it was only meant to change colour.
- * The same rule with any real property changing on the hovered element beside
- * it repainted at once.
- *
- * So the hovered element declares one, and it has to be a property the engine
- * really repaints for. `column-rule-color` was tried first and does nothing:
- * with no column rule to draw, Chromium drops the change before it reaches
- * paint and the bar stayed invisible. `outline-color` reaches paint, and it
- * draws nothing of its own here — an outline appears only where a style and a
- * width were asked for, which every focus ring in this product states itself,
- * later in the cascade and at its own specificity. `:not(:focus-visible)` keeps
- * this away from the one ring that does not: the browser's default, on an
- * element that never declared a focus style. The price is that a focused
- * scrollport does not reveal its bar until something else restyles it.
- *
- * It is not decoration and it is not dead: delete it and no bar in the product
- * appears on hover again.
- */
-*:hover:not(:focus-visible) {
-    outline-color: var(--scrollbar-thumb);
+[data-scrollbar-visibility="always"] [data-scrollbar-host] > .happy2-scrollbar__track,
+[data-scrollbar-host][data-scrollbar-always] > .happy2-scrollbar__track,
+[data-scrollbar-host][data-scrollbar-active] > .happy2-scrollbar__track {
+    pointer-events: auto;
 }
 
-:hover::-webkit-scrollbar-thumb {
-    background-color: var(--scrollbar-thumb);
-}
-
-::-webkit-scrollbar-thumb {
+.happy2-scrollbar__thumb {
     --happy2-scrollbar-cap: calc(var(--happy2-scrollbar-ink) / 2);
     --happy2-scrollbar-outer-cap: calc(
         var(--happy2-scrollbar-cap) + var(--happy2-scrollbar-edge-inset)
     );
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    background-color: var(--happy2-scrollbar-color);
+    background-clip: padding-box;
+    will-change: transform;
 }
 
-::-webkit-scrollbar-thumb:vertical {
+.happy2-scrollbar__track[data-axis="vertical"] > .happy2-scrollbar__thumb {
+    width: 100%;
+    min-height: 24px;
     border-right: var(--happy2-scrollbar-edge-inset) solid transparent;
     border-radius: var(--happy2-scrollbar-cap) var(--happy2-scrollbar-outer-cap)
         var(--happy2-scrollbar-outer-cap) var(--happy2-scrollbar-cap) / var(--happy2-scrollbar-cap);
 }
 
-::-webkit-scrollbar-thumb:horizontal {
+.happy2-scrollbar__track[data-axis="horizontal"] > .happy2-scrollbar__thumb {
+    height: 100%;
+    min-width: 24px;
     border-bottom: var(--happy2-scrollbar-edge-inset) solid transparent;
     border-radius: var(--happy2-scrollbar-cap) / var(--happy2-scrollbar-cap)
         var(--happy2-scrollbar-cap) var(--happy2-scrollbar-outer-cap)
         var(--happy2-scrollbar-outer-cap);
+}
+
+/* File, diff, and editor tracks sit above full-width painted content. */
+[data-scrollbar-host][data-scrollbar-placement="overlay"]
+    > .happy2-scrollbar__track[data-axis="vertical"] {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: var(--happy2-scrollbar-end-inset, 0px);
+    margin-bottom: 0;
+}
+
+[data-scrollbar-host][data-scrollbar-placement="overlay"][data-scrollbar-overflow-x]
+    > .happy2-scrollbar__track[data-axis="vertical"] {
+    bottom: calc(var(--happy2-scrollbar-end-inset, 0px) + var(--happy2-scrollbar-track));
+}
+
+[data-scrollbar-host][data-scrollbar-placement="overlay"]
+    > .happy2-scrollbar__track[data-axis="horizontal"] {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+[data-scrollbar-host][data-scrollbar-placement="overlay"][data-scrollbar-overflow-y]
+    > .happy2-scrollbar__track[data-axis="horizontal"] {
+    right: var(--happy2-scrollbar-track);
 }

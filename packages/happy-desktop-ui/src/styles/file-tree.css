@@ -20,14 +20,18 @@
 }
 
 .happy2-file-tree {
-    display: flex;
-    flex-direction: column;
     width: 100%;
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
     color: var(--text);
     -webkit-user-select: none;
     user-select: none;
+}
+
+.happy2-file-tree__viewport {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
 }
 
 /* ---- Virtualized listing ---------------------------------------------- */
@@ -38,6 +42,9 @@
 .happy2-file-tree[data-virtualized] {
     flex: 1 1 0%;
     min-height: 0;
+}
+
+.happy2-file-tree[data-virtualized] > .happy2-file-tree__viewport {
     overflow-x: hidden;
     overflow-y: auto;
 }

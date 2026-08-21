@@ -241,22 +241,30 @@ and WebKit.
 
 ### The scrollbar
 
-There is one scrollbar, in `happy-desktop-ui/src/styles/scrollbar.css`, and a
-scrolling surface wears it: panels, cards, the command palette, code and diff
-panes. A surface does not restyle its bar — a different width or colour on one
-surface is a difference no one chose — and it must not declare `scrollbar-width`
-or `scrollbar-color`, which silently opts Chromium and WebKit out of the shared
-geometry altogether. Where Firefox needs the standard properties, state them
-inside `@supports not selector(::-webkit-scrollbar)`.
+Every scrolling surface uses the shared scrollbar. Its pointer track is always
+8px, its ink is always 6px, and neither changes size between states or surfaces.
 
-The message history keeps its own bar in `message.css`. That is deliberate: the
-width it reserves is the measure every message is laid out against, so changing
-it moves the whole thread. Do not fold it into the shared treatment without
-being asked.
+- Automatic is the default. Trusted user scroll input reveals the thumb,
+  continued input keeps it visible, and stopping starts a two-second hold
+  followed by a 480ms fade. Programmatic scrolling, streaming, and resize never
+  reveal it. Hovering or dragging the track pins it visible.
+- Always visible uses three restrained neutral strengths: 0.32 inactive, 0.50
+  on the surface that would receive the wheel, and 0.68 on track hover or drag.
+  Automatic uses the latter two after reveal.
+- Row panels place the track beside their content only while they overflow;
+  their existing panel inset remains the content-to-track gap. File previews,
+  diffs, and editors overlay it so painted rows reach the pane edge. Code keeps
+  `8px + 1ch` of trailing text clearance in both wrap modes.
+- The composer alone always reserves the 8px lane and keeps an overflowing thumb
+  visible in either appearance mode, so its text never rewraps when overflow
+  begins.
 
-The bar is quiet until the pointer is over the surface it belongs to, and its
-thumb's ink is held `--happy2-scrollbar-edge-inset` off that surface's outer
-edge at whatever width `--happy2-scrollbar-track` reserves.
+The browser remains responsible for scrolling, momentum, selection, and scroll
+position. Happy hides only its chrome and paints a shared DOM track because
+native thumbs cannot provide the required fixed geometry and lifecycle states.
+Pierre's horizontal code scrollport is the sole implementation exception: its
+markup lives inside third-party shadow DOM, so its native thumb is styled to the
+same visual contract without mutating vendor structure.
 
 ## Nested rounded corners
 

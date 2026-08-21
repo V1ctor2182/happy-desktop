@@ -82,6 +82,9 @@
 
 .happy2-diff-snippet__scroll {
     box-sizing: border-box;
+}
+
+.happy2-diff-snippet__scroll-viewport {
     overflow-x: auto;
     overflow-y: hidden;
 }
@@ -157,7 +160,7 @@
  * height and keeps it as a minimum; the gutters stay on the first row of the
  * line they mark, which is where the reader looks for them.
  */
-.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__scroll {
+.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__scroll-viewport {
     overflow-x: hidden;
 }
 

@@ -9,6 +9,7 @@ export type DesktopMode = "local";
 
 /** Appearance source the Electron shell applies to every local renderer and guest. */
 export type DesktopAppearanceMode = "dark" | "light" | "system";
+export type DesktopScrollbarVisibility = "always" | "automatic";
 
 /** Access granted to a newly created local Rig session. */
 export type DesktopPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
@@ -32,10 +33,10 @@ export interface DesktopModelPreference extends DesktopModelIdentity {
 }
 
 /**
- * Machine-local desktop preferences. Appearance and explicit title motion
- * belong here because they must survive every window and Rig lifetime. Model
- * ids are provider-qualified because the same model can be offered through more
- * than one account/provider.
+ * Machine-local desktop preferences. Theme, scrollbar behavior, and explicit
+ * title motion belong here because they must survive every window and Rig
+ * lifetime. Model ids are provider-qualified because the same model can be
+ * offered through more than one account/provider.
  */
 export interface DesktopConfig {
     readonly appearance: DesktopAppearanceMode;
@@ -44,6 +45,7 @@ export interface DesktopConfig {
     readonly defaultPermissionMode: DesktopPermissionMode;
     readonly lastPickedModel?: DesktopModelIdentity;
     readonly modelPreferences: readonly DesktopModelPreference[];
+    readonly scrollbarVisibility: DesktopScrollbarVisibility;
     readonly titleShimmerEnabled?: boolean;
     readonly version: 1;
 }

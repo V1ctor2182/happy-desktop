@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { ScrollArea } from "./Scrollbar";
 import { WindowDragRegion } from "./TitleBar";
 
 /**
@@ -114,63 +115,77 @@ export function SetupPage(props: SetupPageProps) {
             style={local.style}
         >
             <WindowDragRegion />
-            <div className="happy2-setup-page__body" data-happy-desktop-ui="setup-page-body">
-                {local.scene ? (
-                    <span
-                        className="happy2-setup-page__stage"
-                        data-happy-desktop-ui="setup-page-stage"
+            <ScrollArea
+                axes="both"
+                className="happy2-setup-page__scroll"
+                viewportClassName="happy2-setup-page__scroll-viewport"
+            >
+                <div className="happy2-setup-page__body" data-happy-desktop-ui="setup-page-body">
+                    {local.scene ? (
+                        <span
+                            className="happy2-setup-page__stage"
+                            data-happy-desktop-ui="setup-page-stage"
+                        >
+                            <LottieScene
+                                name={local.scene}
+                                // The picture repeats what the title already says, so
+                                // the only thing worth offering is one more play.
+                                replayLabel={local.title}
+                                size={120}
+                            />
+                        </span>
+                    ) : null}
+                    <h1
+                        className="happy2-setup-page__title"
+                        data-happy-desktop-ui="setup-page-title"
                     >
-                        <LottieScene
-                            name={local.scene}
-                            // The picture repeats what the title already says, so
-                            // the only thing worth offering is one more play.
-                            replayLabel={local.title}
-                            size={120}
-                        />
-                    </span>
-                ) : null}
-                <h1 className="happy2-setup-page__title" data-happy-desktop-ui="setup-page-title">
-                    {local.title}
-                </h1>
-                {local.copy === undefined ? null : (
-                    <p className="happy2-setup-page__copy" data-happy-desktop-ui="setup-page-copy">
-                        {local.copy}
-                    </p>
-                )}
-                {local.command === undefined ? null : (
-                    <code
-                        className="happy2-setup-page__command"
-                        data-happy-desktop-ui="setup-page-command"
-                    >
-                        {local.command}
-                    </code>
-                )}
-                {local.children === undefined ? null : (
-                    <div
-                        className="happy2-setup-page__slot"
-                        data-happy-desktop-ui="setup-page-slot"
-                    >
-                        {local.children}
-                    </div>
-                )}
-                {local.action
-                    ? ((action) =>
-                          action.busy && action.progress ? (
-                              <SetupPageProgressBar
-                                  label={action.label}
-                                  progress={action.progress}
-                              />
-                          ) : (
-                              <Button
-                                  disabled={action.disabled}
-                                  loading={action.busy}
-                                  onClick={action.onSelect}
-                              >
-                                  {action.label}
-                              </Button>
-                          ))(local.action)
-                    : null}
-            </div>
+                        {local.title}
+                    </h1>
+                    {local.copy === undefined ? null : (
+                        <p
+                            className="happy2-setup-page__copy"
+                            data-happy-desktop-ui="setup-page-copy"
+                        >
+                            {local.copy}
+                        </p>
+                    )}
+                    {local.command === undefined ? null : (
+                        <code
+                            className="happy2-setup-page__command"
+                            data-happy-desktop-ui="setup-page-command"
+                        >
+                            {local.command}
+                        </code>
+                    )}
+                    {local.children === undefined ? null : (
+                        <div
+                            className="happy2-setup-page__slot"
+                            data-happy-desktop-ui="setup-page-slot"
+                        >
+                            {local.children}
+                        </div>
+                    )}
+                    {local.action
+                        ? ((action) =>
+                              action.busy && action.progress ? (
+                                  <SetupPageProgressBar
+                                      label={action.label}
+                                      progress={action.progress}
+                                  />
+                              ) : (
+                                  <Button
+                                      disabled={action.disabled}
+                                      fullWidth
+                                      loading={action.busy}
+                                      onClick={action.onSelect}
+                                      size="large"
+                                  >
+                                      {action.label}
+                                  </Button>
+                              ))(local.action)
+                        : null}
+                </div>
+            </ScrollArea>
         </div>
     );
 }

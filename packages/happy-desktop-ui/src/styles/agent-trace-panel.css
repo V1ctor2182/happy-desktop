@@ -33,10 +33,13 @@
 
 /* Scrollport: edge-to-edge, no margin/padding/gap of its own. */
 .happy2-agent-trace-panel__body {
-    display: flex;
     flex: 1 1 0%;
-    flex-direction: column;
     min-height: 0;
+}
+
+.happy2-agent-trace-panel__body-viewport {
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
 }
 

@@ -28,6 +28,7 @@ import {
 import { Menu, type MenuItem } from "./Menu";
 import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
+import { ScrollArea } from "./Scrollbar";
 /** One control on a row: its glyph, what it does, and when it shows. */
 export type SidebarItemAction = {
     icon: IconName;
@@ -1996,7 +1997,12 @@ export function Sidebar(props: SidebarProps) {
                     {local.headerAccessory}
                 </div>
             ) : null}
-            <div className="happy2-sidebar__body" data-happy-desktop-ui="sidebar-body">
+            <ScrollArea
+                className="happy2-sidebar__body"
+                data-happy-desktop-ui="sidebar-body"
+                data-scrollbar-rows=""
+                viewportClassName="happy2-sidebar__body-viewport"
+            >
                 <div
                     className="happy2-sidebar__body-content"
                     data-happy-desktop-ui="sidebar-body-content"
@@ -2334,7 +2340,7 @@ export function Sidebar(props: SidebarProps) {
                         );
                     })}
                 </div>
-            </div>
+            </ScrollArea>
             {/* A row moved by keyboard travels without the reader's caret leaving
                 it, so where it has landed is said out loud here. Both regions
                 are always mounted, because one that arrives with its own text is

@@ -14,6 +14,7 @@ import type {
     DesktopConfig,
     DesktopDefaultModel,
     DesktopModelPreference,
+    DesktopScrollbarVisibility,
     HappyDesktopBridge,
 } from "../shared/desktopContract";
 
@@ -32,10 +33,14 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set([
 
 export interface DesktopPreferences {
     readonly initialAppearance: DesktopAppearanceMode;
+    readonly initialScrollbarVisibility: DesktopScrollbarVisibility;
     readonly initialSettings: RigSettingsInitial;
     readonly preferencePersistence: RigModelPreferencePersistence;
     readonly titleShimmerPersistence: TitleShimmerPersistence;
-    appearanceChanged(mode: DesktopAppearanceMode): void;
+    appearanceChanged(
+        mode: DesktopAppearanceMode,
+        scrollbarVisibility: DesktopScrollbarVisibility,
+    ): void;
     settingsChanged(snapshot: RigSettingsSnapshot): void;
 }
 
@@ -88,12 +93,14 @@ export function desktopPreferencesCreate(
 
     return {
         initialAppearance: config.appearance,
+        initialScrollbarVisibility: config.scrollbarVisibility,
         initialSettings: settingsInitial(config),
         preferencePersistence,
         titleShimmerPersistence,
-        appearanceChanged(mode) {
-            if (config.appearance === mode) return;
-            commit({ ...config, appearance: mode });
+        appearanceChanged(mode, scrollbarVisibility) {
+            if (config.appearance === mode && config.scrollbarVisibility === scrollbarVisibility)
+                return;
+            commit({ ...config, appearance: mode, scrollbarVisibility });
         },
         settingsChanged(snapshot) {
             const nextEffort = snapshot.defaultEffort;
@@ -151,6 +158,7 @@ export function desktopPreferencesCreate(
                       ? { lastPickedModel: config.lastPickedModel }
                       : {}),
                 modelPreferences,
+                scrollbarVisibility: config.scrollbarVisibility,
                 ...(config.titleShimmerEnabled === undefined
                     ? {}
                     : { titleShimmerEnabled: config.titleShimmerEnabled }),
@@ -253,6 +261,7 @@ function configFromPreferenceDocument(
         ...(document.lastPickedModel ? { lastPickedModel: document.lastPickedModel } : {}),
         defaultPermissionMode: current.defaultPermissionMode,
         modelPreferences,
+        scrollbarVisibility: current.scrollbarVisibility,
         ...(current.titleShimmerEnabled === undefined
             ? {}
             : { titleShimmerEnabled: current.titleShimmerEnabled }),

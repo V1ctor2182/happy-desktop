@@ -3,6 +3,7 @@ import { FileDiff } from "@pierre/diffs/react";
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { CodeEditor } from "./CodeEditor";
 import { CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH } from "./CodeBlock";
+import { ScrollArea } from "./Scrollbar";
 import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
 import { SegmentedControl } from "./SegmentedControl";
 
@@ -221,9 +222,11 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                 </span>
             </div>
 
-            <div
+            <ScrollArea
                 className="happy2-changed-file-diff__body"
                 data-happy-desktop-ui="changed-file-diff-body"
+                placement="overlay"
+                viewportClassName="happy2-changed-file-diff__viewport"
             >
                 {mode === "preview" ? (
                     props.preview
@@ -250,7 +253,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         options={diffOptions}
                     />
                 )}
-            </div>
+            </ScrollArea>
         </section>
     );
 }

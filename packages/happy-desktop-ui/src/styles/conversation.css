@@ -187,11 +187,15 @@
 
 .happy2-conversation__panel,
 .happy2-conversation__empty {
-    display: flex;
     flex: 1 1 auto;
-    flex-direction: column;
     min-height: 0;
     width: 100%;
+}
+
+.happy2-conversation__panel-viewport,
+.happy2-conversation__empty-viewport {
+    display: flex;
+    flex-direction: column;
     overflow: auto;
 }
 

@@ -64,20 +64,26 @@
     flex: 1 1 0%;
     min-height: 0;
     width: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: auto;
     background: var(--diff-context-bg);
     color: var(--text-secondary);
     font-family: var(--happy2-font-mono);
     font-size: 11px;
     font-variant-numeric: lining-nums tabular-nums;
     line-height: 17px;
+}
+
+.happy2-rig-debug-log__viewport {
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    background: inherit;
+    color: inherit;
+    font: inherit;
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-.happy2-rig-debug-log__scrollport:focus-visible {
+.happy2-rig-debug-log__viewport:focus-visible {
     outline: 2px solid var(--text-link);
     outline-offset: -2px;
 }

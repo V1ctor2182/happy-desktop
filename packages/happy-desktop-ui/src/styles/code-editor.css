@@ -22,8 +22,17 @@
     background: var(--surface);
 }
 
+.happy2-code-editor__mount {
+    display: flex;
+    flex: 1 1 0%;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
 .happy2-code-editor .cm-editor {
     flex: 1 1 0%;
+    width: 100%;
     min-height: 0;
     background: transparent;
     color: var(--text);
@@ -35,9 +44,7 @@
 
 /* The editor owns the scrollport: the file scrolls inside the pane it was given
    rather than growing the pane to the height of its text. Its bar is the
-   product's, not the platform's — see styles/scrollbar.css; naming a
-   `scrollbar-color` here would take this pane out of that treatment in both
-   Chromium and WebKit. */
+   product's shared custom track — see styles/scrollbar.css. */
 .happy2-code-editor .cm-scroller {
     overflow: auto;
     font-family: inherit;

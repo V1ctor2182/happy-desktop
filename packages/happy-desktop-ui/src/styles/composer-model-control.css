@@ -145,10 +145,13 @@
 }
 
 .happy2-composer-model-control__list {
-    display: flex;
     flex: 0 1 auto;
-    flex-direction: column;
     min-height: 0;
+}
+
+.happy2-composer-model-control__list-viewport {
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
     overscroll-behavior: contain;
 }

@@ -5,6 +5,7 @@ import { Badge, type BadgeVariant } from "./Badge";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { SURFACE_HEADER_HEIGHT } from "./InfoPanel";
+import { ScrollArea } from "./Scrollbar";
 import { Toolbar } from "./Toolbar";
 export type AgentTracePanelStatus = "pending" | "running" | "complete" | "failed";
 export interface AgentTracePanelEntry {
@@ -109,9 +110,10 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                     </>
                 }
             />
-            <div
+            <ScrollArea
                 className="happy2-agent-trace-panel__body"
                 data-happy-desktop-ui="agent-trace-panel-body"
+                viewportClassName="happy2-agent-trace-panel__body-viewport"
             >
                 {local.loading ? (
                     <div
@@ -192,7 +194,7 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                         ))}
                     </div>
                 )}
-            </div>
+            </ScrollArea>
         </section>
     );
 }

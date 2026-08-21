@@ -418,9 +418,11 @@ export function RigSettingsBlueprintPage() {
                         onDefaultModelChange={noop}
                         onEffortChange={noop}
                         onPermissionModeChange={noop}
+                        onScrollbarVisibilityChange={noop}
                         onTitleShimmerChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
+                        scrollbarVisibility="automatic"
                         titleShimmerEnabled={false}
                     />
                 </RigSettingsShell>
@@ -698,9 +700,11 @@ export function RigSettingsBlueprintPage() {
                         onEffortChange={noop}
                         onExperimentalFeaturesChange={noop}
                         onPermissionModeChange={noop}
+                        onScrollbarVisibilityChange={noop}
                         onTitleShimmerChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
+                        scrollbarVisibility="automatic"
                         titleShimmerEnabled={false}
                         unavailable="Rig is offline. Showing the last synced defaults."
                     />

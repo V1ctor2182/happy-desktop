@@ -13,6 +13,7 @@ import { Button } from "./Button";
 import { Checkbox } from "./Checkbox";
 import { Modal } from "./Modal";
 import { ModalOverlay } from "./ModalOverlay";
+import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 import { Select, type SelectOption } from "./Select";
 
 /**
@@ -112,15 +113,24 @@ function destinationDetail(
  * so neither a re-render nor the surface behind this one can take it away.
  */
 export function RigCreateSessionDialog(props: RigCreateSessionDialogProps) {
+    const scrollbarController = useScrollbarController("vertical");
+    const promptHost = useCallback(
+        (node: HTMLDivElement | null) => scrollbarController.hostSet(node),
+        [scrollbarController],
+    );
     // Opening puts the caret in the field, and behind whatever is already
     // written: a task offered back from a previous open is one to carry on with,
     // not one to type in front of. A stable callback rather than an inline one
     // so React runs it when the field appears rather than on every render.
-    const promptMount = useCallback((node: HTMLTextAreaElement | null) => {
-        if (!node) return;
-        node.focus();
-        node.setSelectionRange(node.value.length, node.value.length);
-    }, []);
+    const promptMount = useCallback(
+        (node: HTMLTextAreaElement | null) => {
+            scrollbarController.viewportSet(node);
+            if (!node) return;
+            node.focus();
+            node.setSelectionRange(node.value.length, node.value.length);
+        },
+        [scrollbarController],
+    );
     const submitting = props.submitting === true;
     const loading = props.destinationsLoading === true;
     const menus = props.menus;
@@ -231,6 +241,10 @@ export function RigCreateSessionDialog(props: RigCreateSessionDialogProps) {
                     <div
                         className="happy2-rig-create-session__prompt"
                         data-happy-desktop-ui="rig-create-session-prompt"
+                        data-scrollbar-axes="vertical"
+                        data-scrollbar-host=""
+                        data-scrollbar-placement="gutter"
+                        ref={promptHost}
                     >
                         <textarea
                             aria-label="Task"
@@ -247,6 +261,7 @@ export function RigCreateSessionDialog(props: RigCreateSessionDialogProps) {
                             ref={promptMount}
                             value={props.text}
                         />
+                        <ScrollbarTracks controller={scrollbarController} />
                     </div>
                     <div
                         className="happy2-rig-create-session__where"

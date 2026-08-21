@@ -515,6 +515,32 @@
     min-height: 0;
 }
 
+/* This panel is against the right edge of the window, so with nothing docked
+   under it its scrollport finishes in the window's bottom-right corner — where
+   macOS rounds the frame and would slice the end off a bar running the full
+   height. The shell is the only thing here that knows the panel meets the
+   window, so the shell is what says how far to hold the bar off that end; the
+   scrollport only reads the number (see styles/scrollbar.css).
+
+   Sixteen is where the frame begins to curve. macOS 26
+   rounds a window far more than the ten points that held from Big Sur through
+   Sequoia: a plain window like this one — hidden title bar, no toolbar — is
+   16pt, and one with a toolbar is 26pt. Measured off a screen capture of this
+   window, its right edge runs perfectly straight down to 29 device pixels above
+   the bottom and curves in below that. In CSS pixels that start lands anywhere
+   from 16 to 19.2 depending on the page's zoom, since the frame is drawn in
+   points and this is stated in pixels; sixteen lets the bar run four pixels
+   lower while keeping it out of the visible arc at the reference zoom.
+   The track's end is the ink's end here, because a vertical thumb wears its
+   inset on the right alone and has no bottom border to stand on.
+
+   `:last-child` is the condition: with a footer docked beneath it, the content
+   no longer reaches the corner and holding the bar off the end would be a gap
+   for nothing. */
+.happy-desktop-app-shell__panel-content:last-child {
+    --happy2-scrollbar-end-inset: 16px;
+}
+
 .happy-desktop-app-shell__panel-footer {
     box-sizing: border-box;
     display: flex;

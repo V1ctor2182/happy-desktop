@@ -3,6 +3,7 @@ import { type CSSProperties, type HTMLAttributes } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { Badge } from "./Badge";
 import { Icon, type IconName } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 export type DeskRun = {
     agent: string;
     detail?: string;
@@ -67,7 +68,11 @@ export function AgentDesk(props: AgentDeskProps) {
                     variant="accent"
                 />
             </header>
-            <div className="happy2-agent-desk__body" data-happy-desktop-ui="agent-desk-body">
+            <ScrollArea
+                className="happy2-agent-desk__body"
+                data-happy-desktop-ui="agent-desk-body"
+                viewportClassName="happy2-agent-desk__body-viewport"
+            >
                 <div
                     className="happy2-agent-desk__body-content"
                     data-happy-desktop-ui="agent-desk-body-content"
@@ -212,7 +217,7 @@ export function AgentDesk(props: AgentDeskProps) {
                         </>
                     ) : null}
                 </div>
-            </div>
+            </ScrollArea>
         </div>
     );
 }

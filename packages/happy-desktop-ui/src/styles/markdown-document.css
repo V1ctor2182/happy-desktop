@@ -13,16 +13,19 @@
 }
 
 .happy2-markdown-document {
-    display: flex;
     flex: 1 1 0%;
-    flex-direction: column;
     min-width: 0;
     min-height: 0;
-    overflow: auto;
     background: var(--surface);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
     color: var(--text);
+}
+
+.happy2-markdown-document__viewport {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
 }
 
 .happy2-markdown-document__body {
@@ -207,12 +210,20 @@
     font-size: 13px;
 }
 
+.happy2-markdown-document__plain-code {
+    max-width: 100%;
+    border-radius: var(--happy2-radius-sm);
+    background: var(--surface-pressed);
+}
+
+.happy2-markdown-document__plain-code-viewport {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 .happy2-markdown-document__body pre {
     max-width: 100%;
     margin: 0;
-    overflow-x: auto;
-    border-radius: var(--happy2-radius-sm);
-    background: var(--surface-pressed);
 }
 
 /* A fenced block is the shared code renderer, sunk into the page on the same
@@ -243,12 +254,18 @@
 /* ---- Tables, quotes, rules -------------------------------------------- */
 
 .happy2-markdown-document__body table {
-    display: block;
-    max-width: 100%;
-    overflow-x: auto;
     border-collapse: collapse;
     font-size: 14px;
     line-height: 22px;
+}
+
+.happy2-markdown-document__table-scroll {
+    max-width: 100%;
+}
+
+.happy2-markdown-document__table-scroll-viewport {
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .happy2-markdown-document__body th,

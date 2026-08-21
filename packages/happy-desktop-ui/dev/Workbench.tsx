@@ -92,7 +92,7 @@ export function Workbench(props: WorkbenchProps = {}) {
         </>
     );
     return (
-        <ThemeScope mode={appearance}>
+        <ThemeScope mode={appearance} scrollbarVisibility="automatic">
             <div className="workbench-shell">
                 <header className="workbench-header">
                     {hashAddressed ? (

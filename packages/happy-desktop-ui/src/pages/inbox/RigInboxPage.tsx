@@ -13,6 +13,7 @@ import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
 import { SURFACE_HEADER_HEIGHT } from "../../InfoPanel";
 import { RigUserInputPrompt, type RigUserInputAnswerMap } from "../../RigUserInputPrompt";
+import { ScrollArea } from "../../Scrollbar";
 import { Toolbar } from "../../Toolbar";
 
 export interface RigInboxPageProps {
@@ -94,7 +95,11 @@ export function RigInboxPage(props: RigInboxPageProps) {
                     title="Inbox"
                 />
             </div>
-            <div className="happy2-rig-inbox__scroll" data-happy-desktop-ui="rig-inbox-scroll">
+            <ScrollArea
+                className="happy2-rig-inbox__scroll"
+                data-happy-desktop-ui="rig-inbox-scroll"
+                viewportClassName="happy2-rig-inbox__scroll-viewport"
+            >
                 <div className="happy2-rig-inbox__content">
                     {props.error ? (
                         <Banner tone="danger" title="Questions may be out of date">
@@ -209,7 +214,7 @@ export function RigInboxPage(props: RigInboxPageProps) {
                         </div>
                     ) : null}
                 </div>
-            </div>
+            </ScrollArea>
         </div>
     );
 }

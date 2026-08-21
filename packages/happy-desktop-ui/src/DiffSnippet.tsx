@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type HTMLAttributes } from "react";
 import { compactCount, changeCountLabel } from "./countText";
+import { ScrollArea } from "./Scrollbar";
 export type DiffLineKind = "add" | "del" | "context" | "meta";
 export type DiffLine = {
     kind: DiffLineKind;
@@ -97,9 +98,11 @@ export function DiffSnippet(props: DiffSnippetProps) {
                         : null}
                 </div>
             ) : null}
-            <div
+            <ScrollArea
+                axes="horizontal"
                 className="happy2-diff-snippet__scroll"
                 data-happy-desktop-ui="diff-snippet-scroll"
+                viewportClassName="happy2-diff-snippet__scroll-viewport"
             >
                 <div
                     className="happy2-diff-snippet__code"
@@ -135,7 +138,7 @@ export function DiffSnippet(props: DiffSnippetProps) {
                         </div>
                     ))}
                 </div>
-            </div>
+            </ScrollArea>
         </div>
     );
 }

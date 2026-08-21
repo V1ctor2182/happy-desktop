@@ -6,6 +6,17 @@ export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActiv
 export { compactCount } from "./countText";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
 export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
+export {
+    ScrollArea,
+    ScrollbarTrack,
+    ScrollbarTracks,
+    scrollbarControllerCreate,
+    type ScrollAreaProps,
+    type ScrollbarAxes,
+    type ScrollbarAxis,
+    type ScrollbarController,
+    type ScrollbarPlacement,
+} from "./Scrollbar";
 export { CodeHighlightWorkers } from "./CodeHighlightWorkers";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
 export { SplashCover, type SplashCoverProps } from "./SplashCover";
@@ -188,7 +199,12 @@ export {
 export { type MessageGenerationStatus } from "./MessageMarkdown";
 export { Lightbox, type LightboxProps } from "./Lightbox";
 export { Rail, type RailItem, type RailProps } from "./Rail";
-export { ThemeScope, type ThemeMode, type ThemeScopeProps } from "./ThemeScope";
+export {
+    ThemeScope,
+    type ScrollbarVisibility,
+    type ThemeMode,
+    type ThemeScopeProps,
+} from "./ThemeScope";
 export { haptic, type HapticSignal } from "./haptics";
 export {
     Sidebar,
@@ -484,6 +500,7 @@ export {
     RigGeneralSettings,
     type RigAppearanceChoice,
     type RigGeneralSettingsProps,
+    type RigScrollbarVisibilityChoice,
 } from "./pages/settings/RigGeneralSettings";
 export {
     RigDebugSettings,

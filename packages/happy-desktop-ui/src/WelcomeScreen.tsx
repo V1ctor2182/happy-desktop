@@ -19,6 +19,7 @@ import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRunt
  * disagree about what the third option is called.
  */
 import type { RigAppearanceChoice } from "./pages/settings/RigGeneralSettings";
+import { ScrollArea } from "./Scrollbar";
 import { WindowDragRegion } from "./TitleBar";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
@@ -220,7 +221,11 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                 It is rendered here rather than beside the screen because this
                 root is what establishes its positioning context. */}
             <WindowDragRegion />
-            <div className="happy2-welcome-screen__view" data-happy-desktop-ui="welcome-view">
+            <ScrollArea
+                className="happy2-welcome-screen__view"
+                data-happy-desktop-ui="welcome-view"
+                viewportClassName="happy2-welcome-screen__view-viewport"
+            >
                 <div className="happy2-welcome-screen__body" data-happy-desktop-ui="welcome-body">
                     <div
                         className="happy2-welcome-screen__slideshow"
@@ -323,7 +328,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                         {local.actionLabel ?? "Go Happy"}
                     </Button>
                 </div>
-            </div>
+            </ScrollArea>
 
             {/* Outside the scrollport as well as outside the flex flow: it is a
                 corner of the window rather than the last item of a column, and

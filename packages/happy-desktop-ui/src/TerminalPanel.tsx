@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { TerminalGridSnapshot, TerminalRowSnapshot } from "happy-desktop-state";
 import { Button } from "./Button";
+import { ScrollArea } from "./Scrollbar";
 import { TerminalPanelRenderer } from "./terminalPanelRenderer";
 
 export interface TerminalPanelProps {
@@ -405,8 +406,8 @@ export function TerminalPanel(props: TerminalPanelProps) {
                 </div>
             ) : null}
             {collapsed ? null : (
-                <div
-                    aria-label={availability ? `Terminal output. ${availability}` : undefined}
+                <ScrollArea
+                    axes="both"
                     className={
                         props.colorScheme
                             ? `happy2-terminal-panel__screen happy2-theme-${props.colorScheme}`
@@ -414,26 +415,31 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     }
                     data-focused={focused && !readOnly ? "" : undefined}
                     data-happy-desktop-ui="terminal-screen"
-                    onClick={screenClick}
-                    onCopy={terminalSelectionCopy}
-                    onKeyDown={(event) => {
-                        if (
-                            event.target === event.currentTarget &&
-                            (event.key === "Enter" || event.key === " ")
-                        ) {
-                            event.preventDefault();
-                            screenFocus();
-                        }
+                    viewportClassName="happy2-terminal-panel__screen-viewport"
+                    viewportProps={{
+                        "aria-label": availability ? `Terminal output. ${availability}` : undefined,
+                        onClick: screenClick,
+                        onCopy: terminalSelectionCopy,
+                        onKeyDown: (event) => {
+                            if (
+                                event.target === event.currentTarget &&
+                                (event.key === "Enter" || event.key === " ")
+                            ) {
+                                event.preventDefault();
+                                screenFocus();
+                            }
+                        },
+                        onPointerLeave: () => {
+                            for (const cell of linkedCells.current)
+                                delete cell.dataset.terminalLink;
+                            linkedCells.current = [];
+                        },
+                        onPointerMove: linkHover,
+                        onScroll: screenScroll,
+                        role: readOnly ? "region" : "application",
+                        tabIndex: -1,
                     }}
-                    onPointerLeave={() => {
-                        for (const cell of linkedCells.current) delete cell.dataset.terminalLink;
-                        linkedCells.current = [];
-                    }}
-                    onPointerMove={linkHover}
-                    onScroll={screenScroll}
-                    ref={screen}
-                    role={readOnly ? "region" : "application"}
-                    tabIndex={-1}
+                    viewportRef={screen}
                 >
                     <div
                         className="happy2-terminal-panel__rows"
@@ -480,7 +486,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                         ref={input}
                         spellCheck={false}
                     />
-                </div>
+                </ScrollArea>
             )}
         </section>
     );

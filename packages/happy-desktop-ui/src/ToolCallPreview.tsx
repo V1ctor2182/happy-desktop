@@ -5,6 +5,7 @@ import type {
 } from "happy-desktop-state";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { Icon } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 
 export interface ToolCallPreviewProps {
     readonly tool: ConversationToolCall;
@@ -118,7 +119,11 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                     {statusLabel(tool)}
                 </span>
             </header>
-            <div className="happy2-tool-call-preview__scroll">
+            <ScrollArea
+                axes="both"
+                className="happy2-tool-call-preview__scroll"
+                viewportClassName="happy2-tool-call-preview__scroll-viewport"
+            >
                 <div className="happy2-tool-call-preview__content">
                     {command !== undefined ? (
                         <section className="happy2-tool-call-preview__section">
@@ -127,11 +132,14 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                         </section>
                     ) : null}
                     {terminalBody !== undefined ? (
-                        <div className="happy2-tool-call-preview__terminal">
+                        <ScrollArea
+                            className="happy2-tool-call-preview__terminal"
+                            viewportClassName="happy2-tool-call-preview__terminal-viewport"
+                        >
                             <pre className="happy2-tool-call-preview__terminal-content">
                                 {terminalBody || "(no output)"}
                             </pre>
-                        </div>
+                        </ScrollArea>
                     ) : null}
                     {presentation?.type === "fileDiff"
                         ? presentation.files.map((file) => (
@@ -194,7 +202,7 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                         </section>
                     ) : null}
                 </div>
-            </div>
+            </ScrollArea>
         </section>
     );
 }

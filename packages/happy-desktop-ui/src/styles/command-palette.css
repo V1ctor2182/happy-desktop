@@ -88,18 +88,23 @@
 
 /* Scrollport: edge-to-edge, no padding of its own. */
 .happy2-command-palette__body {
-    display: flex;
     flex: 1 1 auto;
-    flex-direction: column;
     min-height: 0;
+}
+
+.happy2-command-palette__body-viewport {
+    display: flex;
+    flex-direction: column;
     overflow-x: hidden;
     overflow-y: auto;
-    scrollbar-gutter: stable;
     /* The bar is the product's one scrollbar — see styles/scrollbar.css. The
        card states its own inset and its own corners, but not its own bar: a
        scrollbar that appeared in a different colour, at a different width, on
        the surface a reader reaches for most is the sort of difference nobody
-       chose. */
+       chose. It marks itself `data-scrollbar-rows`, because a command sits on a
+       selected row and the bar must be beside that row rather than on it. No
+       gutter is stated here: reserving the width is the bar's own job, and only
+       when the list is long enough to have one. */
 }
 
 /* Inner content wrapper carries the 8px inset around the command groups. It is

@@ -10,6 +10,7 @@ import {
     type DocumentEditorUser,
 } from "./DocumentEditor";
 import { SURFACE_HEADER_HEIGHT } from "./InfoPanel";
+import { ScrollArea } from "./Scrollbar";
 import { Toolbar } from "./Toolbar";
 
 export interface DocumentSurfaceParticipant {
@@ -171,7 +172,13 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
                     </>
                 }
             />
-            <div className="happy2-document-surface__body">{body()}</div>
+            <ScrollArea
+                axes="both"
+                className="happy2-document-surface__body"
+                viewportClassName="happy2-document-surface__body-viewport"
+            >
+                {body()}
+            </ScrollArea>
             {deleteConfirming ? (
                 <DocumentDeleteDialog
                     data-testid="document-surface-delete-dialog"

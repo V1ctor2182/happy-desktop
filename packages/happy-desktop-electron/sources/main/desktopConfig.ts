@@ -9,6 +9,7 @@ import type {
     DesktopModelIdentity,
     DesktopModelPreference,
     DesktopPermissionMode,
+    DesktopScrollbarVisibility,
 } from "../shared/desktopContract";
 
 const CONFIG_VERSION = 1;
@@ -29,6 +30,7 @@ export const desktopConfigEmpty: DesktopConfig = {
     defaultEffort: DEFAULT_EFFORT,
     defaultPermissionMode: "auto",
     modelPreferences: [],
+    scrollbarVisibility: "automatic",
     version: CONFIG_VERSION,
 };
 
@@ -115,6 +117,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         "defaultPermissionMode",
         "lastPickedModel",
         "modelPreferences",
+        "scrollbarVisibility",
         "titleShimmerEnabled",
         "version",
     ]);
@@ -149,12 +152,17 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         typeof candidate.titleShimmerEnabled === "boolean"
             ? candidate.titleShimmerEnabled
             : undefined;
+    const scrollbarVisibility =
+        candidate.scrollbarVisibility === undefined
+            ? "automatic"
+            : scrollbarVisibilityParse(candidate.scrollbarVisibility);
     if (
         !appearance ||
         (candidate.defaultModel !== undefined && !defaultModel) ||
         !defaultEffort ||
         !defaultPermissionMode ||
-        (candidate.lastPickedModel !== undefined && !lastPickedModel)
+        (candidate.lastPickedModel !== undefined && !lastPickedModel) ||
+        !scrollbarVisibility
     )
         throw invalidConfigError();
 
@@ -175,6 +183,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         defaultPermissionMode,
         ...(lastPickedModel ? { lastPickedModel } : {}),
         modelPreferences,
+        scrollbarVisibility,
         ...(titleShimmerEnabled === undefined ? {} : { titleShimmerEnabled }),
         version: CONFIG_VERSION,
     };
@@ -182,6 +191,10 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
 
 function appearanceModeParse(value: unknown): DesktopAppearanceMode | undefined {
     return value === "dark" || value === "light" || value === "system" ? value : undefined;
+}
+
+function scrollbarVisibilityParse(value: unknown): DesktopScrollbarVisibility | undefined {
+    return value === "always" || value === "automatic" ? value : undefined;
 }
 
 function defaultModelParse(candidate: unknown): DesktopDefaultModel | undefined {

@@ -126,7 +126,13 @@ function desktopAppearanceSynchronize(
     appearance: AppearanceStore,
     bridge: HappyDesktopBridge,
 ): void {
-    const publish = () => bridge.appearanceSet(appearance.get().mode);
+    let published: "dark" | "light" | "system" | undefined;
+    const publish = () => {
+        const mode = appearance.get().mode;
+        if (mode === published) return;
+        published = mode;
+        bridge.appearanceSet(mode);
+    };
     publish();
     appearance.subscribe(publish);
 }
@@ -201,7 +207,11 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
         props.appearance.get,
         props.appearance.get,
     );
-    return <ThemeScope mode={appearance.mode}>{props.children}</ThemeScope>;
+    return (
+        <ThemeScope mode={appearance.mode} scrollbarVisibility={appearance.scrollbarVisibility}>
+            {props.children}
+        </ThemeScope>
+    );
 }
 
 /**
@@ -927,9 +937,15 @@ if (mediaPreviewBridge) {
         // created here beside the router and outlives both — and outlives the app
         // itself, along with the daemon store, for the reasons given at `shell`.
         shell ??= ((): DesktopShellStores => {
-            const created = appearanceStoreCreate({ mode: preferences.initialAppearance });
+            const created = appearanceStoreCreate({
+                mode: preferences.initialAppearance,
+                scrollbarVisibility: preferences.initialScrollbarVisibility,
+            });
             desktopAppearanceSynchronize(created, desktopBridge);
-            created.subscribe(() => preferences.appearanceChanged(created.get().mode));
+            created.subscribe(() => {
+                const snapshot = created.get();
+                preferences.appearanceChanged(snapshot.mode, snapshot.scrollbarVisibility);
+            });
             const store = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
             if (store) restartSupervise(config, store);
             return { appearance: created, ...(store ? { daemon: store } : {}) };
@@ -1040,6 +1056,7 @@ if (mediaPreviewBridge) {
             defaultEffort: RIG_DEFAULT_THINKING_LEVEL,
             defaultPermissionMode: "auto",
             modelPreferences: [],
+            scrollbarVisibility: "automatic",
             version: 1,
         });
     });

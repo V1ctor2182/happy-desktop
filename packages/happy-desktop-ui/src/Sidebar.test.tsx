@@ -395,11 +395,14 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     /* ---- Body and section rhythm ---------------------------------------- */
 
     const body = view.$('[data-testid="full"] [data-happy-desktop-ui="sidebar-body"]');
+    const bodyViewport = view.$(
+        '[data-testid="full"] [data-happy-desktop-ui="sidebar-body"] > [data-scrollbar-viewport]',
+    );
     expect(body.bounds().y).toBe(56);
     /* Scrollport edge-to-edge; the inner content wrapper owns the shared 6px
        panel inset (see --happy2-panel-inset). */
     expect(
-        body.computedStyles(["overflow-y", "padding-left", "padding-right", "padding-top"]),
+        bodyViewport.computedStyles(["overflow-y", "padding-left", "padding-right", "padding-top"]),
     ).toEqual({
         "overflow-y": "auto",
         "padding-left": "0px",
@@ -755,7 +758,10 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     expect(overflow.bounds().width).toBe(360);
     expect(overflow.bounds().height).toBe(240);
     const overflowBody = view.$('[data-testid="overflow"] [data-happy-desktop-ui="sidebar-body"]');
-    expect(overflowBody.element.scrollHeight).toBeGreaterThan(overflowBody.element.clientHeight);
+    const overflowViewport = overflowBody.element.querySelector(
+        ":scope > [data-scrollbar-viewport]",
+    ) as HTMLElement;
+    expect(overflowViewport.scrollHeight).toBeGreaterThan(overflowViewport.clientHeight);
     expect(
         view.container.querySelector(
             '[data-testid="overflow"] [data-happy-desktop-ui="sidebar-footer"]',

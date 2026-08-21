@@ -1,5 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 
 export type ComposerModelChoice = {
     /** Optional heading this choice belongs to; consecutive choices sharing it are one group. */
@@ -88,9 +89,10 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
             ref={fitToViewport}
             role="dialog"
         >
-            <div
+            <ScrollArea
                 className="happy2-composer-model-control__list"
                 data-happy-desktop-ui="composer-model-control-list"
+                viewportClassName="happy2-composer-model-control__list-viewport"
             >
                 {choicesFor(next).map((choice, index) => {
                     const group = choice.group;
@@ -121,7 +123,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                         </Fragment>
                     );
                 })}
-            </div>
+            </ScrollArea>
         </div>
     );
     return (

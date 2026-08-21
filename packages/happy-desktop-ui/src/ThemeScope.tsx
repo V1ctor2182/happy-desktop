@@ -1,10 +1,12 @@
 import { type ReactNode } from "react";
 
 export type ThemeMode = "dark" | "light" | "system";
+export type ScrollbarVisibility = "always" | "automatic";
 
 export type ThemeScopeProps = {
     children: ReactNode;
     mode: ThemeMode;
+    scrollbarVisibility?: ScrollbarVisibility;
 };
 
 /**
@@ -20,6 +22,7 @@ export function ThemeScope(props: ThemeScopeProps) {
                     : `happy2-theme-scope happy2-theme-${props.mode}`
             }
             data-happy-desktop-ui="theme-scope"
+            data-scrollbar-visibility={props.scrollbarVisibility ?? "automatic"}
         >
             {props.children}
         </div>

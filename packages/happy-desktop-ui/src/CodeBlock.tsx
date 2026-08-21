@@ -1,7 +1,7 @@
 import { EXTENSION_TO_FILE_FORMAT } from "@pierre/diffs";
 import { File } from "@pierre/diffs/react";
 import type { CSSProperties } from "react";
-import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
+import { PIERRE_PANE_CSS, pierreCodeSurfacePhase } from "./pierreCodeSurface";
 
 /** Do not retain Pierre ASTs for unusually large documents. */
 export const CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH = 512 * 1024;
@@ -98,6 +98,7 @@ export function CodeBlock(props: CodeBlockProps) {
                 disableFileHeader: true,
                 disableLineNumbers: props.lineNumbers !== true,
                 overflow: "scroll",
+                onPostRender: (node, _instance, phase) => pierreCodeSurfacePhase(node, phase),
                 theme: { dark: "pierre-dark", light: "pierre-light" },
                 // Whatever scrolls this code is outside the renderer, so its own
                 // reserved gutter would only leave a dead lane beside every line.

@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
-import { useId, type CSSProperties } from "react";
+import { useCallback, useId, type CSSProperties } from "react";
 import { Icon, type IconName } from "./Icon";
+import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 export type TextFieldType = "text" | "email" | "password" | "search";
 export type TextFieldSize = "small" | "medium" | "large";
 export type TextFieldProps = {
@@ -55,6 +56,15 @@ const MULTILINE_LINE_HEIGHT = 20;
  * leading icon, hint, and error message. Props-only and fully controlled.
  */
 export function TextField(props: TextFieldProps) {
+    const scrollbarController = useScrollbarController("vertical");
+    const textareaHost = useCallback(
+        (element: HTMLDivElement | null) => scrollbarController.hostSet(element),
+        [scrollbarController],
+    );
+    const textareaAttach = useCallback(
+        (element: HTMLTextAreaElement | null) => scrollbarController.viewportSet(element),
+        [scrollbarController],
+    );
     const [local] = partitionComponentProps(props, [
         "aria-label",
         "autoComplete",
@@ -141,23 +151,33 @@ export function TextField(props: TextFieldProps) {
                     : null}
 
                 {local.multiline ? (
-                    <textarea
-                        aria-label={local["aria-label"]}
-                        aria-describedby={describedBy()}
-                        aria-invalid={invalid() ? "true" : undefined}
-                        className="happy2-text-field__input"
-                        data-happy-desktop-ui="text-field-input"
-                        disabled={local.disabled}
-                        id={fieldId()}
-                        name={local.name}
-                        onBlur={() => local.onBlur?.()}
-                        onInput={(event) => local.onValueChange?.(event.currentTarget.value)}
-                        placeholder={local.placeholder}
-                        required={local.required}
-                        rows={rows()}
-                        style={{ height: `${rows() * MULTILINE_LINE_HEIGHT}px` }}
-                        value={local.value ?? ""}
-                    />
+                    <div
+                        className="happy2-text-field__textarea-scroll"
+                        data-scrollbar-axes="vertical"
+                        data-scrollbar-host=""
+                        data-scrollbar-placement="gutter"
+                        ref={textareaHost}
+                    >
+                        <textarea
+                            aria-label={local["aria-label"]}
+                            aria-describedby={describedBy()}
+                            aria-invalid={invalid() ? "true" : undefined}
+                            className="happy2-text-field__input"
+                            data-happy-desktop-ui="text-field-input"
+                            disabled={local.disabled}
+                            id={fieldId()}
+                            name={local.name}
+                            onBlur={() => local.onBlur?.()}
+                            onInput={(event) => local.onValueChange?.(event.currentTarget.value)}
+                            placeholder={local.placeholder}
+                            ref={textareaAttach}
+                            required={local.required}
+                            rows={rows()}
+                            style={{ height: `${rows() * MULTILINE_LINE_HEIGHT}px` }}
+                            value={local.value ?? ""}
+                        />
+                        <ScrollbarTracks controller={scrollbarController} />
+                    </div>
                 ) : (
                     <input
                         aria-label={local["aria-label"]}

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { CopyButton } from "../../CopyButton";
+import { ScrollArea } from "../../Scrollbar";
 import { RigSettingsSection } from "./RigSettingsShell";
 
 export interface RigDebugLogPanelEntry {
@@ -112,18 +113,21 @@ export function RigDebugLogPanel(props: RigDebugLogPanelProps) {
                         text={() => logText(props)}
                     />
                 </header>
-                <div
-                    aria-label="Live Rig debug log"
-                    aria-live="off"
+                <ScrollArea
+                    axes="both"
                     className="happy2-rig-debug-log__scrollport"
                     data-happy-desktop-ui="rig-debug-log-scrollport"
-                    onScroll={() => {
-                        following.current = virtualizer.isAtEnd(ENTRY_GAP * 2);
+                    viewportClassName="happy2-rig-debug-log__viewport"
+                    viewportProps={{
+                        "aria-label": "Live Rig debug log",
+                        "aria-live": "off",
+                        onScroll: () => {
+                            following.current = virtualizer.isAtEnd(ENTRY_GAP * 2);
+                        },
+                        role: "log",
+                        tabIndex: 0,
                     }}
-                    ref={scrollport}
-                    role="log"
-                    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the scrollable log needs a keyboard focus stop so arrow/Page keys can read retained output
-                    tabIndex={0}
+                    viewportRef={scrollport}
                 >
                     <div className="happy2-rig-debug-log__content" ref={virtualizer.containerRef}>
                         {itemCount === 0 ? (
@@ -149,7 +153,7 @@ export function RigDebugLogPanel(props: RigDebugLogPanelProps) {
                             })
                         )}
                     </div>
-                </div>
+                </ScrollArea>
             </section>
         </RigSettingsSection>
     );

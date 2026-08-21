@@ -38,9 +38,9 @@
     /* Every scrolling list panel — the sidebar, the file listings, any column
        of rows — is inset from both of its edges by the same number, so the gap
        from the panel's left edge to a row equals the gap from a row to the
-       scrollbar. The scrollbar sits outside the scrollport's content box, so
-       the promise holds at whatever width the platform draws it, and whether
-       or not it is there at all.
+       scrollbar. The custom track sits in the scroll area's adjoining grid
+       cell, so the promise holds whether or not overflow makes that cell 8px
+       wide.
 
        A row's own horizontal padding is stated here too, because the two
        together are what a reader sees on the trailing side: a row's last mark
@@ -67,25 +67,26 @@
     --happy2-panel-inset: 6px;
     --happy2-panel-row-padding: 10px;
 
-    /* The scrollbar's own geometry, stated once because it is layout a surface
-       sometimes has to do arithmetic with. The ink is the bar a reader sees; the
-       edge inset is how far it is held off the surface's outer edge; and the
-       track — the sum, and the only one of the three the layout reserves — is
-       what a scrollport gives up to have a bar at all.
+    /* The bar a panel of rows reserves room for — see styles/scrollbar.css, and
+       note that code/content surfaces use the same track as an overlay and
+       reserve nothing at all.
 
-       The inset is small on purpose. The bar the eye in this product is trained
-       on is the message history's, which is the platform's own overlay: it takes
-       no width and rides the very edge of the column. A panel bar sitting 4px in
-       from its edge read as a different object beside it, and spent panel width
-       saying so. Two is close enough to belong to the same family while still
-       keeping the ink off the corner.
-
-       See styles/scrollbar.css. */
+       The ink is the bar the reader sees. The edge inset is clear space on the
+       far side of it alone — between the ink and the panel's outer edge — so the
+       track is the sum of those two and nothing more. On the near side the bar
+       sits straight against the rows, which means the gap a reader sees there is
+       the scrollport's own inset and not a second number competing with it. */
     --happy2-scrollbar-ink: 6px;
     --happy2-scrollbar-edge-inset: 2px;
     --happy2-scrollbar-track: calc(
         var(--happy2-scrollbar-ink) + var(--happy2-scrollbar-edge-inset)
     );
+    --happy2-scrollbar-color: transparent;
+    --happy2-scrollbar-quiet-color: rgb(128 128 128 / 0.32);
+    --happy2-scrollbar-active-color: rgb(128 128 128 / 0.5);
+    --happy2-scrollbar-interaction-color: rgb(128 128 128 / 0.68);
+    --happy2-scrollbar-rest-color: transparent;
+    --happy2-scrollbar-surface-color: transparent;
 
     --text: #000000;
     --text-destructive: #f44336;
@@ -123,8 +124,6 @@
     --shadow-elevated: rgb(0 0 0 / 0.5);
     --overlay-backdrop: rgb(15 15 15 / 0.75);
     --overlay-panel: rgb(0 0 0 / 0.48);
-    --scrollbar-thumb: rgba(150, 150, 150, 0.4);
-
     --groupped-background: #f5f5f5;
     --groupped-chevron: #49454f;
     --groupped-section-title: #49454f;
@@ -336,7 +335,6 @@
         --shadow-elevated: rgb(0 0 0 / 0.5);
         --overlay-backdrop: rgb(15 15 15 / 0.75);
         --overlay-panel: rgb(0 0 0 / 0.48);
-        --scrollbar-thumb: rgba(150, 150, 150, 0.4);
         --groupped-background: #1e1e1e;
         --groupped-chevron: #cac4d0;
         --groupped-section-title: #cac4d0;
@@ -505,7 +503,6 @@
     --shadow-elevated: rgb(0 0 0 / 0.5);
     --overlay-backdrop: rgb(15 15 15 / 0.75);
     --overlay-panel: rgb(0 0 0 / 0.48);
-    --scrollbar-thumb: rgba(150, 150, 150, 0.4);
     --groupped-background: #1e1e1e;
     --groupped-chevron: #cac4d0;
     --groupped-section-title: #cac4d0;

@@ -234,10 +234,13 @@
 
 /* Scrollport: edge-to-edge, no padding of its own. */
 .happy2-sidebar__body {
-    display: flex;
     flex: 1;
-    flex-direction: column;
     min-height: 0;
+}
+
+.happy2-sidebar__body-viewport {
+    display: flex;
+    flex-direction: column;
     overflow-x: hidden;
     overflow-y: auto;
 }

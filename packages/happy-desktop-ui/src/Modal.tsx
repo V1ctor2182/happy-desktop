@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 export type ModalSize = "small" | "medium" | "large";
 export type ModalTone = "default" | "danger";
 export type ModalProps = {
@@ -84,14 +85,19 @@ export function Modal(props: ModalProps) {
                         />
                     ) : null}
                 </header>
-                <div className="happy2-modal__body" data-happy-desktop-ui="modal-body">
+                <ScrollArea
+                    axes="both"
+                    className="happy2-modal__body"
+                    data-happy-desktop-ui="modal-body"
+                    viewportClassName="happy2-modal__body-viewport"
+                >
                     <div
                         className="happy2-modal__body-content"
                         data-happy-desktop-ui="modal-body-content"
                     >
                         {local.children}
                     </div>
-                </div>
+                </ScrollArea>
                 {local.footer ? (
                     <footer className="happy2-modal__footer" data-happy-desktop-ui="modal-footer">
                         {local.footer}

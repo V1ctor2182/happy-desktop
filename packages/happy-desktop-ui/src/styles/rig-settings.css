@@ -34,13 +34,16 @@
    carries no spacing of its own. */
 .happy2-rig-settings__body {
     box-sizing: border-box;
-    display: flex;
     flex: 1 1 0%;
-    flex-direction: column;
     min-height: 0;
     width: 100%;
-    overflow-y: auto;
     background: var(--surface);
+}
+
+.happy2-rig-settings__body-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
 }
 
 /* Held to a comfortable measure but anchored to the surface's leading edge,

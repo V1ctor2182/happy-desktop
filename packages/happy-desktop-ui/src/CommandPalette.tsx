@@ -9,6 +9,7 @@ import {
 import { KeyCap } from "./Badge";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 export type CommandPaletteProps = {
     /** The current query text; the palette input is a controlled reflection of it. */
     query: string;
@@ -144,9 +145,11 @@ export function CommandPalette(props: CommandPaletteProps) {
                     variant="ghost"
                 />
             </div>
-            <div
+            <ScrollArea
                 className="happy2-command-palette__body"
                 data-happy-desktop-ui="command-palette-body"
+                data-scrollbar-rows=""
+                viewportClassName="happy2-command-palette__body-viewport"
             >
                 <div
                     className="happy2-command-palette__body-content"
@@ -154,7 +157,7 @@ export function CommandPalette(props: CommandPaletteProps) {
                 >
                     {local.children}
                 </div>
-            </div>
+            </ScrollArea>
         </div>
     );
 }

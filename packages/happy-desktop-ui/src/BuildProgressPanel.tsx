@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { Badge, type BadgeVariant } from "./Badge";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 export type BuildProgressStatus = "pending" | "building" | "ready" | "failed";
 export type BuildProgressPanelProps = {
     className?: string;
@@ -145,12 +146,16 @@ export function BuildProgressPanel(props: BuildProgressPanelProps) {
                                   Earlier log truncated
                               </span>
                           ) : null}
-                          <pre
+                          <ScrollArea
+                              axes="both"
                               className="happy2-build-progress__log"
                               data-happy-desktop-ui="build-progress-log"
+                              viewportClassName="happy2-build-progress__log-viewport"
                           >
-                              <code className="happy2-build-progress__log-inner">{log}</code>
-                          </pre>
+                              <pre className="happy2-build-progress__log-inner">
+                                  <code>{log}</code>
+                              </pre>
+                          </ScrollArea>
                       </div>
                   ))(local.log)
                 : null}

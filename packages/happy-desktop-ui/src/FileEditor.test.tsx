@@ -7,6 +7,7 @@ import "./styles/button.css";
 import "./styles/file-editor.css";
 import "./styles/file-path-label.css";
 import "./styles/code-editor.css";
+import "./styles/scrollbar.css";
 import { FileEditor } from "./FileEditor";
 import { createRenderer } from "./testing";
 
@@ -51,6 +52,21 @@ it("holds FileEditor path row, code body, and tab-owned dirty affordances", asyn
             </div>
         ),
         { width: 600, height: 400, padding: 20 },
+    );
+    view.render(
+        () => (
+            <div data-scrollbar-visibility="always" style={{ height: "240px", width: "560px" }}>
+                <FileEditor
+                    data-testid="long"
+                    path="src/long.ts"
+                    value={Array.from(
+                        { length: 80 },
+                        (_, index) => `export const line${String(index)} = ${String(index)};`,
+                    ).join("\n")}
+                />
+            </div>
+        ),
+        { width: 600, height: 280, padding: 20 },
     );
     view.render(
         () => (
@@ -114,6 +130,14 @@ it("holds FileEditor path row, code body, and tab-owned dirty affordances", asyn
         "font-size": "13px",
         "line-height": "20px",
     });
+
+    const longScroller = view.$('[data-testid="long"] .cm-scroller');
+    expect(longScroller.element.scrollHeight).toBeGreaterThan(longScroller.element.clientHeight);
+    if (getComputedStyle(longScroller.element).scrollbarWidth === "auto")
+        expect(
+            (longScroller.element as HTMLElement).offsetWidth -
+                (longScroller.element as HTMLElement).clientWidth,
+        ).toBe(0);
 
     /* ---- Compact status + no retired bottom bar ------------------------- */
 

@@ -3,6 +3,7 @@ import { AppShell } from "../../AppShell";
 import { Box } from "../../Box";
 import { Icon, type IconName } from "../../Icon";
 import { PanelHeader } from "../../PanelHeader";
+import { ScrollArea } from "../../Scrollbar";
 import { Sidebar } from "../../Sidebar";
 
 export interface RigSettingsCategory {
@@ -80,9 +81,13 @@ export function RigSettingsShell(props: RigSettingsShellProps) {
                     ) : null}
                 </Box>
             </PanelHeader>
-            <Box className="happy2-rig-settings__body" data-happy2-ui="rig-settings-body">
+            <ScrollArea
+                className="happy2-rig-settings__body"
+                data-happy2-ui="rig-settings-body"
+                viewportClassName="happy2-rig-settings__body-viewport"
+            >
                 <Box className="happy2-rig-settings__content">{props.children}</Box>
-            </Box>
+            </ScrollArea>
         </AppShell>
     );
 }

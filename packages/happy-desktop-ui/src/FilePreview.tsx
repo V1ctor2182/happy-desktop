@@ -7,6 +7,7 @@ import { FilePathLabel } from "./FilePathLabel";
 import { Icon, type IconName } from "./Icon";
 import { ImageViewer } from "./ImageViewer";
 import { MarkdownDocument } from "./MarkdownDocument";
+import { ScrollArea } from "./Scrollbar";
 import { SegmentedControl } from "./SegmentedControl";
 import { Spinner } from "./Spinner";
 import { VideoViewer } from "./VideoViewer";
@@ -458,7 +459,13 @@ function FilePreviewBody(props: {
     // The header above already names it, so the renderer's own header is off.
     if (props.content.type === "text")
         return (
-            <div className="happy2-file-preview__source" data-happy-desktop-ui="file-preview-code">
+            <ScrollArea
+                axes="both"
+                className="happy2-file-preview__source"
+                data-happy-desktop-ui="file-preview-code"
+                placement="overlay"
+                viewportClassName="happy2-file-preview__source-viewport"
+            >
                 <CodeBlock
                     className="happy2-file-preview__source-renderer"
                     {...(props.cacheKey ? { cacheKey: props.cacheKey } : {})}
@@ -466,7 +473,7 @@ function FilePreviewBody(props: {
                     name={props.name}
                     text={props.content.text}
                 />
-            </div>
+            </ScrollArea>
         );
     return (
         <div

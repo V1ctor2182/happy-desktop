@@ -188,6 +188,11 @@
 }
 
 /* Multiline uses a real 20px reading line box; height is set inline from rows. */
+.happy2-text-field__textarea-scroll {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 textarea.happy2-text-field__input {
     display: block;
     width: 100%;

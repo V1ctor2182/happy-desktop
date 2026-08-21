@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useLayoutEffect,
     useRef,
     useState,
@@ -22,6 +23,7 @@ import {
 } from "./ComposerAttachmentPreviews";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
+import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 /* ---- ContextChips ----------------------------------------------------- */
 export type ContextKind = "file" | "run";
 export type ContextItem = {
@@ -464,6 +466,18 @@ export function Composer(props: ComposerProps) {
     const fileInputEl = useRef<HTMLInputElement>(null);
     const inputEl = useRef<HTMLDivElement>(null);
     const textareaEl = useRef<HTMLTextAreaElement>(null);
+    const draftScrollbarController = useScrollbarController("vertical");
+    const draftScrollbarHost = useCallback(
+        (element: HTMLDivElement | null) => draftScrollbarController.hostSet(element),
+        [draftScrollbarController],
+    );
+    const textareaAttach = useCallback(
+        (element: HTMLTextAreaElement | null) => {
+            textareaEl.current = element;
+            draftScrollbarController.viewportSet(element);
+        },
+        [draftScrollbarController],
+    );
     const wasBusy = useRef(Boolean(props.disabled || props.pending));
     const [mentionStart, setMentionStart] = useState<number | null>(null);
     const [typedMentionQuery, setTypedMentionQuery] = useState("");
@@ -1035,27 +1049,37 @@ export function Composer(props: ComposerProps) {
                     data-happy-desktop-ui="composer-input"
                     ref={inputEl}
                 >
-                    <textarea
-                        className="happy2-composer__textarea"
-                        data-happy-desktop-ui="composer-textarea"
-                        disabled={props.disabled}
-                        readOnly={props.pending}
-                        onBlur={() => {
-                            rememberSelection();
-                            props.onFocusChange?.(false);
-                        }}
-                        onClick={rememberSelection}
-                        onFocus={() => props.onFocusChange?.(true)}
-                        onInput={onInput}
-                        onKeyDown={onKeyDown}
-                        onPaste={onPaste}
-                        onScroll={(event) => draftFadeSync(event.currentTarget)}
-                        onSelect={rememberSelection}
-                        placeholder={props.placeholder}
-                        ref={textareaEl}
-                        rows={MIN_LINES}
-                        value={props.value}
-                    />
+                    <div
+                        className="happy2-composer__textarea-scroll"
+                        data-scrollbar-always=""
+                        data-scrollbar-axes="vertical"
+                        data-scrollbar-host=""
+                        data-scrollbar-placement="stable-gutter"
+                        ref={draftScrollbarHost}
+                    >
+                        <textarea
+                            className="happy2-composer__textarea"
+                            data-happy-desktop-ui="composer-textarea"
+                            disabled={props.disabled}
+                            readOnly={props.pending}
+                            onBlur={() => {
+                                rememberSelection();
+                                props.onFocusChange?.(false);
+                            }}
+                            onClick={rememberSelection}
+                            onFocus={() => props.onFocusChange?.(true)}
+                            onInput={onInput}
+                            onKeyDown={onKeyDown}
+                            onPaste={onPaste}
+                            onScroll={(event) => draftFadeSync(event.currentTarget)}
+                            onSelect={rememberSelection}
+                            placeholder={props.placeholder}
+                            ref={textareaAttach}
+                            rows={MIN_LINES}
+                            value={props.value}
+                        />
+                        <ScrollbarTracks controller={draftScrollbarController} />
+                    </div>
                     {/* Decorative edge fades: the draft dissolves into the card
                         where it runs past the visible lines, so a clipped line
                         is never cut on a hard edge. */}

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import "./styles.css";
 import { expect, it } from "vitest";
+import { userEvent } from "vitest/browser";
 import { FileAttachment } from "./FileAttachment";
 import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, MessageList, SystemNotice } from "./Message";
@@ -1269,11 +1270,14 @@ it("anchors MessageList to the bottom and lays out sparse histories", async () =
     await view.ready();
     /* ---- Sparse history bottom-anchors ---------------------------------- */
     const sparse = view.$('[data-testid="sparse"] [data-happy-desktop-ui="message-list"]');
+    const sparseViewport = view.$(
+        '[data-testid="sparse"] [data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
+    );
     expect(sparse.bounds().height).toBe(360);
     /* Scrollport edge-to-edge; the inner content wrapper owns its 12px top
        breathing room and 8px clearance before the composer. */
     expect(
-        sparse.computedStyles([
+        sparseViewport.computedStyles([
             "display",
             "flex-direction",
             "overflow-y",
@@ -1296,8 +1300,8 @@ it("anchors MessageList to the bottom and lays out sparse histories", async () =
         "padding-top": "12px",
     });
     /* No scrolling needed. */
-    expect(sparse.element.scrollHeight).toBe(sparse.element.clientHeight);
-    expect(sparse.element.scrollTop).toBe(0);
+    expect(sparseViewport.element.scrollHeight).toBe(sparseViewport.element.clientHeight);
+    expect(sparseViewport.element.scrollTop).toBe(0);
     /* The spacer absorbs the free space above the history. */
     const spacer = view.$('[data-testid="sparse"] [data-happy-desktop-ui="message-list-spacer"]');
     expect(spacer.bounds().height).toBe(0);
@@ -1356,7 +1360,9 @@ it("virtualizes long MessageList histories with bounded mounted rows", async () 
     );
     await view.ready();
     await nextFrame();
-    const list = view.$('[data-testid="virtual-feed"] [data-happy-desktop-ui="message-list"]');
+    const list = view.$(
+        '[data-testid="virtual-feed"] [data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
+    );
     const mounted = list.element.querySelectorAll(
         '[data-happy-desktop-ui="message-list-virtual"] > [data-index]',
     );
@@ -1402,7 +1408,9 @@ it("follows the newest content in MessageList unless the reader scrolled up", as
     view.render(MessageFeedFixture, { width: 620, height: 360 });
     await view.ready();
     const list = view.$('[data-testid="feed"] [data-happy-desktop-ui="message-list"]');
-    const element = list.element as HTMLDivElement;
+    const element = view.$(
+        '[data-testid="feed"] [data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
+    ).element as HTMLDivElement;
     const maxScroll = () => element.scrollHeight - element.clientHeight;
     const atBottom = () => Math.abs(element.scrollTop - maxScroll()) <= 1;
     /* Long history overflows and the spacer collapses. */
@@ -1423,6 +1431,21 @@ it("follows the newest content in MessageList unless the reader scrolled up", as
        intentionally compact 8px bottom clearance before the composer (the top
        keeps a roomier 12px above the history — see its message.css comment). */
     expect(atBottom(), "mounted at bottom").toBe(true);
+    const bottomBeforeWheel = element.scrollTop;
+    await userEvent.wheel(element, { delta: { y: 120 } });
+    await nextFrame();
+    expect(element.scrollTop, "wheel at the bottom does not nudge the transcript").toBe(
+        bottomBeforeWheel,
+    );
+    element.scrollTop = maxScroll() - 1;
+    await nextFrame();
+    const nearBottomBeforeWheel = element.scrollTop;
+    await userEvent.wheel(element, { delta: { y: 120 } });
+    await nextFrame();
+    expect(
+        element.scrollTop,
+        "wheel within the bottom edge tolerance does not snap the transcript",
+    ).toBe(nearBottomBeforeWheel);
     const lastLong = view.$('[data-testid="long-13"]');
     expect(
         Math.abs(lastLong.bounds().y + lastLong.bounds().height - (list.bounds().y + 360 - 8)),
@@ -1496,8 +1519,9 @@ it("restores each virtualized MessageList position across keyed lifetimes", asyn
     await view.ready();
     await nextFrame();
     const list = () =>
-        view.$('[data-testid="restorable-feed"] [data-happy-desktop-ui="message-list"]')
-            .element as HTMLDivElement;
+        view.$(
+            '[data-testid="restorable-feed"] [data-happy-desktop-ui="message-list"] [data-scrollbar-viewport]',
+        ).element as HTMLDivElement;
 
     expect(list().scrollTop).toBe(176);
     list().scrollTop = 88;

@@ -39,11 +39,14 @@
 
 /* The scrollport is flush; spacing belongs to the content wrapper inside it. */
 .happy2-rig-inbox__scroll {
-    display: flex;
     flex: 1 1 auto;
-    flex-direction: column;
     min-height: 0;
     width: 100%;
+}
+
+.happy2-rig-inbox__scroll-viewport {
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
 }
 

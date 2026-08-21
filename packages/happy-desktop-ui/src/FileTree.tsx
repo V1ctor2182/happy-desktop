@@ -4,6 +4,7 @@ import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { compactCount, changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
 import { fileTreeRowModel, type FileTreeRow } from "./fileTreeRows";
+import { ScrollArea } from "./Scrollbar";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 /** Git working-tree state of a file, mirrored from the workspace API. */
 export type FileTreeGitStatus =
@@ -877,19 +878,26 @@ export function FileTree(props: FileTreeProps) {
         />
     );
     return (
-        <div
-            aria-label={local.label ?? "Files"}
-            aria-multiselectable={local.selectedIds ? true : undefined}
+        <ScrollArea
             className={["happy2-file-tree", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-tree"
             data-testid={local["data-testid"]}
             data-virtualized={virtualized ? "" : undefined}
-            ref={scrollElement}
-            role="tree"
-            // The rows carry the tab stop between them; the tree itself is only
-            // reachable on purpose, never by tabbing past the listing into it.
-            tabIndex={-1}
+            // Virtualized is exactly when this element owns the scrolling, so it
+            // is exactly when it needs the bar beside its rows rather than over
+            // them. Unvirtualized, the panel around it scrolls and marks itself.
+            data-scrollbar-rows={virtualized ? "" : undefined}
             style={local.style}
+            viewportClassName="happy2-file-tree__viewport"
+            viewportProps={{
+                "aria-label": local.label ?? "Files",
+                "aria-multiselectable": local.selectedIds ? true : undefined,
+                role: "tree",
+                // The rows carry the tab stop between them; the tree itself is
+                // reachable on purpose, never by tabbing past the listing.
+                tabIndex: -1,
+            }}
+            viewportRef={scrollElement}
         >
             {local.loading ? (
                 <div
@@ -934,6 +942,6 @@ export function FileTree(props: FileTreeProps) {
             ) : (
                 model.rows.map(rowView)
             )}
-        </div>
+        </ScrollArea>
     );
 }

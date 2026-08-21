@@ -9,9 +9,11 @@ import { Switch } from "../../Switch";
 import { RigSettingsSection } from "./RigSettingsShell";
 
 export type RigAppearanceChoice = "system" | "light" | "dark";
+export type RigScrollbarVisibilityChoice = "always" | "automatic";
 
 export type RigGeneralSettingsProps = {
     appearance: RigAppearanceChoice;
+    scrollbarVisibility: RigScrollbarVisibilityChoice;
     /** The default a new session starts on, keyed `${providerId}:${modelId}`. */
     defaultModelKey?: string;
     /** Every model the enabled providers offer, already labelled for display. */
@@ -55,6 +57,7 @@ export type RigGeneralSettingsProps = {
         }[];
     };
     onAppearanceChange: (appearance: RigAppearanceChoice) => void;
+    onScrollbarVisibilityChange: (visibility: RigScrollbarVisibilityChoice) => void;
     onExperimentalFeaturesChange: (enabled: boolean) => void;
     onTitleShimmerChange: (enabled: boolean) => void;
     onDefaultModelChange: (key: string) => void;
@@ -71,6 +74,11 @@ const appearanceSegments = [
     { value: "system", label: "System" },
     { value: "light", label: "Light" },
     { value: "dark", label: "Dark" },
+];
+
+const scrollbarSegments = [
+    { value: "automatic", label: "Automatic" },
+    { value: "always", label: "Always visible" },
 ];
 
 /**
@@ -109,6 +117,22 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                     }
                     description="Applies to this window immediately"
                     label="Theme"
+                />
+                <FormRow
+                    control={
+                        <SegmentedControl
+                            onChange={(value) =>
+                                props.onScrollbarVisibilityChange(
+                                    value as RigScrollbarVisibilityChoice,
+                                )
+                            }
+                            segments={scrollbarSegments}
+                            size="small"
+                            value={props.scrollbarVisibility}
+                        />
+                    }
+                    description="Automatic hides two seconds after user scrolling stops"
+                    label="Scrollbars"
                 />
                 <FormRow
                     control={

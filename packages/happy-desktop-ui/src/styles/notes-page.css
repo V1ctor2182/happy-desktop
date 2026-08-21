@@ -17,10 +17,13 @@
 }
 
 .happy2-notes-page__scroll {
-    display: flex;
-    flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
+}
+
+.happy2-notes-page__scroll-viewport {
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
 }
 

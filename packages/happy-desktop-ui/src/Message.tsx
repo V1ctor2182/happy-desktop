@@ -19,6 +19,7 @@ import { Icon, type IconName } from "./Icon";
 import { APP_SHELL_RESIZE_LAYOUT_EVENT } from "./AppShell";
 import { messageMediaSingleBox } from "./conversationRowHeight";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
+import { ScrollArea } from "./Scrollbar";
 export type MessageSegment =
     | {
           kind: "text";
@@ -720,6 +721,8 @@ export interface MessageListScrollPosition {
 const FOLLOW_BOTTOM_THRESHOLD = 8;
 /** A reader this close to the top (px) is looking at the oldest loaded row. */
 const START_REACHED_THRESHOLD = 64;
+/** Do not expose the final fractional/integer pixels to a further downward wheel. */
+const BOTTOM_WHEEL_EPSILON = 2;
 /** Transcript clearances represented inside the virtualizer's coordinate space. */
 const MESSAGE_LIST_PADDING_START = 12;
 const MESSAGE_LIST_PADDING_END_DEFAULT = 8;
@@ -1141,6 +1144,7 @@ export function MessageList(props: MessageListProps) {
                     0,
                     element.scrollHeight - element.scrollTop - element.clientHeight,
                 );
+                if (!event.ctrlKey && bottomOffset <= BOTTOM_WHEEL_EPSILON) event.preventDefault();
                 if (bottomOffset <= FOLLOW_BOTTOM_THRESHOLD) {
                     escapedFromFollow.current = false;
                     following.current = true;
@@ -1278,7 +1282,10 @@ export function MessageList(props: MessageListProps) {
         element.addEventListener("scrollend", onScrollEnd);
         element.addEventListener("pointerdown", onGeometryScrollIntent);
         element.addEventListener("touchstart", onGeometryScrollIntent, { passive: true });
-        element.addEventListener("wheel", onWheel, { passive: true });
+        /* This is the one viewport wheel listener that may cancel a default:
+           Chromium/WebKit can otherwise consume the last 1–2px at the chat
+           boundary even though the reader is already visibly at the bottom. */
+        element.addEventListener("wheel", onWheel, { passive: false });
         /*
          * TanStack Virtual measures mounted rows through its own ResizeObserver
          * and owns their scroll compensation. A second mutation-driven measure
@@ -1379,11 +1386,12 @@ export function MessageList(props: MessageListProps) {
         if (virtualized) virtualizer.measure();
     }, [props.estimateVersion, virtualized, virtualizer]);
     return (
-        <div
+        <ScrollArea
             className={["happy2-message-list", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="message-list"
-            ref={list}
             style={props.style}
+            viewportClassName="happy2-message-list__viewport"
+            viewportRef={list}
         >
             <div
                 className="happy2-message-list__content"
@@ -1419,7 +1427,7 @@ export function MessageList(props: MessageListProps) {
                     items
                 )}
             </div>
-        </div>
+        </ScrollArea>
     );
 }
 /** Centered plain-text date separating message days. */

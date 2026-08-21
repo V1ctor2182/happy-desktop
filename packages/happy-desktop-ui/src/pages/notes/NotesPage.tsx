@@ -7,6 +7,7 @@ import { DocumentDeleteDialog } from "../../DocumentDeleteDialog";
 import { DocumentSurface } from "../../DocumentSurface";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
+import { ScrollArea } from "../../Scrollbar";
 import { Toolbar } from "../../Toolbar";
 
 const emptySubscribe = () => () => undefined;
@@ -135,7 +136,12 @@ export function NotesPage(props: NotesPageProps) {
                         ) : undefined
                     }
                 />
-                <Box className="happy2-notes-page__scroll">{list()}</Box>
+                <ScrollArea
+                    className="happy2-notes-page__scroll"
+                    viewportClassName="happy2-notes-page__scroll-viewport"
+                >
+                    {list()}
+                </ScrollArea>
             </Box>
             <Box className="happy2-notes-page__pane">
                 <NotePane note={props.note} theme={props.theme} />

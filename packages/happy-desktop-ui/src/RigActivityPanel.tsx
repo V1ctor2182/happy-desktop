@@ -11,6 +11,7 @@ import { Button } from "./Button";
 import { CompactActivityRow } from "./CompactActivityRow";
 import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
 import { Icon } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 
 export type RigActivityPanelProps = {
     /** Opens the native Completed disclosure on its first render; omitted is closed. */
@@ -372,12 +373,14 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
         </section>
     );
     return props.placement === "panel" ? (
-        <div
+        <ScrollArea
+            axes="both"
             className="happy2-rig-activity-panel-scroll"
             data-happy-desktop-ui="rig-activity-panel-scroll"
+            viewportClassName="happy2-rig-activity-panel-scroll__viewport"
         >
             <div className="happy2-rig-activity-panel-scroll__content">{content}</div>
-        </div>
+        </ScrollArea>
     ) : (
         content
     );

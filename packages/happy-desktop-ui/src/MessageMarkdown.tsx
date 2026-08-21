@@ -11,6 +11,7 @@ import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { filePreviewKind } from "./FilePreview";
 import { markdownDocumentLinkPath } from "./MarkdownDocument";
+import { ScrollArea } from "./Scrollbar";
 
 // This list is part of the renderer configuration, not message state. A fresh
 // array here makes react-markdown reparse unchanged streamed messages on every
@@ -180,18 +181,28 @@ const MarkdownParagraph = ({
     );
 };
 const MarkdownPre = ({ children, ...props }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => (
-    <div className="happy2-message__code-block" data-happy-desktop-ui="message-code-block">
+    <ScrollArea
+        axes="horizontal"
+        className="happy2-message__code-block"
+        data-happy-desktop-ui="message-code-block"
+        viewportClassName="happy2-message__code-block-viewport"
+    >
         <pre {...props}>{children}</pre>
-    </div>
+    </ScrollArea>
 );
 const MarkdownTable = ({
     children,
     node: _node,
     ...props
 }: ComponentPropsWithoutRef<"table"> & ExtraProps) => (
-    <div className="happy2-message__table-scroll" data-happy-desktop-ui="message-table-scroll">
+    <ScrollArea
+        axes="horizontal"
+        className="happy2-message__table-scroll"
+        data-happy-desktop-ui="message-table-scroll"
+        viewportClassName="happy2-message__table-scroll-viewport"
+    >
         <table {...props}>{children}</table>
-    </div>
+    </ScrollArea>
 );
 /**
  * Headings render with no generated `id`. Chat bodies are untrusted and appear

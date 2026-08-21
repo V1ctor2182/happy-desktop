@@ -329,7 +329,16 @@ it("holds Composer geometry, colors, and typography", async () => {
     const textarea = view.$(
         '[data-testid="composer-default"] [data-happy-desktop-ui="composer-textarea"]',
     );
-    expect(textarea.bounds()).toEqual({ x: 40, y: textareaY(), width: 520, height: 22 });
+    const textareaScroll = view.$(
+        '[data-testid="composer-default"] .happy2-composer__textarea-scroll',
+    );
+    expect(textareaScroll.bounds()).toEqual({ x: 40, y: 41, width: 520, height: 22 });
+    expect(textarea.bounds()).toEqual({ x: 40, y: textareaY(), width: 512, height: 22 });
+    expect(
+        view
+            .$('[data-testid="composer-default"] [data-scrollbar-track][data-axis="vertical"]')
+            .bounds().width,
+    ).toBe(8);
     expect(
         textarea.computedStyles([
             "background-color",
@@ -589,7 +598,7 @@ it.skipIf(!growsDraft())(
             top: textarea.scrollTop,
         });
         const scrolledEarly: { width: number; box: number; content: number; lane: number }[] = [];
-        const laned: number[] = [];
+        const lanes = new Set<number>();
         const boxes = new Map<number, number>();
         // Narrowing and widening are swept separately: a stale twin keeps the height
         // of the column it was last laid out at, so it only shows up going one way.
@@ -600,11 +609,14 @@ it.skipIf(!growsDraft())(
             surface.style.width = `${width}px`;
             const { box, content, lane } = measure();
             boxes.set(width, box);
-            if (lane > 0) laned.push(width);
+            lanes.add(lane);
             if (box < 176 && content > box + 0.5) scrolledEarly.push({ width, box, content, lane });
         }
         expect(scrolledEarly).toEqual([]);
-        expect(laned).toEqual([]);
+        // The available measure remains one constant width, so crossing the
+        // cap cannot change wrapping underneath the caret. Overlay engines
+        // report a zero-width lane because their bar takes no measure at all.
+        expect(lanes.size).toBe(1);
         // Type at the narrowest width that still leaves three lines of headroom
         // below the cap: the draft sits as close to the seam as it can while every
         // line the pass adds is one the box is still allowed to grow into.
@@ -627,7 +639,7 @@ it.skipIf(!growsDraft())(
                 // A draft below the cap shows every line it has, from the top, and
                 // never gives a line back to a keystroke that added text.
                 content: step.box,
-                lane: 0,
+                lane: growth[0]!.lane,
                 top: 0,
             });
             expect({ index, lines: step.box / 22 }).toEqual({
@@ -637,9 +649,8 @@ it.skipIf(!growsDraft())(
         }
         // The pass has to cross a wrap boundary, or it proved nothing about growth.
         expect(growth.at(-1)!.box).toBeGreaterThan(growth[0]!.box);
-        // The cap is the one place the draft is meant to scroll, and the only
-        // place it may wear the shared scrollbar — whose lane is the design
-        // system's to size, not this control's, so it is not asserted here.
+        // The cap is the one place the draft is meant to scroll and paint a
+        // thumb; the stable lane above was already part of its measure.
         // Typing past the cap and deleting back must return the same box the
         // same draft had before, or the composer stays large after the text
         // that grew it is gone.
@@ -650,6 +661,12 @@ it.skipIf(!growsDraft())(
             box: 176,
             overflows: true,
         });
+        const scrollbarHost = textarea.closest<HTMLElement>("[data-scrollbar-host]")!;
+        await expect.poll(() => scrollbarHost.hasAttribute("data-scrollbar-overflow-y")).toBe(true);
+        expect(
+            getComputedStyle(scrollbarHost.querySelector<HTMLElement>(".happy2-scrollbar__thumb")!)
+                .display,
+        ).not.toBe("none");
         while (textarea.value.length > beforeCap.value.length) {
             await userEvent.keyboard("{Backspace}");
         }

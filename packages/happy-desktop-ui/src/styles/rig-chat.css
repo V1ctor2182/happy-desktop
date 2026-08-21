@@ -27,9 +27,9 @@
 /* Match the composer's actual card edges, not only the shared max measure. */
 .happy2-conversation .happy2-rig-input[data-variant="card"] {
     width: auto;
-    /* The transcript reserves an 11px scrollbar gutter while the dock does
-       not. Split that gutter across the two margins so this block's painted
-       edges still land on the composer's painted edges. */
+    /* The transcript may carry the shared scrollbar gutter while the dock does
+       not. The asymmetric margins keep this block's painted edges on the
+       composer's painted edges when that 8px track is present. */
     margin-right: 14px;
     margin-left: 18px;
 }

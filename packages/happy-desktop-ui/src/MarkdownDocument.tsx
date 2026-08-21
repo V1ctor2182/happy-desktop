@@ -11,6 +11,7 @@ import {
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock, codeBlockLanguage } from "./CodeBlock";
+import { ScrollArea } from "./Scrollbar";
 
 // react-markdown reparses the document when this plugin list changes identity.
 // Keep the product's fixed GFM configuration stable across streaming/store
@@ -225,11 +226,31 @@ const DocumentPre = ({
                     text={fence.text}
                 />
             ) : (
-                <pre {...props}>{children}</pre>
+                <ScrollArea
+                    axes="horizontal"
+                    className="happy2-markdown-document__plain-code"
+                    viewportClassName="happy2-markdown-document__plain-code-viewport"
+                >
+                    <pre {...props}>{children}</pre>
+                </ScrollArea>
             )}
         </div>
     );
 };
+
+const DocumentTable = ({
+    children,
+    node: _node,
+    ...props
+}: ComponentPropsWithoutRef<"table"> & ExtraProps) => (
+    <ScrollArea
+        axes="horizontal"
+        className="happy2-markdown-document__table-scroll"
+        viewportClassName="happy2-markdown-document__table-scroll-viewport"
+    >
+        <table {...props}>{children}</table>
+    </ScrollArea>
+);
 
 /**
  * Headings render with no generated `id`. A viewer shows one document at a
@@ -248,6 +269,7 @@ const documentComponents: Components = {
     a: DocumentLink,
     img: DocumentImage,
     pre: DocumentPre,
+    table: DocumentTable,
     h1: headingOverride("h1"),
     h2: headingOverride("h2"),
     h3: headingOverride("h3"),
@@ -278,11 +300,13 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
         "onFileOpen",
     ]);
     return (
-        <div
+        <ScrollArea
+            axes="both"
             className={["happy2-markdown-document", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="markdown-document"
             data-testid={local["data-testid"]}
             style={local.style}
+            viewportClassName="happy2-markdown-document__viewport"
         >
             <article
                 className="happy2-markdown-document__body"
@@ -299,6 +323,6 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
                     </FileOpenContext.Provider>
                 </MarkdownCacheKeyContext.Provider>
             </article>
-        </div>
+        </ScrollArea>
     );
 }

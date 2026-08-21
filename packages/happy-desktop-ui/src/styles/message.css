@@ -628,7 +628,11 @@
 
 .happy2-message__table-scroll {
     max-width: 100%;
+}
+
+.happy2-message__table-scroll-viewport {
     overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .happy2-message__body--markdown table {
@@ -718,13 +722,18 @@
    horizontal scroll instead of being clipped by the overflow boundary. */
 .happy2-message__code-block {
     margin: 12px 0;
+    max-width: 100%;
+    border-radius: 8px;
+    background: var(--surface-pressed);
+}
+
+.happy2-message__code-block-viewport {
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .happy2-message__body--markdown pre {
     margin: 0;
-    background: var(--surface-pressed);
-    border-radius: 8px;
-    overflow-x: auto;
     max-width: 100%;
 }
 
@@ -957,59 +966,19 @@
 
 /* Scrollport: edge-to-edge, no padding of its own. */
 .happy2-message-list {
-    display: flex;
-    flex-direction: column;
     flex: 1 1 0%;
     min-height: 0;
+}
+
+.happy2-message-list__viewport {
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
     /* TanStack and the semantic drag anchor are the scroll authorities. */
     overflow-anchor: none;
-    /* Keep every message's available measure constant when the history crosses
-       the overflow threshold and native scrollbar space becomes occupied. */
-    scrollbar-gutter: stable;
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
-    /* Slack-style scrollbar (desktop): a narrow, rounded thumb over a
-       transparent track, subdued at rest and clearer while the column is
-       hovered. Firefox uses the standard properties; WebKit/Chromium use the
-       ::-webkit-scrollbar rules below. Both resolve to the same theme tokens. */
-    scrollbar-width: thin;
-    scrollbar-color: var(--surface-selected) transparent;
-}
-
-.happy2-message-list:hover {
-    scrollbar-color: var(--input-placeholder) transparent;
-}
-
-.happy2-message-list::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
-}
-
-.happy2-message-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-/* The 3px transparent border (clipped to the padding box) insets the thumb to a
-   ~6px rounded bar floating off the edge, matching the standard property width. */
-.happy2-message-list::-webkit-scrollbar-thumb {
-    background-color: var(--surface-selected);
-    background-clip: padding-box;
-    border: 3px solid transparent;
-    border-radius: var(--happy2-radius-pill);
-}
-
-.happy2-message-list:hover::-webkit-scrollbar-thumb {
-    background-color: var(--input-placeholder);
-}
-
-.happy2-message-list::-webkit-scrollbar-thumb:hover {
-    background-color: var(--text-secondary);
-}
-
-.happy2-message-list::-webkit-scrollbar-corner {
-    background: transparent;
 }
 
 /* The non-virtual inner content wrapper keeps 12px above the history and a

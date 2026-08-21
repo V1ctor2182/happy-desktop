@@ -165,9 +165,7 @@
 
 /* Scrollport: edge-to-edge, no padding; the inner <code> carries the inset. */
 .happy2-build-progress__log {
-    margin: 0;
     max-height: 200px;
-    overflow: auto;
     background: var(--diff-context-bg);
     border-radius: var(--happy2-radius-sm);
     color: var(--text-secondary);
@@ -178,9 +176,14 @@
     word-break: break-word;
 }
 
+.happy2-build-progress__log-viewport {
+    overflow: auto;
+}
+
 /* Inner content block carries the 12px inset off the scrollport. */
 .happy2-build-progress__log-inner {
     display: block;
+    margin: 0;
     font: inherit;
     color: inherit;
     white-space: inherit;

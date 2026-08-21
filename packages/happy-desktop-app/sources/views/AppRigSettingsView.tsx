@@ -575,6 +575,9 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     loading={models.type !== "ready" && models.type !== "error"}
                     modelOptions={modelOptions(catalog, settings)}
                     onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
+                    onScrollbarVisibilityChange={(visibility) =>
+                        props.appearance.scrollbarVisibilitySelect(visibility)
+                    }
                     onExperimentalFeaturesChange={(enabled) =>
                         experimentsStore.experimentalFeaturesUpdate(enabled)
                     }
@@ -605,6 +608,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                         label: rigPermissionLabel(mode),
                         value: mode,
                     }))}
+                    scrollbarVisibility={appearance.scrollbarVisibility}
                     titleShimmerEnabled={titleShimmer.titleShimmerEnabled}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />

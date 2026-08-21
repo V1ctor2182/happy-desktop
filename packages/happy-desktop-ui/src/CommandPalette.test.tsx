@@ -172,7 +172,10 @@ it("holds the fixed 640x461 CommandPalette frame with a real short result set", 
         "overflow-y": "auto",
         "padding-left": "0px",
         "padding-top": "0px",
-        "scrollbar-gutter": "stable",
+        /* No hand-reserved lane: the bar reserves its own track, and only when
+           the list is long enough to have one. This result set is short, so the
+           638px body above is the full width between the card's borders. */
+        "scrollbar-gutter": "auto",
     });
     const bodyContent = view.$(
         '[data-testid="cp"] [data-happy-desktop-ui="command-palette-body-content"]',

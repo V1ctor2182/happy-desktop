@@ -41,6 +41,7 @@ import {
     messageTextLayoutFontGenerationSubscribe,
 } from "./messageTextLayout";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
+import { ScrollArea } from "./Scrollbar";
 import { Spinner } from "./Spinner";
 import { WindowOverlay } from "./WindowOverlay";
 
@@ -445,24 +446,30 @@ export function ConversationView(props: ConversationViewProps) {
             ) : null}
 
             {props.panel ? (
-                <div
+                <ScrollArea
+                    axes="both"
                     className="happy2-conversation__panel"
                     data-happy-desktop-ui="conversation-panel"
+                    viewportClassName="happy2-conversation__panel-viewport"
                 >
                     {props.panel}
-                </div>
+                </ScrollArea>
             ) : props.loading ? (
-                <div
+                <ScrollArea
+                    axes="both"
                     className="happy2-conversation__empty happy2-conversation__loading"
                     data-happy-desktop-ui="conversation-loading"
+                    viewportClassName="happy2-conversation__empty-viewport"
                 >
                     <Spinner label="Loading conversation" size={20} tone="muted" variant="line" />
                     {activityFallback}
-                </div>
+                </ScrollArea>
             ) : props.entries.length === 0 ? (
-                <div
+                <ScrollArea
+                    axes="both"
                     className="happy2-conversation__empty"
                     data-happy-desktop-ui="conversation-empty"
+                    viewportClassName="happy2-conversation__empty-viewport"
                 >
                     <EmptyState
                         // A conversation with nothing in it is an agent waiting
@@ -474,7 +481,7 @@ export function ConversationView(props: ConversationViewProps) {
                         title="Nothing here yet"
                     />
                     {activityFallback}
-                </div>
+                </ScrollArea>
             ) : (
                 <MessageList
                     estimateRowSize={(index, width) =>

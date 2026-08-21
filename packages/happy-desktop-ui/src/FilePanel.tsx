@@ -4,6 +4,7 @@ import { Button } from "./Button";
 import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
 import { Icon } from "./Icon";
 import { SURFACE_HEADER_HEIGHT } from "./InfoPanel";
+import { ScrollArea } from "./Scrollbar";
 import { Toolbar } from "./Toolbar";
 export type FilePanelProps = {
     className?: string;
@@ -85,7 +86,12 @@ export function FilePanel(props: FilePanelProps) {
                     {local.note}
                 </div>
             ) : null}
-            <div className="happy2-file-panel__body" data-happy-desktop-ui="file-panel-body">
+            <ScrollArea
+                className="happy2-file-panel__body"
+                data-happy-desktop-ui="file-panel-body"
+                data-scrollbar-rows=""
+                viewportClassName="happy2-file-panel__body-viewport"
+            >
                 <div
                     className="happy2-file-panel__body-content"
                     data-happy-desktop-ui="file-panel-body-content"
@@ -102,7 +108,7 @@ export function FilePanel(props: FilePanelProps) {
                         selectedId={local.selectedId}
                     />
                 </div>
-            </div>
+            </ScrollArea>
         </section>
     );
 }

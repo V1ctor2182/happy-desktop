@@ -1,6 +1,7 @@
 import { type CSSProperties } from "react";
 import type { ComposerCommand } from "happy-desktop-state";
 import { Icon, type IconName } from "./Icon";
+import { ScrollArea } from "./Scrollbar";
 
 export type CommandPickerItem = {
     id: string;
@@ -44,9 +45,10 @@ export function CommandPicker(props: CommandPickerProps) {
         >
             {/* The card holds the frame; this scrollport owns scrolling with no
                 spacing of its own, and the list inside it owns the padding. */}
-            <div
+            <ScrollArea
                 className="happy2-command-picker__scroll"
                 data-happy-desktop-ui="command-picker-scroll"
+                viewportClassName="happy2-command-picker__scroll-viewport"
             >
                 <div
                     className="happy2-command-picker__list"
@@ -92,7 +94,7 @@ export function CommandPicker(props: CommandPickerProps) {
                         </button>
                     ))}
                 </div>
-            </div>
+            </ScrollArea>
         </div>
     );
 }

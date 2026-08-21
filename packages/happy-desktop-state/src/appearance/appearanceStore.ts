@@ -1,6 +1,6 @@
 /**
- * The appearance surface: which of the three theme modes the product tree is
- * rendered in, and the resolved light/dark value that follows from it.
+ * The appearance surface: the selected and resolved theme plus the window's
+ * scrollbar visibility behavior.
  *
  * It exists because appearance is product state, not React state: every
  * workspace renders one `ThemeScope` from it instead of carrying a separate
@@ -12,12 +12,15 @@
  * the mode actually depends on it, so a backgrounded surface does no work.
  */
 export type ThemeMode = "dark" | "light" | "system";
+export type ScrollbarVisibility = "always" | "automatic";
 
 export interface AppearanceSnapshot {
     /** The user's selection. `system` defers to the platform appearance. */
     readonly mode: ThemeMode;
     /** The appearance actually rendered, after resolving `system`. */
     readonly appearance: "dark" | "light";
+    /** Whether overflowing surfaces keep their scrollbar visible at rest. */
+    readonly scrollbarVisibility: ScrollbarVisibility;
 }
 
 export interface AppearanceStore {
@@ -31,6 +34,7 @@ export interface AppearanceStore {
     appearanceToggle(): void;
     /** Selects a mode directly, including returning to `system`. */
     appearanceSelect(mode: ThemeMode): void;
+    scrollbarVisibilitySelect(visibility: ScrollbarVisibility): void;
     [Symbol.dispose](): void;
 }
 
@@ -40,6 +44,8 @@ const DARK_QUERY = "(prefers-color-scheme: dark)";
 export interface AppearanceStoreOptions {
     /** Initial selection; defaults to following the platform. */
     readonly mode?: ThemeMode;
+    /** Initial scrollbar behavior; defaults to automatic. */
+    readonly scrollbarVisibility?: ScrollbarVisibility;
     /**
      * Injected platform appearance source. Supplying it keeps this store free of
      * a `window` dependency in tests and in any non-browser host.
@@ -72,17 +78,24 @@ export function appearanceStoreCreate(options: AppearanceStoreOptions = {}): App
 
     const listeners = new Set<() => void>();
     let mode: ThemeMode = options.mode ?? "system";
+    let scrollbarVisibility: ScrollbarVisibility = options.scrollbarVisibility ?? "automatic";
     let snapshot: AppearanceSnapshot = {
         mode,
         appearance: mode === "system" ? systemAppearance() : mode,
+        scrollbarVisibility,
     };
     let systemUnsubscribe: (() => void) | undefined;
     let disposed = false;
 
     const publish = (): void => {
         const appearance = mode === "system" ? systemAppearance() : mode;
-        if (snapshot.mode === mode && snapshot.appearance === appearance) return;
-        snapshot = { mode, appearance };
+        if (
+            snapshot.mode === mode &&
+            snapshot.appearance === appearance &&
+            snapshot.scrollbarVisibility === scrollbarVisibility
+        )
+            return;
+        snapshot = { mode, appearance, scrollbarVisibility };
         for (const listener of listeners) listener();
     };
 
@@ -123,6 +136,11 @@ export function appearanceStoreCreate(options: AppearanceStoreOptions = {}): App
         },
         appearanceSelect(next) {
             modeSet(next);
+        },
+        scrollbarVisibilitySelect(next) {
+            if (scrollbarVisibility === next) return;
+            scrollbarVisibility = next;
+            publish();
         },
         [Symbol.dispose]() {
             if (disposed) return;

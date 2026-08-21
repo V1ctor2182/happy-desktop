@@ -6,12 +6,15 @@
 
 .happy2-rig-activity-panel-scroll {
     container-type: inline-size;
-    display: flex;
     flex: 1 1 auto;
-    flex-direction: column;
     min-width: 0;
     min-height: 0;
     width: 100%;
+}
+
+.happy2-rig-activity-panel-scroll__viewport {
+    display: flex;
+    flex-direction: column;
     overflow: auto;
 }
 

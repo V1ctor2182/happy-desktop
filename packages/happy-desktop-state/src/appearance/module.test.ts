@@ -28,10 +28,18 @@ describe("appearance store", () => {
         const seen: string[] = [];
         const unsubscribe = store.subscribe(() => seen.push(store.get().appearance));
 
-        expect(store.get()).toEqual({ mode: "system", appearance: "light" });
+        expect(store.get()).toEqual({
+            mode: "system",
+            appearance: "light",
+            scrollbarVisibility: "automatic",
+        });
 
         system.set("dark");
-        expect(store.get()).toEqual({ mode: "system", appearance: "dark" });
+        expect(store.get()).toEqual({
+            mode: "system",
+            appearance: "dark",
+            scrollbarVisibility: "automatic",
+        });
         expect(seen).toEqual(["dark"]);
 
         unsubscribe();
@@ -46,10 +54,18 @@ describe("appearance store", () => {
         expect(store.get().appearance).toBe("dark");
         store.appearanceToggle();
         // From system-dark the toggle means "give me light", explicitly.
-        expect(store.get()).toEqual({ mode: "light", appearance: "light" });
+        expect(store.get()).toEqual({
+            mode: "light",
+            appearance: "light",
+            scrollbarVisibility: "automatic",
+        });
 
         store.appearanceToggle();
-        expect(store.get()).toEqual({ mode: "dark", appearance: "dark" });
+        expect(store.get()).toEqual({
+            mode: "dark",
+            appearance: "dark",
+            scrollbarVisibility: "automatic",
+        });
 
         unsubscribe();
         store[Symbol.dispose]();
@@ -68,12 +84,20 @@ describe("appearance store", () => {
         // notification and does not alter the rendered appearance.
         system.set("dark");
         system.set("light");
-        expect(store.get()).toEqual({ mode: "dark", appearance: "dark" });
+        expect(store.get()).toEqual({
+            mode: "dark",
+            appearance: "dark",
+            scrollbarVisibility: "automatic",
+        });
         expect(seen).toEqual(["dark"]);
 
         // Returning to system re-resolves against the platform.
         store.appearanceSelect("system");
-        expect(store.get()).toEqual({ mode: "system", appearance: "light" });
+        expect(store.get()).toEqual({
+            mode: "system",
+            appearance: "light",
+            scrollbarVisibility: "automatic",
+        });
 
         unsubscribe();
         store[Symbol.dispose]();
@@ -106,7 +130,11 @@ describe("appearance store", () => {
         const seen: string[] = [];
         const unsubscribe = store.subscribe(() => seen.push(store.get().appearance));
 
-        expect(store.get()).toEqual({ mode: "dark", appearance: "dark" });
+        expect(store.get()).toEqual({
+            mode: "dark",
+            appearance: "dark",
+            scrollbarVisibility: "automatic",
+        });
         // Re-selecting the current mode is not a change.
         store.appearanceSelect("dark");
         expect(seen).toEqual([]);

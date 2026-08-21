@@ -220,6 +220,10 @@
  * engine we do not ship on — there it degrades to the `rows` default, a static
  * one-line box, which is a rendering difference and not a broken product.
  */
+.happy2-composer__textarea-scroll {
+    width: 100%;
+}
+
 .happy2-composer__textarea {
     display: block;
     field-sizing: content;

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Button } from "./Button";
+import { ScrollArea } from "./Scrollbar";
 
 export type ComposerPanelProps = {
     /** What the reading is, said in the words the command that opened it uses. */
@@ -69,12 +70,14 @@ export function ComposerPanel(props: ComposerPanelProps) {
                     variant="ghost"
                 />
             </header>
-            <div
+            <ScrollArea
+                axes="both"
                 className="happy2-composer-panel__body"
                 data-happy-desktop-ui="composer-panel-body"
+                viewportClassName="happy2-composer-panel__body-viewport"
             >
                 <div className="happy2-composer-panel__content">{props.children}</div>
-            </div>
+            </ScrollArea>
         </section>
     );
 }
