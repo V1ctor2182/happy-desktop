@@ -213,7 +213,17 @@ function projectInference(run: Run): Extract<ChatElement, { kind: "inference" }>
     return element;
 }
 
-/** The pending question's row, projected once per question version. */
+/**
+ * The pending question's stand-in row, projected once per question version.
+ *
+ * A question's identity is the provider call ID of the `request_user_input`
+ * call that asked it, so the transcript's own row for that call *is* the
+ * question's row once the daemon has recorded it. This stand-in only covers the
+ * window before that happens — a question read from the agent's state ahead of
+ * the message carrying its call — and is left out entirely as soon as the real
+ * call arrives, because two rows with one identity are the same question asked
+ * twice.
+ */
 const questionElements = new WeakMap<Question, Extract<ChatElement, { kind: "tool_call" }>>();
 function projectQuestionElement(question: Question): Extract<ChatElement, { kind: "tool_call" }> {
     const cached = questionElements.get(question);
@@ -249,6 +259,21 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     }
 
     const elements: ChatElement[] = [];
+    const question = input.question?.status === "pending" ? input.question : undefined;
+    /* Whether the transcript already carries the call that asked the pending
+       question, settled while the rows go by rather than by scanning them
+       again afterwards. */
+    let questionAsked = false;
+    const push = (element: ChatElement): void => {
+        if (
+            question !== undefined &&
+            !questionAsked &&
+            element.kind === "tool_call" &&
+            element.toolCallId === question.id
+        )
+            questionAsked = true;
+        elements.push(element);
+    };
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         const before = elements.length;
@@ -259,8 +284,7 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             // everything else this loop does.
             if (!messagesOrdered(messages)) messages.sort(compareMessages);
             for (const entry of messages)
-                for (const element of projectMessage(entry, run.id, run.status))
-                    elements.push(element);
+                for (const element of projectMessage(entry, run.id, run.status)) push(element);
         }
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
@@ -271,8 +295,8 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     if (!messagesOrdered(pending)) pending.sort(compareMessages);
     for (const entry of pending)
         for (const element of projectMessage(entry, `pending:${entry.message.id}`, "running"))
-            elements.push(element);
-    if (input.question?.status === "pending") elements.push(projectQuestionElement(input.question));
+            push(element);
+    if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
     return elements;
 }
 

@@ -319,13 +319,20 @@ export function ConversationView(props: ConversationViewProps) {
             entry.request.kind === "userInput" &&
             entry.request.status !== "answered",
     );
+    /*
+     * An unanswered question keeps the footer after the run that asked it
+     * stops. The turn is not over — it is waiting on the reader — and the one
+     * line that reports what this conversation is doing is the place that says
+     * so, rather than leaving the transcript looking finished.
+     */
+    const statusVisible = props.running === true || awaitingInput;
     const workingStatusStartsGroup =
-        props.running === true &&
+        statusVisible &&
         props.agentAuthor !== undefined &&
         conversationWorkingStatusStartsGroup(transcript);
     const workingStatus = (
         <AgentWorkingStatus
-            active={props.running === true}
+            active={statusVisible}
             awaitingInput={awaitingInput}
             className="happy2-conversation-turn-status"
             elapsedMs={props.elapsedMs}
@@ -352,9 +359,7 @@ export function ConversationView(props: ConversationViewProps) {
      */
     const lastEntry = transcript.at(-1);
     const activityClosesTurnStatus =
-        props.activityControl !== undefined &&
-        props.running !== true &&
-        lastEntry?.kind === "turnStatus";
+        props.activityControl !== undefined && !statusVisible && lastEntry?.kind === "turnStatus";
     /**
      * The live turn and its external work share one line: the status keeps the
      * left, the activity summary sits at the far right, and when the two no
@@ -399,12 +404,11 @@ export function ConversationView(props: ConversationViewProps) {
             {props.activityControl}
         </div>
     ) : null;
-    const workingStatusHeight =
-        props.running === true
-            ? workingStatusStartsGroup
-                ? 68
-                : AGENT_WORKING_STATUS_ROW_HEIGHT
-            : 0;
+    const workingStatusHeight = statusVisible
+        ? workingStatusStartsGroup
+            ? 68
+            : AGENT_WORKING_STATUS_ROW_HEIGHT
+        : 0;
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -516,9 +520,7 @@ export function ConversationView(props: ConversationViewProps) {
                         // is one row taller than this; the footer mounts at the
                         // bottom of every conversation and is measured there, so
                         // that case corrects itself rather than needing a width.
-                        (props.activityControl &&
-                        props.running !== true &&
-                        !activityClosesTurnStatus
+                        (props.activityControl && !statusVisible && !activityClosesTurnStatus
                             ? RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT
                             : 0) +
                         queued.reduce(
