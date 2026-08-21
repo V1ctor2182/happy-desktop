@@ -77,11 +77,12 @@
 }
 
 /* The activity rows above this footer set a 14px glyph column, and the text
-   after them starts 6px past it. The braille cell is half that width, so the
-   row's 3px leading padding plus this 3px trailing margin centre it in the same
-   column. A ring already fills the column, so it takes the padding back and
-   adds no margin of its own: a turn that starts waiting keeps both the glyph
-   and the text it precedes exactly where the work above them sits. */
+   after them starts 6px past it. The 14px loader's snapped braille box is 8px
+   wide, so the row's 3px leading padding plus this 3px trailing margin complete
+   the same 14px column. A ring already fills the column, so it takes the
+   padding back and adds no margin of its own: a turn that starts waiting keeps
+   both the glyph and the text it precedes exactly where the work above them
+   sits. */
 .happy-agent-working-status__ring {
     flex: none;
     margin-left: -3px;

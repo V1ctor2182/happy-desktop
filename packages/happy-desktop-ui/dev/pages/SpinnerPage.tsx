@@ -206,7 +206,7 @@ export function SpinnerPage() {
             </Specimen>
 
             <Specimen
-                detail="All geometry derives from one size variable — 12 / 16 / 20 / 24 / 32 / 48"
+                detail="Braille includes its 14px production size; every variant retains its documented scale"
                 label="Size scale"
                 number="03"
                 stage="surface"
@@ -216,7 +216,10 @@ export function SpinnerPage() {
                         ["braille-2", "braille-sand", "arc", "blocks", "bar"] as SpinnerVariant[]
                     ).map((variant) => (
                         <div key={variant} style={row}>
-                            {[12, 16, 20, 24, 32, 48].map((size) => (
+                            {(variant.startsWith("braille")
+                                ? [12, 14, 16, 20, 24, 32, 48]
+                                : [12, 16, 20, 24, 32, 48]
+                            ).map((size) => (
                                 <div key={size} style={{ ...cell, minWidth: "auto" }}>
                                     <Spinner size={size} variant={variant} />
                                     <span style={caption}>{size} px</span>
