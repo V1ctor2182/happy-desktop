@@ -3,13 +3,15 @@ import {
     type RigProviderModelTokenUsage,
     type RigProviderTokenCounts,
     type RigProviderUsageEntry,
+    type RigProviderUsageReading,
     type RigProviderUsageSource,
+    type RigProviderUsageWindow,
     type happyAgentProtocol,
 } from "happy-desktop-state";
 
 const POLL_MS = 5_000;
 
-type UsageWindow = keyof happyAgentProtocol.DaemonUsageResponse;
+type UsageWindow = "hour" | "day" | "week" | "month";
 
 const WINDOWS: readonly UsageWindow[] = ["hour", "day", "week", "month"];
 
@@ -65,22 +67,87 @@ function usageProject(
     usage: happyAgentProtocol.DaemonUsageResponse,
     capturedAt: number,
 ): readonly RigProviderUsageEntry[] {
-    const providerIds = new Set<string>();
+    const providersById = new Map(
+        (usage.providers ?? []).map((provider) => [provider.providerId, provider]),
+    );
+    const providerIds = new Set(providersById.keys());
     for (const window of WINDOWS)
         for (const providerId of Object.keys(usage[window])) providerIds.add(providerId);
 
-    return [...providerIds].map((providerId) => ({
-        checkedAt: capturedAt,
-        providerId,
-        usage: { capturedAt, models: modelsProject(usage, providerId) },
-    }));
+    return [...providerIds].map((providerId) => {
+        const provider = providersById.get(providerId);
+        const models = modelsProject(
+            usage,
+            providerId,
+            provider?.models.map((model) => model.id) ?? [],
+        );
+        const reading = provider?.usage
+            ? accountUsageProject(provider.usage, models)
+            : models.length > 0
+              ? { capturedAt, models }
+              : undefined;
+        return {
+            providerId,
+            ...(provider?.checkedAt == null ? {} : { checkedAt: provider.checkedAt }),
+            ...(provider?.error == null ? {} : { error: provider.error }),
+            ...(reading === undefined ? {} : { usage: reading }),
+        };
+    });
+}
+
+function accountUsageProject(
+    usage: happyAgentProtocol.ProviderAccountUsage,
+    models: readonly RigProviderModelTokenUsage[],
+): RigProviderUsageReading {
+    const fiveHour = windowProject(usage.windows.fiveHour);
+    const weekly = windowProject(usage.windows.weekly);
+    const monthly = windowProject(usage.windows.monthly);
+    return {
+        capturedAt: usage.capturedAt,
+        exhausted: usage.exhausted,
+        ...(usage.planName === null ? {} : { planName: usage.planName }),
+        ...(fiveHour === undefined ? {} : { fiveHour }),
+        ...(weekly === undefined ? {} : { weekly }),
+        ...(monthly === undefined ? {} : { monthly }),
+        ...(usage.credits === null
+            ? {}
+            : {
+                  credits: {
+                      available: usage.credits.available,
+                      unlimited: usage.credits.unlimited,
+                      ...(usage.credits.remainingCents === null
+                          ? {}
+                          : { remainingCents: usage.credits.remainingCents }),
+                      ...(usage.credits.usedPercent === null
+                          ? {}
+                          : { usedPercent: usage.credits.usedPercent }),
+                  },
+              }),
+        ...(models.length === 0 ? {} : { models }),
+    };
+}
+
+function windowProject(
+    window: happyAgentProtocol.ProviderAccountUsageWindow | null,
+): RigProviderUsageWindow | undefined {
+    if (window === null) return undefined;
+    return {
+        usedPercent: window.usedPercent,
+        ...(window.resetsAt === null ? {} : { resetsAt: window.resetsAt }),
+        ...(window.startsAt === null ? {} : { startsAt: window.startsAt }),
+        ...(window.durationMs === null ? {} : { durationMs: window.durationMs }),
+    };
 }
 
 function modelsProject(
     usage: happyAgentProtocol.DaemonUsageResponse,
     providerId: string,
+    configuredModelIds: readonly string[],
 ): readonly RigProviderModelTokenUsage[] {
-    const modelIds = new Set<string>();
+    // The provider entry is the authoritative complete catalog. Rolling token
+    // windows are deliberately sparse, so deriving rows from them alone hides
+    // every model that has not spent tokens during the reported periods.
+    const modelIds = new Set(configuredModelIds);
     for (const window of WINDOWS)
         for (const modelId of Object.keys(usage[window][providerId] ?? {})) modelIds.add(modelId);
 

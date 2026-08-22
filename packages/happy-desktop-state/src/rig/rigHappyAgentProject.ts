@@ -109,13 +109,14 @@ export function rigHappyAgentGitChangeProject(change: GitFileChange): RigGitChan
 
 export function rigHappyAgentChangedFileProject(input: {
     readonly path: string;
+    readonly oldPath?: string;
     readonly oldContent: string;
     readonly newContent: string;
     readonly hash?: string;
 }): RigChangedFileDocument {
     return {
         path: input.path,
-        oldPath: input.path,
+        oldPath: input.oldPath ?? input.path,
         oldContent: input.oldContent,
         newContent: input.newContent,
         ...(input.hash === undefined ? {} : { hash: input.hash }),

@@ -169,7 +169,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
     const recentEvents: RecentEvent[] = [];
     let compatibility: ServerCompatibility = CHECKING_SERVER_COMPATIBILITY;
     let closed = false;
-    let streamAttemptController: AbortController | undefined;
+    let updatesAttemptController: AbortController | undefined;
     let retryRequested = false;
     let retryWake: (() => void) | undefined;
 
@@ -481,8 +481,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     /**
      * Releases transient mutation bookkeeping while retaining the hydrated
-     * session itself. One Rig-wide SSE stream keeps that cached entry current,
-     * so closing and reopening a view never needs another bootstrap read.
+     * session itself. One Rig-wide managed update feed keeps that cached entry
+     * current, so closing and reopening a view never needs another bootstrap
+     * read.
      */
     const settleSessionIfIdle = (entry: SessionEntry): void => {
         if (
@@ -1489,10 +1490,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         entry.questionRecovery = tracked;
     };
 
-    const retryStream = (): void => {
+    const retryUpdates = (): void => {
         if (closed || rootController.signal.aborted) return;
         retryRequested = true;
-        streamAttemptController?.abort();
+        updatesAttemptController?.abort();
         retryWake?.();
         retryWake = undefined;
     };
@@ -1515,11 +1516,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         }
     };
 
-    const runStream = async (): Promise<void> => {
+    const runUpdates = async (): Promise<void> => {
         let reconnectMs = INITIAL_RECONNECT_MS;
         while (!rootController.signal.aborted) {
             const attemptController = new AbortController();
-            streamAttemptController = attemptController;
+            updatesAttemptController = attemptController;
             const attemptSignal = AbortSignal.any([
                 rootController.signal,
                 attemptController.signal,
@@ -1527,11 +1528,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             try {
                 // Health gates startup because it is the only route guaranteed
                 // while the daemon is booting. Once the first bootstrap lands,
-                // the SSE request itself owns reachability and reconnection.
+                // the client's managed update feed owns reachability and
+                // reconnection.
                 if (config === undefined) {
                     reportDebug({
                         level: "info",
-                        message: "Checking Rig health before initial SSE",
+                        message: "Checking Rig health before managed updates",
                         source: "connection",
                     });
                     const health = await client.getHealth({
@@ -1566,55 +1568,54 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 reportDebug({
                     detail: debugDetail({ after: cursor ?? null }),
                     level: "info",
-                    message: "Opening SSE stream",
+                    message: "Opening managed update feed",
                     source: "sse",
                 });
-                for await (const frame of client.streamEvents({
+                for await (const update of client.updates({
                     after: cursor,
                     signal: attemptSignal,
                 })) {
-                    if (frame.kind === "hello") {
+                    if (update.kind === "connected") {
                         reportDebug({
-                            detail: debugDetail(frame.hello),
-                            level: frame.hello.gap ? "warning" : "info",
-                            message: frame.hello.gap
-                                ? "SSE hello reported a journal gap"
-                                : "SSE stream connected",
+                            detail: debugDetail({ cursor: update.cursor }),
+                            level: "info",
+                            message: "Managed update feed connected",
                             source: "sse",
                         });
-                        if (frame.hello.gap) {
-                            await resync(true);
-                            reopen = true;
-                            break;
-                        }
                         publishConnection("live");
                         reconnectMs = INITIAL_RECONNECT_MS;
-                    } else {
+                    } else if (update.kind === "state_lost") {
                         reportDebug({
-                            detail: debugDetail(frame.event),
-                            level: "info",
-                            message: `SSE event arrived: ${frame.event.type}`,
+                            detail: debugDetail({ cursor: update.cursor }),
+                            level: "warning",
+                            message: "Managed update feed reported a journal gap",
                             source: "sse",
                         });
-                        if (cursor === undefined || frame.event.cursor.localeCompare(cursor) > 0) {
-                            // Keep the event before acknowledging its cursor.
-                            // Session snapshots can then rebase from this
-                            // connection-wide rolling window without changing
-                            // where the global journal resumes.
-                            rememberEvent(frame.event);
-                            applyEvent(frame.event);
-                            advanceCursor(frame.event.cursor);
-                        } else {
-                            reportDebug({
-                                detail: debugDetail({
-                                    cursor: frame.event.cursor,
-                                    lastReceivedCursor: cursor,
-                                }),
-                                level: "warning",
-                                message: `Ignored redelivered SSE event: ${frame.event.type}`,
-                                source: "sse",
-                            });
-                        }
+                        publishConnection("reconnecting");
+                        await resync(true);
+                        reopen = true;
+                        break;
+                    } else if (update.kind === "disconnected") {
+                        reportDebug({
+                            detail: debugDetail({ cursor: update.cursor ?? null }),
+                            level: "warning",
+                            message: "Managed update feed disconnected; client reconnecting",
+                            source: "sse",
+                        });
+                        publishConnection("reconnecting");
+                    } else {
+                        reportDebug({
+                            detail: debugDetail(update.event),
+                            level: "info",
+                            message: `SSE event arrived: ${update.event.type}`,
+                            source: "sse",
+                        });
+                        // `updates()` has already rejected duplicate and older
+                        // cursors. Keep Happy's cursor only as the durable
+                        // snapshot boundary used by hydration and gap recovery.
+                        rememberEvent(update.event);
+                        applyEvent(update.event);
+                        advanceCursor(update.cursor);
                     }
                 }
                 if (reopen) {
@@ -1624,7 +1625,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 if (!rootController.signal.aborted) {
                     reportDebug({
                         level: retryRequested ? "info" : "warning",
-                        message: retryRequested ? "SSE reconnect requested" : "SSE stream ended",
+                        message: retryRequested
+                            ? "Managed update feed restart requested"
+                            : "Managed update feed ended",
                         source: "sse",
                     });
                     publishConnection("reconnecting");
@@ -1636,7 +1639,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     reportDebug({
                         detail: errorDetail(error),
                         level: "error",
-                        message: "Connection or SSE stream failed",
+                        message: "Connection or update reconciliation failed",
                         source: "connection",
                     });
                     for (const subscriber of groupSubscribers) subscriber.onError?.(error);
@@ -1645,8 +1648,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     }
                 }
             } finally {
-                if (streamAttemptController === attemptController) {
-                    streamAttemptController = undefined;
+                if (updatesAttemptController === attemptController) {
+                    updatesAttemptController = undefined;
                 }
             }
             if (!rootController.signal.aborted) {
@@ -1801,12 +1804,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         );
     };
 
-    background(runStream());
+    background(runUpdates());
     background(runGitWatchRenewal());
 
     return {
         compatibility: () => compatibility,
-        retry: retryStream,
+        retry: retryUpdates,
         connectGroups(subscription) {
             if (closed) throw new Error("This Happy Agent connection is closed.");
             const subscriber: GroupsSubscriber = { ...subscription, closed: false };
@@ -2625,7 +2628,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 source: "connection",
             });
             rootController.abort();
-            streamAttemptController?.abort();
+            updatesAttemptController?.abort();
             retryWake?.();
             retryWake = undefined;
             publishConnection("closed");

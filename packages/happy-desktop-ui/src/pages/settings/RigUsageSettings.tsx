@@ -197,15 +197,19 @@ function ProviderSection(props: {
                     />
                     <span>{provider.error}</span>
                 </p>
-            ) : usage === undefined ? (
-                <p className="happy2-rig-usage-settings__note" data-note="unread">
-                    <Ionicon
-                        className="happy2-rig-usage-settings__note-icon"
-                        name="time-outline"
-                        size={16}
-                    />
-                    <span>This account has not been read yet.</span>
-                </p>
+            ) : null}
+
+            {usage === undefined ? (
+                provider.error === undefined ? (
+                    <p className="happy2-rig-usage-settings__note" data-note="unread">
+                        <Ionicon
+                            className="happy2-rig-usage-settings__note-icon"
+                            name="time-outline"
+                            size={16}
+                        />
+                        <span>This account has not been read yet.</span>
+                    </p>
+                ) : null
             ) : (
                 <>
                     {hasWindows(provider) ? (

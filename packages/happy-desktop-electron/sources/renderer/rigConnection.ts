@@ -125,9 +125,10 @@ function snapshotsEqual(left: RigConnectionSnapshot, right: RigConnectionSnapsho
 }
 
 /**
- * Projects the connection's existing SSE lifecycle into the host availability
- * store. It opens no transport of its own: `/health` remains the one startup
- * gate inside `connectHappyAgent`, and stream completion owns reconnect state.
+ * Projects the connection's managed update-feed lifecycle into the host
+ * availability store. It opens no transport of its own: `/health` remains the
+ * one startup gate inside `connectHappyAgent`, and the shared client owns
+ * reconnect state.
  */
 function streamConnectionStoreCreate(connection: RigConnection): RigConnectionStore {
     const listeners = new Set<() => void>();

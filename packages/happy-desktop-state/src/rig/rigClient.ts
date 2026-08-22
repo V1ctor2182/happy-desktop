@@ -31,6 +31,7 @@ import {
 import type {
     RigChangedFileDocument,
     RigFileSearchResult,
+    RigGitChangedFile,
     RigGroupId,
     RigOpenInTargets,
     RigWorkspaceFileBytes,
@@ -192,6 +193,7 @@ export interface RigClient {
     changedFileRead(
         groupId: RigGroupId,
         path: string,
+        change: RigGitChangedFile,
         signal?: AbortSignal,
     ): Promise<RigChangedFileDocument>;
     /**
@@ -297,29 +299,32 @@ async function workspaceFileTreeRead(
 }
 
 async function changedFileRead(
-    client: Pick<HappyAgentClient, "getWorkspaceGit" | "readFile" | "readFileRevision">,
+    client: Pick<HappyAgentClient, "readFile" | "readFileRevision">,
     groupId: RigGroupId,
     path: string,
+    change: RigGitChangedFile,
     signal?: AbortSignal,
 ): Promise<RigChangedFileDocument> {
-    const { git } = await client.getWorkspaceGit(groupId, { signal });
-    const change = git.files.find((candidate) => candidate.path === path);
-    if (change === undefined) throw new UserError("That file is no longer changed.");
-
+    const oldPath = change.previousPath ?? path;
     const oldContent =
         change.status === "added" ||
         change.status === "untracked" ||
-        git.comparison === "unavailable" ||
-        git.base === null
+        change.baseRevision === undefined
             ? ""
             : rigTextDecodeBase64(
-                  (await client.readFileRevision(groupId, { path, revision: git.base }, { signal }))
-                      .content,
+                  (
+                      await client.readFileRevision(
+                          groupId,
+                          { path: oldPath, revision: change.baseRevision },
+                          { signal },
+                      )
+                  ).content,
               );
     const current =
         change.status === "deleted" ? undefined : await client.readFile(groupId, path, { signal });
     return rigHappyAgentChangedFileProject({
         path,
+        ...(oldPath === path ? {} : { oldPath }),
         oldContent,
         newContent: current === undefined ? "" : rigTextDecodeBase64(current.content),
         ...(current === undefined ? {} : { hash: current.hash }),
@@ -381,8 +386,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         models,
         memory,
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
-        changedFileRead: (groupId, path, signal) =>
-            changedFileRead(deps.client, groupId, path, signal),
+        changedFileRead: (groupId, path, change, signal) =>
+            changedFileRead(deps.client, groupId, path, change, signal),
         workspaceFileTreeRead: (groupId, path, cursor) =>
             workspaceFileTreeRead(deps.client, groupId, path, cursor),
         filesSearch: async (groupId, query, limit) =>

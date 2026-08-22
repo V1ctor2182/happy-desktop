@@ -766,11 +766,11 @@ function fileTabItem(tab: RigFileTabSnapshot): TabItem {
  *
  * A picture, a video, or an archive has no text view worth offering, and asking
  * for one only produced "Binary files cannot be opened in the editor." over the
- * thing the reader just clicked — so those open as media regardless of scope.
- * Everything else keeps the scope's answer: the whole checkout opens the file
- * itself, the changed list opens what changed in it.
+ * thing the reader just clicked. Ordinary source asks for a file; the workspace
+ * state upgrades that intent to a diff only when its live Git snapshot says the
+ * path is changed.
  */
-function fileTabKind(path: string, scope: RigFileScope): RigFileTabKind {
+function fileTabKind(path: string): RigFileTabKind {
     const kind = filePreviewKind(path);
     if (kind === "image" || kind === "video" || kind === "audio" || kind === "pdf") return "media";
     if (kind === "binary") return "media";
@@ -778,7 +778,7 @@ function fileTabKind(path: string, scope: RigFileScope): RigFileTabKind {
     // source a toggle away, even out of the changed list: someone opening a
     // document wants to see the document.
     if (kind === "html") return "document";
-    return scope === "all" ? "file" : "diff";
+    return "file";
 }
 
 function fileHighlightLanguageKey(path: string): string {
@@ -1988,7 +1988,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         openGroup !== undefined &&
         activeMainTool === undefined &&
         activeFile === undefined;
-    const mainFileBody = (file: RigFileTabSnapshot, onReady?: () => void): ReactNode => (
+    const mainFileBody = (file: RigFileTabSnapshot): ReactNode => (
         <RigFileBody
             appearance={appearance.appearance}
             file={file}
@@ -1996,7 +1996,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             key={`${file.id}:${file.kind}`}
             {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
             mode={workspace.fileViewMode}
-            {...(onReady === undefined ? {} : { onReady })}
             rigOnline={rigOnline}
             wrap={workspace.fileViewWrap}
             {...(access.writeRefusal === undefined ? {} : { writeRefusal: access.writeRefusal })}
@@ -2038,7 +2037,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 onFileOpen={(path) => {
                     if (!rigOnline() || !openGroup.create) return;
                     const target = workspacePathRelative(path, openGroup.create.cwd);
-                    props.workspace.filePanelOpen(openGroup.id, target, fileTabKind(target, "all"));
+                    props.workspace.filePanelOpen(openGroup.id, target, fileTabKind(target));
                 }}
                 canAbort={conversationCanAbort}
                 readOnly={conversationReadOnly}
@@ -2088,18 +2087,18 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         layout={workspace.fileLayout}
                         onFileSelect={(path) => {
                             if (openGroup && rigOnline())
-                                props.workspace.filePreview(
-                                    openGroup.id,
-                                    path,
-                                    fileTabKind(path, workspace.fileScope),
-                                );
+                                props.workspace.filePreview(openGroup.id, path, fileTabKind(path));
                         }}
                         onFileOpen={(path) => {
                             if (openGroup && rigOnline())
-                                props.workspace.fileOpen(
+                                props.workspace.fileOpen(openGroup.id, path, fileTabKind(path));
+                        }}
+                        onFilePreprocess={(path) => {
+                            if (openGroup && rigOnline())
+                                props.workspace.filePreprocess(
                                     openGroup.id,
                                     path,
-                                    fileTabKind(path, workspace.fileScope),
+                                    fileTabKind(path),
                                 );
                         }}
                         onLayoutChange={(layout) => {
@@ -2520,25 +2519,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     pending={
                                         pendingFile
                                             ? (() => {
-                                                  const waitsForDiff =
-                                                      pendingFile.kind === "diff" &&
-                                                      pendingFile.document.type === "ready" &&
-                                                      "oldContent" in pendingFile.document.value &&
-                                                      (workspace.fileViewMode === "unified" ||
-                                                          workspace.fileViewMode === "split");
                                                   const readyOnCommit =
                                                       connectionRefusal !== undefined ||
-                                                      (pendingFile.document.type !== "loading" &&
-                                                          !waitsForDiff);
+                                                      pendingFile.document.type !== "loading";
                                                   return {
                                                       id: pendingFile.presentationId,
                                                       ready: readyOnCommit,
-                                                      render: (ready: () => void) =>
-                                                          mainFileBody(
-                                                              pendingFile,
-                                                              waitsForDiff ? ready : undefined,
-                                                          ),
-                                                      waitForReady: waitsForDiff,
+                                                      render: () => mainFileBody(pendingFile),
                                                   };
                                               })()
                                             : undefined
@@ -2645,8 +2632,6 @@ function RigFileBody(props: {
     mode: RigFileViewMode;
     /** Whether long diff lines wrap to the pane or scroll out of it. */
     wrap: boolean;
-    /** Reports that a pending worker-backed diff has committed its final DOM. */
-    onReady?: () => void;
     /** Re-reads Rig availability when a retained file handler fires. */
     rigOnline: () => boolean;
     /** Why this file cannot be edited or saved, or absent when it can. */
@@ -2664,7 +2649,7 @@ function RigFileBody(props: {
      */
     const linkedFileOpen = (target: string): void => {
         if (!props.rigOnline()) return;
-        const kind = fileTabKind(target, "all");
+        const kind = fileTabKind(target);
         if (file.placement === "panel") workspace.filePanelOpen(file.groupId, target, kind);
         else workspace.fileOpen(file.groupId, target, kind);
     };
@@ -2733,8 +2718,8 @@ function RigFileBody(props: {
                           rendered: (
                               <MarkdownDocument
                                   /* Whatever the link names — another document,
-                                     a picture — opens as the file itself, never
-                                     as its diff. */
+                                     a picture — follows the same file-open path
+                                     as the sidebar. */
                                   onFileOpen={(href) =>
                                       linkedFileOpen(documentLinkResolve(file.path, href))
                                   }
@@ -2808,7 +2793,6 @@ function RigFileBody(props: {
                     onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
                     onWrapChange={(wrap) => workspace.fileViewWrapUpdate(wrap)}
                     wrap={props.wrap}
-                    {...(props.onReady === undefined ? {} : { onReady: props.onReady })}
                     // A change that deleted the file left no copy to look at, which
                     // the read reports by having no working-tree identity for it.
                     // Preview is then not offered rather than offered over nothing.
@@ -3900,6 +3884,7 @@ function RigPanelBody(props: {
     /** Opens one delegated child session from the Activity tab. */
     onSubagentSelect?: (sessionId: string) => void;
     onFileOpen: (path: string) => void;
+    onFilePreprocess: (path: string) => void;
     onFileSelect: (path: string) => void;
     onLayoutChange: (layout: RigFileLayout) => void;
     onPanelClose: () => void;
@@ -4139,6 +4124,7 @@ function RigPanelBody(props: {
                                 : {})}
                             onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
                             onDirectoryPrefetch={props.onDirectoryPrefetch}
+                            onFilePrefetch={props.onFilePreprocess}
                             onLoadMore={props.onLoadMore}
                             {...(props.rigAvailability === undefined
                                 ? { onOpen: props.onFileOpen }

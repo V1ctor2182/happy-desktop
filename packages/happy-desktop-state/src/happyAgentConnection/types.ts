@@ -452,6 +452,8 @@ export interface GitChangeSnapshot {
     generation: string;
     version: number;
     revision?: string;
+    /** Comparison revision already held by the live Git watcher. */
+    baseRevision?: string;
 }
 
 export interface GroupSession {
@@ -661,7 +663,7 @@ export interface ConnectHappyAgentOptions {
 
 export interface RigConnection {
     compatibility: () => ServerCompatibility;
-    /** Interrupts the current SSE attempt or backoff so reconnection starts immediately. */
+    /** Interrupts the managed update feed or startup wait so reconnection starts immediately. */
     retry: () => void;
     connectSession: (options: RigSessionSubscriptionOptions) => RigSessionConnection;
     connectGroups: (options: RigGroupsSubscriptionOptions) => RigGroupsConnection;

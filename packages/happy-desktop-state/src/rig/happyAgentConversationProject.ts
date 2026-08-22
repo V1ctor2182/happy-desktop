@@ -567,6 +567,12 @@ function rigConnectGroupProject(
                 // and replaces "Waiting for model" when real output arrives.
                 break;
             case "agent_text":
+                /* A text block opens before the model has said anything into
+                   it. Projecting that empty block reserves a blank message row
+                   in the transcript moments before the first words arrive, so
+                   the reader watches a gap open and then fill. The live status
+                   already reports the turn; the row belongs to the text. */
+                if (element.text.trim().length === 0) break;
                 entries.push({
                     kind: "message",
                     source: "server",

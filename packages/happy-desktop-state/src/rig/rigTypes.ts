@@ -432,6 +432,8 @@ export interface RigGitChangedFile {
     readonly path: string;
     /** Original repository path when Git reports a rename or copy. */
     readonly previousPath?: string;
+    /** Comparison revision retained by the live Git watcher. */
+    readonly baseRevision?: string;
     readonly status: "added" | "deleted" | "modified" | "renamed" | "untracked";
     /** Lightweight disk identity used to reload an open file after a Git watcher hint. */
     readonly revision: string;

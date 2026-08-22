@@ -44,7 +44,8 @@
 }
 
 /* One typographic run after the loader: clock, separator, and phase share the
-   same family, size, line box, and baseline. */
+   same family, size, line box, and baseline — the row's own body measure, so
+   the line reporting the turn reads at the size the turn's own prose does. */
 .happy2-agent-working-status__state {
     display: flex;
     flex: 0 1 auto;
@@ -52,9 +53,9 @@
     gap: 6px;
     min-width: 0;
     padding-left: 3px;
-    font-family: var(--happy2-font-ui);
-    font-size: 14px;
-    line-height: 20px;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
 }
 
 .happy2-agent-working-status__state .happy2-typed-text {

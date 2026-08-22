@@ -1,5 +1,6 @@
 import {
     HAPPY_AGENT_PROTOCOL_VERSION,
+    HappyAgentClient,
     type Agent,
     type AgentContextUsage,
     type AgentDraftSnapshot,
@@ -7,7 +8,6 @@ import {
     type DaemonConfig,
     type EventStreamFrame,
     type EventStreamOptions,
-    type HappyAgentClient,
     type HappyAgentEvent,
     type HistoryRun,
     type Message,
@@ -396,6 +396,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 options.signal?.removeEventListener("abort", abort);
             }
         },
+        // Exercise the published reconnect/dedup/state-loss behavior while the
+        // fake supplies only the low-level stream transport.
+        updates: HappyAgentClient.prototype.updates,
         async getMessages(agentId: string, query: MessageHistoryQuery = {}, ...rest: unknown[]) {
             const cursor = latestCursor;
             await record("getMessages", [agentId, query, ...rest]);

@@ -198,7 +198,7 @@ export interface RigFileTabSnapshot {
      */
     readonly groupId: RigGroupId;
     readonly path: string;
-    /** `All files` opens the file itself; `Changed` opens its Git diff. */
+    /** Viewer selected from file type and the live in-memory Git snapshot. */
     readonly kind: RigFileTabKind;
     /**
      * Which of the workspace's two strips is drawing this file — the main
@@ -294,11 +294,23 @@ type RigWorkspaceFileTreeLoadRequest = {
     readonly path: string;
 };
 
+type RigFilePreprocessRequest = {
+    readonly cacheBaseKey: string;
+    readonly change?: RigGitChangedFile;
+    readonly generation: number;
+    readonly groupId: RigGroupId;
+    readonly kind: RigFileTabKind;
+    readonly path: string;
+    readonly revision: string;
+};
+
 /** Bounds decoded source text retained between preview/tab lifetimes. */
 const RIG_READY_DOCUMENT_CACHE_MAX_ENTRIES = 48;
 const RIG_READY_DOCUMENT_CACHE_MAX_WEIGHT = 16 * 1024 * 1024;
 /** Bounds speculative and reader-requested directory reads across the all-files tree. */
 const RIG_WORKSPACE_FILE_TREE_MAX_CONCURRENT_LOADS = 3;
+/** Bounds speculative file reads started by pointer and keyboard intent. */
+const RIG_FILE_PREPROCESS_MAX_CONCURRENT_LOADS = 2;
 /**
  * The renderer/UI uses the same ceiling when deciding whether to retain a
  * Pierre AST. A changed document at or above it must already carry the
@@ -917,6 +929,8 @@ export interface RigWorkspaceStore {
     filePreview(groupId: RigGroupId, path: string, kind: RigFileTabKind): void;
     /** Opens one workspace file permanently, promoting its preview when present. */
     fileOpen(groupId: RigGroupId, path: string, kind: RigFileTabKind): void;
+    /** Warms one file after pointer or keyboard intent without opening a tab. */
+    filePreprocess(groupId: RigGroupId, path: string, kind: RigFileTabKind): void;
     /**
      * Opens an attachment the agent produced on the host as a file of the
      * checkout it lives in, reported by whether it could.
@@ -1424,6 +1438,10 @@ export function rigWorkspaceStoreCreate(
     const fileLoadOwnerRequests = new Map<string, RigFileLoadRequest>();
     const fileTabLoadedIdentities = new Map<string, RigDocumentCacheIdentity>();
     const fileTabRevalidations = new Map<string, { readonly revision: string }>();
+    /** Most-recent file intent first; completed documents remain in the bounded LRU. */
+    let filePreprocessQueue: RigFilePreprocessRequest[] = [];
+    let filePreprocessLoadsActive = 0;
+    let filePreprocessGeneration = 0;
 
     const readyDocumentCacheRead = (
         baseKey: string,
@@ -1998,6 +2016,38 @@ export function rigWorkspaceStoreCreate(
         );
     };
 
+    /** Commits already-ready bytes in the same state action that selects their tab. */
+    const fileReadyDisplay = (tabId: string): void => {
+        const file = fileTabs.find((tab) => tab.id === tabId);
+        if (
+            file === undefined ||
+            file.placement !== "main" ||
+            activeMainViewId !== tabId ||
+            file.document.type !== "ready"
+        )
+            return;
+        const document = file.document.value;
+        displayedMainViewId = tabId;
+        if (
+            file.displayedPresentationId === file.presentationId &&
+            file.displayedDocument === document &&
+            file.displayedKind === file.kind &&
+            file.displayedPath === file.path
+        )
+            return;
+        fileTabs = fileTabs.map((tab) =>
+            tab.id === tabId
+                ? {
+                      ...tab,
+                      displayedDocument: document,
+                      displayedKind: file.kind,
+                      displayedPath: file.path,
+                      displayedPresentationId: file.presentationId,
+                  }
+                : tab,
+        );
+    };
+
     /**
      * The strip holds tabs the panel owns, so what the panel does to one reaches
      * this snapshot: a page moved into the main content joins the order, and one
@@ -2054,6 +2104,120 @@ export function rigWorkspaceStoreCreate(
             if (worktree) return worktree.changes?.find((change) => change.path === path);
         }
         return undefined;
+    };
+
+    /**
+     * Resolves every ordinary source-file intent from the live catalog only.
+     * A missing Git snapshot and an unchanged path both deliberately resolve to
+     * the raw file; neither starts a Git read to discover a different answer.
+     */
+    const fileKindResolve = (
+        groupId: RigGroupId,
+        path: string,
+        requestedKind: RigFileTabKind,
+    ): RigFileTabKind => {
+        if (requestedKind === "media" || requestedKind === "document") return requestedKind;
+        return fileChangeFind(groupId, path) === undefined ? "file" : "diff";
+    };
+
+    const fileDocumentRead = (
+        groupId: RigGroupId,
+        path: string,
+        kind: RigFileTabKind,
+        change?: RigGitChangedFile,
+    ): ((signal: AbortSignal) => Promise<RigFileDocument>) => {
+        if (kind === "file" || kind === "document")
+            return (signal) => client.workspaceFileRead(groupId, path, signal);
+        if (kind === "media")
+            return (signal) => client.workspaceFileBytesRead(groupId, path, signal);
+        return (signal) =>
+            change === undefined
+                ? Promise.reject(new Error("That file is no longer changed."))
+                : client.changedFileRead(groupId, path, change, signal);
+    };
+
+    const filePreprocessLoadPump = (): void => {
+        while (
+            active &&
+            filePreprocessLoadsActive < RIG_FILE_PREPROCESS_MAX_CONCURRENT_LOADS &&
+            filePreprocessQueue.length > 0
+        ) {
+            const warm = filePreprocessQueue.shift()!;
+            filePreprocessLoadsActive += 1;
+            const owner = `file-preprocess\u0000${warm.cacheBaseKey}`;
+            const request = fileLoadRequestAcquire(
+                owner,
+                warm.cacheBaseKey,
+                fileDocumentRead(warm.groupId, warm.path, warm.kind, warm.change),
+            );
+            const finish = (): void => {
+                fileLoadRequestRelease(owner, request);
+                if (warm.generation !== filePreprocessGeneration) return;
+                filePreprocessLoadsActive = Math.max(0, filePreprocessLoadsActive - 1);
+                filePreprocessLoadPump();
+            };
+            void request.promise.then((document) => {
+                const currentKind = fileKindResolve(warm.groupId, warm.path, warm.kind);
+                const currentRevision = fileChangeFind(warm.groupId, warm.path)?.revision ?? "";
+                if (
+                    warm.generation === filePreprocessGeneration &&
+                    currentKind === warm.kind &&
+                    currentRevision === warm.revision
+                )
+                    readyDocumentCacheWrite(warm.cacheBaseKey, document);
+                finish();
+            }, finish);
+        }
+    };
+
+    const filePreprocessEnqueue = (
+        groupId: RigGroupId,
+        path: string,
+        requestedKind: RigFileTabKind,
+    ): void => {
+        if (!active || disposed) return;
+        const kind = fileKindResolve(groupId, path, requestedKind);
+        const change = kind === "diff" ? fileChangeFind(groupId, path) : undefined;
+        const revision = change?.revision ?? "";
+        const cacheBaseKey = rigReadyDocumentCacheBaseKey(groupId, path, kind, revision);
+        if (readyDocumentCacheRead(cacheBaseKey) !== undefined) return;
+        if (fileLoadRequests.has(cacheBaseKey)) return;
+        const queued = filePreprocessQueue.findIndex(
+            (candidate) => candidate.cacheBaseKey === cacheBaseKey,
+        );
+        if (queued >= 0) filePreprocessQueue.splice(queued, 1);
+        filePreprocessQueue.unshift({
+            cacheBaseKey,
+            ...(change === undefined ? {} : { change }),
+            generation: filePreprocessGeneration,
+            groupId,
+            kind,
+            path,
+            revision,
+        });
+        filePreprocessLoadPump();
+    };
+
+    /** Drops warmed diffs as soon as their in-memory Git identity moves on. */
+    const readyDocumentCacheReconcileGit = (): void => {
+        for (const [key, entry] of readyDocumentCache) {
+            const [groupIdValue, path, kind] = entry.baseKey.split("\u0000");
+            if (groupIdValue === undefined || path === undefined || kind !== "diff") continue;
+            const groupId = groupIdValue as RigGroupId;
+            const change = fileChangeFind(groupId, path);
+            const currentBaseKey =
+                change === undefined
+                    ? undefined
+                    : rigReadyDocumentCacheBaseKey(groupId, path, "diff", change.revision);
+            if (entry.baseKey === currentBaseKey) continue;
+            readyDocumentCache.delete(key);
+            readyDocumentCacheWeight -= entry.weight;
+        }
+        filePreprocessQueue = filePreprocessQueue.filter((warm) => {
+            const currentKind = fileKindResolve(warm.groupId, warm.path, warm.kind);
+            const currentRevision = fileChangeFind(warm.groupId, warm.path)?.revision ?? "";
+            return currentKind === warm.kind && currentRevision === warm.revision;
+        });
     };
 
     /**
@@ -2219,7 +2383,7 @@ export function rigWorkspaceStoreCreate(
             before.kind,
             revision,
         );
-        const cachedEntry = readyDocumentCacheRead(cacheBaseKey, true);
+        const cachedEntry = readyDocumentCacheRead(cacheBaseKey);
         const cached = cachedEntry?.document;
         if (cachedEntry) {
             fileTabLoadedIdentities.set(tabId, cachedEntry.identity);
@@ -2239,13 +2403,16 @@ export function rigWorkspaceStoreCreate(
               ? before.document
               : { type: "loading" as const };
         const loading = document.type !== "ready";
-        const revalidating = document.type === "ready";
+        const revalidating = cachedEntry === undefined && document.type === "ready";
         if (revalidating) fileTabRevalidations.set(tabId, { revision });
         else fileTabRevalidations.delete(tabId);
         const documentSame =
             document.type === "ready"
                 ? before.document.type === "ready" && before.document.value === document.value
                 : before.document.type === "loading";
+        const displayReady =
+            document.type === "ready" && before.placement === "main" && activeMainViewId === tabId;
+        if (displayReady) displayedMainViewId = tabId;
         if (
             before.revision !== revision ||
             before.loading !== loading ||
@@ -2263,20 +2430,27 @@ export function rigWorkspaceStoreCreate(
                           loading,
                           revalidating,
                           revalidationError: undefined,
+                          ...(displayReady && document.type === "ready"
+                              ? {
+                                    displayedDocument: document.value,
+                                    displayedKind: before.kind,
+                                    displayedPath: before.path,
+                                    displayedPresentationId: presentationId,
+                                }
+                              : {}),
                       }
                     : tab,
             );
             recompute();
         }
-        const read =
-            before.kind === "file" || before.kind === "document"
-                ? (signal: AbortSignal) =>
-                      client.workspaceFileRead(before.groupId, before.path, signal)
-                : before.kind === "media"
-                  ? (signal: AbortSignal) =>
-                        client.workspaceFileBytesRead(before.groupId, before.path, signal)
-                  : (signal: AbortSignal) =>
-                        client.changedFileRead(before.groupId, before.path, signal);
+        if (cachedEntry !== undefined) {
+            fileLoadRequestRelease(tabId);
+            if (before.kind === "document") filePreviewAddressResolve(tabId, generation, before);
+            return;
+        }
+        const change =
+            before.kind === "diff" ? fileChangeFind(before.groupId, before.path) : undefined;
+        const read = fileDocumentRead(before.groupId, before.path, before.kind, change);
         const request = fileLoadRequestAcquire(tabId, cacheBaseKey, read);
         if (before.kind === "document") filePreviewAddressResolve(tabId, generation, before);
         void request.promise.then(
@@ -2303,6 +2477,8 @@ export function rigWorkspaceStoreCreate(
                 else fileTabLoadedIdentities.delete(tabId);
                 fileTabRevalidations.delete(tabId);
                 fileLoadRequestRelease(tabId, request);
+                const displayLoaded = current?.placement === "main" && activeMainViewId === tabId;
+                if (displayLoaded) displayedMainViewId = tabId;
                 fileTabs = fileTabs.map((tab) =>
                     tab.id === tabId
                         ? {
@@ -2312,6 +2488,14 @@ export function rigWorkspaceStoreCreate(
                               loading: false,
                               revalidating: false,
                               revalidationError: undefined,
+                              ...(displayLoaded
+                                  ? {
+                                        displayedDocument: loaded,
+                                        displayedKind: tab.kind,
+                                        displayedPath: tab.path,
+                                        displayedPresentationId: settledPresentationId,
+                                    }
+                                  : {}),
                           }
                         : tab,
                 );
@@ -2364,10 +2548,11 @@ export function rigWorkspaceStoreCreate(
     const fileTabOpen = (
         groupId: RigGroupId,
         path: string,
-        kind: RigFileTabKind,
+        requestedKind: RigFileTabKind,
         preview: boolean,
         placement: RigViewPlacement = "main",
     ): void => {
+        const kind = fileKindResolve(groupId, path, requestedKind);
         const id = fileTabIdOf(groupId, path);
         const existing = fileTabs.find((tab) => tab.id === id);
         // Only the main content selects what it is showing. A file opening in
@@ -2410,14 +2595,17 @@ export function rigWorkspaceStoreCreate(
                 );
             groupTabRemember(groupId, id);
             if (change && change.revision !== existing.revision) fileLoad(id, change.revision);
-            else recompute();
+            else {
+                fileReadyDisplay(id);
+                recompute();
+            }
             return;
         }
 
         const revision = fileChangeFind(groupId, path)?.revision ?? "";
         const presentationId = filePresentationIdNext();
         const cacheBaseKey = rigReadyDocumentCacheBaseKey(groupId, path, kind, revision);
-        const cached = readyDocumentCacheRead(cacheBaseKey, true)?.document;
+        const cached = readyDocumentCacheRead(cacheBaseKey)?.document;
         let tab: RigFileTabSnapshot = {
             id,
             groupId,
@@ -2430,7 +2618,7 @@ export function rigWorkspaceStoreCreate(
             saving: false,
             document: cached ? { type: "ready", value: cached } : { type: "loading" },
             loading: cached === undefined,
-            revalidating: cached !== undefined,
+            revalidating: false,
         };
         const replacedIndex =
             preview && placement === "main"
@@ -2470,6 +2658,7 @@ export function rigWorkspaceStoreCreate(
         } else {
             fileTabs = [...fileTabs, tab];
         }
+        fileReadyDisplay(id);
         groupTabRemember(groupId, id);
         recompute();
         fileLoad(id, revision, presentationId);
@@ -2544,9 +2733,19 @@ export function rigWorkspaceStoreCreate(
     };
 
     const fileTabsReconcile = (): void => {
+        readyDocumentCacheReconcileGit();
         for (const tab of fileTabs) {
+            const kind = fileKindResolve(tab.groupId, tab.path, tab.kind);
             const change = fileChangeFind(tab.groupId, tab.path);
-            if (change && change.revision !== tab.revision) fileLoad(tab.id, change.revision);
+            const revision = change?.revision ?? "";
+            if (kind !== tab.kind) {
+                fileTabs = fileTabs.map((candidate) =>
+                    candidate.id === tab.id ? { ...candidate, kind, revision } : candidate,
+                );
+                fileLoad(tab.id, revision);
+            } else if (revision !== tab.revision) {
+                fileLoad(tab.id, revision);
+            }
         }
     };
 
@@ -3556,6 +3755,7 @@ export function rigWorkspaceStoreCreate(
     const start = (): void => {
         active = true;
         workspaceFilesDirectoryLoadPump();
+        filePreprocessLoadPump();
         unsubscribeList = list.subscribe(() => {
             if (openId) list.sessionRead(openId);
             // A group addressed before its sessions arrived could not have its
@@ -3603,6 +3803,9 @@ export function rigWorkspaceStoreCreate(
         fileLoadRequests.clear();
         fileLoadOwnerKeys.clear();
         fileLoadOwnerRequests.clear();
+        filePreprocessGeneration += 1;
+        filePreprocessQueue = [];
+        filePreprocessLoadsActive = 0;
         for (const tab of fileTabs)
             fileLoadGenerations.set(tab.id, (fileLoadGenerations.get(tab.id) ?? 0) + 1);
         // A stopped surface has no in-flight authoritative read. Keep ready
@@ -4178,6 +4381,7 @@ export function rigWorkspaceStoreCreate(
         },
         filePreview: (groupId, path, kind) => fileTabOpen(groupId, path, kind, true),
         fileOpen: (groupId, path, kind) => fileTabOpen(groupId, path, kind, false),
+        filePreprocess: (groupId, path, kind) => filePreprocessEnqueue(groupId, path, kind),
         attachmentFileOpen: (source, kind) => {
             const resolved = groupPathResolve(source);
             if (!resolved) return false;
@@ -4252,9 +4456,11 @@ export function rigWorkspaceStoreCreate(
                     ? undefined
                     : panel.get().tabs.find((tab) => tab.id === viewId && tab.placement === "main");
             activeMainViewId = file?.id ?? tool?.id;
-            // Files finish their read/highlight off screen and explicitly
-            // commit below. Conversations and live tools are already complete.
-            if (!file) displayedMainViewId = tool?.id;
+            // Ready files commit in this selection action. An unread file keeps
+            // the current body until its bytes arrive, so selection never
+            // exposes an empty frame.
+            if (file) fileReadyDisplay(file.id);
+            else displayedMainViewId = tool?.id;
             activeMainViewGroupId = tool ? addressedGroupId : undefined;
             if (file) groupTabRemember(file.groupId, file.id);
             else if (addressedGroupId !== undefined) {

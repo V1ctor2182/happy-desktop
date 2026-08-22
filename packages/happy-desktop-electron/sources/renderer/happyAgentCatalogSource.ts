@@ -190,6 +190,7 @@ function gitProject(
         changes: git.files.map((file) => ({
             path: file.path,
             ...(file.previousPath ? { previousPath: file.previousPath } : {}),
+            ...(git.baseRevision === undefined ? {} : { baseRevision: git.baseRevision }),
             // A binary file has no lines to count, and saying "+0 −0" about one
             // reads as an empty change rather than as an unmeasurable one.
             ...(file.binary || file.insertions === undefined
@@ -201,6 +202,7 @@ function gitProject(
             status: gitStatusProject(file.status),
             revision: [
                 git.revision ?? `${git.generation}:${String(git.version)}`,
+                git.baseRevision ?? "",
                 file.path,
                 file.status,
                 file.staged ? "staged" : "",
