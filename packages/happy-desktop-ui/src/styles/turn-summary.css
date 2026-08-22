@@ -24,16 +24,28 @@
  * live footer it replaces occupies. Anything more reads as a gap between the
  * answer and the line that ends it.
  *
- * The following status owns this boundary; tool rows never change because a
- * later sibling appeared or disappeared. */
+ * Closing a run of tool rows is the one boundary that opens: those rows are
+ * tight, so the status takes the same 8px above it that prose resuming under a
+ * run takes, and a turn that ends on a tool reads exactly like one that ends on
+ * a sentence. The row centres a 24px line, so 4px of padding lands on the 4px of
+ * slack the 36px box leaves. The following status owns this boundary; tool rows
+ * never change because a later sibling appeared or disappeared. */
 .happy2-turn-summary.happy2-conversation-turn-status.happy2-turn-status--after-trace {
-    min-height: 40px;
-    padding-top: 8px;
+    min-height: 36px;
+    padding-top: 4px;
 }
 
 .happy2-turn-summary__label {
     flex: none;
     font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* The token detail hangs off the label, not the whole row: the row runs the
+   full width of the transcript and is mostly empty, so anchoring the hover to
+   the words themselves keeps the pointer from opening it in passing. The
+   wrapper stands in for the label as a flex item and must not shrink either. */
+.happy2-turn-summary__detail {
+    flex: none;
 }
 
 /* The summary brings its own transcript-row padding, which the settled line
@@ -54,14 +66,17 @@
     margin-left: auto;
 }
 
+/* The copy action leads the settled line. Its 20px hit box carries 2px around a
+   16px glyph, so the negative margin is what puts the glyph's own left edge on
+   the transcript's text column instead of the button's padding box. */
 .happy2-turn-summary__copy {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    margin: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0 0 0 -2px;
     padding: 0;
     background: transparent;
     border: 0;

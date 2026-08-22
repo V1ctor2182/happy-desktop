@@ -258,6 +258,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 copyText={entry.copyText}
                 data-testid={props["data-testid"]}
                 durationMs={entry.durationMs}
+                usedTokens={entry.usedTokens}
+                finalContextTokens={entry.finalContextTokens}
                 reason={entry.reason}
                 status={entry.status}
                 {...(props.trailing ? { trailing: props.trailing } : {})}

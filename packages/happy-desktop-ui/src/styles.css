@@ -23,6 +23,7 @@
 @import "./styles/typed-text.css";
 @import "./styles/agent-working-status.css";
 @import "./styles/turn-summary.css";
+@import "./styles/tooltip.css";
 @import "./styles/scrolling-text.css";
 @import "./styles/copy-button.css";
 @import "./styles/conversation-error-card.css";

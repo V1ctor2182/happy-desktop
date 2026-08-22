@@ -478,7 +478,7 @@ export interface ConversationDelegationEntry {
 
 /**
  * Permanent readout under a finished turn: how long it took from the request
- * and how many tools it used. Running turns use the message-list footer instead.
+ * and how many tools/tokens it used. Running turns use the message-list footer instead.
  */
 export interface ConversationTurnStatusEntry {
     readonly kind: "turnStatus";
@@ -490,6 +490,10 @@ export interface ConversationTurnStatusEntry {
     readonly copyText?: string;
     /** Final duration from request sent through completion, when known. */
     readonly durationMs?: number;
+    /** Tokens consumed by this run across provider/model segments. */
+    readonly usedTokens?: number;
+    /** Conversation context measured when the run settled. */
+    readonly finalContextTokens?: number;
     readonly tools?: number;
 }
 

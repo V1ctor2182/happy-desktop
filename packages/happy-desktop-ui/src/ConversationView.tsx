@@ -19,7 +19,9 @@ import { ConversationDock } from "./ConversationDock";
 import { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 import {
     conversationAgentRowStartsGroup,
+    conversationEntryPrecedesActivity,
     conversationEntryResumesAfterActivity,
+    conversationMessageClosedByStatus,
     conversationMessageGrouped,
     conversationTurnStatusAfterActivity,
     conversationTurnStatusStartsGroup,
@@ -575,12 +577,23 @@ export function ConversationView(props: ConversationViewProps) {
                                         : undefined
                                 }
                                 className={
-                                    entry.kind === "turnStatus" &&
-                                    conversationTurnStatusAfterActivity(transcript, index)
-                                        ? "happy2-turn-status--after-trace"
-                                        : conversationEntryResumesAfterActivity(transcript, index)
-                                          ? "happy2-conversation__resumed"
-                                          : undefined
+                                    [
+                                        entry.kind === "turnStatus" &&
+                                        conversationTurnStatusAfterActivity(transcript, index)
+                                            ? "happy2-turn-status--after-trace"
+                                            : undefined,
+                                        conversationEntryResumesAfterActivity(transcript, index)
+                                            ? "happy2-conversation__resumed"
+                                            : undefined,
+                                        conversationEntryPrecedesActivity(transcript, index)
+                                            ? "happy2-conversation__continues"
+                                            : undefined,
+                                        conversationMessageClosedByStatus(transcript, index)
+                                            ? "happy2-conversation__closing"
+                                            : undefined,
+                                    ]
+                                        .filter(Boolean)
+                                        .join(" ") || undefined
                                 }
                                 entry={entry}
                                 grouped={

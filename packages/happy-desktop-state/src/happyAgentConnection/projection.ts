@@ -48,6 +48,8 @@ export interface SessionProjectionInput {
     activity?: AgentActivityResponse;
     question?: Question | null;
     runs: readonly Run[];
+    /** Final conversation-context measurements captured at exact run boundaries. */
+    runFinalContextTokens?: ReadonlyMap<string, number>;
     usage?: UsageBreakdown;
     workspace?: Workspace;
 }
@@ -289,7 +291,7 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
         }
-        const end = projectRunEnd(run);
+        const end = projectRunEnd(run, input.runFinalContextTokens?.get(run.id));
         if (end !== undefined) elements.push(end);
     }
     if (!messagesOrdered(pending)) pending.sort(compareMessages);
@@ -705,17 +707,28 @@ function projectToolStatus(
     return runStatus === "failed" ? "failed" : "interrupted";
 }
 
-/** A settled run's footer, projected once per run for the same reason. */
-const runEndElements = new WeakMap<Run, Extract<ChatElement, { kind: "group_end" }>>();
-function projectRunEnd(run: Run): Extract<ChatElement, { kind: "group_end" }> | undefined {
+/** A settled run's footer, projected once per complete set of footer facts. */
+interface RunEndProjection {
+    readonly finalContextTokens?: number;
+    readonly element: Extract<ChatElement, { kind: "group_end" }>;
+}
+const runEndElements = new WeakMap<Run, RunEndProjection>();
+function projectRunEnd(
+    run: Run,
+    finalContextTokens?: number,
+): Extract<ChatElement, { kind: "group_end" }> | undefined {
     const cached = runEndElements.get(run);
-    if (cached !== undefined) return cached;
-    const element = runEndProject(run);
-    if (element !== undefined) runEndElements.set(run, element);
+    if (cached !== undefined && cached.finalContextTokens === finalContextTokens)
+        return cached.element;
+    const element = runEndProject(run, finalContextTokens);
+    if (element !== undefined) runEndElements.set(run, { finalContextTokens, element });
     return element;
 }
 
-function runEndProject(run: Run): Extract<ChatElement, { kind: "group_end" }> | undefined {
+function runEndProject(
+    run: Run,
+    finalContextTokens?: number,
+): Extract<ChatElement, { kind: "group_end" }> | undefined {
     if (run.status === "running" || run.endedAt === null) return undefined;
     const reason =
         run.reason === "abort"
@@ -739,7 +752,18 @@ function runEndProject(run: Run): Extract<ChatElement, { kind: "group_end" }> | 
         elapsedMs: Math.max(0, run.endedAt - run.startedAt),
         turnStartedAt: run.startedAt,
         turnElapsedMs: Math.max(0, run.endedAt - run.startedAt),
+        usedTokens: usageTotal(run.usage),
+        ...(finalContextTokens === undefined ? {} : { finalContextTokens }),
     };
+}
+
+/** Exact token consumption represented by one provider/model usage tree. */
+function usageTotal(usage: UsageBreakdown): number {
+    let total = 0;
+    for (const models of Object.values(usage))
+        for (const counts of Object.values(models))
+            total += counts.input + counts.output + counts.cacheRead + counts.cacheWrite;
+    return total;
 }
 
 function projectToolPresentation(

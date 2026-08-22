@@ -55,6 +55,15 @@
     margin-bottom: 0;
 }
 
+/* The identity line sits on a run of tool rows, so it opens a boundary of its
+   own rather than keeping only the run's 6px. It is a label introducing the run
+   beneath it, not prose the run interrupts, so it sits slightly tighter than the
+   14px between a run and the sentences around it: 6px here plus the row's own
+   6px. */
+.happy2-message--activity-lead:has(.happy2-agent-activity-row) .happy2-message__meta {
+    margin-bottom: 6px;
+}
+
 /* The lead row of a focused turn is a tool line, not prose, and the rest of
  * that turn's rows end on the transcript's own 30px inset. The message that
  * carries the first one takes the same trailing inset instead of prose's wider

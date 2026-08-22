@@ -719,7 +719,7 @@ it("appends a genuinely new provider segment after a tool result", async () => {
     expect(agentTexts(chat.elements).map((element) => element.text)).toEqual(["Before", "After"]);
 });
 
-it("reloads durable history at run.finished so the transcript matches the server", async () => {
+it("settles a finished run on the stream alone, without refetching history", async () => {
     const { daemon, chat, sessionId } = await liveHarness();
     daemon.eventEmit("run.started", {
         agentId: sessionId,
@@ -728,28 +728,22 @@ it("reloads durable history at run.finished so the transcript matches the server
     });
     daemon.eventEmit("message.created", {
         agentId: sessionId,
-        message: fakeAgentMessage({ id: "a1", content: [{ type: "text", text: "partial" }] }),
+        message: fakeAgentMessage({ id: "a1", content: [{ type: "text", text: "final text" }] }),
         runId: "r1",
     });
     await vi.waitFor(() => expect(agentTexts(chat.elements)).toHaveLength(1));
+    const loads = daemon.callCount("getMessages");
 
-    daemon.historySet(sessionId, [
-        fakeRun({
-            id: "r1",
-            status: "completed",
-            endedAt: 2,
-            messages: [
-                fakeAgentMessage({ id: "a1", content: [{ type: "text", text: "final text" }] }),
-            ],
-        }),
-    ]);
     daemon.eventEmit("run.finished", {
         agentId: sessionId,
         run: fakeRun({ id: "r1", status: "completed", endedAt: 2 }),
     });
-    await vi.waitFor(() => expect(agentTexts(chat.elements)[0]?.text).toBe("final text"));
-    expect(agentTexts(chat.elements)).toHaveLength(1);
-    expect(chat.session?.status).toBe("idle");
+    await vi.waitFor(() => expect(chat.session?.status).toBe("idle"));
+
+    // The stream already carried the whole turn, so ending it reads nothing
+    // back: the transcript is what the events built.
+    expect(daemon.callCount("getMessages")).toBe(loads);
+    expect(agentTexts(chat.elements).map((element) => element.text)).toEqual(["final text"]);
 });
 
 // --- lost cursor and full resync -------------------------------------------

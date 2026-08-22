@@ -1,7 +1,9 @@
 import { entryKey, type ConversationEntry } from "happy-desktop-state";
 import {
     conversationAgentRowStartsGroup,
+    conversationEntryPrecedesActivity,
     conversationEntryResumesAfterActivity,
+    conversationMessageClosedByStatus,
     conversationMessageGrouped,
     conversationTurnStatusAfterActivity,
     conversationTurnStatusStartsGroup,
@@ -104,6 +106,16 @@ const MESSAGE_CHROME = {
  */
 const RESUMED_PADDING_TOP = 8;
 const CONVERSATION_AGENT_PADDING_TOP = { leading: 16, grouped: 2 } as const;
+/**
+ * `.happy2-conversation__continues` gives prose the same 8px on the way into a
+ * tool run that `.happy2-conversation__resumed` gives it on the way out, and
+ * `.happy2-conversation__closing` trims an answer's trailing padding to 4px so
+ * the status closing it sits a paragraph break away. Only the bottom edge
+ * changes.
+ */
+const CONTINUES_PADDING_BOTTOM = 8;
+const CLOSING_PADDING_BOTTOM = 4;
+const CONVERSATION_AGENT_PADDING_BOTTOM = { leading: 16, grouped: 2 } as const;
 /** `.happy2-message__meta` — 20px row plus its 5px separation from the body. */
 const META_ROW = 25;
 /** Horizontal chrome: row padding, then the 76% bubble cap, then bubble padding. */
@@ -138,6 +150,12 @@ const ATTACHMENT_CARD_GAP = 4;
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
 /** Tool-first Message: 16px top inset + 20px identity row, then no lower chrome. */
 const ACTIVITY_LEAD_CHROME = 36;
+/**
+ * A lead row holding a run of activity restores the meta row's margin, because
+ * the identity line opens its own boundary onto the run beneath it. Only a lead
+ * whose content is an activity row pays it.
+ */
+const ACTIVITY_LEAD_RUN_SEPARATION = 6;
 /** One delegated agent row: 20px call + 20px metadata + 4px vertical inset. */
 const DELEGATION_HEIGHT = 44;
 /** `.happy2-day-divider` — 20px padding around a 20px label that never wraps. */
@@ -318,7 +336,10 @@ export function conversationRowHeight(
             cache,
             entry,
             `activity:${context.surface}:${startsGroup ? "lead" : "plain"}`,
-            () => (startsGroup ? ACTIVITY_LEAD_CHROME + activityHeight : activityHeight),
+            () =>
+                startsGroup
+                    ? ACTIVITY_LEAD_CHROME + ACTIVITY_LEAD_RUN_SEPARATION + activityHeight
+                    : activityHeight,
         );
     }
     /* A settled footer owns the clearance above it when prior activity exists. */
@@ -334,7 +355,7 @@ export function conversationRowHeight(
                 afterActivity ? "after-activity" : "plain",
                 startsGroup ? "leading" : "continuous",
             ].join(":"),
-            () => (afterActivity ? 40 : 32) + (startsGroup ? ACTIVITY_LEAD_CHROME : 0),
+            () => (afterActivity ? 36 : 32) + (startsGroup ? ACTIVITY_LEAD_CHROME : 0),
         );
     }
     if (entry.kind === "delegation") {
@@ -390,6 +411,12 @@ export function conversationRowHeight(
         agent &&
         context.surface === "conversation" &&
         conversationEntryResumesAfterActivity(entries, index);
+    const precedesActivity =
+        agent &&
+        context.surface === "conversation" &&
+        conversationEntryPrecedesActivity(entries, index);
+    const closedByStatus =
+        context.surface === "conversation" && conversationMessageClosedByStatus(entries, index);
     const cacheKey = [
         "message",
         String(width),
@@ -398,6 +425,7 @@ export function conversationRowHeight(
         grouped ? "grouped" : "leading",
         traceCollapsible ? "trace" : "plain",
         resumesAfterActivity ? "resumed" : "continuous",
+        precedesActivity ? "continues" : closedByStatus ? "closing" : "open",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
         let height = messageRowHeight({
@@ -417,6 +445,12 @@ export function conversationRowHeight(
                 (grouped
                     ? CONVERSATION_AGENT_PADDING_TOP.grouped
                     : CONVERSATION_AGENT_PADDING_TOP.leading);
+        if (precedesActivity || closedByStatus)
+            height +=
+                (precedesActivity ? CONTINUES_PADDING_BOTTOM : CLOSING_PADDING_BOTTOM) -
+                (grouped
+                    ? CONVERSATION_AGENT_PADDING_BOTTOM.grouped
+                    : CONVERSATION_AGENT_PADDING_BOTTOM.leading);
         const images: { readonly width?: number; readonly height?: number }[] = [];
         let cards = 0;
         for (const attachment of message.attachments) {

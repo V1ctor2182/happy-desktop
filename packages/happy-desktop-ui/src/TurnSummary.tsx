@@ -1,6 +1,7 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { partitionComponentProps } from "./componentProps";
 import { Icon } from "./Icon";
+import { Tooltip } from "./Tooltip";
 
 export interface TurnSummaryProps {
     /** Final assistant text copied by the trailing action. */
@@ -8,6 +9,10 @@ export interface TurnSummaryProps {
     readonly className?: string;
     readonly "data-testid"?: string;
     readonly durationMs?: number;
+    /** Tokens consumed by this run. */
+    readonly usedTokens?: number;
+    /** Conversation context size measured when this run settled. */
+    readonly finalContextTokens?: number;
     readonly reason?: "completed" | "steering" | "compaction" | "abort" | "error";
     readonly status: "complete" | "failed" | "steered";
     readonly style?: CSSProperties;
@@ -28,6 +33,20 @@ function durationFormat(durationMs: number): string {
     return `${Math.floor(minutes / 60)}h\u00a0${minutes % 60}m`;
 }
 
+const TOKENS = new Intl.NumberFormat("en-US");
+
+/** Exact token detail kept behind the settled row rather than in its resting layout. */
+function tokenDetail(usedTokens?: number, finalContextTokens?: number): string | undefined {
+    const parts: string[] = [];
+    if (usedTokens !== undefined && Number.isFinite(usedTokens))
+        parts.push(`Used ${TOKENS.format(Math.max(0, Math.round(usedTokens)))} tokens`);
+    if (finalContextTokens !== undefined && Number.isFinite(finalContextTokens))
+        parts.push(
+            `Final context ${TOKENS.format(Math.max(0, Math.round(finalContextTokens)))} tokens`,
+        );
+    return parts.length === 0 ? undefined : parts.join(" · ");
+}
+
 /** Neutral settled footer for one turn, including duration and final-message copy action. */
 export function TurnSummary(props: TurnSummaryProps) {
     const [local] = partitionComponentProps(props, [
@@ -35,6 +54,8 @@ export function TurnSummary(props: TurnSummaryProps) {
         "copyText",
         "data-testid",
         "durationMs",
+        "usedTokens",
+        "finalContextTokens",
         "reason",
         "status",
         "style",
@@ -57,6 +78,7 @@ export function TurnSummary(props: TurnSummaryProps) {
         local.durationMs === undefined
             ? verb
             : `${verb} ${joiner}\u00a0${durationFormat(local.durationMs)}`;
+    const detail = tokenDetail(local.usedTokens, local.finalContextTokens);
     const copy = async () => {
         try {
             if (local.copyText === undefined) return;
@@ -79,9 +101,6 @@ export function TurnSummary(props: TurnSummaryProps) {
             data-testid={local["data-testid"]}
             style={local.style}
         >
-            <span className="happy2-turn-summary__label" data-happy-desktop-ui="turn-summary-label">
-                {label}
-            </span>
             {local.status === "complete" && local.copyText !== undefined ? (
                 <button
                     aria-label={copied ? "Final message copied" : "Copy final message"}
@@ -94,6 +113,14 @@ export function TurnSummary(props: TurnSummaryProps) {
                     <Icon name={copied ? "check" : "copy"} size={16} />
                 </button>
             ) : null}
+            <Tooltip className="happy2-turn-summary__detail" label={detail} placement="top">
+                <span
+                    className="happy2-turn-summary__label"
+                    data-happy-desktop-ui="turn-summary-label"
+                >
+                    {label}
+                </span>
+            </Tooltip>
             {local.trailing ? (
                 <span
                     className="happy2-turn-summary__trailing"

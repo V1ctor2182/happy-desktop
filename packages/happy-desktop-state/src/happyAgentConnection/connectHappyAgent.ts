@@ -97,6 +97,8 @@ interface SessionEntry {
     runs: Map<string, Run>;
     /** `runs` in transcript order, rebuilt only when a run is added or replaced. */
     runsOrdered?: readonly Run[];
+    /** Context measurement preserved at each observed terminal run boundary. */
+    runFinalContextTokens: Map<string, number>;
     hasMore: boolean;
     loading: Promise<void> | undefined;
     loadRequestedRevision: number;
@@ -313,6 +315,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             ...(entry.activity === undefined ? {} : { activity: entry.activity }),
             ...(entry.question === undefined ? {} : { question: entry.question }),
             runs: runsOrderedOf(entry),
+            runFinalContextTokens: entry.runFinalContextTokens,
             ...(entry.usage === undefined ? {} : { usage: entry.usage }),
             workspace: entry.workspace ?? workspaceOf(entry.agent.workspaceId),
         };
@@ -336,6 +339,26 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             subscriber.onChange(elements, session);
             for (const delta of deltas) subscriber.onDelta?.(delta);
         }
+    };
+
+    /** Preserve the context measurement that belongs to a concrete settled run. */
+    const captureRunFinalContext = (entry: SessionEntry, run: Run): void => {
+        const contextTokens = entry.context?.contextTokens;
+        if (
+            run.status === "running" ||
+            contextTokens === undefined ||
+            !Number.isFinite(contextTokens)
+        )
+            return;
+        entry.runFinalContextTokens.set(run.id, Math.max(0, Math.round(contextTokens)));
+    };
+
+    /** A context update after the terminal event still belongs to the newest idle run. */
+    const captureLatestIdleRunFinalContext = (entry: SessionEntry): void => {
+        const runs = runsOrderedOf(entry);
+        if (runs.some((run) => run.status === "running")) return;
+        const latest = runs.at(-1);
+        if (latest !== undefined) captureRunFinalContext(entry, latest);
     };
 
     const publishConnection = (next: GroupsState["connection"]): void => {
@@ -638,6 +661,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 entry.runsOrdered = undefined;
                 entry.corruptedMessageIds.clear();
                 ingestHistory(entry, history.runs, bootstrap.pending);
+                captureLatestIdleRunFinalContext(entry);
                 for (const message of pendingSends) {
                     if (entry.messages.has(message.message.id)) {
                         sendConfirmations.get(message.message.id)?.();
@@ -1078,6 +1102,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 const entry = sessions.get(event.payload.agentId);
                 if (entry !== undefined) {
                     entry.context = event.payload.context;
+                    captureLatestIdleRunFinalContext(entry);
                     publishSession(entry);
                 }
                 return;
@@ -1215,6 +1240,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
         }
         entry.runs.set(run.id, run);
         entry.runsOrdered = undefined;
+        captureRunFinalContext(entry, run);
         publishSession(entry);
     };
 
@@ -1835,6 +1861,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     messages: new Map(),
                     messageBlockOffsets: new Map(),
                     runs: new Map(),
+                    runFinalContextTokens: new Map(),
                     hasMore: false,
                     loading: undefined,
                     historyLoaded: false,

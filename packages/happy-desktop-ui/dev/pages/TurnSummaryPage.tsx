@@ -16,11 +16,11 @@ export function TurnSummaryPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The neutral settled footer for a turn: total duration, steering boundary, and final-message copy confirmation. Failure detail belongs to ConversationErrorCard above it."
+            summary="The neutral settled footer for a turn: total duration, token detail on hover, steering boundary, and final-message copy confirmation. Failure detail belongs to ConversationErrorCard above it."
             title="Turn summary"
         >
             <Specimen
-                detail="Message-sized type · copy changes to a check after success"
+                detail="Message-sized type · hover reveals used tokens and final context · copy changes to a check after success"
                 label="Completed"
                 number="01"
                 stage="surface"
@@ -30,7 +30,9 @@ export function TurnSummaryPage() {
                         <TurnSummary
                             copyText="The migration completed successfully."
                             durationMs={104_000}
+                            finalContextTokens={184_320}
                             status="complete"
+                            usedTokens={42_781}
                         />
                         <TurnSummary copyText="Done." durationMs={7_000} status="complete" />
                     </div>

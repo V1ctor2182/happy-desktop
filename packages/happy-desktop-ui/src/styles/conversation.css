@@ -66,9 +66,24 @@
 
 /* Prose resuming under a run of tool rows opens the same gap that separates the
    prose above from the first of those rows, so the run reads as belonging to the
-   text it followed. */
+   text it followed. Both edges of that boundary are 8px: a fresh author's 16px
+   on the way in and a grouped row's 2px on the way out would make one run sit
+   closer to the text below it than to the text that introduced it. */
 .happy2-conversation .happy2-message[data-agent].happy2-conversation__resumed {
     padding-top: 8px;
+}
+
+.happy2-conversation .happy2-message[data-agent].happy2-conversation__continues {
+    padding-bottom: 8px;
+}
+
+/* An answer and the status that closes it are one block, so the boundary
+   between them is the 8px that separates two paragraphs: 4px of this row's own
+   trailing padding, and the 4px of leading the status row carries. Padding for
+   a new author would put the turn's last line and its own footer further apart
+   than the paragraphs above them. */
+.happy2-conversation .happy2-message[data-agent].happy2-conversation__closing {
+    padding-bottom: 4px;
 }
 
 /* The live turn and its external work are one wrapping line. The status takes

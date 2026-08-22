@@ -787,6 +787,10 @@ function rigConnectGroupProject(
                               : "complete",
                     reason: element.reason,
                     durationMs: element.elapsedMs,
+                    ...(element.usedTokens === undefined ? {} : { usedTokens: element.usedTokens }),
+                    ...(element.finalContextTokens === undefined
+                        ? {}
+                        : { finalContextTokens: element.finalContextTokens }),
                     tools: elements.filter((candidate) => candidate.kind === "tool_call").length,
                 });
                 break;

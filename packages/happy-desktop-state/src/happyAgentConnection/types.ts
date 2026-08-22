@@ -262,6 +262,10 @@ export interface GroupEndElement extends BaseChatElement {
     elapsedMs: number;
     turnStartedAt: number;
     turnElapsedMs: number;
+    /** Tokens consumed by this run across every provider/model segment, when reported. */
+    usedTokens?: number;
+    /** Conversation context measured when this run settled, when reported. */
+    finalContextTokens?: number;
 }
 
 export type ChatElement =

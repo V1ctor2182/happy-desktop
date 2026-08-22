@@ -41,6 +41,25 @@ export function conversationEntryResumesAfterActivity(
     );
 }
 
+/**
+ * Whether this entry is prose the same turn's tool rows continue directly under.
+ * It is the opening half of the boundary `conversationEntryResumesAfterActivity`
+ * closes, and takes the same clearance: a fresh author's trailing padding here
+ * would push the run further from the text that introduces it than the text
+ * resuming below it sits from the run's last row.
+ */
+export function conversationEntryPrecedesActivity(
+    entries: readonly ConversationEntry[],
+    index: number,
+): boolean {
+    const next = entries[index + 1];
+    return (
+        entries[index]?.kind === "message" &&
+        next?.kind === "agentActivity" &&
+        next.activity.kind === "tool"
+    );
+}
+
 /** Whether this message continues the previous row's author group. */
 export function conversationMessageGrouped(
     entries: readonly ConversationEntry[],
@@ -133,17 +152,35 @@ export function conversationTurnStatusStartsGroup(
     return true;
 }
 
-/** Whether this status follows activity already emitted in the same turn. */
+/**
+ * Whether this status closes a run of activity directly. Those rows are tight,
+ * so the status opens its own clearance above them. Prose ending the turn is not
+ * tight — it closes on the status like one paragraph on the next — so a status
+ * under an answer takes no clearance of its own even when the turn ran tools
+ * earlier.
+ */
 export function conversationTurnStatusAfterActivity(
     entries: readonly ConversationEntry[],
     index: number,
 ): boolean {
     if (entries[index]?.kind !== "turnStatus") return false;
-    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-        const entry = entries[cursor];
-        if (entry?.kind === "agentActivity" || entry?.kind === "delegation") return true;
-        if (entry?.kind === "turnStatus") return false;
-        if (entry?.kind === "message" && entry.message.sender?.kind !== "agent") return false;
-    }
-    return false;
+    const previous = entries[index - 1];
+    return previous?.kind === "agentActivity" || previous?.kind === "delegation";
+}
+
+/**
+ * Whether this message is the answer a settled status closes. The two are one
+ * block: the message gives up the trailing padding that would separate it from a
+ * new author, and the pair keeps the 8px a paragraph break carries.
+ */
+export function conversationMessageClosedByStatus(
+    entries: readonly ConversationEntry[],
+    index: number,
+): boolean {
+    const entry = entries[index];
+    return (
+        entry?.kind === "message" &&
+        entry.message.sender?.kind === "agent" &&
+        entries[index + 1]?.kind === "turnStatus"
+    );
 }
