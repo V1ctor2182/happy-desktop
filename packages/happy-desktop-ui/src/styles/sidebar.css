@@ -1165,61 +1165,171 @@
     border-top: 1px solid var(--divider);
 }
 
+/* The anchor for a panel a footer control opens upward; see SidebarFooter. */
+.happy-sidebar-footer {
+    position: relative;
+}
+
 .happy-sidebar__dev-build {
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
 }
 
-.happy-sidebar-update-action {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 100%;
-}
-
-.happy-sidebar-update-action--status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 28px;
-    color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 16px;
-}
-
-.happy-sidebar-update-action__icon {
+/*
+ * The update mark in the sidebar footer: one 28px slot holding a filled orange
+ * arrow-up-circle. Every other control on this row is a neutral ghost glyph, so
+ * the warning orange is the whole signal — it is the only colour in the footer,
+ * and it is there only while a newer version is waiting. The trigger itself
+ * stays transparent and takes the same ripple as its neighbours; the circle is
+ * the drawn shape, not a painted button.
+ */
+.happy-sidebar-update {
     display: flex;
     flex: none;
-    color: var(--text-link);
 }
 
-.happy-sidebar-update-action__label {
+.happy-sidebar-update__trigger {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--box-warning-text);
+    cursor: pointer;
+    appearance: none;
+    /* The mark arrives in a footer the reader is not looking at, so it rises
+       into place instead of appearing between two frames. */
+    animation: happy-sidebar-update-mark-in 260ms ease both;
+    transition: background-color 120ms ease;
+}
+
+@keyframes happy-sidebar-update-mark-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.8);
+    }
+}
+
+.happy-sidebar-update__trigger:hover,
+.happy-sidebar-update[data-open] .happy-sidebar-update__trigger {
+    background: var(--surface-ripple);
+}
+
+.happy-sidebar-update__trigger:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+/* The panel leaves the footer's flow and hangs above the whole row, ending on
+   the footer's right gutter — the mark itself sits between other controls and
+   is far too narrow to measure a card against without pushing it off the left
+   edge of the window. `.happy-sidebar-footer` is the containing block. */
+.happy-sidebar-update__panel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 236px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    /* Grows out of the mark it hangs off, so the panel reads as that control
+       opening rather than as a card that was already there. */
+    transform-origin: 100% 100%;
+    animation: happy-sidebar-update-panel-in 140ms ease both;
+    user-select: none;
+}
+
+@keyframes happy-sidebar-update-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.96);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-sidebar-update__trigger,
+    .happy-sidebar-update__panel {
+        animation-duration: 1ms;
+    }
+}
+
+.happy-sidebar-update__copy {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-sidebar-update__eyebrow {
     display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 14px;
+    text-transform: uppercase;
+}
+
+.happy-sidebar-update__subject {
+    display: block;
+    flex: none;
     min-width: 0;
     overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy-sidebar-update-action--ready.happy-button {
+.happy-sidebar-update__state {
+    display: block;
+    flex: none;
     min-width: 0;
-    padding-right: 8px;
-    padding-left: 8px;
-}
-
-.happy-sidebar-update-action--ready .happy-button__content,
-.happy-sidebar-update-action--ready .happy-button__label {
-    min-width: 0;
-}
-
-.happy-sidebar-update-action--ready .happy-button__content {
-    flex: 0 1 auto;
-}
-
-.happy-sidebar-update-action--ready .happy-button__label {
     overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The one thing in the panel that is a sentence rather than a label, so it is
+   the one thing that wraps. */
+.happy-sidebar-update__assurance {
+    display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+}
+
+.happy-sidebar-update__apply {
+    flex: none;
 }
 
 /* Profile control pinned in the sidebar footer: avatar + name that opens the

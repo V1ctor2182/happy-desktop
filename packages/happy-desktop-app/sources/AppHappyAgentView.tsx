@@ -1295,15 +1295,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             detail={props.update.detail}
             onAction={props.update.status === "downloaded" ? props.onUpdateApply : undefined}
             status={props.update.status}
+            subject="application"
             version={props.update.version}
         />
     ) : agentUpdate ? (
         <SidebarUpdateAction
             action="install"
             detail={agentUpdate.detail}
-            label="Happy Agent"
             onAction={agentUpdate.status === "downloaded" ? daemonStore.daemonInstall : undefined}
             status={agentUpdate.status}
+            subject="happyAgent"
             version={agentUpdate.version}
         />
     ) : undefined;

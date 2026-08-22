@@ -894,7 +894,12 @@ const UPDATE_STATES: readonly {
 }[] = [
     {
         label: "Available",
-        update: { action: "restart", status: "available", version: "0.0.22" },
+        update: {
+            action: "restart",
+            status: "available",
+            subject: "application",
+            version: "0.0.22",
+        },
     },
     {
         label: "Downloading",
@@ -902,6 +907,7 @@ const UPDATE_STATES: readonly {
             action: "restart",
             detail: "64% downloaded",
             status: "downloading",
+            subject: "application",
             version: "0.0.22",
         },
     },
@@ -911,6 +917,7 @@ const UPDATE_STATES: readonly {
             action: "restart",
             onAction: () => {},
             status: "downloaded",
+            subject: "application",
             version: "0.0.22",
         },
     },
@@ -920,7 +927,28 @@ const UPDATE_STATES: readonly {
             action: "refresh",
             onAction: () => {},
             status: "downloaded",
+            subject: "application",
             version: "build 8250610",
+        },
+    },
+    {
+        label: "Agent downloading",
+        update: {
+            action: "install",
+            detail: "64% downloaded",
+            status: "downloading",
+            subject: "happyAgent",
+            version: "0.3.10",
+        },
+    },
+    {
+        label: "Agent ready",
+        update: {
+            action: "install",
+            onAction: () => {},
+            status: "downloaded",
+            subject: "happyAgent",
+            version: "0.3.10",
         },
     },
 ];
@@ -1001,7 +1029,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="The footer stays quiet while an update arrives. A native package becomes Restart; a hosted renderer deploy becomes Refresh."
+                detail="An update shows as one 28px orange arrow-up-circle beside the neutral footer glyphs — the only colour on the row, and only while a newer version waits."
                 label="Desktop update footer"
                 number="01c"
                 stage="app"
@@ -1028,7 +1056,45 @@ export function SidebarPage() {
                                     title={label}
                                 />
                             </Frame>
-                            <DimensionRule label={`${label} · footer 56 px`} />
+                            <DimensionRule label={`${label} · footer 56 px · 28 px mark`} />
+                        </div>
+                    ))}
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="The mark opens a 236px panel on the footer's gutters: version, state, and one line promising work in flight survives. A native package applies with Restart; a hosted renderer deploy with Refresh; the agent binary with Install. Nothing to apply yet means no button."
+                label="Update panel"
+                number="01d"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {UPDATE_STATES.map(({ label, update }) => (
+                        <div
+                            key={label}
+                            style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                        >
+                            <Frame height={280}>
+                                <Sidebar
+                                    activeItemId=""
+                                    footer={
+                                        <SidebarFooter
+                                            actions={
+                                                <SidebarUpdateAction {...update} defaultOpen />
+                                            }
+                                            appearance="light"
+                                            onAppearanceToggle={() => {}}
+                                            onSettingsOpen={() => {}}
+                                        />
+                                    }
+                                    onItemSelect={() => {}}
+                                    sections={[]}
+                                    title={label}
+                                />
+                            </Frame>
+                            <DimensionRule
+                                label={`${label} · panel 236 px · 8 px above the mark`}
+                            />
                         </div>
                     ))}
                 </div>

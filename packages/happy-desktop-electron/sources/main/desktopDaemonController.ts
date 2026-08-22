@@ -402,16 +402,25 @@ export class DesktopDaemonController {
     /**
      * The downloaded version worth installing: newer than the one running, and
      * already on this machine. Anything else is not an offer anyone can accept.
+     *
+     * "Nothing" is an answer, and it is returned as one. Every caller spreads
+     * this over the current snapshot, so answering absence with an empty object
+     * would leave a `readyVersion` from an earlier read standing — which is
+     * exactly the state right after an install, where the version just moved
+     * onto would go on being offered as an upgrade to itself.
      */
-    private async readyVersionRead(): Promise<{ readonly readyVersion?: string }> {
+    private async readyVersionRead(): Promise<{ readonly readyVersion: string | undefined }> {
         const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
         const downloaded = await happyAgentBinaryDownloaded(this.paths).catch((): string[] => []);
         const newest = downloaded.reduce<string | undefined>(
             (best, version) => (best === undefined || versionNewer(version, best) ? version : best),
             undefined,
         );
-        if (newest === undefined) return {};
-        if (selected !== undefined && !versionNewer(newest, selected.version)) return {};
+        if (newest === undefined) return { readyVersion: undefined };
+        // An unknown selection cannot be compared against, and a copy on disk
+        // that might be the one already running is not an upgrade.
+        if (selected === undefined || !versionNewer(newest, selected.version))
+            return { readyVersion: undefined };
         return { readyVersion: newest };
     }
 

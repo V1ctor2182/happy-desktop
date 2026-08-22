@@ -57,6 +57,12 @@ export type SidebarFooterProps = {
  * it shows no identity either and its controls sit alone on the row. An absent
  * handler removes its control entirely instead of rendering a disabled one, so
  * there is no mode flag here and no control wired to nothing.
+ *
+ * The row is also the anchor for a panel one of its controls opens upward. A
+ * 28px glyph in the middle of the row is far too narrow to hang a readable card
+ * from — measured against the glyph, the card leaves the window — so
+ * `.happy-sidebar-footer` is positioned and such a panel measures itself against
+ * the footer's own gutters instead.
  */
 export function SidebarFooter(props: SidebarFooterProps) {
     const name = props.name;
@@ -76,7 +82,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
         );
     return (
         <Box
-            className={props.className}
+            className={["happy-sidebar-footer", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="sidebar-footer"
             data-testid={props["data-testid"]}
             style={{

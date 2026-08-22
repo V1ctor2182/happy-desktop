@@ -1,20 +1,24 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "./Button";
-import { Icon } from "./Icon";
+import { Ionicon } from "./vectorIcons/VectorIcon";
 
 export interface SidebarUpdateActionProps {
     /** Operation the host needs for this update source once it is ready. */
     action: "refresh" | "restart" | "install";
+    /** Opens the panel on the first render, for blueprint fixtures and tests. */
+    defaultOpen?: boolean;
     /** Detail shown while the update is arriving, such as download progress. */
     detail?: string;
-    /**
-     * What is being updated, when it is not Happy itself. A row that names
-     * nothing is about the application, which is the case the sidebar has always
-     * had; anything else has to say what it is or the version means nothing.
-     */
-    label?: string;
     /** Applies the ready update through the operation named by `action`. */
     onAction?: () => void;
     status: "available" | "downloading" | "downloaded";
+    /**
+     * Which of the two things that can update this one is. It names the subject
+     * — a version alone does not say what it is a version of — and it decides
+     * what the panel promises about work in flight, which is the only question
+     * anyone actually has before pressing the button.
+     */
+    subject: "application" | "happyAgent";
     /** Human-readable identity of the incoming version or build. */
     version?: string;
 }
@@ -25,52 +29,148 @@ function versionLabel(version: string | undefined): string {
 }
 
 /**
- * SidebarUpdateAction — a compact update readout for a sidebar footer. Discovery
- * and download states remain passive status text; once ready, the same footprint
- * becomes an explicit refresh or restart action carrying the incoming version
- * identity.
+ * What survives the update. The answer is "everything" either way, so it is one
+ * short line: the reader is deciding whether to press a button, not reading
+ * release notes. Only the reason differs — Happy's own update takes the window
+ * away while the agents carry on without it, and an agent's update hands its
+ * running sessions over rather than dropping them.
+ */
+function assurance(subject: SidebarUpdateActionProps["subject"]): string {
+    return subject === "happyAgent"
+        ? "Running agents keep working."
+        : "Agents keep working during the update.";
+}
+
+/**
+ * SidebarUpdateAction — the standing sign that a newer version exists. The
+ * footer keeps one 28px slot for it: a filled orange arrow-up-circle, the only
+ * colour in a row of neutral ghost controls, so news is legible at a glance
+ * without being read. The version, its state, and the action that applies it
+ * live in the panel it opens above itself.
+ *
+ * A sentence in the footer was the wrong size for this: "Install · Happy Agent
+ * v0.3.10" is either truncated or wider than the navigation it sits under, and
+ * it spends the row on text nobody reads twice. The mark is either there or it
+ * is not; the words appear when the reader asks for them.
  */
 export function SidebarUpdateAction(props: SidebarUpdateActionProps) {
+    const [open, setOpen] = useState(props.defaultOpen ?? false);
+    const root = useRef<HTMLDivElement>(null);
     const version = versionLabel(props.version);
-    // The subject comes first wherever there is one, because "Install · v0.4.2"
-    // in a corner of the window does not say what is being installed.
-    const subject = props.label ? `${props.label} ${version}` : version;
+    // The name comes first wherever there is one, because "Install · v0.4.2" in
+    // a corner of the window does not say what is being installed. Happy's own
+    // update is the exception: the window it is named after is the thing the
+    // reader is looking at.
+    const subject = props.subject === "happyAgent" ? `Happy Agent ${version}` : version;
     const actionLabel =
         props.action === "refresh" ? "Refresh" : props.action === "install" ? "Install" : "Restart";
-    if (props.status === "downloaded" && props.onAction)
-        return (
-            <Button
-                aria-label={`${actionLabel} ${subject}`}
-                className="happy-sidebar-update-action happy-sidebar-update-action--ready"
-                icon="arrow-up"
-                onClick={props.onAction}
-                size="small"
-                title={`${subject} is ready`}
-                variant="secondary"
-            >
-                {actionLabel} · {subject}
-            </Button>
-        );
-
-    const label =
-        props.status === "available"
-            ? `${subject} available`
+    const ready = props.status === "downloaded" && props.onAction !== undefined;
+    const state =
+        props.status === "downloaded"
+            ? `Ready to ${actionLabel.toLowerCase()}`
             : props.status === "downloading"
-              ? [subject, props.detail ?? "Downloading"].join(" · ")
-              : `${subject} ready`;
+              ? (props.detail ?? "Downloading")
+              : "Available to download";
+    // The trigger is a glyph, so its own name has to carry everything the row
+    // used to say out loud.
+    const triggerLabel = ready ? `${actionLabel} ${subject}` : `${subject} — ${state}`;
+
+    // eslint-disable-next-line happy-react/no-layout-effect -- an open popover owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
+    useLayoutEffect(() => {
+        if (!open) return;
+        const closeOnOutsidePointer = (event: PointerEvent) => {
+            if (event.target instanceof Node && !root.current?.contains(event.target)) {
+                setOpen(false);
+            }
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+        document.addEventListener("keydown", closeOnEscape, true);
+        return () => {
+            document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+            document.removeEventListener("keydown", closeOnEscape, true);
+        };
+    }, [open]);
+
     return (
-        <span
-            aria-live="polite"
-            className="happy-sidebar-update-action happy-sidebar-update-action--status"
+        <div
+            className="happy-sidebar-update"
             data-happy-desktop-ui="sidebar-update-action"
+            data-open={open ? "" : undefined}
             data-status={props.status}
-            role="status"
-            title={label}
+            ref={root}
         >
-            <span className="happy-sidebar-update-action__icon" aria-hidden="true">
-                <Icon name="arrow-up" size={14} />
+            <button
+                aria-expanded={open}
+                aria-haspopup="menu"
+                aria-label={triggerLabel}
+                className="happy-sidebar-update__trigger"
+                data-happy-desktop-ui="sidebar-update-action-trigger"
+                onClick={() => setOpen((current) => !current)}
+                title={triggerLabel}
+                type="button"
+            >
+                <Ionicon name="arrow-up-circle" size={20} />
+            </button>
+            {/* The mark says only that there is news; the words that changed are
+                spoken here, where a state change is announced whether or not the
+                panel is open. */}
+            <span aria-live="polite" className="happy-visually-hidden" role="status">
+                {`${subject} — ${state}`}
             </span>
-            <span className="happy-sidebar-update-action__label">{label}</span>
-        </span>
+            {open ? (
+                <div
+                    aria-label="Update"
+                    className="happy-sidebar-update__panel"
+                    data-happy-desktop-ui="sidebar-update-action-panel"
+                    role="menu"
+                >
+                    <span className="happy-sidebar-update__copy">
+                        <span
+                            className="happy-sidebar-update__eyebrow"
+                            data-happy-desktop-ui="sidebar-update-action-eyebrow"
+                        >
+                            Update
+                        </span>
+                        <span
+                            className="happy-sidebar-update__subject"
+                            data-happy-desktop-ui="sidebar-update-action-subject"
+                            title={subject}
+                        >
+                            {subject}
+                        </span>
+                        <span
+                            className="happy-sidebar-update__state"
+                            data-happy-desktop-ui="sidebar-update-action-state"
+                        >
+                            {state}
+                        </span>
+                    </span>
+                    <span
+                        className="happy-sidebar-update__assurance"
+                        data-happy-desktop-ui="sidebar-update-action-assurance"
+                    >
+                        {assurance(props.subject)}
+                    </span>
+                    {ready ? (
+                        <Button
+                            className="happy-sidebar-update__apply"
+                            fullWidth
+                            onClick={() => {
+                                setOpen(false);
+                                props.onAction?.();
+                            }}
+                            role="menuitem"
+                            size="small"
+                            variant="primary"
+                        >
+                            {actionLabel}
+                        </Button>
+                    ) : null}
+                </div>
+            ) : null}
+        </div>
     );
 }
