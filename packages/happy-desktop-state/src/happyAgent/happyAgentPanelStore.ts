@@ -305,6 +305,14 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
 
     const recompute = (): void => {
         const next = project();
+        // The count is part of what makes two strips the same strip. Comparing
+        // only tab for tab would call a strip unchanged whenever the tabs that
+        // remain still match position for position, which is exactly what
+        // closing the last tab looks like — and the closed one would then be
+        // kept, drawn forever, and answer nothing.
+        const tabsSame =
+            next.tabs.length === snapshot.tabs.length &&
+            next.tabs.every((tab, index) => tabSame(snapshot.tabs[index], tab));
         if (
             next.open === snapshot.open &&
             next.activeViewId === snapshot.activeViewId &&
@@ -314,13 +322,12 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             next.previewEntryId === snapshot.previewEntryId &&
             next.fileViewOpen === snapshot.fileViewOpen &&
             next.terminalRefusal === snapshot.terminalRefusal &&
-            next.tabs.length === snapshot.tabs.length &&
-            next.tabs.every((tab, index) => tabSame(snapshot.tabs[index], tab))
+            tabsSame
         )
             return;
         // Unchanged rows keep their identity so a tab strip re-renders only the
         // tab that actually changed.
-        const projectedTabs = next.tabs.every((tab, index) => tabSame(snapshot.tabs[index], tab))
+        const projectedTabs = tabsSame
             ? snapshot.tabs
             : next.tabs.map((tab, index) => {
                   const before = snapshot.tabs[index];
