@@ -36,6 +36,7 @@ export * from "./happyAgent/happyAgentProjectGroupProject.js";
 export * from "./happyAgent/happyAgentProjectRegistration.js";
 export * from "./happyAgent/happyAgentProfileStore.js";
 export * from "./happyAgent/happyAgentProviderUsageStore.js";
+export * from "./happyAgent/happyAgentProvidersStore.js";
 export * from "./happyAgent/happyAgentSecurityPolicyStore.js";
 export * from "./happyAgent/happyAgentSessionListStore.js";
 export * from "./happyAgent/happyAgentSettingsStore.js";

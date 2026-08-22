@@ -120,6 +120,13 @@ export interface HappyAgentModelProvider {
     readonly id: string;
     readonly models: readonly HappyAgentModel[];
     readonly serviceTiers: readonly HappyAgentServiceTier[];
+    /**
+     * Whether the machine will use this provider at all, as its own
+     * configuration states it. Stated rather than read back out of
+     * `disabledReason`, which also covers a provider that is switched on and
+     * simply offers nothing.
+     */
+    readonly enabled: boolean;
     readonly disabledReason?: "not_authenticated" | "not_enabled" | "no_models";
 }
 
@@ -694,12 +701,19 @@ export interface HappyAgentOpenInTarget {
 
 /**
  * The applications a host offers, with the one opened most recently. The recent
- * id belongs to the same answer because a control that wears the last-used
- * application has to know it before it can draw itself.
+ * application belongs to the same answer because a control that wears the
+ * last-used one has to know it before it can draw itself.
+ *
+ * It arrives whole rather than as an id into `targets`, and is not required to
+ * appear there: the host remembers what the reader chose, while `targets` is a
+ * fresh prediction that costs a process launch per application and is therefore
+ * still empty for the first moments after a reload. Carrying the label and the
+ * icon means the control is correct from the first frame instead of blank until
+ * detection finishes.
  */
 export interface HappyAgentOpenInTargets {
     readonly targets: readonly HappyAgentOpenInTarget[];
-    readonly recentId?: string;
+    readonly recent?: HappyAgentOpenInTarget;
 }
 
 /** Current model/effort/permission/tier selection used to derive menu options. */

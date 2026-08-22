@@ -28,6 +28,10 @@ export interface HappyAgentProviderRow {
     readonly id: string;
     readonly name: string;
     readonly status: HappyAgentProviderStatus;
+    /** Whether the machine will use this provider at all. */
+    readonly enabled: boolean;
+    /** A requested enablement change the machine has not confirmed yet. */
+    readonly saving?: boolean;
     readonly models: readonly HappyAgentProviderModelRow[];
     /** Service tiers the provider offers, already labelled. */
     readonly serviceTiers: readonly string[];
@@ -37,9 +41,13 @@ export type HappyAgentProviderSettingsProps = {
     providers: readonly HappyAgentProviderRow[];
     loading?: boolean;
     error?: string;
+    /** Why the last provider change was refused. */
+    saveError?: string;
     /** Why model enablement cannot currently be changed. */
     unavailable?: string;
     onModelEnabledChange: (id: string, enabled: boolean) => void;
+    /** Switches one whole provider on or off for the machine. */
+    onProviderEnabledChange: (id: string, enabled: boolean) => void;
 };
 
 const STATUS_LABELS: Record<HappyAgentProviderStatus, string> = {
@@ -59,13 +67,13 @@ const STATUS_VARIANTS: Record<HappyAgentProviderStatus, BadgeVariant> = {
 /** What has to happen in Happy Agent itself before the provider's models become usable. */
 const STATUS_HINTS: Partial<Record<HappyAgentProviderStatus, string>> = {
     not_authenticated: "Sign this provider in from Happy Agent to use its models.",
-    not_enabled: "Enable this provider in Happy Agent's configuration to use it.",
+    not_enabled: "Switched off on this machine, so no agent here may use it.",
 };
 
 /**
  * The Providers category: every provider the daemon knows about, whether it is
  * usable, and which of its models the session pickers may offer. A provider that
- * is not signed in or not enabled still lists its models — knowing what would be
+ * is not signed in or switched off still lists its models — knowing what would be
  * available is the reason to go and connect it.
  */
 export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProps) {
@@ -97,8 +105,13 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     {props.unavailable}
                 </Banner>
             ) : null}
+            {props.saveError ? (
+                <Banner tone="danger" title="Provider unchanged">
+                    {props.saveError}
+                </Banner>
+            ) : null}
             <HappyAgentSettingsSection
-                description="Providers are configured in Happy Agent itself. Switch off a model here to keep it out of the session pickers."
+                description="Switching a provider off stops every agent on this machine from using it. Switching off one model only keeps it out of this window's session pickers."
                 rows="cards"
                 title="Model providers"
             >
@@ -135,6 +148,15 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                             <Badge
                                 label={STATUS_LABELS[provider.status]}
                                 variant={STATUS_VARIANTS[provider.status]}
+                            />
+                            {provider.saving ? <Spinner size={16} /> : null}
+                            <Switch
+                                aria-label={`${provider.name} enabled`}
+                                checked={provider.enabled}
+                                disabled={props.unavailable !== undefined || provider.saving}
+                                onChange={(enabled) =>
+                                    props.onProviderEnabledChange(provider.id, enabled)
+                                }
                             />
                         </header>
                         <Box className="happy-agent-provider__models">

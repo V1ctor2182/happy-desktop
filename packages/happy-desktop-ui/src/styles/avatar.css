@@ -18,8 +18,16 @@
     align-items: center;
     justify-content: center;
     border-radius: var(--happy-radius-pill);
-    background: var(--text-secondary);
-    color: var(--button-primary-tint);
+    /* The neutral mark — what a row gets when nothing about it is worth a
+       colour — is a quiet chip, not a filled tile. A filled tile has to be dark
+       to carry white initials, and no neutral role stays dark in both
+       appearances: an ink role inverts with the text it was made for, so the
+       tile turns into the brightest thing in a dark list. The ripple is the
+       surface's own faint opposite, so the chip stays the same small step above
+       whatever it sits on — the popover, a hovered row, a selected one — rather
+       than matching one of them and disappearing. */
+    background: var(--surface-ripple);
+    color: var(--text-secondary);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
     font-weight: 700;
@@ -72,6 +80,11 @@
     border-radius: 10px;
 }
 
+/* A colour tone is a filled tile and carries the primary action's white ink. */
+.happy-avatar:not([data-tone="slate"]) {
+    color: var(--button-primary-tint);
+}
+
 .happy-avatar[data-tone="violet"] {
     background: var(--radio-active);
 }
@@ -97,11 +110,14 @@
 }
 
 .happy-avatar[data-tone="slate"] {
-    background: var(--text-secondary);
+    background: var(--surface-ripple);
 }
 
+/* Black with white ink in both appearances, exactly as a primary action reads —
+   the FAB role is the one that inverts to white, which would leave the mark's
+   own initials invisible on it. */
 .happy-avatar[data-tone="brand"] {
-    background: var(--fab-background);
+    background: var(--button-primary-background);
 }
 
 /* A supplied avatar image owns the entire mark. This is especially important

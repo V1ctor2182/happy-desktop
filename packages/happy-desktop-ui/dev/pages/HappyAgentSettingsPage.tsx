@@ -273,6 +273,7 @@ const permissionModeOptions = [
 
 const providers: readonly HappyAgentProviderRow[] = [
     {
+        enabled: true,
         id: "codex",
         models: [
             {
@@ -307,6 +308,7 @@ const providers: readonly HappyAgentProviderRow[] = [
         status: "ready",
     },
     {
+        enabled: true,
         id: "claude",
         models: [
             {
@@ -333,6 +335,7 @@ const providers: readonly HappyAgentProviderRow[] = [
         status: "ready",
     },
     {
+        enabled: true,
         id: "bedrock",
         models: [
             {
@@ -346,10 +349,12 @@ const providers: readonly HappyAgentProviderRow[] = [
             },
         ],
         name: "Bedrock",
+        saving: true,
         serviceTiers: [],
         status: "not_authenticated",
     },
     {
+        enabled: false,
         id: "vertex",
         models: [],
         name: "Vertex",
@@ -636,7 +641,32 @@ export function HappyAgentSettingsBlueprintPage() {
                     onClose={noop}
                     title="Providers"
                 >
-                    <HappyAgentProviderSettings onModelEnabledChange={noop} providers={providers} />
+                    <HappyAgentProviderSettings
+                        onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
+                        providers={providers}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A refused provider change: the list still shows what the daemon holds, with the refusal above it"
+                label="Happy Agent settings — providers refused"
+                number="03a"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="providers"
+                    categories={categories}
+                    description="Every model provider this Happy Agent daemon knows about"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Providers"
+                >
+                    <HappyAgentProviderSettings
+                        onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
+                        providers={providers}
+                        saveError="This Happy Agent cannot change its providers while it is running."
+                    />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
@@ -655,6 +685,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     <HappyAgentProviderSettings
                         loading
                         onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
                         providers={[]}
                     />
                 </HappyAgentSettingsShell>
@@ -675,6 +706,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     <HappyAgentProviderSettings
                         error="The Happy Agent daemon could not read its model catalog."
                         onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
                         providers={[]}
                     />
                 </HappyAgentSettingsShell>

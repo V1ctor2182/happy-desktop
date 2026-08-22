@@ -1,6 +1,7 @@
 import type { TerminalConnection } from "../transport.js";
 import type {
     HappyAgentGroupId,
+    HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
     HappyAgentTerminalId,
     HappyAgentWorkspaceFileBytes,
@@ -17,7 +18,13 @@ import type {
  */
 export interface HappyAgentHostServices {
     openInTargetsRead(): Promise<HappyAgentOpenInTargets>;
-    openIn(groupId: HappyAgentGroupId, targetId: string): Promise<void>;
+    /**
+     * Hands the group's directory to that application, and records it as the one
+     * this machine opened a project in most recently. The whole target is passed
+     * because the host is what remembers the choice across a reload, and the
+     * control that wears it needs the label and the icon, not only the id.
+     */
+    openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
     workspaceFileBytesRead(
         groupId: HappyAgentGroupId,
         path: string,

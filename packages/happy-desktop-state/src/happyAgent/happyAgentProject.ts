@@ -54,6 +54,7 @@ export function happyAgentModelCatalogProject(config: DaemonConfig): HappyAgentM
                 ),
             ].filter((tier): tier is "fast" => tier === "fast");
             return {
+                enabled: provider.enabled,
                 id: providerId,
                 models,
                 serviceTiers,

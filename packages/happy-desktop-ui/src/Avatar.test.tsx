@@ -45,7 +45,7 @@ const TONE_COLORS: Record<ToneName, string> = {
     ocean: "rgb(43, 172, 204)",
     rose: "rgb(255, 107, 107)",
     amber: "rgb(255, 149, 0)",
-    slate: "rgb(73, 69, 79)",
+    slate: "rgba(0, 0, 0, 0.08)",
     brand: "rgb(0, 0, 0)",
 };
 

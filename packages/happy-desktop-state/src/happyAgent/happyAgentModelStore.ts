@@ -82,6 +82,15 @@ export interface HappyAgentModelStore {
     subscribe(listener: () => void): () => void;
     /** Loads or joins the one in-flight catalog request. A failed explicit retry starts anew. */
     load(): Promise<HappyAgentModelStoreReadySnapshot>;
+    /**
+     * Replaces the catalog with one the daemon has just confirmed elsewhere.
+     *
+     * Enabling or disabling a provider changes what this machine offers, and the
+     * daemon answers that change with its whole configuration. This is that
+     * answer arriving, not a selection anyone made, so it replaces the catalog
+     * and re-derives the defaults from it without touching what was last used.
+     */
+    catalogChanged(catalog: HappyAgentModelCatalog): void;
     /** Records a user-selected model/effort/access/tier as the next-session default. */
     selectionUsed(selection: HappyAgentSelection): void;
     /** Selects a model with that model's last locally remembered effort and speed. */
@@ -179,6 +188,19 @@ export function happyAgentModelStoreCreate(
                 },
             );
             return loadPromise;
+        },
+        catalogChanged(catalog) {
+            const selections = selectionsFromDocument(
+                catalog,
+                document,
+                snapshot.type === "ready" ? snapshot : undefined,
+            );
+            publish({
+                type: "ready",
+                catalog,
+                ...selections,
+                menus: happyAgentMenusDerive(catalog, selections.lastUsedSelection),
+            });
         },
         selectionUsed(selection) {
             if (snapshot.type !== "ready") return;

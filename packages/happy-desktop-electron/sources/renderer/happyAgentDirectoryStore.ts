@@ -146,7 +146,7 @@ export function happyAgentDirectoryStoreCreate(
     const happyAgent: LocalHappyAgent = {
         entry: {
             id: LOCAL_HAPPY_AGENT_ID,
-            label: "This Mac",
+            label: "Projects",
             projects: [],
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,

@@ -6,22 +6,45 @@ import type {
     HappyAgentWorkspaceFileBytes,
 } from "happy-desktop-state";
 
-const OPEN_IN_RECENT_KEY = "happy.happy-agent.open-in-recent.v1";
+/**
+ * Where the application a project was last opened in is remembered. It holds the
+ * whole target rather than its id, because the control that wears it is drawn
+ * long before the host has finished detecting what is installed — that answer
+ * costs a Spotlight query and an icon conversion per application — and a reader
+ * who reloads should see the application they chose, not an empty control that
+ * fills in a few seconds later.
+ *
+ * The `v1` key held a bare id and is simply left behind: the first Open in after
+ * an upgrade writes this one, and until then the control is as blank as it was
+ * before.
+ */
+const OPEN_IN_RECENT_KEY = "happy.happy-agent.open-in-recent.v2";
 const TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy-capability.";
 
 type WorkspaceFileBytesResponse = Omit<HappyAgentWorkspaceFileBytes, "url">;
 
-function recentTargetRead(): string | undefined {
+function recentTargetRead(): HappyAgentOpenInTarget | undefined {
     try {
-        return localStorage.getItem(OPEN_IN_RECENT_KEY) ?? undefined;
+        const stored = localStorage.getItem(OPEN_IN_RECENT_KEY);
+        if (stored === null) return undefined;
+        const value = JSON.parse(stored) as Partial<HappyAgentOpenInTarget>;
+        // Written by an older version of this same code, so the shape is checked
+        // rather than trusted: a record without a name to show is no use to the
+        // control and is treated as nothing remembered.
+        if (typeof value.id !== "string" || typeof value.label !== "string") return undefined;
+        return {
+            id: value.id,
+            label: value.label,
+            ...(typeof value.iconUrl === "string" ? { iconUrl: value.iconUrl } : {}),
+        };
     } catch {
         return undefined;
     }
 }
 
-function recentTargetWrite(targetId: string): void {
+function recentTargetWrite(target: HappyAgentOpenInTarget): void {
     try {
-        localStorage.setItem(OPEN_IN_RECENT_KEY, targetId);
+        localStorage.setItem(OPEN_IN_RECENT_KEY, JSON.stringify(target));
     } catch {
         // The workspace store retains this selection for the current renderer.
     }
@@ -86,20 +109,20 @@ export function happyAgentHostServicesCreate(baseUrl: string): HappyAgentHostSer
                 baseUrl,
                 "/open-in-targets",
             );
-            const recentId = recentTargetRead();
-            return {
-                targets,
-                ...(recentId !== undefined && targets.some((target) => target.id === recentId)
-                    ? { recentId }
-                    : {}),
-            };
+            const recent = recentTargetRead();
+            return { targets, ...(recent ? { recent } : {}) };
         },
-        openIn: async (workspaceId, targetId) => {
+        openIn: async (workspaceId, target) => {
+            // Remembered before the launch rather than after it. Choosing the
+            // application is the reader's act and is already done; whether the
+            // application then starts is the machine's business, and a slow or
+            // failed launch must not make the next reload forget what they
+            // picked.
+            recentTargetWrite(target);
             await postJson<Record<string, never>>(baseUrl, "/open-in", {
                 workspaceId,
-                target: targetId,
+                target: target.id,
             });
-            recentTargetWrite(targetId);
         },
         workspaceFileBytesRead: async (
             workspaceId,

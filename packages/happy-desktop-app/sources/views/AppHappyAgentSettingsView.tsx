@@ -8,6 +8,7 @@ import type {
     HappyAgentModelCatalog,
     HappyAgentModelKey,
     HappyAgentPermissionMode,
+    HappyAgentProviderEntry,
     HappyAgentSettingsSnapshot,
     HappyAgentSettingsStore,
     HappyAgentThinkingLevel,
@@ -24,6 +25,7 @@ import {
     happyAgentAvailabilityProject,
     happyAgentProfileStoreNoop,
     happyAgentProviderUsageStoreNoop,
+    happyAgentProvidersStoreNoop,
     happyAgentWindowStoreNoop,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
@@ -358,6 +360,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         securityPolicyStore?.get ?? securityPolicyUnavailable,
         securityPolicyStore?.get ?? securityPolicyUnavailable,
     );
+    // The Providers category is the only thing that reads this, and subscribing
+    // is what starts the work: the daemon's configuration is read, and re-read
+    // every few seconds, only while that category is the one on screen.
+    const providersStore =
+        (props.section === "providers" ? host?.session?.providers : undefined) ??
+        happyAgentProvidersStoreNoop;
+    const providers = useSyncExternalStore(
+        providersStore.subscribe,
+        providersStore.get,
+        providersStore.get,
+    );
     // The Usage category is the only thing that reads these, and subscribing is
     // what starts the work: the daemon is asked what its accounts have spent,
     // and the clock ticks the time left until each reset, only while that
@@ -544,14 +557,18 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 />
             ) : props.section === "providers" ? (
                 <HappyAgentProviderSettings
-                    error={models.type === "error" ? models.error.message : undefined}
-                    loading={models.type !== "ready" && models.type !== "error"}
+                    loading={providers.loading}
                     onModelEnabledChange={(id, enabled) =>
                         happyAgentOnline()
                             ? props.settings.modelEnabledUpdate(id as HappyAgentModelKey, enabled)
                             : undefined
                     }
-                    providers={providerRows(catalog, settings, selection)}
+                    onProviderEnabledChange={(id, enabled) => {
+                        if (happyAgentOnline()) providersStore.providerEnabledUpdate(id, enabled);
+                    }}
+                    providers={providerRows(providers.providers, settings, selection)}
+                    {...(providers.error ? { error: providers.error.message } : {})}
+                    {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
             ) : props.section === "usage" ? (
@@ -776,11 +793,12 @@ function modelOptions(
 }
 
 function providerRows(
-    catalog: HappyAgentModelCatalog | undefined,
+    providers: readonly HappyAgentProviderEntry[],
     settings: HappyAgentSettingsSnapshot,
     selection: { providerId: string; modelId: string },
 ): readonly HappyAgentProviderRow[] {
-    return (catalog?.providers ?? []).map((provider) => ({
+    return providers.map((provider) => ({
+        enabled: provider.enabled,
         id: provider.id,
         models: provider.models.map((model) => ({
             contextWindow: model.contextWindow,
@@ -792,6 +810,7 @@ function providerRows(
             name: model.name,
         })),
         name: providerAccountName(provider.id),
+        saving: provider.saving,
         serviceTiers: provider.serviceTiers.map((tier) => (tier === "fast" ? "Fast" : tier)),
         status: provider.disabledReason ?? "ready",
     }));

@@ -36,6 +36,7 @@ import type {
     HappyAgentFileSearchResult,
     HappyAgentGitChangedFile,
     HappyAgentGroupId,
+    HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
     HappyAgentWorkspaceFileBytes,
     HappyAgentWorkspaceFileDocument,
@@ -75,6 +76,10 @@ import {
     type HappyAgentProfileSource,
     type HappyAgentProfileStore,
 } from "./happyAgentProfileStore.js";
+import {
+    happyAgentProvidersStoreCreate,
+    type HappyAgentProvidersStore,
+} from "./happyAgentProvidersStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface HappyAgentChatHandle {
@@ -114,6 +119,13 @@ export interface HappyAgentWorkspaceClient {
     providerUsage(): HappyAgentProviderUsageStore | undefined;
     /** The one host-owned identity work is authored as. */
     profile(): HappyAgentProfileStore | undefined;
+    /**
+     * Which model providers this Happy Agent will use, as the Providers settings
+     * category reads and changes them. Materialized on first access and shared;
+     * every configuration the daemon confirms through it also replaces the
+     * catalog `models` holds, so a provider switched off stops being offered.
+     */
+    providers(): HappyAgentProvidersStore;
     /**
      * This Happy Agent's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -197,8 +209,11 @@ export interface HappyAgentWorkspaceClient {
     projectAdd(path: string): Promise<HappyAgentProjectId>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<HappyAgentOpenInTargets>;
-    /** Opens one project or worktree root in one of those applications. */
-    openIn(groupId: HappyAgentGroupId, targetId: string): Promise<void>;
+    /**
+     * Opens one project or worktree root in one of those applications, and makes
+     * it the one this machine opened most recently.
+     */
+    openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
         groupId: HappyAgentGroupId,
@@ -362,6 +377,7 @@ export function happyAgentWorkspaceClientCreate(
     let inboxStore: HappyAgentInboxStore | undefined;
     let providerUsageStore: HappyAgentProviderUsageStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
+    let providersStore: HappyAgentProvidersStore | undefined;
     let instructionsStore: HappyAgentInstructionsStore | undefined;
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
     const chats = new Map<HappyAgentSessionId, ChatBinding>();
@@ -442,7 +458,7 @@ export function happyAgentWorkspaceClientCreate(
             }
         },
         openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
-        openIn: (groupId, targetId) => deps.hostServices.openIn(groupId, targetId),
+        openIn: (groupId, target) => deps.hostServices.openIn(groupId, target),
         sessionList() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!sessionListStore) {
@@ -488,6 +504,14 @@ export function happyAgentWorkspaceClientCreate(
                 actions: deps.profileActions,
             });
             return profileStore;
+        },
+        providers() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            providersStore ??= happyAgentProvidersStoreCreate({
+                client: deps.client,
+                catalogChanged: (catalog) => models.catalogChanged(catalog),
+            });
+            return providersStore;
         },
         instructions() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -584,6 +608,8 @@ export function happyAgentWorkspaceClientCreate(
             providerUsageStore = undefined;
             profileStore?.[Symbol.dispose]();
             profileStore = undefined;
+            providersStore?.[Symbol.dispose]();
+            providersStore = undefined;
             instructionsStore?.[Symbol.dispose]();
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();

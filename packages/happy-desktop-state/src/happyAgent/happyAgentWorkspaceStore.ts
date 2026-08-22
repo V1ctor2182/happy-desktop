@@ -518,8 +518,13 @@ export interface HappyAgentWorkspaceSnapshot {
      * The application this machine opened a project in most recently, so the
      * control can offer it directly instead of making the reader find it in the
      * menu again. Undefined until something has been opened.
+     *
+     * It is whole rather than an id into `openInTargets`, and does not have to
+     * be listed there: the host remembers the reader's choice across a reload,
+     * while the list is a detection that has not finished yet for the first
+     * moments of one.
      */
-    readonly openInRecentId?: string;
+    readonly openInRecent?: HappyAgentOpenInTarget;
     /** The rename in progress, if any: what is being renamed and the draft name. */
     readonly rename?: HappyAgentRenameSnapshot;
     /** The project archive that has been asked for and not yet carried out, if any. */
@@ -1105,10 +1110,13 @@ export interface HappyAgentWorkspaceStore {
     /** Closes the full-size image viewer. */
     imageClose(): void;
     /**
-     * Opens one project or worktree root in a named application. The group is
+     * Opens one project or worktree root in one of `openInTargets`. The group is
      * named, not the directory: the host resolves the path from its own catalog.
+     * The whole target is passed because it also becomes `openInRecent`, which
+     * the host remembers across a reload and a control draws before detection
+     * has answered.
      */
-    openIn(groupId: HappyAgentGroupId, targetId: string): Promise<void>;
+    openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
     /**
      * Opens the create dialog, on the group last created in — or the one given,
      * when it is being opened from somewhere that already knows where. A task
@@ -1301,7 +1309,7 @@ export function happyAgentWorkspaceStoreCreate(
        applications costs a process launch or several, and most sessions never
        open the menu. */
     let openInTargets: readonly HappyAgentOpenInTarget[] = [];
-    let openInRecentId: string | undefined;
+    let openInRecent: HappyAgentOpenInTarget | undefined;
     let openInTargetsRequested = false;
     let rename: HappyAgentRenameSnapshot | undefined;
     let projectArchive: HappyAgentProjectArchiveSnapshot | undefined;
@@ -2002,7 +2010,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.panelFile === panelFile &&
                 snapshot.groupResume === groupResume &&
                 snapshot.openInTargets === openInTargets &&
-                snapshot.openInRecentId === openInRecentId &&
+                snapshot.openInRecent === openInRecent &&
                 snapshot.rename === rename &&
                 snapshot.projectArchive === projectArchive &&
                 snapshot.projectCompute === projectCompute &&
@@ -2037,7 +2045,7 @@ export function happyAgentWorkspaceStoreCreate(
                           fileTreeExpanded,
                           fileTreeCollapsed,
                           ...(workspaceFiles ? { workspaceFiles } : {}),
-                          ...(openInRecentId ? { openInRecentId } : {}),
+                          ...(openInRecent ? { openInRecent } : {}),
                           workspaceFilesLoading,
                           projectAdd,
                           ...(projectClone ? { projectClone } : {}),
@@ -3543,7 +3551,14 @@ export function happyAgentWorkspaceStoreCreate(
             (result) => {
                 if (disposed) return;
                 openInTargets = result.targets;
-                openInRecentId = openInRecentId ?? result.recentId;
+                // What was opened last is the host's memory of this reader's
+                // choice, so it stands even when detection did not list it;
+                // anything already chosen in this run is newer and stands over
+                // it. Detection does get the last word on how that application
+                // looks, since a reinstall can change its icon or its name.
+                const remembered = openInRecent ?? result.recent;
+                openInRecent =
+                    openInTargets.find((target) => target.id === remembered?.id) ?? remembered;
                 recompute();
             },
             () => {
@@ -3900,7 +3915,7 @@ export function happyAgentWorkspaceStoreCreate(
                     fileTreeExpanded,
                     fileTreeCollapsed,
                     ...(workspaceFiles ? { workspaceFiles } : {}),
-                    ...(openInRecentId ? { openInRecentId } : {}),
+                    ...(openInRecent ? { openInRecent } : {}),
                     workspaceFilesLoading,
                     projectAdd,
                     ...(projectClone ? { projectClone } : {}),
@@ -4768,14 +4783,14 @@ export function happyAgentWorkspaceStoreCreate(
         imageNext: () => chatStore?.imageNext(),
         imagePrevious: () => chatStore?.imagePrevious(),
         imageClose: () => chatStore?.imageClose(),
-        openIn: (groupId, targetId) => {
+        openIn: (groupId, target) => {
             // The choice is the reader's, so the control wears it immediately;
             // the host records the same thing durably for the next launch.
-            if (openInRecentId !== targetId) {
-                openInRecentId = targetId;
+            if (openInRecent?.id !== target.id) {
+                openInRecent = target;
                 recompute();
             }
-            return client.openIn(groupId, targetId);
+            return client.openIn(groupId, target);
         },
         createOpen(groupId) {
             // Asking for the dialog while it is already open — a second Create,

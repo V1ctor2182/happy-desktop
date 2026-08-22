@@ -36,6 +36,7 @@ import type {
     HappyAgentSecurityPolicyStore,
     HappyAgentAvailabilitySnapshot,
     HappyAgentProviderUsageStore,
+    HappyAgentProvidersStore,
     HappyAgentGroupLifecycle,
     HappyAgentProjectGroup,
     HappyAgentProjectId,
@@ -245,6 +246,12 @@ export interface AppHappyAgentSession {
     readonly providerUsage?: HappyAgentProviderUsageStore;
     /** The identity this Happy Agent authors work as, as its profile settings edit it. */
     readonly profile?: () => HappyAgentProfileStore | undefined;
+    /**
+     * Which model providers this machine will use, as the Providers settings
+     * category reads and switches them. Absent on a host that cannot change the
+     * machine's configuration, which leaves that category saying so.
+     */
+    readonly providers?: HappyAgentProvidersStore;
     /** This Happy Agent's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: HappyAgentInstructionsStore;
     /** This Happy Agent's machine-wide permission-review policy. */
@@ -1925,9 +1932,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const mainTools = openGroup ? toolTabsPlaced(panel, "main") : [];
     const activeMainTool = mainTools.find((tab) => tab.id === workspace.activeMainViewId);
     const displayedMainTool = mainTools.find((tab) => tab.id === workspace.displayedMainViewId);
-    const openInRecent = workspace.openInTargets.find(
-        (target) => target.id === workspace.openInRecentId,
-    );
+    const openInRecent = workspace.openInRecent;
     const conversation = workspace.conversation;
     // A chat that belongs to another session rather than to this group's strip.
     // The state says so outright — the host gives such a session no place in an
@@ -2339,7 +2344,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                       if (happyAgentOnline())
                                                           void props.workspace.openIn(
                                                               openGroup.id,
-                                                              openInRecent.id,
+                                                              openInRecent,
                                                           );
                                                   },
                                                   primaryLabel: `Open in ${openInRecent.label}`,
@@ -2353,8 +2358,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                     );
                                                 return;
                                             }
-                                            if (happyAgentOnline() && openGroup.create)
-                                                void props.workspace.openIn(openGroup.id, id);
+                                            const target = workspace.openInTargets.find(
+                                                (candidate) => candidate.id === id,
+                                            );
+                                            if (target && happyAgentOnline() && openGroup.create)
+                                                void props.workspace.openIn(openGroup.id, target);
                                         }}
                                     />
                                     {!panel.open ? (

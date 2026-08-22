@@ -21,6 +21,7 @@ import {
     type HappyAgentModelStore,
     type HappyAgentProfileStore,
     type HappyAgentProviderUsageStore,
+    type HappyAgentProvidersStore,
     type HappyAgentSecurityPolicyStore,
     type HappyAgentSessionLocation,
     type HappyAgentWorkspaceMemoryDocument,
@@ -90,6 +91,7 @@ export interface HappyAgentSession {
     readonly models: HappyAgentModelStore;
     readonly profile: () => HappyAgentProfileStore | undefined;
     readonly providerUsage: HappyAgentProviderUsageStore | undefined;
+    readonly providers: HappyAgentProvidersStore;
     readonly workspace: HappyAgentWorkspaceStore;
     readonly instructions: HappyAgentInstructionsStore;
     readonly securityPolicy: HappyAgentSecurityPolicyStore;
@@ -319,6 +321,7 @@ export function happyAgentConnectionOpen(input: {
                     models: client.models,
                     profile: () => client.profile(),
                     providerUsage: client.providerUsage(),
+                    providers: client.providers(),
                     workspace: happyAgentWorkspaceStoreCreate(client, {
                         host: input.host,
                         viewPreferences: desktopViewPreferencesPersistence(),

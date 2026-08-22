@@ -60,6 +60,7 @@ const modelCatalog: HappyAgentModelCatalog = {
     ],
     providers: [
         {
+            enabled: true,
             id: "happy",
             models: [
                 {
