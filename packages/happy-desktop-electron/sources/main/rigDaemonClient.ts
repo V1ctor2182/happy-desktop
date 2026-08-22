@@ -8,10 +8,12 @@ import {
     HappyAgentClient,
     type AgentResponse,
     type Cuid2,
+    type DrainResponse,
     type FileContentResponse,
     type HealthResponse,
     type InspectorStartedResponse,
     type InspectorStoppedResponse,
+    type ShutdownResponse,
     type WorkspaceResponse,
     type WriteFileRequest,
     type WriteFileResponse,
@@ -42,6 +44,9 @@ export interface RigDaemonRawResponse {
     readonly headers: IncomingHttpHeaders;
     readonly body: IncomingMessage;
 }
+
+/** One runtime component whose admitted work has not finished draining. */
+export type DrainWaitingFor = NonNullable<HealthResponse["drainWaitingFor"]>[number];
 
 /** Where a debugger attaches once Happy Agent's inspector is listening. */
 export type RigDaemonInspectorResponse = InspectorStartedResponse;
@@ -75,6 +80,20 @@ export class RigDaemonClient {
 
     health(signal?: AbortSignal): Promise<HealthResponse> {
         return this.#client.getHealth(signal ? { signal } : undefined);
+    }
+
+    /**
+     * Puts this daemon process into its sticky drain mode: it stops admitting
+     * work and reports what is still finishing through `health`. There is no way
+     * back out, which is why only a decided restart calls it.
+     */
+    drain(signal?: AbortSignal): Promise<DrainResponse> {
+        return this.#client.drain(signal ? { signal } : undefined);
+    }
+
+    /** Asks the daemon to exit; it answers with its pid before going. */
+    shutdown(signal?: AbortSignal): Promise<ShutdownResponse> {
+        return this.#client.shutdown(signal ? { signal } : undefined);
     }
 
     startInspector(signal?: AbortSignal): Promise<RigDaemonInspectorResponse> {

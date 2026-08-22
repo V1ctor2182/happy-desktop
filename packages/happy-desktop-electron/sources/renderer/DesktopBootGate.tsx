@@ -17,6 +17,19 @@ import type { DesktopRuntimeStore } from "./runtimeStore";
  */
 let booted = false;
 
+/**
+ * Forgets that this window ever started, so the next mount boots as a cold one.
+ *
+ * The single caller is the agent restart, which discards the entire app and
+ * builds it again from nothing. That is a real cold start — new stores, no
+ * carried state, every Rig connected from scratch — so the mark belongs in front
+ * of it exactly as it belongs in front of the first one. This is not a way to
+ * bring the cover back for a disconnect; a disconnect never calls it.
+ */
+export function desktopBootForget(): void {
+    booted = false;
+}
+
 /** A Rig that has said something conclusive about what it holds. */
 function rigSettled(rig: RigDirectoryEntry): boolean {
     // Only a Rig that is up owes an answer about its projects. One that is

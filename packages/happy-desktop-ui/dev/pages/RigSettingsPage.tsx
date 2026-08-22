@@ -382,17 +382,22 @@ export function RigSettingsBlueprintPage() {
                     title="General"
                 >
                     <RigGeneralSettings
+                        // The ordinary resting state of a machine with an update:
+                        // the check found it and fetched it without asking, so
+                        // the version is already on disk and the only thing left
+                        // is the interruption nobody has agreed to yet.
                         agent={{
                             availableVersion: "0.3.1",
                             installedVersion: "0.3.0",
                             managed: true,
-                            message: "Happy Agent 0.3.1 is available.",
+                            message: "Happy Agent 0.3.1 is ready to install.",
                             operation: "idle",
+                            readyVersion: "0.3.1",
                             runningVersion: "0.3.0",
                             runtime: "ready",
                             updateAvailable: true,
                             versions: [
-                                { downloaded: false, prerelease: false, version: "0.3.1" },
+                                { downloaded: true, prerelease: false, version: "0.3.1" },
                                 { downloaded: false, prerelease: true, version: "0.3.1-rc.2" },
                                 { downloaded: true, prerelease: false, version: "0.3.0" },
                                 { downloaded: true, prerelease: false, version: "0.2.9" },
@@ -406,6 +411,7 @@ export function RigSettingsBlueprintPage() {
                         modelOptions={modelOptions}
                         onAppearanceChange={noop}
                         onAgentCheck={noop}
+                        onAgentRestart={noop}
                         onAgentUpgrade={noop}
                         onAgentVersionSelect={noop}
                         onExperimentalFeaturesChange={noop}

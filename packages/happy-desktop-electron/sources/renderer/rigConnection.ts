@@ -167,10 +167,13 @@ function streamConnectionStoreCreate(connection: RigConnection): RigConnectionSt
                 attempt,
                 connection: "disconnected",
                 daemon: "unknown",
-                message:
-                    state.connection === "closed"
-                        ? "This Rig connection is closed."
-                        : "The SSE stream is reconnecting.",
+                // A closed connection is a fact about this Rig worth stating.
+                // Reconnecting is not: the window's own header says the machine
+                // is unreachable, and naming the transport that is retrying
+                // tells a reader nothing they can act on.
+                ...(state.connection === "closed"
+                    ? { message: "This Rig connection is closed." }
+                    : {}),
             });
         },
         onError: (error) => {

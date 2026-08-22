@@ -84,6 +84,17 @@ function projectsRead(
     };
 }
 
+function projectsMatch(
+    entry: RigDirectoryEntry,
+    next: Pick<RigDirectoryEntry, "projects" | "projectsStatus" | "projectAdd">,
+): boolean {
+    return (
+        entry.projects === next.projects &&
+        entry.projectsStatus === next.projectsStatus &&
+        entry.projectAdd === next.projectAdd
+    );
+}
+
 function connectionRead(
     rig: LocalRig,
     connection: RigConnectionSnapshot,
@@ -234,7 +245,13 @@ export function rigDirectoryStoreCreate(
                         rig.workspaceUnsubscribe?.();
                         rig.workspaceUnsubscribe = session.workspace.subscribe(() => {
                             if (rig.entry.session !== session) return;
-                            rig.entry = { ...rig.entry, ...projectsRead(session) };
+                            // The workspace also announces every open-transcript
+                            // delta. None of that belongs to this directory
+                            // projection; republishing it would synchronously
+                            // render the entire app shell once per token.
+                            const projects = projectsRead(session);
+                            if (projectsMatch(rig.entry, projects)) return;
+                            rig.entry = { ...rig.entry, ...projects };
                             publish();
                         });
                         rig.connectionUnsubscribe = session.connection.subscribe(() => {

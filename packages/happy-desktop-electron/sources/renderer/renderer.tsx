@@ -8,6 +8,7 @@ import {
     rigRouterGroupOpen,
     rigRouterGroupForget,
     rigRouterCreate,
+    type AppRigDaemonInstall,
     type AppRigDaemonStore,
     type AppRigUpdate,
     type AppRigDebugStore,
@@ -37,8 +38,11 @@ import {
     LocalOnboardingScreen,
     SetupPage,
     ThemeScope,
+    AgentInstallScreen,
+    ConnectionHeader,
     WelcomeScreen,
     ZoomIndicator,
+    type AgentInstallView,
     type WelcomeSlide,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
@@ -81,7 +85,7 @@ import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
-import { DesktopBootGate } from "./DesktopBootGate";
+import { DesktopBootGate, desktopBootForget } from "./DesktopBootGate";
 import {
     DesktopMediaPreviewWindow,
     desktopMediaPreviewEscapeBind,
@@ -433,16 +437,124 @@ function DesktopScreens(props: DesktopRendererProps) {
         </DesktopProtocolGate>
     );
     // Local setup gates the workspace until this machine can run Rig.
-    if (!snapshot || !desktopLocalPhase(snapshot)) return content;
+    const gated =
+        !snapshot || !desktopLocalPhase(snapshot) ? (
+            content
+        ) : (
+            <DesktopOnboardingGate
+                appearance={props.appearance}
+                store={props.onboarding}
+                welcome={props.welcome}
+            >
+                {content}
+            </DesktopOnboardingGate>
+        );
+    // A restart is not gated here. It is not a state this tree can be in: the
+    // tree is discarded for its duration and a new one is built afterwards, so
+    // the screen for it lives above the root render rather than inside it.
+    //
+    // The unreachable band is the window's outermost row, so it moves every
+    // screen below it down rather than covering any of them.
     return (
-        <DesktopOnboardingGate
-            appearance={props.appearance}
-            store={props.onboarding}
-            welcome={props.welcome}
-        >
-            {content}
-        </DesktopOnboardingGate>
+        <div className="happy2-connection-frame">
+            <DesktopConnectionHeader platform={props.platform} rigs={props.rigs} />
+            <div className="happy2-connection-frame__body">{gated}</div>
+        </div>
     );
+}
+
+/**
+ * The window's own line about being out of touch with the machine.
+ *
+ * It reads the Rig directory rather than any one surface, because losing the
+ * machine is not a fact about a surface: every project, session, and terminal in
+ * the window is equally out of reach, and saying so once at the top beats saying
+ * it on each of them.
+ *
+ * Only a Rig that has actually dropped gets a line. `connecting` is deliberately
+ * silent — that is startup, and the boot cover is already speaking for it; a
+ * band that appeared during every launch would mean nothing by the time it
+ * mattered.
+ */
+function DesktopConnectionHeader(props: { platform: "desktop" | "web"; rigs: RigDirectoryStore }) {
+    const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
+    const lost = directory.rigs.find(
+        (rig) => rig.status === "disconnected" || rig.status === "error",
+    );
+    if (!lost) return null;
+    return (
+        <ConnectionHeader
+            message={lost.message ?? `${lost.label} is unreachable.`}
+            // An error has settled; a disconnect is still being retried by the
+            // connection's own backoff, and the spinner is the difference.
+            retrying={lost.status === "disconnected"}
+            // Only the Electron window hides its title bar and so hands this
+            // band the traffic lights; the browser development server draws web
+            // chrome above it and needs neither the inset nor the drag lane.
+            windowControls={props.platform === "desktop"}
+        />
+    );
+}
+
+/**
+ * The whole window while the local machine's Happy Agent is being replaced.
+ *
+ * This is the entire tree for as long as a restart runs — not a screen over the
+ * app, but the app's replacement. It renders one thing from one store, and that
+ * store reaches the main process directly, so nothing here depends on a Rig, a
+ * session, a project, or a connection. That is what lets the rest be thrown
+ * away: there is nothing left holding a reference to the machine going down.
+ *
+ * Only ever the local host. A Rig on another machine is restarted by whoever
+ * owns it and never touches this window.
+ */
+function DesktopAgentRestartWindow(props: { daemon: AppRigDaemonStore }) {
+    const daemon = useSyncExternalStore(props.daemon.subscribe, props.daemon.get, props.daemon.get);
+    const view = agentInstallView(daemon.install);
+    // The supervisor mounts this only while a restart is running and replaces it
+    // the moment one is not, so this is unreachable in practice; rendering
+    // nothing is the honest answer for the frame that could sit between the two.
+    if (!view) return null;
+    return (
+        <AgentInstallScreen
+            onDismiss={props.daemon.daemonInstallDismiss}
+            onKill={props.daemon.daemonInstallKill}
+            view={view}
+        />
+    );
+}
+
+/** The restart as the screen takes it, or nothing while none is running. */
+function agentInstallView(install: AppRigDaemonInstall): AgentInstallView | undefined {
+    switch (install.phase) {
+        case "idle":
+            return undefined;
+        case "draining":
+            return {
+                killable: install.killable,
+                kind: "draining",
+                reason: install.reason,
+                version: install.version,
+                waitingFor: install.waitingFor,
+            };
+        case "stopping":
+            return {
+                killed: install.killed,
+                kind: "stopping",
+                reason: install.reason,
+                version: install.version,
+            };
+        case "starting":
+        case "reconnecting":
+            return { kind: install.phase, reason: install.reason, version: install.version };
+        case "error":
+            return {
+                kind: "error",
+                message: install.message,
+                reason: install.reason,
+                version: install.version,
+            };
+    }
 }
 
 /**
@@ -533,6 +645,7 @@ function DesktopProtocolGate(props: {
 }
 
 const unavailableDaemonSnapshot = {
+    install: { phase: "idle" },
     managed: false,
     operation: "idle",
     runtime: "stopped",
@@ -541,6 +654,10 @@ const unavailableDaemonSnapshot = {
 } as const;
 const unavailableDaemonStore: AppRigDaemonStore = {
     daemonCheck: () => undefined,
+    daemonInstall: () => undefined,
+    daemonInstallDismiss: () => undefined,
+    daemonInstallKill: () => undefined,
+    daemonRestart: () => undefined,
     daemonUpgrade: () => undefined,
     daemonVersionSelect: () => undefined,
     get: () => unavailableDaemonSnapshot,
@@ -690,6 +807,82 @@ if (mediaPreviewBridge) {
         );
     });
     window.addEventListener("unload", guestKeyUnsubscribe, { once: true });
+    /**
+     * The two stores that outlive the app itself.
+     *
+     * Everything else in `start` is rebuilt from nothing by an agent restart, so
+     * these are the only things held apart from it. The daemon store has to be:
+     * it is what reports the restart, and a store discarded by the teardown
+     * could not tell anyone the restart had finished. Appearance is held for a
+     * plainer reason — the window must not flash to another theme on its way
+     * through a restart it was asked to perform.
+     */
+    interface DesktopShellStores {
+        readonly appearance: AppearanceStore;
+        readonly daemon?: AppRigDaemonStore;
+    }
+    let shell: DesktopShellStores | undefined;
+    /**
+     * What the current app registered outside its own React tree.
+     *
+     * Unmounting drops every store the tree subscribed to, but a shell listener
+     * and a window event listener are not the tree's to drop — nothing would
+     * ever remove them, and the next `start` would add a second set pointing at
+     * the history and directory the first set is still holding. Back would then
+     * walk twice per press. Everything registered by a run of `start` is
+     * recorded here and undone before the next one begins.
+     */
+    const appDisposers: (() => void)[] = [];
+    const appDispose = (): void => {
+        for (const dispose of appDisposers.splice(0)) dispose();
+    };
+    /**
+     * Throws the whole app away for the duration of an agent restart, then
+     * builds a brand new one.
+     *
+     * The machine every surface in this window is a view of is being stopped.
+     * Nothing rendered against it stays true across that: sessions end,
+     * subscriptions point at a daemon that is gone, and what comes back is a
+     * different process that may not even be the same version. Reconciling all
+     * of that in place is work with no reader — the person asked for this and is
+     * watching the restart, not the workspace behind it.
+     *
+     * So the restart screen replaces the tree outright rather than covering it.
+     * React unmounts everything under the root, every store and connection
+     * created by `start` is dropped on the floor, and the screen that remains
+     * holds no product state at all — it renders the daemon's own report of
+     * itself and nothing else.
+     *
+     * When it is over, `start` runs again from the top against the new daemon.
+     * That is a cold boot in every sense that matters, so `desktopBootForget`
+     * lets the ordinary boot cover do its ordinary job while the fresh app
+     * connects and reads its state back.
+     *
+     * This is the deliberate exception to the multirig plan's rule against
+     * connection-driven app loaders. The rule exists so an arbitrary network
+     * failure cannot take someone's work away; this is not one. It happens only
+     * because a person asked for it, only for the machine-local agent, and never
+     * for a Rig that merely went quiet.
+     */
+    const restartSupervise = (config: DesktopConfig, daemon: AppRigDaemonStore): void => {
+        let covering = false;
+        daemon.subscribe(() => {
+            const running = daemon.get().install.phase !== "idle";
+            if (running === covering) return;
+            covering = running;
+            if (running) {
+                root.render(
+                    <DesktopAppearance appearance={shell!.appearance}>
+                        <DesktopAgentRestartWindow daemon={daemon} />
+                    </DesktopAppearance>,
+                );
+                return;
+            }
+            desktopBootForget();
+            appDispose();
+            start(config);
+        });
+    };
     const start = (config: DesktopConfig): void => {
         const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
         // First-run setup outlives every daemon connection this window makes, so
@@ -701,40 +894,48 @@ if (mediaPreviewBridge) {
         const rigHistory = rigHistoryCreate({ persistence: desktopHistoryPersistence() });
         const rigRouter = rigRouterCreate(rigHistory);
         // The shell's Back and Forward arrive as a direction and are walked here.
-        desktopBridge.navigationStepSubscribe((step) => {
-            if (step.direction === "back") rigHistory.back();
-            else rigHistory.forward();
-        });
+        appDisposers.push(
+            desktopBridge.navigationStepSubscribe((step) => {
+                if (step.direction === "back") rigHistory.back();
+                else rigHistory.forward();
+            }),
+        );
         // Chromium acts on macOS side buttons after mouseup, before auxclick is
         // guaranteed to arrive. Claim them in capture so only our stack moves.
-        window.addEventListener(
-            "mouseup",
-            (event) => {
-                if (event.button !== 3 && event.button !== 4) return;
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                if (event.button === 3) rigHistory.back();
-                else rigHistory.forward();
-            },
-            { capture: true },
+        const sideButtonWalk = (event: MouseEvent): void => {
+            if (event.button !== 3 && event.button !== 4) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if (event.button === 3) rigHistory.back();
+            else rigHistory.forward();
+        };
+        window.addEventListener("mouseup", sideButtonWalk, { capture: true });
+        appDisposers.push(() =>
+            window.removeEventListener("mouseup", sideButtonWalk, { capture: true }),
         );
         // Appearance, title motion, and model choices share one durable desktop
         // document. The adapter keeps its current value synchronous so writes
         // from any product store preserve changes already made by the others.
         const preferences = desktopPreferencesCreate(desktopBridge, config);
         // Appearance is chosen for the window, not for one connection, so the store is
-        // created here beside the router and outlives both.
-        const appearance = appearanceStoreCreate({ mode: preferences.initialAppearance });
-        desktopAppearanceSynchronize(appearance, desktopBridge);
-        appearance.subscribe(() => preferences.appearanceChanged(appearance.get().mode));
+        // created here beside the router and outlives both — and outlives the app
+        // itself, along with the daemon store, for the reasons given at `shell`.
+        shell ??= ((): DesktopShellStores => {
+            const created = appearanceStoreCreate({ mode: preferences.initialAppearance });
+            desktopAppearanceSynchronize(created, desktopBridge);
+            created.subscribe(() => preferences.appearanceChanged(created.get().mode));
+            const store = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
+            if (store) restartSupervise(config, store);
+            return { appearance: created, ...(store ? { daemon: store } : {}) };
+        })();
+        const { appearance, daemon } = shell;
         const debug = desktopDebugStoreCreate(desktopBridge);
         const profiler = desktopProfilerStoreCreate(desktopBridge);
-        const daemon = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
         // Defaults and model picker memory belong to the desktop, not one daemon.
         // The state stores stay synchronous while the bridge persists their typed
         // snapshots through the main process.
         const settings = rigSettingsStoreCreate(preferences.initialSettings);
-        settings.subscribe(() => preferences.settingsChanged(settings.get()));
+        appDisposers.push(settings.subscribe(() => preferences.settingsChanged(settings.get())));
         // How the reader arranged the sidebar's pinned rows. It is the window's
         // Those rows are window chrome whether or not any machine is reachable,
         // so the arrangement must outlive every connection this window makes.
@@ -771,19 +972,21 @@ if (mediaPreviewBridge) {
             terminalColorScheme: () => appearance.get().appearance,
         });
         let materialized = "";
-        rigs.subscribe(() => {
-            const current = rigs
-                .get()
-                .rigs.map((rig) => `${rig.id}:${rig.session ? "up" : "down"}`)
-                .join(",");
-            if (current === materialized) return;
-            materialized = current;
-            void rigRouter.invalidate();
-        });
+        appDisposers.push(
+            rigs.subscribe(() => {
+                const current = rigs
+                    .get()
+                    .rigs.map((rig) => `${rig.id}:${rig.session ? "up" : "down"}`)
+                    .join(",");
+                if (current === materialized) return;
+                materialized = current;
+                void rigRouter.invalidate();
+            }),
+        );
         // What is waiting for the person is a fact about the whole window, not
         // about the screen that happens to be open, so the Dock is marked from
         // the same directory the sidebar reads rather than from any one Rig.
-        dockUnreadPublish(rigs, (count) => desktopBridge.dockUnreadSet(count));
+        appDisposers.push(dockUnreadPublish(rigs, (count) => desktopBridge.dockUnreadSet(count)));
         // This window renders the Rig tree directly rather than through `App`, so
         // it has to start the highlighting pool itself: without this the file
         // viewer and every diff in the primary desktop surface tokenize on the

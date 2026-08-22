@@ -750,8 +750,14 @@ export class LocalOnboarding implements Disposable {
     }): LocalOnboardingSnapshot["stage"] {
         if (!facts.local) return "inactive";
         if (facts.daemon) {
-            if (facts.daemon.installation === "missing" || facts.daemon.operation === "downloading")
-                return "daemonDownload";
+            // Whether the agent is here at all, never whether bytes are moving.
+            // Happy downloads a found update on its own, and a machine that is
+            // already set up and working must not be dropped back into setup
+            // because a background download started: downloading interrupts
+            // nobody, so it stays where it can be ignored. Setup keeps the
+            // window through a first download because nothing is installed yet,
+            // which this already says.
+            if (facts.daemon.installation === "missing") return "daemonDownload";
             if (!facts.ready) {
                 const runtime = this.options.runtime.get();
                 return runtime.phase === "error" ? "connectFailed" : "connecting";

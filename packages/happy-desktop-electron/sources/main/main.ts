@@ -1437,6 +1437,22 @@ void app
             desktopDaemonSenderRequire(event.sender);
             return daemonController.checkForUpdate();
         });
+        ipcMain.handle(desktopIpc.daemonInstall, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.install();
+        });
+        ipcMain.handle(desktopIpc.daemonInstallDismiss, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            daemonController.installDismiss();
+        });
+        ipcMain.handle(desktopIpc.daemonInstallKill, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            daemonController.installKill();
+        });
+        ipcMain.handle(desktopIpc.daemonRestart, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.restart();
+        });
         ipcMain.handle(desktopIpc.daemonVersionSelect, (event, version: unknown) => {
             desktopDaemonSenderRequire(event.sender);
             return daemonController.versionSelect(desktopDaemonVersionValidate(version));

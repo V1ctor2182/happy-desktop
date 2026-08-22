@@ -302,6 +302,7 @@ function RigWorkspaceLayout(
             mediaWindow={context.mediaWindow}
             chatId={params.chatId}
             groupId={params.groupId}
+            {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}

@@ -41,6 +41,12 @@ export type RigGeneralSettingsProps = {
         runningVersion?: string;
         runtime: "stopped" | "starting" | "ready";
         updateAvailable: boolean;
+        /**
+         * A newer version already downloaded and waiting on the person. Its
+         * presence turns the offer from "fetch this" into "stop the agent and
+         * run it", which is the only half of an update anyone has to decide.
+         */
+        readyVersion?: string;
         /** Every version that can be run, newest first; empty before the first check. */
         versions: readonly {
             downloaded: boolean;
@@ -57,6 +63,8 @@ export type RigGeneralSettingsProps = {
     onAgentCheck?: () => void;
     onAgentUpgrade?: () => void;
     onAgentVersionSelect?: (version: string) => void;
+    /** Drains and restarts the agent on the version it is already running. */
+    onAgentRestart?: () => void;
 };
 
 const appearanceSegments = [
@@ -197,7 +205,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
             </RigSettingsSection>
             {props.agent ? (
                 <RigSettingsSection
-                    description="The verified local runtime Happy uses for coding sessions. Updates are checked automatically; the check below just asks now."
+                    description="The verified local runtime Happy uses for coding sessions. Updates are found and downloaded on their own, quietly and without interrupting anything. Running one is the part you decide, because it stops the agent."
                     title="Happy Agent"
                 >
                     <FormRow
@@ -210,10 +218,19 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                                           ? `v${props.agent.installedVersion}`
                                           : "Not installed"}
                                 </span>
-                                {props.agent.managed && props.agent.operation === "checking" ? (
+                                {/* Downloading says so right here and nowhere else.
+                                    It interrupts nobody, so it gets a line in the
+                                    row it belongs to rather than the window. */}
+                                {props.agent.managed &&
+                                (props.agent.operation === "checking" ||
+                                    props.agent.operation === "downloading") ? (
                                     <Box className="happy2-rig-settings__pending">
                                         <Spinner size={16} />
-                                        <span>Checking…</span>
+                                        <span>
+                                            {props.agent.operation === "checking"
+                                                ? "Checking…"
+                                                : "Downloading…"}
+                                        </span>
                                     </Box>
                                 ) : null}
                                 {props.agent.managed &&
@@ -225,9 +242,15 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                                         size="small"
                                         variant="secondary"
                                     >
-                                        {props.agent.availableVersion
-                                            ? `Update to ${props.agent.availableVersion}`
-                                            : "Update"}
+                                        {/* "Install" once the bytes are already here,
+                                            which is the ordinary case: the fetch
+                                            happened on its own, and what is left to
+                                            agree to is the interruption. */}
+                                        {props.agent.readyVersion
+                                            ? `Install v${props.agent.readyVersion}`
+                                            : props.agent.availableVersion
+                                              ? `Update to ${props.agent.availableVersion}`
+                                              : "Update"}
                                     </Button>
                                 ) : null}
                                 {props.agent.managed && props.onAgentCheck ? (
@@ -274,18 +297,33 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                                     />
                                 </Box>
                             }
-                            description="Runs an exact release. One not held on this machine is downloaded first."
+                            description="Runs an exact release, forwards or back. One not held on this machine is downloaded first; then the agent is drained and restarted onto it."
                             htmlFor="rig-settings-agent-version"
                             label="Version"
                         />
                     ) : null}
                     <FormRow
                         control={
-                            <span className="happy2-rig-settings__agent-runtime">
-                                {agentRuntimeLabel(props.agent.runtime, props.agent.runningVersion)}
-                            </span>
+                            <Box className="happy2-rig-settings__agent-control">
+                                <span className="happy2-rig-settings__agent-runtime">
+                                    {agentRuntimeLabel(
+                                        props.agent.runtime,
+                                        props.agent.runningVersion,
+                                    )}
+                                </span>
+                                {props.agent.managed && props.onAgentRestart ? (
+                                    <Button
+                                        disabled={props.agent.operation !== "idle"}
+                                        onClick={props.onAgentRestart}
+                                        size="small"
+                                        variant="secondary"
+                                    >
+                                        Restart
+                                    </Button>
+                                ) : null}
+                            </Box>
                         }
-                        description="Follows the daemon Happy is connected to"
+                        description="Follows the daemon Happy is connected to. Restarting lets its work finish first."
                         label="Daemon"
                     />
                 </RigSettingsSection>

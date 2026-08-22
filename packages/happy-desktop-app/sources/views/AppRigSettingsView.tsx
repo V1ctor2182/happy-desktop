@@ -101,6 +101,62 @@ export interface AppRigDaemonVersion {
     readonly version: string;
 }
 
+/** One agent the daemon is still waiting on, and the stage it is finishing. */
+export interface AppRigDrainAgent {
+    readonly id: string;
+    readonly stage: "inference" | "tools" | "compaction" | "settlement";
+}
+
+/** One runtime component whose admitted work has not drained yet. */
+export interface AppRigDrainComponent {
+    readonly name: string;
+    readonly count: number;
+    readonly agents?: readonly AppRigDrainAgent[];
+    readonly truncated?: boolean;
+}
+
+/** Why the daemon is being taken down and brought back. */
+export type AppRigDaemonRestartReason = "install" | "restart";
+
+/**
+ * Where a deliberate agent restart has got to. Every fact here is the daemon's
+ * own report of itself, so a surface showing it states rather than estimates.
+ */
+export type AppRigDaemonInstall =
+    /** No restart running — and how a finished one ends, so the screen leaves. */
+    | { readonly phase: "idle" }
+    | {
+          readonly phase: "draining";
+          readonly reason: AppRigDaemonRestartReason;
+          readonly version: string;
+          readonly waitingFor: readonly AppRigDrainComponent[];
+          /** The drain has run long enough to be worth offering a way out of. */
+          readonly killable: boolean;
+      }
+    | {
+          readonly phase: "stopping";
+          readonly reason: AppRigDaemonRestartReason;
+          readonly version: string;
+          /** The drain was cut short, so work was interrupted rather than finished. */
+          readonly killed: boolean;
+      }
+    | {
+          readonly phase: "starting";
+          readonly reason: AppRigDaemonRestartReason;
+          readonly version: string;
+      }
+    | {
+          readonly phase: "reconnecting";
+          readonly reason: AppRigDaemonRestartReason;
+          readonly version: string;
+      }
+    | {
+          readonly phase: "error";
+          readonly reason: AppRigDaemonRestartReason;
+          readonly version: string;
+          readonly message: string;
+      };
+
 /** The managed Happy Agent installation projected into General settings. */
 export interface AppRigDaemonSnapshot {
     readonly availableVersion?: string;
@@ -114,10 +170,21 @@ export interface AppRigDaemonSnapshot {
     readonly updateAvailable: boolean;
     /** Newest first; empty until the first catalog read answers. */
     readonly versions: readonly AppRigDaemonVersion[];
+    /** A downloaded version waiting on the person to install it. */
+    readonly readyVersion?: string;
+    readonly install: AppRigDaemonInstall;
 }
 
 export interface AppRigDaemonStore {
     daemonCheck(): void;
+    /** Drains and restarts the local daemon onto the downloaded version. */
+    daemonInstall(): void;
+    /** Hands the window back once a failed install has been read. */
+    daemonInstallDismiss(): void;
+    /** Stops waiting for the drain and takes the daemon down now. */
+    daemonInstallKill(): void;
+    /** Drains and restarts the daemon on the version it is already running. */
+    daemonRestart(): void;
     daemonUpgrade(): void;
     daemonVersionSelect(version: string): void;
     get(): AppRigDaemonSnapshot;
@@ -487,6 +554,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                         ? {
                               agent: daemonView,
                               onAgentCheck: daemonStore.daemonCheck,
+                              onAgentRestart: daemonStore.daemonRestart,
                               onAgentUpgrade: daemonStore.daemonUpgrade,
                               onAgentVersionSelect: daemonStore.daemonVersionSelect,
                           }
@@ -598,6 +666,7 @@ const profilerStoreNoop: AppRigProfilerStore = {
     subscribe: noSubscribe,
 };
 const daemonUnavailable: AppRigDaemonSnapshot = {
+    install: { phase: "idle" },
     managed: false,
     operation: "idle",
     runtime: "stopped",
@@ -606,6 +675,10 @@ const daemonUnavailable: AppRigDaemonSnapshot = {
 };
 const daemonStoreNoop: AppRigDaemonStore = {
     daemonCheck: () => undefined,
+    daemonInstall: () => undefined,
+    daemonInstallDismiss: () => undefined,
+    daemonInstallKill: () => undefined,
+    daemonRestart: () => undefined,
     daemonUpgrade: () => undefined,
     daemonVersionSelect: () => undefined,
     get: () => daemonUnavailable,

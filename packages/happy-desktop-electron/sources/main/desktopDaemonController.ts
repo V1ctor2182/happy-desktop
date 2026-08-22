@@ -1,9 +1,12 @@
 import { execFile } from "node:child_process";
 import type {
+    DesktopDaemonInstall,
+    DesktopDaemonRestartReason,
     DesktopDaemonSnapshot,
     DesktopDaemonVersion,
     DesktopRuntimeSnapshot,
 } from "../shared/desktopContract";
+import { happyAgentRestartRun } from "./happyAgentRestart";
 import {
     happyAgentBinaryDownloaded,
     happyAgentBinarySelect,
@@ -16,6 +19,7 @@ import {
     type HappyDaemonPaths,
 } from "./happyAgentBinaryPaths";
 import {
+    happyAgentReleaseDownload,
     happyAgentReleaseInstall,
     happyAgentReleaseLatest,
     happyAgentReleasesList,
@@ -26,6 +30,8 @@ import {
 
 const DAEMON_COMMAND_TIMEOUT_MS = 75_000;
 const MAXIMUM_COMMAND_OUTPUT_BYTES = 1024 * 1024;
+/** How long the install screen waits for this window to reconnect before it lets go. */
+const RECONNECT_TIMEOUT_MS = 60_000;
 
 export interface DesktopDaemonControllerOptions {
     readonly environment?: NodeJS.ProcessEnv;
@@ -36,6 +42,8 @@ export interface DesktopDaemonControllerOptions {
 
 /** Owns the downloaded Happy Agent selection and its renderer-facing live state. */
 export class DesktopDaemonController {
+    /** Present only while a restart is running, so it can be cut short. */
+    private killController?: AbortController;
     private latestRelease?: HappyAgentRelease;
     private readonly listeners = new Set<(snapshot: DesktopDaemonSnapshot) => void>();
     private operation = Promise.resolve();
@@ -49,6 +57,7 @@ export class DesktopDaemonController {
         selected: HappyAgentBinary | undefined,
     ) {
         this.snapshotValue = {
+            install: { phase: "idle" },
             installation: selected ? "installed" : "missing",
             ...(selected ? { installedVersion: selected.version } : {}),
             managed,
@@ -122,7 +131,23 @@ export class DesktopDaemonController {
                     operation: "idle",
                     updateAvailable,
                     versions: await this.versionsProject(),
+                    ...(await this.readyVersionRead()),
                 });
+                // Fetching it now is what makes the install a decision rather
+                // than a wait: by the time anyone clicks, the bytes are here.
+                //
+                // A failed background download is not the check failing: the
+                // version it found is still real, and the next check tries the
+                // bytes again.
+                if (updateAvailable)
+                    await this.stage(release).catch((error: unknown) => {
+                        this.publish({
+                            ...this.snapshotValue,
+                            error: displayError(error),
+                            message: undefined,
+                            operation: "idle",
+                        });
+                    });
             } catch (error) {
                 this.publish({
                     ...this.snapshotValue,
@@ -136,87 +161,304 @@ export class DesktopDaemonController {
         });
     }
 
-    download(): Promise<void> {
-        return this.install("downloading", undefined);
-    }
-
-    upgrade(): Promise<void> {
-        return this.install("upgrading", undefined);
+    /**
+     * Puts a release's bytes on this machine and stops there, leaving the
+     * running daemon exactly as it is.
+     *
+     * Downloading is not installing, and it is deliberately not an event in the
+     * life of the window: nothing is interrupted, nothing is restarted, and
+     * whoever is working keeps working. It reports itself in place — the agent
+     * row in settings and the sidebar — and never takes the screen. Moving onto
+     * what it fetched is a separate decision, and that one does take the screen,
+     * because that one stops the agent.
+     *
+     * Throws when the bytes do not arrive. A caller that is about to restart
+     * onto this version must not proceed, and the one caller for which a failed
+     * download is merely disappointing catches it itself.
+     */
+    private async stage(release: HappyAgentRelease): Promise<void> {
+        // Deliberately not serialized: every caller already holds the lock, and
+        // taking it again here would make this wait on the work calling it.
+        if ((await happyAgentBinaryDownloaded(this.paths)).includes(release.version)) {
+            this.publish({ ...this.snapshotValue, ...(await this.readyVersionRead()) });
+            return;
+        }
+        this.publish({
+            ...this.snapshotValue,
+            error: undefined,
+            message: `Downloading Happy Agent ${release.version}…`,
+            operation: "downloading",
+        });
+        await happyAgentReleaseDownload(release, this.paths, {
+            onStatus: (message) =>
+                this.publish({ ...this.snapshotValue, message, operation: "downloading" }),
+        });
+        this.publish({
+            ...this.snapshotValue,
+            error: undefined,
+            message: `Happy Agent ${release.version} is ready to install.`,
+            operation: "idle",
+            versions: await this.versionsProject(),
+            ...(await this.readyVersionRead()),
+        });
     }
 
     /**
-     * Runs the daemon on one exact version, downloading it first when this
-     * machine does not already hold it. Unlike an upgrade this may move
-     * backwards, so the requested version is installed whether or not it is
-     * newer than the one selected now.
+     * The same, for one exact version. A version this machine already holds
+     * costs nothing and touches no network — that is the whole point of keeping
+     * the earlier ones.
      */
-    versionSelect(version: string): Promise<void> {
-        return this.install("upgrading", version);
-    }
-
-    runtimeSet(runtime: DesktopRuntimeSnapshot): void {
-        const state =
-            runtime.phase === "ready"
-                ? "ready"
-                : runtime.phase === "starting"
-                  ? "starting"
-                  : "stopped";
-        if (this.snapshotValue.runtime === state) return;
-        this.publish({ ...this.snapshotValue, runtime: state });
+    private async stageVersion(version: string): Promise<void> {
+        if ((await happyAgentBinaryDownloaded(this.paths)).includes(version)) return;
+        await this.stage(await happyAgentReleaseVersion(version));
     }
 
     /**
-     * `version` names an exact release to run; without one this installs the
-     * latest release, which is what an update and a first download both mean.
+     * The download half of a move onto a version, left in a truthful state
+     * whichever way it goes.
+     *
+     * `stage` reports its own progress but not its own failure, because its
+     * other caller treats a failed background fetch as nothing worth saying.
+     * Here it is the reason the restart is not happening, so it is said — and
+     * `operation` is put back, which is what stops the row claiming bytes are
+     * still arriving after they have stopped.
      */
-    private install(
-        operation: "downloading" | "upgrading",
-        version: string | undefined,
-    ): Promise<void> {
-        return this.serial(async () => {
-            if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
+    private async stageOrFail<T>(work: () => Promise<T>): Promise<T> {
+        try {
+            return await work();
+        } catch (error) {
             this.publish({
                 ...this.snapshotValue,
-                error: undefined,
-                message:
-                    version !== undefined
-                        ? `Preparing Happy Agent ${version}…`
-                        : operation === "upgrading"
-                          ? "Preparing the Happy Agent update…"
-                          : "Preparing Happy Agent…",
-                operation,
+                error: displayError(error),
+                message: undefined,
+                operation: "idle",
             });
+            throw error;
+        }
+    }
+
+    /**
+     * Drains the running daemon and restarts it on the downloaded version.
+     *
+     * This is the only kind of path that interrupts anybody's work, so it is
+     * never taken on Happy's own initiative. It concerns the local machine's
+     * daemon alone; a remote Rig is restarted by whoever owns it.
+     */
+    install(): Promise<void> {
+        return this.serial(() => this.restartCore("install", this.snapshotValue.readyVersion));
+    }
+
+    /**
+     * Drains and restarts the daemon on the version it is already running.
+     *
+     * The same sequence and the same screen as an install: the reason someone
+     * restarts an agent — it is wedged, or its environment changed — is not a
+     * reason to interrupt the work it is currently finishing.
+     */
+    restart(): Promise<void> {
+        return this.serial(() => this.restartCore("restart", undefined));
+    }
+
+    /**
+     * Stops waiting for the drain. Whatever the daemon had not finished is
+     * interrupted, which is why this only ever happens by being asked for.
+     */
+    installKill(): void {
+        this.killController?.abort();
+    }
+
+    /**
+     * The one restart sequence, whichever reason brought it about.
+     *
+     * `version` names a downloaded version to move onto; without one the daemon
+     * comes back on exactly what it was already running. Every move onto a
+     * version arrives here, so there is one answer to "what happens to the work
+     * that is running" and it is the same one every time.
+     *
+     * Unlocked: the caller holds the serial lock, because some callers download
+     * first and the two halves must not be interleaved with anything else.
+     */
+    private restartCore(
+        reason: DesktopDaemonRestartReason,
+        version: string | undefined,
+    ): Promise<void> {
+        return (async () => {
+            if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
+            if (reason === "install" && version === undefined)
+                throw new Error("No Happy Agent update has been downloaded.");
+            const selected = version ?? (await happyAgentBinarySelected(this.paths))?.version;
+            if (selected === undefined) throw new Error("Happy Agent is not installed.");
+            const publishStep = (install: DesktopDaemonInstall): void =>
+                this.publish({ ...this.snapshotValue, install });
+            const killController = new AbortController();
+            this.killController = killController;
             try {
-                const selected = await this.binaryPrepare(operation, version, (message) =>
-                    this.publish({ ...this.snapshotValue, message, operation }),
-                );
+                // The restart is underway from here, and this says so in the
+                // same breath as marking the daemon busy. Publishing the busy
+                // flag alone would carry the still-idle install phase with it
+                // and take the screen back down over a window that had already
+                // put it up, leaving the click looking like it did nothing.
+                this.publish({
+                    ...this.snapshotValue,
+                    error: undefined,
+                    install: {
+                        killable: false,
+                        phase: "draining",
+                        reason,
+                        version: selected,
+                        waitingFor: [],
+                    },
+                    operation: "upgrading",
+                });
+                if (version !== undefined) await happyAgentBinarySelect(this.paths, version);
+                await happyAgentRestartRun({
+                    binary: { path: happyAgentBinaryPath(this.paths, selected), version: selected },
+                    environment: await this.launchEnvironmentRead(),
+                    killSignal: killController.signal,
+                    onStep: publishStep,
+                    paths: this.paths,
+                    reason,
+                });
+                // The daemon answers, but this window is not talking to it yet.
+                // Finishing here would hand the app back mid-reconnect.
+                await this.runtimeReadyAwait();
+                // Against the newest release rather than assumed false: this is
+                // also how a deliberate move backwards lands, and that machine
+                // is running exactly what was asked for while a newer version
+                // genuinely does still exist.
                 const availableVersion = this.latestRelease?.version;
                 const updateAvailable =
-                    availableVersion !== undefined &&
-                    versionNewer(availableVersion, selected.version);
+                    availableVersion !== undefined && versionNewer(availableVersion, selected);
                 this.publish({
                     ...this.snapshotValue,
                     ...(availableVersion ? { availableVersion } : {}),
                     error: undefined,
+                    // Straight back to idle, which takes the screen down. The
+                    // restart succeeding is the window returning; there is
+                    // nothing further to tell anyone about it.
+                    install: { phase: "idle" },
                     installation: "installed",
-                    installedVersion: selected.version,
-                    message: `Starting Happy Agent ${selected.version}…`,
-                    operation,
-                    runtime: "starting",
-                    updateAvailable,
-                });
-                await daemonCommandRun(selected.path, "reload", await this.launchEnvironmentRead());
-                this.publish({
-                    ...this.snapshotValue,
-                    error: undefined,
-                    installation: "installed",
-                    installedVersion: selected.version,
+                    installedVersion: selected,
                     message: updateAvailable
                         ? `Happy Agent ${availableVersion} is available.`
                         : "Happy Agent is up to date.",
                     operation: "idle",
                     runtime: "ready",
                     updateAvailable,
+                    versions: await this.versionsProject(),
+                    ...(await this.readyVersionRead()),
+                });
+            } catch (error) {
+                const message = displayError(error);
+                this.publish({
+                    ...this.snapshotValue,
+                    error: message,
+                    install: { message, phase: "error", reason, version: selected },
+                    operation: "idle",
+                });
+                throw error;
+            } finally {
+                if (this.killController === killController) this.killController = undefined;
+            }
+        })();
+    }
+
+    /**
+     * Resolves once this window is connected to a daemon again.
+     *
+     * The connection is re-established by the ordinary reconnect path rather
+     * than by anything here, so this only watches. It gives up after a bounded
+     * wait: a reconnect that is taking unusually long is still a working app
+     * with its own status, and is no reason to keep the whole window covered.
+     */
+    private runtimeReadyAwait(): Promise<void> {
+        if (this.snapshotValue.runtime === "ready") return Promise.resolve();
+        return new Promise((resolve) => {
+            const settle = (): void => {
+                clearTimeout(timer);
+                unsubscribe();
+                resolve();
+            };
+            const timer = setTimeout(settle, RECONNECT_TIMEOUT_MS);
+            const unsubscribe = this.subscribe((snapshot) => {
+                if (snapshot.runtime === "ready") settle();
+            });
+        });
+    }
+
+    /** Clears a failed install so the screen hands the window back. */
+    installDismiss(): void {
+        if (this.snapshotValue.install.phase === "idle") return;
+        this.publish({ ...this.snapshotValue, install: { phase: "idle" } });
+    }
+
+    /**
+     * The downloaded version worth installing: newer than the one running, and
+     * already on this machine. Anything else is not an offer anyone can accept.
+     */
+    private async readyVersionRead(): Promise<{ readonly readyVersion?: string }> {
+        const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
+        const downloaded = await happyAgentBinaryDownloaded(this.paths).catch((): string[] => []);
+        const newest = downloaded.reduce<string | undefined>(
+            (best, version) => (best === undefined || versionNewer(version, best) ? version : best),
+            undefined,
+        );
+        if (newest === undefined) return {};
+        if (selected !== undefined && !versionNewer(newest, selected.version)) return {};
+        return { readyVersion: newest };
+    }
+
+    /**
+     * Puts Happy Agent on a machine that has none and starts it.
+     *
+     * First-run setup only, and the one move onto a version that is not a
+     * restart: there is no daemon yet, so there is no work to drain and nobody
+     * to interrupt. Setup already owns the window and reports this in place;
+     * raising the restart screen over it would be covering a screen with a
+     * screen. Every later move onto a version goes through `restartCore`.
+     */
+    download(): Promise<void> {
+        return this.serial(async () => {
+            if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
+            this.publish({
+                ...this.snapshotValue,
+                error: undefined,
+                message: "Preparing Happy Agent…",
+                operation: "downloading",
+            });
+            try {
+                const release = this.latestRelease ?? (await happyAgentReleaseLatest());
+                this.latestRelease = release;
+                const installed = await happyAgentBinarySelected(this.paths);
+                const selected =
+                    installed !== undefined && !versionNewer(release.version, installed.version)
+                        ? installed
+                        : await happyAgentReleaseInstall(release, this.paths, {
+                              onStatus: (message) =>
+                                  this.publish({
+                                      ...this.snapshotValue,
+                                      message,
+                                      operation: "downloading",
+                                  }),
+                          });
+                this.publish({
+                    ...this.snapshotValue,
+                    availableVersion: release.version,
+                    error: undefined,
+                    installation: "installed",
+                    installedVersion: selected.version,
+                    message: `Starting Happy Agent ${selected.version}…`,
+                    operation: "downloading",
+                    runtime: "starting",
+                    updateAvailable: false,
+                });
+                await daemonCommandRun(selected.path, "reload", await this.launchEnvironmentRead());
+                this.publish({
+                    ...this.snapshotValue,
+                    error: undefined,
+                    message: "Happy Agent is up to date.",
+                    operation: "idle",
+                    runtime: "ready",
                     versions: await this.versionsProject(),
                 });
             } catch (error) {
@@ -234,39 +476,53 @@ export class DesktopDaemonController {
     }
 
     /**
-     * Leaves this machine holding the requested version and having selected it.
-     * A version already downloaded here is selected without touching the
-     * network; that is the whole point of keeping the earlier versions.
+     * Moves the daemon onto the newest release: the bytes inline, then the
+     * restart.
+     *
+     * The two halves are deliberately different in kind. Fetching costs the
+     * person nothing and reports itself in place; stopping the agent they are
+     * working through costs them the app, so it drains first and says so on the
+     * screen. A version already downloaded skips straight to the second half.
      */
-    private async binaryPrepare(
-        operation: "downloading" | "upgrading",
-        version: string | undefined,
-        onStatus: (message: string) => void,
-    ): Promise<HappyAgentBinary> {
-        if (version !== undefined) {
-            if (!(await happyAgentBinaryDownloaded(this.paths)).includes(version)) {
-                return happyAgentReleaseInstall(
-                    await happyAgentReleaseVersion(version),
-                    this.paths,
-                    {
-                        onStatus,
-                    },
-                );
-            }
-            onStatus(`Switching to Happy Agent ${version}.`);
-            await happyAgentBinarySelect(this.paths, version);
-            return { path: happyAgentBinaryPath(this.paths, version), version };
-        }
-        const release =
-            operation === "upgrading" || this.latestRelease === undefined
-                ? await happyAgentReleaseLatest()
-                : this.latestRelease;
-        this.latestRelease = release;
-        const installed = await happyAgentBinarySelected(this.paths);
-        if (installed !== undefined && !versionNewer(release.version, installed.version)) {
-            return installed;
-        }
-        return happyAgentReleaseInstall(release, this.paths, { onStatus });
+    upgrade(): Promise<void> {
+        return this.serial(async () => {
+            // Ahead of the download rather than inside the restart: an agent
+            // Happy does not manage is not one to fetch bytes for either.
+            if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
+            const release = await this.stageOrFail(async () => {
+                const found = this.latestRelease ?? (await happyAgentReleaseLatest());
+                this.latestRelease = found;
+                await this.stage(found);
+                return found;
+            });
+            await this.restartCore("install", release.version);
+        });
+    }
+
+    /**
+     * Runs the daemon on one exact version, downloading it first when this
+     * machine does not already hold it. Unlike an upgrade this may move
+     * backwards, so the requested version is applied whether or not it is newer
+     * than the one selected now — and it drains exactly the same way, because
+     * going back interrupts the same work going forward would have.
+     */
+    versionSelect(version: string): Promise<void> {
+        return this.serial(async () => {
+            if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
+            await this.stageOrFail(() => this.stageVersion(version));
+            await this.restartCore("install", version);
+        });
+    }
+
+    runtimeSet(runtime: DesktopRuntimeSnapshot): void {
+        const state =
+            runtime.phase === "ready"
+                ? "ready"
+                : runtime.phase === "starting"
+                  ? "starting"
+                  : "stopped";
+        if (this.snapshotValue.runtime === state) return;
+        this.publish({ ...this.snapshotValue, runtime: state });
     }
 
     /**

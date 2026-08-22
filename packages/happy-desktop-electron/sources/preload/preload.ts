@@ -105,6 +105,10 @@ const bridge: HappyDesktopBridge = {
     desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),
     daemonCheck: () => ipcRenderer.invoke(desktopIpc.daemonCheck),
     daemonDownload: () => ipcRenderer.invoke(desktopIpc.daemonDownload),
+    daemonInstall: () => ipcRenderer.invoke(desktopIpc.daemonInstall),
+    daemonInstallDismiss: () => ipcRenderer.invoke(desktopIpc.daemonInstallDismiss),
+    daemonInstallKill: () => ipcRenderer.invoke(desktopIpc.daemonInstallKill),
+    daemonRestart: () => ipcRenderer.invoke(desktopIpc.daemonRestart),
     daemonGet: () => ipcRenderer.invoke(desktopIpc.daemonGet),
     daemonSubscribe(listener: (snapshot: DesktopDaemonSnapshot) => void) {
         const receive = (_event: Electron.IpcRendererEvent, snapshot: DesktopDaemonSnapshot) =>

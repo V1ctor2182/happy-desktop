@@ -102,6 +102,13 @@
     --surface-pressed-overlay: transparent;
     --surface-high: #f8f8f8;
     --surface-highest: #f0f0f0;
+    /* The surface turned inside out: near-black on a light appearance and
+       near-white on a dark one, always the opposite of what surrounds it. It is
+       for the rare band that has to be seen without claiming anything is wrong —
+       a colour would say error or warning, and neutral at full contrast says
+       only "read this". Not a container: it carries one line and no controls. */
+    --surface-inverse: #1c1c1e;
+    --text-inverse: #ffffff;
     /* The paper a rendered web page sits on. It is the browser's canvas rather
        than one of our surfaces, so it stays white in both appearances: a page
        that sets no background of its own was written expecting white, and
@@ -318,6 +325,8 @@
         --surface-pressed-overlay: transparent;
         --surface-high: #171717;
         --surface-highest: #292929;
+        --surface-inverse: #f2f2f7;
+        --text-inverse: #1c1c1e;
         --divider: #292929;
         --shadow-color: rgb(0 0 0 / 0.1);
         --shadow-opacity: 0.1;
@@ -485,6 +494,8 @@
     --surface-pressed-overlay: transparent;
     --surface-high: #171717;
     --surface-highest: #292929;
+    --surface-inverse: #f2f2f7;
+    --text-inverse: #1c1c1e;
     --divider: #292929;
     --shadow-color: rgb(0 0 0 / 0.1);
     --shadow-opacity: 0.1;

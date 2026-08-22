@@ -3,9 +3,15 @@ import { Icon } from "./Icon";
 
 export interface SidebarUpdateActionProps {
     /** Operation the host needs for this update source once it is ready. */
-    action: "refresh" | "restart";
+    action: "refresh" | "restart" | "install";
     /** Detail shown while the update is arriving, such as download progress. */
     detail?: string;
+    /**
+     * What is being updated, when it is not Happy itself. A row that names
+     * nothing is about the application, which is the case the sidebar has always
+     * had; anything else has to say what it is or the version means nothing.
+     */
+    label?: string;
     /** Applies the ready update through the operation named by `action`. */
     onAction?: () => void;
     status: "available" | "downloading" | "downloaded";
@@ -26,28 +32,32 @@ function versionLabel(version: string | undefined): string {
  */
 export function SidebarUpdateAction(props: SidebarUpdateActionProps) {
     const version = versionLabel(props.version);
-    const actionLabel = props.action === "refresh" ? "Refresh" : "Restart";
+    // The subject comes first wherever there is one, because "Install · v0.4.2"
+    // in a corner of the window does not say what is being installed.
+    const subject = props.label ? `${props.label} ${version}` : version;
+    const actionLabel =
+        props.action === "refresh" ? "Refresh" : props.action === "install" ? "Install" : "Restart";
     if (props.status === "downloaded" && props.onAction)
         return (
             <Button
-                aria-label={`${actionLabel} to update to ${version}`}
+                aria-label={`${actionLabel} ${subject}`}
                 className="happy2-sidebar-update-action happy2-sidebar-update-action--ready"
                 icon="arrow-up"
                 onClick={props.onAction}
                 size="small"
-                title={`${version} is ready`}
+                title={`${subject} is ready`}
                 variant="secondary"
             >
-                {actionLabel} · {version}
+                {actionLabel} · {subject}
             </Button>
         );
 
     const label =
         props.status === "available"
-            ? `${version} available`
+            ? `${subject} available`
             : props.status === "downloading"
-              ? [version, props.detail ?? "Downloading"].join(" · ")
-              : `${version} ready`;
+              ? [subject, props.detail ?? "Downloading"].join(" · ")
+              : `${subject} ready`;
     return (
         <span
             aria-live="polite"

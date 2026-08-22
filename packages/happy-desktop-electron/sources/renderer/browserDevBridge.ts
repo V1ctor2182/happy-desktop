@@ -110,6 +110,7 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
             throw new Error("Happy Agent downloads are available in the Electron desktop window.");
         },
         daemonGet: async () => ({
+            install: { phase: "idle" },
             installation: "installed",
             managed: false,
             operation: "idle",
@@ -117,6 +118,14 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
             updateAvailable: false,
             versions: [],
         }),
+        daemonInstall: async () => {
+            throw new Error("Happy Agent updates are installed in the Electron desktop window.");
+        },
+        daemonInstallDismiss: async () => undefined,
+        daemonInstallKill: async () => undefined,
+        daemonRestart: async () => {
+            throw new Error("Happy Agent is restarted from the Electron desktop window.");
+        },
         daemonSubscribe: () => () => undefined,
         daemonUpgrade: async () => {
             throw new Error("Happy Agent updates are available in the Electron desktop window.");

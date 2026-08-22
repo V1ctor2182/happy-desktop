@@ -141,6 +141,56 @@ import {
 import { openExternalLink } from "./externalLink";
 import { reactFrameSubscribe } from "./reactFrameSubscribe";
 import { BlueprintView } from "./views/BlueprintView";
+import type { AppRigDaemonSnapshot, AppRigDaemonStore } from "./views/AppRigSettingsView";
+
+const sidebarDaemonUnavailable: AppRigDaemonSnapshot = {
+    install: { phase: "idle" },
+    managed: false,
+    operation: "idle",
+    runtime: "stopped",
+    updateAvailable: false,
+    versions: [],
+};
+
+/** Stands in wherever no machine-local agent is managed, such as a browser. */
+const sidebarDaemonStoreNoop: AppRigDaemonStore = {
+    daemonCheck: () => undefined,
+    daemonInstall: () => undefined,
+    daemonInstallDismiss: () => undefined,
+    daemonInstallKill: () => undefined,
+    daemonRestart: () => undefined,
+    daemonUpgrade: () => undefined,
+    daemonVersionSelect: () => undefined,
+    get: () => sidebarDaemonUnavailable,
+    subscribe: () => () => undefined,
+};
+
+/**
+ * What the sidebar has to say about the agent, if anything.
+ *
+ * Only two things are worth a row: a version being fetched, and one already
+ * fetched and waiting to be installed. A check finding nothing, or an agent
+ * managed outside Happy, is not news and takes no space.
+ */
+function agentUpdateOffer(daemon: AppRigDaemonSnapshot):
+    | {
+          readonly detail?: string;
+          readonly status: "downloading" | "downloaded";
+          readonly version: string;
+      }
+    | undefined {
+    if (!daemon.managed || daemon.install.phase !== "idle") return undefined;
+    if (daemon.readyVersion !== undefined)
+        return { status: "downloaded", version: daemon.readyVersion };
+    if (daemon.operation === "downloading" && daemon.availableVersion !== undefined) {
+        return {
+            ...(daemon.message ? { detail: daemon.message } : {}),
+            status: "downloading",
+            version: daemon.availableVersion,
+        };
+    }
+    return undefined;
+}
 
 export interface AppRigUpdate {
     readonly action: "refresh" | "restart";
@@ -287,6 +337,12 @@ export interface AppRigViewProps {
     update?: AppRigUpdate;
     /** Applies the ready update. Absent in a plain browser surface. */
     onUpdateApply?: () => void;
+    /**
+     * The machine-local Happy Agent, supplied only by the native desktop shell.
+     * The sidebar reads it to offer a downloaded agent update; a browser surface
+     * manages no agent and is given none.
+     */
+    daemon?: AppRigDaemonStore;
     /** Native page renderer supplied only by the packaged Electron host. */
     browserContent?: BrowserContentRenderer;
     /**
@@ -1193,8 +1249,14 @@ export function AppRigView(props: AppRigViewProps) {
     // the count is to be seen while the reader is doing something else.
     const inboxStore = active?.session?.inbox ?? rigInboxStoreNoop;
     const inbox = useSyncExternalStore(inboxStore.subscribe, inboxStore.get, inboxStore.get);
+    const daemonStore = props.daemon ?? sidebarDaemonStoreNoop;
+    const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const inboxPending = inbox.pending.length;
     const desktop = props.platform === "desktop";
+    // Happy's own update wins the row. Restarting the app is the larger event of
+    // the two, and it carries the agent with it, so the agent states its case
+    // once there is nothing bigger waiting.
+    const agentUpdate = props.update ? undefined : agentUpdateOffer(daemon);
     const sidebarUpdate = props.update ? (
         <SidebarUpdateAction
             action={props.update.action}
@@ -1202,6 +1264,15 @@ export function AppRigView(props: AppRigViewProps) {
             onAction={props.update.status === "downloaded" ? props.onUpdateApply : undefined}
             status={props.update.status}
             version={props.update.version}
+        />
+    ) : agentUpdate ? (
+        <SidebarUpdateAction
+            action="install"
+            detail={agentUpdate.detail}
+            label="Happy Agent"
+            onAction={agentUpdate.status === "downloaded" ? daemonStore.daemonInstall : undefined}
+            status={agentUpdate.status}
+            version={agentUpdate.version}
         />
     ) : undefined;
     // The pinned rows as the window offers them. What the reader has made of
@@ -1271,14 +1342,11 @@ export function AppRigView(props: AppRigViewProps) {
                 />
             }
             headerAccessory={
-                active && active.status !== "connected" ? (
-                    <Banner tone={active.status === "error" ? "danger" : "neutral"}>
-                        {active.message ??
-                            (active.status === "connecting"
-                                ? `Connecting to ${active.label}…`
-                                : `${active.label} is disconnected.`)}
-                    </Banner>
-                ) : active?.projectsStatus === "error" ? (
+                // Reachability is the window's line, not the sidebar's — see the
+                // band at the top. What stays here is what only this list can
+                // say: that the Rig is up and still did not hand over its
+                // sessions.
+                active?.status === "connected" && active.projectsStatus === "error" ? (
                     <Banner
                         action={{
                             label: "Retry",
@@ -1289,7 +1357,10 @@ export function AppRigView(props: AppRigViewProps) {
                     >
                         {`${active.label} did not return its projects.`}
                     </Banner>
-                ) : active?.projectsStatus === "loading" ? (
+                ) : active?.status === "connected" && active.projectsStatus === "loading" ? (
+                    // Also only while the Rig is up. Losing it resets the list to
+                    // loading, and "Loading sessions…" under a band saying the
+                    // machine is unreachable is a promise nothing is keeping.
                     <Banner tone="neutral">Loading sessions…</Banner>
                 ) : undefined
             }
@@ -2265,23 +2336,14 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
                     />
-                    {availability.online ? null : (
-                        <Banner
-                            action={{
-                                label: "Retry now",
-                                onClick: () => props.connection.retry(),
-                            }}
-                            icon="link"
-                            tone={availability.state === "error" ? "danger" : "neutral"}
-                            title={
-                                availability.state === "error"
-                                    ? "Rig needs attention"
-                                    : "Rig reconnecting"
-                            }
-                        >
-                            {availability.message}
-                        </Banner>
-                    )}
+                    {/* No banner for an unreachable Rig. The window says that
+                        once, in the band across its top, and repeating it here
+                        pushed the transcript down for something the reader was
+                        already told — in the one surface where the shift is
+                        most expensive. What this conversation still owes is the
+                        local part: its composer and actions go read-only, which
+                        they do on `availability` without any chrome of their
+                        own. */}
                     <WindowShortcuts
                         actions={[
                             // Cmd-W is consistently the workspace's close

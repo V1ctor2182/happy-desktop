@@ -402,6 +402,15 @@ export {
     type LocalOnboardingView,
 } from "./LocalOnboardingScreen";
 export {
+    AgentInstallScreen,
+    type AgentInstallDrainAgent,
+    type AgentInstallDrainComponent,
+    type AgentInstallReason,
+    type AgentInstallScreenProps,
+    type AgentInstallView,
+} from "./AgentInstallScreen";
+export { ConnectionHeader, type ConnectionHeaderProps } from "./ConnectionHeader";
+export {
     WelcomeScreen,
     type WelcomeScreenProps,
     type WelcomeSlide,

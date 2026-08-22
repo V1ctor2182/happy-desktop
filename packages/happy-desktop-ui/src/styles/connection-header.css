@@ -1,0 +1,101 @@
+/*
+ * C-269 ConnectionHeader — a full-width band at the top of the window.
+ *
+ * It is in the flow, not over it: the window is a column, this is its first
+ * child, and the app fills what is left. So appearing moves the whole window
+ * down by exactly its own height and leaves nothing covered. It is deliberately
+ * short — one line, 32px — because it is a standing condition rather than an
+ * alert, and something that may sit there for a minute must not cost a banner's
+ * worth of the window the whole time.
+ *
+ * It paints the inverted surface: near-black on a light appearance, near-white
+ * on a dark one. Neutral rather than coloured, because an unreachable machine is
+ * not a fault — it is usually a lid closing — and full contrast carries the same
+ * weight without the alarm.
+ */
+
+/*
+ * The window as a column with the band as its first row. This is what makes the
+ * band push rather than cover: the body takes what is left and is told it may
+ * shrink, so a window that gains 32px of chrome gives 32px back from the app
+ * instead of scrolling or clipping it.
+ */
+.happy2-connection-frame {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.happy2-connection-frame__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.happy2-connection-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 32px;
+    padding: 0 12px;
+    /* Neutral at full contrast rather than a warning colour. Orange or red
+       reads as something being broken; the machine being briefly out of reach
+       is neither, and a band that cries wolf every time a laptop sleeps stops
+       being read. Inverting the surface makes it impossible to miss without
+       claiming anything. It needs no border — nothing next to it is this
+       dark, or this light. */
+    background: var(--surface-inverse);
+    color: var(--text-inverse);
+    font-family: var(--happy2-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+    /* The band is chrome, so it never becomes a text-selection target while
+       someone drags a selection across the window below it. */
+    user-select: none;
+}
+
+/*
+ * The band as the window's top edge, where the title bar would be.
+ *
+ * The traffic lights are drawn by macOS at a fixed point in the window and do
+ * not move for anything rendered under them, so the band keeps the same 78px
+ * clear of its left edge that every other first-row surface here keeps. The
+ * reservation is padding rather than a margin so the band's own background
+ * still runs edge to edge behind the lights.
+ *
+ * It is draggable for the same reason: it has taken the strip the window was
+ * dragged by, so it has to be that strip now.
+ */
+.happy2-connection-header[data-window-controls] {
+    padding-left: 78px;
+    -webkit-app-region: drag;
+    app-region: drag;
+}
+
+.happy2-connection-header__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+}
+
+/* The spinner sets `--text` on itself, which is the colour of the very surface
+   this band inverted — left alone it draws black on black, or white on white.
+   Only the colour is taken over; the spinner keeps its own geometry. */
+.happy2-connection-header__icon .happy2-spinner {
+    color: inherit;
+}
+
+.happy2-connection-header__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

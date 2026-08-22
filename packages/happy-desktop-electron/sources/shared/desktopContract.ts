@@ -92,6 +92,93 @@ export interface DesktopDaemonVersion {
     readonly version: string;
 }
 
+/**
+ * One agent the daemon is still waiting on, and the stage it is finishing.
+ * Reported by the daemon itself; Happy never infers what an agent is doing.
+ */
+export interface DesktopDrainAgent {
+    readonly id: string;
+    readonly stage: "inference" | "tools" | "compaction" | "settlement";
+}
+
+/**
+ * Why the daemon is being taken down and brought back.
+ *
+ * Both are the same sequence and the same screen; only the words differ,
+ * because arriving on a newer version and arriving back on the one you were
+ * already running are different things to be told.
+ */
+export type DesktopDaemonRestartReason = "install" | "restart";
+
+/** One runtime component whose admitted work has not drained yet. */
+export interface DesktopDrainComponent {
+    readonly name: string;
+    /** Exact number of operations still holding this component open. */
+    readonly count: number;
+    /** Bounded, ID-sorted agent detail, present only for an agent component. */
+    readonly agents?: readonly DesktopDrainAgent[];
+    /** More agents are waiting than the daemon listed. */
+    readonly truncated?: boolean;
+}
+
+/**
+ * Where a deliberate agent restart has got to.
+ *
+ * The daemon owns every one of these facts: it publishes its own drain mode and
+ * what is still finishing, so the screen reports rather than estimates. There is
+ * no percentage here because the daemon does not know one either — what it knows
+ * is which components are still open and how many operations hold them.
+ */
+export type DesktopDaemonInstall =
+    /**
+     * No restart is running, which is also how a finished one ends. There is no
+     * "done": the window comes back the moment the agent is serving again, and
+     * a phase whose only content is that it worked would only be something to
+     * click through.
+     */
+    | { readonly phase: "idle" }
+    /** Asking the daemon to stop admitting new work. */
+    | {
+          readonly phase: "draining";
+          readonly reason: DesktopDaemonRestartReason;
+          readonly version: string;
+          readonly waitingFor: readonly DesktopDrainComponent[];
+          /**
+           * The wait has run long enough to be worth offering a way out of.
+           *
+           * It is published rather than timed in the window, so the offer appears
+           * because the drain really has been going that long — not because a
+           * component happened to mount ten seconds ago.
+           */
+          readonly killable: boolean;
+      }
+    /** Everything drained; the daemon is being asked to exit. */
+    | {
+          readonly phase: "stopping";
+          readonly reason: DesktopDaemonRestartReason;
+          readonly version: string;
+          /** The drain was cut short, so work was interrupted rather than finished. */
+          readonly killed: boolean;
+      }
+    /** The binary is starting. */
+    | {
+          readonly phase: "starting";
+          readonly reason: DesktopDaemonRestartReason;
+          readonly version: string;
+      }
+    /** The daemon answered and Happy is reconnecting to it. */
+    | {
+          readonly phase: "reconnecting";
+          readonly reason: DesktopDaemonRestartReason;
+          readonly version: string;
+      }
+    | {
+          readonly phase: "error";
+          readonly reason: DesktopDaemonRestartReason;
+          readonly version: string;
+          readonly message: string;
+      };
+
 /** The machine-local Happy Agent installation and the daemon currently serving it. */
 export interface DesktopDaemonSnapshot {
     readonly availableVersion?: string;
@@ -109,6 +196,14 @@ export interface DesktopDaemonSnapshot {
      * GitHub no longer lists it.
      */
     readonly versions: readonly DesktopDaemonVersion[];
+    /**
+     * The downloaded version waiting to be installed, once one is held here and
+     * is newer than the running daemon. Its presence is the whole condition for
+     * offering the install: the bytes are already on this machine.
+     */
+    readonly readyVersion?: string;
+    /** A restart the person asked for, while it is happening. */
+    readonly install: DesktopDaemonInstall;
 }
 
 export type DesktopRuntimeSnapshot =
@@ -504,6 +599,21 @@ export interface HappyDesktopBridge {
     desktopConfigWrite(config: DesktopConfig): Promise<void>;
     /** Asks now for what the background check would otherwise find later. */
     daemonCheck(): Promise<void>;
+    /**
+     * Drains and restarts the local daemon onto the version already downloaded
+     * here. Only the local host is ever restarted this way; a remote Rig updates
+     * itself and never takes this window.
+     */
+    daemonInstall(): Promise<void>;
+    /** Hands the window back once a finished or failed install has been read. */
+    daemonInstallDismiss(): Promise<void>;
+    /**
+     * Stops waiting for the drain and takes the daemon down now, interrupting
+     * whatever it was still finishing.
+     */
+    daemonInstallKill(): Promise<void>;
+    /** Drains and restarts the local daemon on the version it is already running. */
+    daemonRestart(): Promise<void>;
     daemonDownload(): Promise<void>;
     daemonGet(): Promise<DesktopDaemonSnapshot>;
     daemonSubscribe(listener: (snapshot: DesktopDaemonSnapshot) => void): () => void;
@@ -603,6 +713,10 @@ export const desktopIpc = {
     daemonChanged: "happy2:daemon:changed",
     daemonCheck: "happy2:daemon:check",
     daemonDownload: "happy2:daemon:download",
+    daemonInstall: "happy2:daemon:install",
+    daemonInstallDismiss: "happy2:daemon:install-dismiss",
+    daemonInstallKill: "happy2:daemon:install-kill",
+    daemonRestart: "happy2:daemon:restart",
     daemonGet: "happy2:daemon:get",
     daemonUpgrade: "happy2:daemon:upgrade",
     daemonVersionSelect: "happy2:daemon:version-select",

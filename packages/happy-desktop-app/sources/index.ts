@@ -10,8 +10,13 @@ export {
     type AppRigViewProps,
 } from "./AppRigView";
 export {
+    type AppRigDaemonInstall,
+    type AppRigDaemonRestartReason,
     type AppRigDaemonSnapshot,
     type AppRigDaemonStore,
+    type AppRigDaemonVersion,
+    type AppRigDrainAgent,
+    type AppRigDrainComponent,
     type AppRigDebugSnapshot,
     type AppRigDebugStore,
     type AppRigDebugTargetSnapshot,

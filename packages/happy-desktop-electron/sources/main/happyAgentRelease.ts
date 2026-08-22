@@ -148,6 +148,26 @@ export async function happyAgentReleaseInstall(
         readonly onStatus?: (message: string) => void;
     } = {},
 ): Promise<HappyAgentBinary> {
+    const binary = await happyAgentReleaseDownload(release, paths, options);
+    await happyAgentBinarySelect(paths, release.version);
+    return binary;
+}
+
+/**
+ * Puts one release on this machine without changing which version runs.
+ *
+ * Downloading and selecting are separate because they are separate decisions: an
+ * update can be fetched quietly in the background, while starting to run it
+ * interrupts whatever the current daemon is doing and waits for a person.
+ */
+export async function happyAgentReleaseDownload(
+    release: HappyAgentRelease,
+    paths: HappyDaemonPaths,
+    options: {
+        readonly fetch?: typeof globalThis.fetch;
+        readonly onStatus?: (message: string) => void;
+    } = {},
+): Promise<HappyAgentBinary> {
     await mkdir(paths.distDirectory, { mode: 0o700, recursive: true });
     await mkdir(paths.versionsDirectory, { mode: 0o700, recursive: true });
     await chmod(paths.distDirectory, 0o700);
@@ -167,7 +187,6 @@ export async function happyAgentReleaseInstall(
                 paths,
             });
         }
-        await happyAgentBinarySelect(paths, release.version);
         return { path: finalPath, version: release.version };
     } finally {
         await lock.release();

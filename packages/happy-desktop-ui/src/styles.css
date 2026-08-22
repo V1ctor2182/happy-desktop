@@ -96,6 +96,8 @@
 @import "./styles/split-column.css";
 @import "./styles/setup-page.css";
 @import "./styles/setup-choice.css";
+@import "./styles/agent-install.css";
+@import "./styles/connection-header.css";
 @import "./styles/setup-option-card.css";
 @import "./styles/default-agent-form.css";
 @import "./styles/build-progress-panel.css";

@@ -2,6 +2,7 @@ import type { AppRigDaemonSnapshot, AppRigDaemonStore } from "happy-desktop-app"
 import type { DesktopDaemonSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 
 const initial: AppRigDaemonSnapshot = {
+    install: { phase: "idle" },
     managed: true,
     operation: "checking",
     runtime: "stopped",
@@ -32,6 +33,45 @@ export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppRigDaem
             if (busy() || snapshot.operation === "checking") return;
             publish({ ...snapshot, error: undefined, operation: "checking" });
             void bridge.daemonCheck().catch(fail);
+        },
+        daemonInstall() {
+            if (busy() || snapshot.install.phase !== "idle" || !snapshot.readyVersion) return;
+            publish({
+                ...snapshot,
+                error: undefined,
+                install: {
+                    killable: false,
+                    phase: "draining",
+                    reason: "install",
+                    version: snapshot.readyVersion,
+                    waitingFor: [],
+                },
+            });
+            void bridge.daemonInstall().catch(fail);
+        },
+        daemonInstallDismiss() {
+            if (snapshot.install.phase === "idle") return;
+            publish({ ...snapshot, install: { phase: "idle" } });
+            void bridge.daemonInstallDismiss().catch(fail);
+        },
+        daemonInstallKill() {
+            if (snapshot.install.phase !== "draining") return;
+            void bridge.daemonInstallKill().catch(fail);
+        },
+        daemonRestart() {
+            if (busy() || snapshot.install.phase !== "idle" || !snapshot.installedVersion) return;
+            publish({
+                ...snapshot,
+                error: undefined,
+                install: {
+                    killable: false,
+                    phase: "draining",
+                    reason: "restart",
+                    version: snapshot.installedVersion,
+                    waitingFor: [],
+                },
+            });
+            void bridge.daemonRestart().catch(fail);
         },
         daemonUpgrade() {
             if (busy()) return;
@@ -81,6 +121,8 @@ function daemonProject(snapshot: DesktopDaemonSnapshot): AppRigDaemonSnapshot {
         ...(snapshot.installedVersion ? { installedVersion: snapshot.installedVersion } : {}),
         ...(snapshot.message ? { message: snapshot.message } : {}),
         managed: snapshot.managed,
+        ...(snapshot.readyVersion ? { readyVersion: snapshot.readyVersion } : {}),
+        install: snapshot.install,
         operation: snapshot.operation,
         runtime: snapshot.runtime,
         updateAvailable: snapshot.updateAvailable,
