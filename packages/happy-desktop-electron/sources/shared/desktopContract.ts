@@ -81,6 +81,17 @@ export interface DesktopUpdateSnapshot {
     status: "idle" | "checking" | "available" | "downloading" | "downloaded" | "error";
 }
 
+/**
+ * One Happy Agent version this machine can run: either published for this
+ * platform, already downloaded here, or both. `downloaded` is what decides
+ * whether choosing it needs the network.
+ */
+export interface DesktopDaemonVersion {
+    readonly downloaded: boolean;
+    readonly prerelease: boolean;
+    readonly version: string;
+}
+
 /** The machine-local Happy Agent installation and the daemon currently serving it. */
 export interface DesktopDaemonSnapshot {
     readonly availableVersion?: string;
@@ -92,6 +103,12 @@ export interface DesktopDaemonSnapshot {
     readonly operation: "idle" | "checking" | "downloading" | "upgrading";
     readonly runtime: "stopped" | "starting" | "ready";
     readonly updateAvailable: boolean;
+    /**
+     * Every version that can be chosen, newest first. Empty until the first
+     * catalog read answers; a version downloaded here always appears, even when
+     * GitHub no longer lists it.
+     */
+    readonly versions: readonly DesktopDaemonVersion[];
 }
 
 export type DesktopRuntimeSnapshot =
@@ -485,10 +502,14 @@ export interface HappyDesktopBridge {
     directoryPick(): Promise<string | undefined>;
     desktopConfigGet(): Promise<DesktopConfig>;
     desktopConfigWrite(config: DesktopConfig): Promise<void>;
+    /** Asks now for what the background check would otherwise find later. */
+    daemonCheck(): Promise<void>;
     daemonDownload(): Promise<void>;
     daemonGet(): Promise<DesktopDaemonSnapshot>;
     daemonSubscribe(listener: (snapshot: DesktopDaemonSnapshot) => void): () => void;
     daemonUpgrade(): Promise<void>;
+    /** Installs one exact version if needed, then runs the daemon on it. */
+    daemonVersionSelect(version: string): Promise<void>;
     debugGet(): Promise<DesktopDebugSnapshot>;
     debugAllStart(): Promise<DesktopDebugSnapshot>;
     debugAllStop(): Promise<DesktopDebugSnapshot>;
@@ -580,9 +601,11 @@ export const desktopIpc = {
     desktopConfigGet: "happy2:desktop-config:get",
     desktopConfigWrite: "happy2:desktop-config:write",
     daemonChanged: "happy2:daemon:changed",
+    daemonCheck: "happy2:daemon:check",
     daemonDownload: "happy2:daemon:download",
     daemonGet: "happy2:daemon:get",
     daemonUpgrade: "happy2:daemon:upgrade",
+    daemonVersionSelect: "happy2:daemon:version-select",
     debugAllStart: "happy2:debug:all-start",
     debugAllStop: "happy2:debug:all-stop",
     debugChanged: "happy2:debug:changed",

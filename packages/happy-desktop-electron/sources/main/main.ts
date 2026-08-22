@@ -28,7 +28,11 @@ import { desktopFlavor } from "./desktopFlavor";
 import { dockBadgeApply, dockBadgeClear, dockUnreadCountRead } from "./dockBadge";
 import { desktopUpdaterCreate } from "./updater";
 import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
-import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
+import {
+    desktopDaemonVersionValidate,
+    desktopStartRequestValidate,
+    desktopTopologyIdValidate,
+} from "./runtimeValidation";
 import {
     buildIdentityArgument,
     desktopIpc,
@@ -1428,6 +1432,14 @@ void app
         ipcMain.handle(desktopIpc.daemonUpgrade, (event) => {
             desktopDaemonSenderRequire(event.sender);
             return daemonController.upgrade();
+        });
+        ipcMain.handle(desktopIpc.daemonCheck, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.checkForUpdate();
+        });
+        ipcMain.handle(desktopIpc.daemonVersionSelect, (event, version: unknown) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.versionSelect(desktopDaemonVersionValidate(version));
         });
         ipcMain.handle(desktopIpc.debugGet, (event) => {
             desktopDebugSenderRequire(event.sender);

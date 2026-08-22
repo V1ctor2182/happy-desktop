@@ -94,6 +94,13 @@ export interface AppRigDebugStore {
     rendererInspectorStop(): void;
 }
 
+/** One Happy Agent version the person may run, published or already downloaded. */
+export interface AppRigDaemonVersion {
+    readonly downloaded: boolean;
+    readonly prerelease: boolean;
+    readonly version: string;
+}
+
 /** The managed Happy Agent installation projected into General settings. */
 export interface AppRigDaemonSnapshot {
     readonly availableVersion?: string;
@@ -105,10 +112,14 @@ export interface AppRigDaemonSnapshot {
     readonly runningVersion?: string;
     readonly runtime: "stopped" | "starting" | "ready";
     readonly updateAvailable: boolean;
+    /** Newest first; empty until the first catalog read answers. */
+    readonly versions: readonly AppRigDaemonVersion[];
 }
 
 export interface AppRigDaemonStore {
+    daemonCheck(): void;
     daemonUpgrade(): void;
+    daemonVersionSelect(version: string): void;
     get(): AppRigDaemonSnapshot;
     subscribe(listener: () => void): () => void;
 }
@@ -473,7 +484,12 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             ) : (
                 <RigGeneralSettings
                     {...(props.daemon
-                        ? { agent: daemonView, onAgentUpgrade: daemonStore.daemonUpgrade }
+                        ? {
+                              agent: daemonView,
+                              onAgentCheck: daemonStore.daemonCheck,
+                              onAgentUpgrade: daemonStore.daemonUpgrade,
+                              onAgentVersionSelect: daemonStore.daemonVersionSelect,
+                          }
                         : {})}
                     appearance={appearance.mode}
                     defaultModelKey={
@@ -586,9 +602,12 @@ const daemonUnavailable: AppRigDaemonSnapshot = {
     operation: "idle",
     runtime: "stopped",
     updateAvailable: false,
+    versions: [],
 };
 const daemonStoreNoop: AppRigDaemonStore = {
+    daemonCheck: () => undefined,
     daemonUpgrade: () => undefined,
+    daemonVersionSelect: () => undefined,
     get: () => daemonUnavailable,
     subscribe: noSubscribe,
 };

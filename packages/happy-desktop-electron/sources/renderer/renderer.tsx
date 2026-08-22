@@ -537,9 +537,12 @@ const unavailableDaemonSnapshot = {
     operation: "idle",
     runtime: "stopped",
     updateAvailable: false,
+    versions: [],
 } as const;
 const unavailableDaemonStore: AppRigDaemonStore = {
+    daemonCheck: () => undefined,
     daemonUpgrade: () => undefined,
+    daemonVersionSelect: () => undefined,
     get: () => unavailableDaemonSnapshot,
     subscribe: () => () => undefined,
 };

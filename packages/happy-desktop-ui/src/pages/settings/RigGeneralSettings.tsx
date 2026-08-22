@@ -41,6 +41,12 @@ export type RigGeneralSettingsProps = {
         runningVersion?: string;
         runtime: "stopped" | "starting" | "ready";
         updateAvailable: boolean;
+        /** Every version that can be run, newest first; empty before the first check. */
+        versions: readonly {
+            downloaded: boolean;
+            prerelease: boolean;
+            version: string;
+        }[];
     };
     onAppearanceChange: (appearance: RigAppearanceChoice) => void;
     onExperimentalFeaturesChange: (enabled: boolean) => void;
@@ -48,7 +54,9 @@ export type RigGeneralSettingsProps = {
     onDefaultModelChange: (key: string) => void;
     onEffortChange: (effort: string) => void;
     onPermissionModeChange: (mode: string) => void;
+    onAgentCheck?: () => void;
     onAgentUpgrade?: () => void;
+    onAgentVersionSelect?: (version: string) => void;
 };
 
 const appearanceSegments = [
@@ -189,7 +197,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
             </RigSettingsSection>
             {props.agent ? (
                 <RigSettingsSection
-                    description="The verified local runtime Happy uses for coding sessions. Updates are checked automatically."
+                    description="The verified local runtime Happy uses for coding sessions. Updates are checked automatically; the check below just asks now."
                     title="Happy Agent"
                 >
                     <FormRow
@@ -202,6 +210,12 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                                           ? `v${props.agent.installedVersion}`
                                           : "Not installed"}
                                 </span>
+                                {props.agent.managed && props.agent.operation === "checking" ? (
+                                    <Box className="happy2-rig-settings__pending">
+                                        <Spinner size={16} />
+                                        <span>Checking…</span>
+                                    </Box>
+                                ) : null}
                                 {props.agent.managed &&
                                 props.agent.updateAvailable &&
                                 props.onAgentUpgrade ? (
@@ -215,17 +229,56 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                                             ? `Update to ${props.agent.availableVersion}`
                                             : "Update"}
                                     </Button>
-                                ) : props.agent.operation === "checking" ? (
-                                    <Box className="happy2-rig-settings__pending">
-                                        <Spinner size={16} />
-                                        <span>Checking…</span>
-                                    </Box>
+                                ) : null}
+                                {props.agent.managed && props.onAgentCheck ? (
+                                    <Button
+                                        disabled={props.agent.operation !== "idle"}
+                                        onClick={props.onAgentCheck}
+                                        size="small"
+                                        variant={
+                                            props.agent.updateAvailable ? "ghost" : "secondary"
+                                        }
+                                    >
+                                        Check for updates
+                                    </Button>
                                 ) : null}
                             </Box>
                         }
                         description={agentDescription(props.agent)}
                         label="Installed version"
                     />
+                    {props.agent.managed && props.onAgentVersionSelect ? (
+                        <FormRow
+                            control={
+                                <Box width={280}>
+                                    <Select
+                                        aria-label="Happy Agent version"
+                                        disabled={
+                                            props.agent.operation !== "idle" ||
+                                            props.agent.versions.length === 0
+                                        }
+                                        fullWidth
+                                        id="rig-settings-agent-version"
+                                        onValueChange={props.onAgentVersionSelect}
+                                        options={agentVersionOptions(
+                                            props.agent.versions,
+                                            props.agent.availableVersion,
+                                        )}
+                                        placeholder={
+                                            props.agent.versions.length === 0
+                                                ? "No versions read yet"
+                                                : "Choose a version"
+                                        }
+                                        size="small"
+                                        value={props.agent.installedVersion}
+                                    />
+                                </Box>
+                            }
+                            description="Runs an exact release. One not held on this machine is downloaded first."
+                            htmlFor="rig-settings-agent-version"
+                            label="Version"
+                        />
+                    ) : null}
                     <FormRow
                         control={
                             <span className="happy2-rig-settings__agent-runtime">
@@ -258,6 +311,29 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
             </RigSettingsSection>
         </>
     );
+}
+
+/**
+ * The picker's rows. Each says what choosing it would cost — a version already
+ * on this machine starts immediately, anything else is a download — and which
+ * one the automatic check considers current.
+ */
+function agentVersionOptions(
+    versions: NonNullable<RigGeneralSettingsProps["agent"]>["versions"],
+    latestVersion: string | undefined,
+): SelectOption[] {
+    return versions.map((entry) => {
+        const notes = [
+            entry.version === latestVersion ? "Latest" : undefined,
+            entry.prerelease ? "Pre-release" : undefined,
+            entry.downloaded ? "Downloaded" : undefined,
+        ].filter((note) => note !== undefined);
+        return {
+            label:
+                notes.length > 0 ? `v${entry.version} · ${notes.join(" · ")}` : `v${entry.version}`,
+            value: entry.version,
+        };
+    });
 }
 
 function agentDescription(agent: NonNullable<RigGeneralSettingsProps["agent"]>): string {

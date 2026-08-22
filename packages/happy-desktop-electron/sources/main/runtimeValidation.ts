@@ -55,6 +55,20 @@ export function desktopActiveTarget(
     };
 }
 
+/**
+ * One Happy Agent version named by a renderer. It reaches a GitHub release tag
+ * and a directory name, so nothing but a semantic version is let through.
+ */
+export function desktopDaemonVersionValidate(value: unknown): string {
+    if (
+        typeof value === "string" &&
+        value.length <= 128 &&
+        /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(value)
+    )
+        return value;
+    throw new Error("The requested Happy Agent version is invalid.");
+}
+
 export function desktopTopologyIdValidate(value: unknown): string {
     if (desktopTopologyIdValid(value)) return value;
     throw new Error("The desktop topology identity is invalid.");

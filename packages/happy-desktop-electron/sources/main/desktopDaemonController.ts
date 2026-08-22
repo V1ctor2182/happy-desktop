@@ -1,11 +1,27 @@
 import { execFile } from "node:child_process";
-import type { DesktopDaemonSnapshot, DesktopRuntimeSnapshot } from "../shared/desktopContract";
-import { happyAgentBinarySelected, type HappyAgentBinary } from "./happyAgentBinaryConfig";
-import { happyDaemonPaths, type HappyDaemonPaths } from "./happyAgentBinaryPaths";
+import type {
+    DesktopDaemonSnapshot,
+    DesktopDaemonVersion,
+    DesktopRuntimeSnapshot,
+} from "../shared/desktopContract";
+import {
+    happyAgentBinaryDownloaded,
+    happyAgentBinarySelect,
+    happyAgentBinarySelected,
+    type HappyAgentBinary,
+} from "./happyAgentBinaryConfig";
+import {
+    happyAgentBinaryPath,
+    happyDaemonPaths,
+    type HappyDaemonPaths,
+} from "./happyAgentBinaryPaths";
 import {
     happyAgentReleaseInstall,
     happyAgentReleaseLatest,
+    happyAgentReleasesList,
+    happyAgentReleaseVersion,
     type HappyAgentRelease,
+    type HappyAgentReleaseSummary,
 } from "./happyAgentRelease";
 
 const DAEMON_COMMAND_TIMEOUT_MS = 75_000;
@@ -23,6 +39,7 @@ export class DesktopDaemonController {
     private latestRelease?: HappyAgentRelease;
     private readonly listeners = new Set<(snapshot: DesktopDaemonSnapshot) => void>();
     private operation = Promise.resolve();
+    private publishedCatalog: readonly HappyAgentReleaseSummary[] = [];
     private snapshotValue: DesktopDaemonSnapshot;
 
     private constructor(
@@ -38,6 +55,7 @@ export class DesktopDaemonController {
             operation: "idle",
             runtime: "stopped",
             updateAvailable: false,
+            versions: [],
         };
     }
 
@@ -82,8 +100,12 @@ export class DesktopDaemonController {
                 operation: "checking",
             });
             try {
-                const release = await happyAgentReleaseLatest();
+                const [release, catalog] = await Promise.all([
+                    happyAgentReleaseLatest(),
+                    happyAgentReleasesList(),
+                ]);
                 this.latestRelease = release;
+                this.publishedCatalog = catalog;
                 const installedVersion = selected?.version;
                 const updateAvailable =
                     installedVersion !== undefined &&
@@ -99,6 +121,7 @@ export class DesktopDaemonController {
                           : "Happy Agent is ready to download.",
                     operation: "idle",
                     updateAvailable,
+                    versions: await this.versionsProject(),
                 });
             } catch (error) {
                 this.publish({
@@ -106,6 +129,7 @@ export class DesktopDaemonController {
                     error: displayError(error),
                     message: undefined,
                     operation: "idle",
+                    versions: await this.versionsProject(),
                 });
                 throw error;
             }
@@ -113,11 +137,21 @@ export class DesktopDaemonController {
     }
 
     download(): Promise<void> {
-        return this.install("downloading", false);
+        return this.install("downloading", undefined);
     }
 
     upgrade(): Promise<void> {
-        return this.install("upgrading", true);
+        return this.install("upgrading", undefined);
+    }
+
+    /**
+     * Runs the daemon on one exact version, downloading it first when this
+     * machine does not already hold it. Unlike an upgrade this may move
+     * backwards, so the requested version is installed whether or not it is
+     * newer than the one selected now.
+     */
+    versionSelect(version: string): Promise<void> {
+        return this.install("upgrading", version);
     }
 
     runtimeSet(runtime: DesktopRuntimeSnapshot): void {
@@ -131,9 +165,13 @@ export class DesktopDaemonController {
         this.publish({ ...this.snapshotValue, runtime: state });
     }
 
+    /**
+     * `version` names an exact release to run; without one this installs the
+     * latest release, which is what an update and a first download both mean.
+     */
     private install(
         operation: "downloading" | "upgrading",
-        latestRequired: boolean,
+        version: string | undefined,
     ): Promise<void> {
         return this.serial(async () => {
             if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
@@ -141,37 +179,31 @@ export class DesktopDaemonController {
                 ...this.snapshotValue,
                 error: undefined,
                 message:
-                    operation === "upgrading"
-                        ? "Preparing the Happy Agent update…"
-                        : "Preparing Happy Agent…",
+                    version !== undefined
+                        ? `Preparing Happy Agent ${version}…`
+                        : operation === "upgrading"
+                          ? "Preparing the Happy Agent update…"
+                          : "Preparing Happy Agent…",
                 operation,
             });
             try {
-                const release =
-                    latestRequired || this.latestRelease === undefined
-                        ? await happyAgentReleaseLatest()
-                        : this.latestRelease;
-                this.latestRelease = release;
-                const installed = await happyAgentBinarySelected(this.paths);
-                const shouldInstall =
-                    installed === undefined || versionNewer(release.version, installed.version);
-                const selected = shouldInstall
-                    ? await happyAgentReleaseInstall(release, this.paths, {
-                          onStatus: (message) =>
-                              this.publish({ ...this.snapshotValue, message, operation }),
-                      })
-                    : installed;
-                if (selected === undefined) throw new Error("Happy Agent is not installed.");
+                const selected = await this.binaryPrepare(operation, version, (message) =>
+                    this.publish({ ...this.snapshotValue, message, operation }),
+                );
+                const availableVersion = this.latestRelease?.version;
+                const updateAvailable =
+                    availableVersion !== undefined &&
+                    versionNewer(availableVersion, selected.version);
                 this.publish({
                     ...this.snapshotValue,
-                    availableVersion: release.version,
+                    ...(availableVersion ? { availableVersion } : {}),
                     error: undefined,
                     installation: "installed",
                     installedVersion: selected.version,
                     message: `Starting Happy Agent ${selected.version}…`,
                     operation,
                     runtime: "starting",
-                    updateAvailable: false,
+                    updateAvailable,
                 });
                 await daemonCommandRun(selected.path, "reload", await this.launchEnvironmentRead());
                 this.publish({
@@ -179,10 +211,13 @@ export class DesktopDaemonController {
                     error: undefined,
                     installation: "installed",
                     installedVersion: selected.version,
-                    message: "Happy Agent is up to date.",
+                    message: updateAvailable
+                        ? `Happy Agent ${availableVersion} is available.`
+                        : "Happy Agent is up to date.",
                     operation: "idle",
                     runtime: "ready",
-                    updateAvailable: false,
+                    updateAvailable,
+                    versions: await this.versionsProject(),
                 });
             } catch (error) {
                 const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
@@ -191,10 +226,75 @@ export class DesktopDaemonController {
                     error: displayError(error),
                     message: undefined,
                     operation: "idle",
+                    versions: await this.versionsProject(),
                 });
                 throw error;
             }
         });
+    }
+
+    /**
+     * Leaves this machine holding the requested version and having selected it.
+     * A version already downloaded here is selected without touching the
+     * network; that is the whole point of keeping the earlier versions.
+     */
+    private async binaryPrepare(
+        operation: "downloading" | "upgrading",
+        version: string | undefined,
+        onStatus: (message: string) => void,
+    ): Promise<HappyAgentBinary> {
+        if (version !== undefined) {
+            if (!(await happyAgentBinaryDownloaded(this.paths)).includes(version)) {
+                return happyAgentReleaseInstall(
+                    await happyAgentReleaseVersion(version),
+                    this.paths,
+                    {
+                        onStatus,
+                    },
+                );
+            }
+            onStatus(`Switching to Happy Agent ${version}.`);
+            await happyAgentBinarySelect(this.paths, version);
+            return { path: happyAgentBinaryPath(this.paths, version), version };
+        }
+        const release =
+            operation === "upgrading" || this.latestRelease === undefined
+                ? await happyAgentReleaseLatest()
+                : this.latestRelease;
+        this.latestRelease = release;
+        const installed = await happyAgentBinarySelected(this.paths);
+        if (installed !== undefined && !versionNewer(release.version, installed.version)) {
+            return installed;
+        }
+        return happyAgentReleaseInstall(release, this.paths, { onStatus });
+    }
+
+    /**
+     * What the picker may offer: everything GitHub published for this platform,
+     * plus everything already on disk. A version kept here after GitHub stopped
+     * listing it is still runnable, so it stays selectable.
+     */
+    private async versionsProject(): Promise<readonly DesktopDaemonVersion[]> {
+        const downloaded = await happyAgentBinaryDownloaded(this.paths).catch((): string[] => []);
+        const rows = new Map<string, DesktopDaemonVersion>();
+        for (const summary of this.publishedCatalog) {
+            rows.set(summary.version, {
+                downloaded: downloaded.includes(summary.version),
+                prerelease: summary.prerelease,
+                version: summary.version,
+            });
+        }
+        for (const version of downloaded) {
+            if (!rows.has(version))
+                rows.set(version, { downloaded: true, prerelease: false, version });
+        }
+        return [...rows.values()].sort((left, right) =>
+            versionNewer(left.version, right.version)
+                ? -1
+                : versionNewer(right.version, left.version)
+                  ? 1
+                  : 0,
+        );
     }
 
     private publish(snapshot: DesktopDaemonSnapshot): void {

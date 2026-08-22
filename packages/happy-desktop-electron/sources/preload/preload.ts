@@ -103,6 +103,7 @@ const bridge: HappyDesktopBridge = {
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),
     desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),
+    daemonCheck: () => ipcRenderer.invoke(desktopIpc.daemonCheck),
     daemonDownload: () => ipcRenderer.invoke(desktopIpc.daemonDownload),
     daemonGet: () => ipcRenderer.invoke(desktopIpc.daemonGet),
     daemonSubscribe(listener: (snapshot: DesktopDaemonSnapshot) => void) {
@@ -112,6 +113,8 @@ const bridge: HappyDesktopBridge = {
         return () => ipcRenderer.removeListener(desktopIpc.daemonChanged, receive);
     },
     daemonUpgrade: () => ipcRenderer.invoke(desktopIpc.daemonUpgrade),
+    daemonVersionSelect: (version: string) =>
+        ipcRenderer.invoke(desktopIpc.daemonVersionSelect, version),
     debugGet: () => ipcRenderer.invoke(desktopIpc.debugGet),
     debugAllStart: () => ipcRenderer.invoke(desktopIpc.debugAllStart),
     debugAllStop: () => ipcRenderer.invoke(desktopIpc.debugAllStop),

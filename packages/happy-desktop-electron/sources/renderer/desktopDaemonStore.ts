@@ -6,6 +6,7 @@ const initial: AppRigDaemonSnapshot = {
     operation: "checking",
     runtime: "stopped",
     updateAvailable: false,
+    versions: [],
 };
 
 /** Adapts the narrow native daemon bridge into the settings surface store. */
@@ -21,17 +22,26 @@ export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppRigDaem
     };
     const set = (next: DesktopDaemonSnapshot): void => publish(daemonProject(next));
 
+    const fail = (error: unknown): void =>
+        publish({ ...snapshot, error: displayError(error), operation: "idle" });
+    const busy = (): boolean =>
+        snapshot.operation === "upgrading" || snapshot.operation === "downloading";
+
     return {
+        daemonCheck() {
+            if (busy() || snapshot.operation === "checking") return;
+            publish({ ...snapshot, error: undefined, operation: "checking" });
+            void bridge.daemonCheck().catch(fail);
+        },
         daemonUpgrade() {
-            if (snapshot.operation === "upgrading" || snapshot.operation === "downloading") return;
+            if (busy()) return;
             publish({ ...snapshot, error: undefined, operation: "upgrading" });
-            void bridge.daemonUpgrade().catch((error: unknown) => {
-                publish({
-                    ...snapshot,
-                    error: displayError(error),
-                    operation: "idle",
-                });
-            });
+            void bridge.daemonUpgrade().catch(fail);
+        },
+        daemonVersionSelect(version) {
+            if (busy() || version === snapshot.installedVersion) return;
+            publish({ ...snapshot, error: undefined, operation: "upgrading" });
+            void bridge.daemonVersionSelect(version).catch(fail);
         },
         get: () => snapshot,
         subscribe(listener) {
@@ -74,6 +84,7 @@ function daemonProject(snapshot: DesktopDaemonSnapshot): AppRigDaemonSnapshot {
         operation: snapshot.operation,
         runtime: snapshot.runtime,
         updateAvailable: snapshot.updateAvailable,
+        versions: snapshot.versions,
     };
 }
 

@@ -33,7 +33,7 @@ export async function happyAgentBinarySelect(
 ): Promise<HappyAgentBinaryConfig> {
     await mkdir(paths.distDirectory, { mode: 0o700, recursive: true });
     await chmod(paths.distDirectory, 0o700);
-    const downloadedVersions = await downloadedVersionsList(paths);
+    const downloadedVersions = await happyAgentBinaryDownloaded(paths);
     if (!downloadedVersions.includes(selectedVersion)) {
         throw new Error(`Happy Agent ${selectedVersion} is not completely installed.`);
     }
@@ -61,6 +61,31 @@ export async function happyAgentBinarySelect(
         throw error;
     }
     return config;
+}
+
+/**
+ * Every version completely installed on this machine, oldest name first. A
+ * directory only counts once its binary is present and executable, so a version
+ * left behind by an interrupted download is never offered as selectable.
+ */
+export async function happyAgentBinaryDownloaded(paths: HappyDaemonPaths): Promise<string[]> {
+    let entries: Dirent<string>[];
+    try {
+        entries = await readdir(paths.versionsDirectory, { withFileTypes: true });
+    } catch (error) {
+        if (missing(error)) return [];
+        throw error;
+    }
+    const versions: string[] = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory() || !new RegExp(SEMANTIC_VERSION_PATTERN, "u").test(entry.name)) {
+            continue;
+        }
+        if (await executableFile(happyAgentBinaryPath(paths, entry.name))) {
+            versions.push(entry.name);
+        }
+    }
+    return versions.sort((left, right) => left.localeCompare(right, "en"));
 }
 
 export async function executableFile(path: string): Promise<boolean> {
@@ -107,26 +132,6 @@ function semanticVersion(value: unknown): value is string {
 
 function record(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-async function downloadedVersionsList(paths: HappyDaemonPaths): Promise<string[]> {
-    let entries: Dirent<string>[];
-    try {
-        entries = await readdir(paths.versionsDirectory, { withFileTypes: true });
-    } catch (error) {
-        if (missing(error)) return [];
-        throw error;
-    }
-    const versions: string[] = [];
-    for (const entry of entries) {
-        if (!entry.isDirectory() || !new RegExp(SEMANTIC_VERSION_PATTERN, "u").test(entry.name)) {
-            continue;
-        }
-        if (await executableFile(happyAgentBinaryPath(paths, entry.name))) {
-            versions.push(entry.name);
-        }
-    }
-    return versions.sort((left, right) => left.localeCompare(right, "en"));
 }
 
 function missing(error: unknown): boolean {

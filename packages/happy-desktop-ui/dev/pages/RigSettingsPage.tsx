@@ -391,6 +391,12 @@ export function RigSettingsBlueprintPage() {
                             runningVersion: "0.3.0",
                             runtime: "ready",
                             updateAvailable: true,
+                            versions: [
+                                { downloaded: false, prerelease: false, version: "0.3.1" },
+                                { downloaded: false, prerelease: true, version: "0.3.1-rc.2" },
+                                { downloaded: true, prerelease: false, version: "0.3.0" },
+                                { downloaded: true, prerelease: false, version: "0.2.9" },
+                            ],
                         }}
                         appearance="system"
                         defaultModelKey="codex:openai/gpt-5.6-sol"
@@ -399,7 +405,9 @@ export function RigSettingsBlueprintPage() {
                         experimentalFeaturesEnabled
                         modelOptions={modelOptions}
                         onAppearanceChange={noop}
+                        onAgentCheck={noop}
                         onAgentUpgrade={noop}
+                        onAgentVersionSelect={noop}
                         onExperimentalFeaturesChange={noop}
                         onDefaultModelChange={noop}
                         onEffortChange={noop}
