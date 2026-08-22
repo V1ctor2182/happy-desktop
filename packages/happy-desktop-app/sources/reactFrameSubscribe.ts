@@ -4,6 +4,11 @@ interface ReactExternalStore {
 
 type StoreSubscribe = ReactExternalStore["subscribe"];
 
+interface ReactFrameSubscription {
+    publish(): void;
+    subscribe: StoreSubscribe;
+}
+
 /** One render-frame queue shared by every coalesced React store adapter. */
 const pending = new Set<() => void>();
 let cancelFrame: (() => void) | undefined;
@@ -32,14 +37,15 @@ function frameRequest(job: () => void): void {
     cancelFrame ??= frameSchedule(frameFlush);
 }
 
-function frameWithdraw(job: () => void): void {
-    pending.delete(job);
-    if (pending.size > 0 || cancelFrame === undefined) return;
+function frameWithdraw(job: () => void): boolean {
+    const withdrawn = pending.delete(job);
+    if (pending.size > 0 || cancelFrame === undefined) return withdrawn;
     cancelFrame();
     cancelFrame = undefined;
+    return withdrawn;
 }
 
-const subscribeByStore = new WeakMap<ReactExternalStore, StoreSubscribe>();
+const subscriptionByStore = new WeakMap<ReactExternalStore, ReactFrameSubscription>();
 
 /**
  * Returns one stable, frame-coalesced React subscription for a synchronous
@@ -53,8 +59,8 @@ const subscribeByStore = new WeakMap<ReactExternalStore, StoreSubscribe>();
  * store's lifetime on ordinary renders.
  */
 export function reactFrameSubscribe(store: ReactExternalStore): StoreSubscribe {
-    const cached = subscribeByStore.get(store);
-    if (cached) return cached;
+    const cached = subscriptionByStore.get(store);
+    if (cached) return cached.subscribe;
 
     const listeners = new Set<() => void>();
     let sourceUnsubscribe: (() => void) | undefined;
@@ -73,6 +79,27 @@ export function reactFrameSubscribe(store: ReactExternalStore): StoreSubscribe {
             frameWithdraw(publish);
         };
     };
-    subscribeByStore.set(store, subscribe);
+    subscriptionByStore.set(store, { publish, subscribe });
     return subscribe;
+}
+
+/**
+ * Runs a controlled-input mutation and publishes that store's queued snapshot
+ * before the browser leaves the input event.
+ *
+ * React must receive a controlled input's new value in the event that produced
+ * it. Leaving this notification in the frame queue makes React restore the old
+ * value after the handler, which also moves a textarea caret to the end. Other
+ * store changes remain frame-coalesced.
+ */
+export function reactFrameInputUpdate<Result>(
+    store: ReactExternalStore,
+    update: () => Result,
+): Result {
+    try {
+        return update();
+    } finally {
+        const subscription = subscriptionByStore.get(store);
+        if (subscription && frameWithdraw(subscription.publish)) subscription.publish();
+    }
 }

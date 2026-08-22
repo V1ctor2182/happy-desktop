@@ -139,7 +139,7 @@ import {
     commandShortcut,
 } from "happy-desktop-ui";
 import { openExternalLink } from "./externalLink";
-import { reactFrameSubscribe } from "./reactFrameSubscribe";
+import { reactFrameInputUpdate, reactFrameSubscribe } from "./reactFrameSubscribe";
 import { BlueprintView } from "./views/BlueprintView";
 import type { AppRigDaemonSnapshot, AppRigDaemonStore } from "./views/AppRigSettingsView";
 
@@ -3116,7 +3116,9 @@ function RigGroupComposer(props: {
             onComposerSend={() => {
                 if (props.rigOnline()) workspace.composerTextSubmit();
             }}
-            onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+            onComposerValueChange={(value) =>
+                reactFrameInputUpdate(workspace, () => workspace.composerTextUpdate(value))
+            }
         />
     );
 }
@@ -3478,7 +3480,9 @@ function RigConversationSurface(props: {
             onComposerSend={() => {
                 if (props.rigOnline()) workspace.composerTextSubmit();
             }}
-            onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+            onComposerValueChange={(value) =>
+                reactFrameInputUpdate(workspace, () => workspace.composerTextUpdate(value))
+            }
             onFileOpen={(path) => {
                 if (props.rigOnline()) props.onFileOpen(path);
             }}
