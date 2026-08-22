@@ -131,7 +131,7 @@ const questions = [
     },
 ] as const;
 
-it("replaces an Ask User tool with its pending request at the tool sequence", () => {
+it("pins a pending Ask User request to the end of the transcript, leaving no tool row", () => {
     const entries = happyAgentConversationProject({
         elements: [askTool],
         sessionId: "s1",
@@ -194,7 +194,7 @@ it("keeps an answered Ask User request once and prefers it over a stale pending 
     });
 });
 
-it("appends only unmatched pending requests", () => {
+it("appends a pending request with no element of its own and drops an answered one", () => {
     const base = {
         elements: [],
         sessionId: "s1",

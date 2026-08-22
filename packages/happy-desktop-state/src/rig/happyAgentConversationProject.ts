@@ -44,8 +44,6 @@ interface ConversationGroupCache {
     readonly startIndex: number;
     /** The lookahead this turn's footer depended on. */
     readonly nextOpensOmitted: boolean;
-    /** Questions this turn claimed, re-announced whenever its rows are reused. */
-    readonly matchedUserInputIds: readonly string[];
     readonly entries: readonly ConversationEntry[];
 }
 
@@ -131,7 +129,9 @@ function profileAuthor(
 /**
  * Projects Happy Agent's flat application transcript into Happy's shared
  * conversation rows. The element order is already authoritative; this pass only
- * changes presentation vocabulary and assigns matching sequence keys.
+ * changes presentation vocabulary and assigns matching sequence keys — with one
+ * deliberate exception: a question still waiting on the reader is pinned to the
+ * end, because that is what the conversation is stopped on.
  */
 export function happyAgentConversationProject(
     input: HappyAgentConversationInput,
@@ -164,7 +164,6 @@ export function happyAgentConversationProject(
     // which a session snapshot can still carry the same request as pending.
     for (const request of input.answeredUserInputs)
         userInputs.set(request.requestId, { state: "answered", request });
-    const matchedUserInputIds = new Set<string>();
     // One pass over the transcript settles both things the turn loop below needs
     // to know up front: where each turn begins, and which user rows are
     // collaboration transport rather than dialogue — which a turn's footer has
@@ -196,9 +195,9 @@ export function happyAgentConversationProject(
                   subagents: input.subagents,
               });
 
-    /* Keyed by position rather than by group id: a pending question is filed
-       under the run it belongs to and lands after that run's own rows, so an id
-       alone would name two turns. A turn that keeps its place keeps its key. */
+    /* Keyed by position rather than by group id, because a turn's rows depend on
+       where the turn sits: its sequence numbers are its place in the finished
+       transcript. A turn that keeps its place keeps its key. */
     const groups = new Map<number, ConversationGroupCache>();
     for (let group = 0; group < starts.length; group += 1) {
         const start = starts[group]!;
@@ -216,18 +215,15 @@ export function happyAgentConversationProject(
             cached.nextOpensOmitted === nextOpensOmitted &&
             sameElements(cached.elements, input.elements, start, end)
         ) {
-            for (const requestId of cached.matchedUserInputIds) matchedUserInputIds.add(requestId);
             for (const entry of cached.entries) entries.push(entry);
             groups.set(group, cached);
             continue;
         }
         const elements = input.elements.slice(start, end);
-        const matchedBefore = matchedUserInputIds.size;
         const projected = rigConnectGroupProject(
             elements,
             input,
             userInputs,
-            matchedUserInputIds,
             omittedInboundMessageIds,
             delegatedChildByRow,
             nextOpensOmitted,
@@ -237,24 +233,23 @@ export function happyAgentConversationProject(
         // are kept must keep the sequence it was projected with too.
         const sequenced = projected.map((entry, index) => resequence(entry, startIndex + index));
         for (const entry of sequenced) entries.push(entry);
-        groups.set(group, {
-            elements,
-            startIndex,
-            nextOpensOmitted,
-            matchedUserInputIds:
-                matchedUserInputIds.size === matchedBefore
-                    ? NO_MATCHED_USER_INPUTS
-                    : [...matchedUserInputIds].slice(matchedBefore),
-            entries: sequenced,
-        });
+        groups.set(group, { elements, startIndex, nextOpensOmitted, entries: sequenced });
     }
 
     for (const entry of input.ephemeral) entries.push(resequence(entry, entries.length));
-    // Older connectors may report a pending request before its tool element is
-    // available. Keep that question actionable at the end until the transcript
-    // catches up; answered records never append out of sequence.
+    /*
+     * A question still waiting on the reader is the last thing in the
+     * transcript, whatever happened after it was asked. It is what the
+     * conversation is stopped on, so it belongs directly above the composer
+     * rather than buried among the rows the run went on to produce — and a
+     * connector that reports a pending request before its tool element arrives
+     * needs no separate path to stay actionable. Answering it settles the
+     * record back into history at the call that asked it.
+     */
     for (const request of input.pendingUserInputs) {
-        if (matchedUserInputIds.has(request.requestId)) continue;
+        // An answered record settles the same question in place, so a session
+        // snapshot still calling it pending adds nothing here.
+        if (userInputs.get(request.requestId)?.state !== "pending") continue;
         entries.push(
             resequence(userInputRequestProject({ state: "pending", request }, ""), entries.length),
         );
@@ -269,7 +264,6 @@ export function happyAgentConversationProject(
 }
 
 const NO_DELEGATED_CHILDREN: ReadonlyMap<string, RigPlaceableSubagent> = new Map();
-const NO_MATCHED_USER_INPUTS: readonly string[] = [];
 
 /** Whether a cached turn's rows came from exactly these elements. */
 function sameElements(
@@ -470,7 +464,6 @@ function rigConnectGroupProject(
     elements: readonly ChatElement[],
     input: HappyAgentConversationInput,
     userInputs: ReadonlyMap<string, ProjectableUserInput>,
-    matchedUserInputIds: Set<string>,
     omittedInboundMessageIds: ReadonlySet<string>,
     delegatedChildByRow: ReadonlyMap<string, RigPlaceableSubagent>,
     /** The next group opens with omitted transport, so a "Steered" footer here would orphan. */
@@ -701,8 +694,12 @@ function rigConnectGroupProject(
                     const userInput = userInputs.get(element.toolCallId);
                     const child = delegatedChildByRow.get(element.id);
                     if (userInput) {
-                        matchedUserInputIds.add(element.toolCallId);
-                        entries.push(userInputRequestProject(userInput, sequence));
+                        /* An answered question is history and settles where it
+                           was asked. One still pending leaves no row here: it is
+                           pinned to the end of the transcript instead, so the
+                           call it came from does not also show as a tool row. */
+                        if (userInput.state === "answered")
+                            entries.push(userInputRequestProject(userInput, sequence));
                     } else if (child) {
                         // The child is the lasting state of this call, so it
                         // takes the call's place in the transcript.
