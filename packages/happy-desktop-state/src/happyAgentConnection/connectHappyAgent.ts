@@ -1131,7 +1131,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             case "run.finished":
                 updateRun(event.payload.agentId, event.payload.run);
                 recoverCorruptedMessages(event.payload.agentId);
-                options.onSessionFinished?.(event.payload.agentId);
+                if (agentOf(event.payload.agentId)?.parentAgentId === null) {
+                    options.onTopLevelSessionFinished?.(event.payload.agentId);
+                }
                 return;
             case "message.created":
                 createMessage(event.payload.agentId, event.payload.message, event.payload.runId);

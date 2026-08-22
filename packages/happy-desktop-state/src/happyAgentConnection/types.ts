@@ -662,7 +662,8 @@ export interface ConnectHappyAgentOptions {
     onCompatibilityChange?: (compatibility: ServerCompatibility) => void;
     /** Receives bounded, display-ready diagnostics without exposing credentials. */
     onDebugEntry?: (entry: HappyAgentDebugLogInput) => void;
-    onSessionFinished?: (sessionId: string) => void;
+    /** Runs when a top-level session finishes; delegated subagent runs stay silent. */
+    onTopLevelSessionFinished?: (sessionId: string) => void;
 }
 
 export interface HappyAgentConnection {

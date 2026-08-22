@@ -264,7 +264,7 @@ export function happyAgentConnectionOpen(input: {
             input.deps.compatibility?.(mismatch);
             input.deps.changed();
         },
-        onSessionFinished: () => completionChimePlay(),
+        onTopLevelSessionFinished: () => completionChimePlay(),
     });
     const catalogSource = happyAgentCatalogSourceCreate(agentConnection, input.happyAgentHttpUrl);
     const hostServices = happyAgentHostServicesCreate(input.happyAgentHttpUrl);
