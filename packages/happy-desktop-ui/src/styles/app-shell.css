@@ -112,7 +112,7 @@
    all — `app-region: none` is not an escape hatch, Chromium resolves it to
    `no-drag`, so the only way out of the region list is to not match here. */
 .happy-desktop-app-shell[data-window-controls]
-    button:not(.happy2-rig-control__backdrop, .happy2-slot-backdrop),
+    button:not(.happy2-happy-agent-control__backdrop, .happy2-slot-backdrop),
 .happy-desktop-app-shell[data-window-controls] a,
 .happy-desktop-app-shell[data-window-controls] input,
 .happy-desktop-app-shell[data-window-controls] select,
@@ -138,7 +138,7 @@
    every product popover is built from, so claiming them here covers the menus
    opened from any header rather than one call site's control. */
 .happy-desktop-app-shell[data-window-controls] .happy2-menu,
-.happy-desktop-app-shell[data-window-controls] .happy2-rig-control__popover,
+.happy-desktop-app-shell[data-window-controls] .happy2-happy-agent-control__popover,
 .happy-desktop-app-shell[data-window-controls] .happy2-channel-header__menu-popover {
     -webkit-app-region: no-drag;
     app-region: no-drag;

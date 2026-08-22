@@ -7,11 +7,11 @@ import { gymManifestRead } from "./manifest.js";
 import {
     gymRunPathsCreate,
     gymRunPathsRead,
-    gymRunPathsWithRigWorkspace,
+    gymRunPathsWithHappyAgentWorkspace,
     gymRunProfileWrite,
 } from "./paths.js";
 import { gitFixturesCreate } from "./fixtures.js";
-import { rigRuntimeCreate, type StartedRigRuntime } from "./rigRuntime.js";
+import { happyAgentRuntimeCreate, type StartedHappyAgentRuntime } from "./happyAgentRuntime.js";
 import { electronWorkloadsRun } from "./workloads.js";
 import type {
     ElectronRunResult,
@@ -56,31 +56,31 @@ export async function gymPrepare(options: {
     let runPaths = created.paths;
     await writeFile(runPaths.manifest, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
     const inference = gymInferenceServerCreate(manifest, runPaths.inferenceLog);
-    let runtime: StartedRigRuntime | undefined;
+    let runtime: StartedHappyAgentRuntime | undefined;
     try {
         await inference.start();
         await gymRunProfileWrite(runPaths, {
-            RIG_GYM_INFERENCE_URL: inference.url,
-            RIG_GYM_TOKEN: inference.token,
+            HAPPY_AGENT_GYM_INFERENCE_URL: inference.url,
+            HAPPY_AGENT_GYM_TOKEN: inference.token,
         });
-        runtime = await rigRuntimeCreate(runPaths, inference);
+        runtime = await happyAgentRuntimeCreate(runPaths, inference);
         const fixtures = await gitFixturesCreate(runPaths, manifest, runtime.client);
         const projects = fixtures.projects;
-        runPaths = gymRunPathsWithRigWorkspace(runPaths, fixtures.rigWorkspacePath);
-        // Git worktrees are mutated after Rig creates their checkout. Restart
+        runPaths = gymRunPathsWithHappyAgentWorkspace(runPaths, fixtures.happyAgentWorkspacePath);
+        // Git worktrees are mutated after Happy Agent creates their checkout. Restart
         // the real daemon once so its file/change projections are rebuilt from
         // the durable dirty trees before sessions are created and consumed by
         // Electron.
         await runtime.stop();
         await inference.start();
-        runtime = await rigRuntimeCreate(runPaths, inference);
+        runtime = await happyAgentRuntimeCreate(runPaths, inference);
         const history = await durableHistorySeed(runPaths, manifest, projects, runtime, inference);
         runtime = history.runtime;
         const catalog = await catalogSnapshotRead(runtime.client, history.sessionIds);
         // Keep achieved durable scale inspectable even when a versioned target
         // is intentionally not claimed. This file is written before target
         // validation so a failed realistic/stress preparation still reports
-        // what the supported Rig APIs actually created.
+        // what the supported Happy Agent APIs actually created.
         await writeFile(
             join(runPaths.root, "achieved.json"),
             `${JSON.stringify(
@@ -129,7 +129,7 @@ export async function gymPrepare(options: {
                     sessionIds: history.sessionIds,
                     clusterWorkspaceId: history.clusterWorkspaceId,
                     clusterSessionIds: history.clusterSessionIds,
-                    rigWorkspacePath: runPaths.rigWorkspacePath,
+                    happyAgentWorkspacePath: runPaths.happyAgentWorkspacePath,
                     catalog,
                     seededTurns: history.seededTurns,
                     durableCounts: history.durableCounts,
@@ -160,15 +160,15 @@ export async function gymRun(options: {
     const paths = state.paths;
     await mkdir(paths.artifacts, { recursive: true });
     const inference = gymInferenceServerCreate(state.manifest, paths.inferenceLog);
-    let runtime: StartedRigRuntime | undefined;
+    let runtime: StartedHappyAgentRuntime | undefined;
     let electron: ElectronRunResult | undefined;
     try {
         await inference.start();
         await gymRunProfileWrite(paths, {
-            RIG_GYM_INFERENCE_URL: inference.url,
-            RIG_GYM_TOKEN: inference.token,
+            HAPPY_AGENT_GYM_INFERENCE_URL: inference.url,
+            HAPPY_AGENT_GYM_TOKEN: inference.token,
         });
-        runtime = await rigRuntimeCreate(paths, inference);
+        runtime = await happyAgentRuntimeCreate(paths, inference);
         electron = await electronWorkloadsRun({
             paths,
             manifest: state.manifest,
@@ -239,14 +239,14 @@ async function preparedStateRead(paths: GymRunPaths): Promise<PreparedGym> {
         readonly sessionIds: readonly string[];
         readonly clusterWorkspaceId: string;
         readonly clusterSessionIds: readonly string[];
-        readonly rigWorkspacePath: string;
+        readonly happyAgentWorkspacePath: string;
         readonly catalog: GymCatalogSnapshot;
         readonly seededTurns: number;
         readonly durableCounts: GymDurableCounts;
         readonly persistedAfterRestart: boolean;
     };
     return {
-        paths: { ...paths, rigWorkspacePath: raw.rigWorkspacePath },
+        paths: { ...paths, happyAgentWorkspacePath: raw.happyAgentWorkspacePath },
         manifest: raw.manifest,
         projects: raw.projects,
         fixture: raw.fixture,

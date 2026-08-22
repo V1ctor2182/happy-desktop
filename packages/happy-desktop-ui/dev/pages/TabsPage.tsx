@@ -19,7 +19,7 @@ const inboxTabs: TabItem[] = [
 const laneTabs = (state: { avatar?: boolean; busy?: boolean; unread?: boolean }): TabItem[] =>
     ["one", "two", "three"].map((id, index) => ({
         id,
-        label: ["Migrate the table", "Rewrite the header", "Connect a Rig"][index]!,
+        label: ["Migrate the table", "Rewrite the header", "Connect a Happy Agent"][index]!,
         avatarId: state.avatar === true ? `ses_${id}` : undefined,
         busy: state.busy === true,
         unread: state.unread === true,

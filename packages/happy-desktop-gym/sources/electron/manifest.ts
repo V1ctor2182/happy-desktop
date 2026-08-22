@@ -23,7 +23,7 @@ const measuredBaseline = {
 } as const;
 
 const limitation =
-    "Rig 0.2.0 exposes no public endpoint for manufacturing subagent rows. " +
+    "Happy Agent 0.2.0 exposes no public endpoint for manufacturing subagent rows. " +
     "This dataset creates the measured session-row load through supported session APIs and " +
     "represents the subagent population with deterministic, tool-heavy primary-session history; " +
     "it never fabricates SQLite rows.";
@@ -70,7 +70,7 @@ const manifests: Readonly<Record<GymProfile, GymManifest>> = {
         schemaVersion: 1,
         datasetVersion: "electron-performance-v1-realistic",
         profile: "realistic",
-        label: "Measured local Rig catalog shape with long durable history",
+        label: "Measured local Happy Agent catalog shape with long durable history",
         hostSnapshot: measuredBaselineHostSnapshot,
         target: measuredBaseline,
         seed: {

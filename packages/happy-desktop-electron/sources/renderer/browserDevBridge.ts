@@ -15,7 +15,7 @@ import type {
     DesktopReactDevtoolsMessage,
 } from "../shared/desktopProfiler";
 
-const endpoint = "/__happy2_local_rig";
+const endpoint = "/__happy2_local_happy_agent";
 
 const unsupportedDebugSnapshot: DesktopDebugSnapshot = {
     daemon: { status: "stopped" },
@@ -57,14 +57,15 @@ async function request<Value>(action: string, input?: unknown): Promise<Value> {
         method: "POST",
     });
     const result = (await response.json()) as DevResponse<Value>;
-    if (!response.ok || result.error) throw new Error(result.error ?? "Local Rig request failed.");
+    if (!response.ok || result.error)
+        throw new Error(result.error ?? "Local Happy Agent request failed.");
     return result.value as Value;
 }
 
 /**
  * Creates the same renderer capability as the preload bridge, backed by the local
  * Vite server. The renderer reaches the daemon's health over the dev server's
- * `${endpoint}/health` route (advertised as `rigHttpUrl` in the runtime snapshot),
+ * `${endpoint}/health` route (advertised as `happyAgentHttpUrl` in the runtime snapshot),
  * while machine-local file operations use the exact endpoint and the remaining
  * native-only operations degrade explicitly.
  */
@@ -161,12 +162,13 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // The development bridge has no push channel, so a change made outside
         // this window is picked up the next time the surface reads.
         notesSubscribe: () => () => undefined,
-        // Browser-local development runs against a machine that already has Rig
+        // Browser-local development runs against a machine that already has Happy Agent
         // and a daemon, and it has no native picker or PTY to run setup with, so
         // it reports setup as finished rather than presenting steps it cannot
         // truthfully perform.
         onboardingGet: async () => ({ busy: false, freshness: "used", stage: "complete" }) as const,
         onboardingSubscribe: () => () => undefined,
+        onboardingAssistantsContinue: async () => undefined,
         onboardingProfileCreate: async () => undefined,
         onboardingProjectChoose: async () => undefined,
         runtimeGet: async () => {
@@ -177,8 +179,8 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
                 ...snapshot,
                 activeTarget: {
                     ...snapshot.activeTarget,
-                    rigHttpUrl: new URL(
-                        snapshot.activeTarget.rigHttpUrl,
+                    happyAgentHttpUrl: new URL(
+                        snapshot.activeTarget.happyAgentHttpUrl,
                         window.location.origin,
                     ).toString(),
                 },

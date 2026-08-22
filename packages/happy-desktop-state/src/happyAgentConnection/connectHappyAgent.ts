@@ -25,7 +25,7 @@ import { createStore } from "zustand/vanilla";
 import { ChatStore } from "./ChatStore.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
-import type { RigDebugLogInput } from "../rig/rigDebugLogStore.js";
+import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import {
     applyChanges,
     defaultMode,
@@ -48,9 +48,9 @@ import type {
     GroupsState,
     MutationAction,
     MutationRejectedDelta,
-    RigConnection,
-    RigGroupsSubscriptionOptions,
-    RigSessionSubscriptionOptions,
+    HappyAgentConnection,
+    HappyAgentGroupsSubscriptionOptions,
+    HappyAgentSessionSubscriptionOptions,
     ServerCompatibility,
 } from "./types.js";
 
@@ -83,7 +83,7 @@ function errorDetail(error: unknown): string {
     return error instanceof Error ? (error.stack ?? error.message) : debugDetail(error);
 }
 
-interface SessionSubscriber extends RigSessionSubscriptionOptions {
+interface SessionSubscriber extends HappyAgentSessionSubscriptionOptions {
     closed: boolean;
 }
 
@@ -127,7 +127,7 @@ interface SessionEntry {
     mode?: MessageMode | null;
 }
 
-interface GroupsSubscriber extends RigGroupsSubscriptionOptions {
+interface GroupsSubscriber extends HappyAgentGroupsSubscriptionOptions {
     closed: boolean;
 }
 
@@ -136,13 +136,13 @@ interface RecentEvent {
     receivedAt: number;
 }
 
-export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnection {
+export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgentConnection {
     const client = options.client ?? new HappyAgentClient(options);
     const endpoint = options.endpoint.toString();
     const rootController = new AbortController();
     const wait = options.wait ?? abortableWait;
     const now = options.now ?? Date.now;
-    const reportDebug = (entry: RigDebugLogInput): void => options.onDebugEntry?.(entry);
+    const reportDebug = (entry: HappyAgentDebugLogInput): void => options.onDebugEntry?.(entry);
     const nextId = createCuid2(now);
     const sessions = new Map<string, SessionEntry>();
     const groupSubscribers = new Set<GroupsSubscriber>();
@@ -504,7 +504,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
 
     /**
      * Releases transient mutation bookkeeping while retaining the hydrated
-     * session itself. One Rig-wide managed update feed keeps that cached entry
+     * session itself. One Happy Agent-wide managed update feed keeps that cached entry
      * current, so closing and reopening a view never needs another bootstrap
      * read.
      */
@@ -1559,7 +1559,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                 if (config === undefined) {
                     reportDebug({
                         level: "info",
-                        message: "Checking Rig health before managed updates",
+                        message: "Checking Happy Agent health before managed updates",
                         source: "connection",
                     });
                     const health = await client.getHealth({
@@ -1571,7 +1571,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
                     reportDebug({
                         detail: debugDetail(health),
                         level: health.ready ? "info" : "warning",
-                        message: health.ready ? "Rig health check passed" : "Rig is not ready",
+                        message: health.ready
+                            ? "Happy Agent health check passed"
+                            : "Happy Agent is not ready",
                         source: "connection",
                     });
                     const nextCompatibility = serverCompatibility(health.version.protocol);
@@ -2267,7 +2269,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): RigConnect
             ) ?? [{ type: "text" as const, text: input.text }];
             const richContent = content.filter((block) => block.type !== "text");
             // The composer deliberately permits an image-only turn, while the
-            // daemon's send contract requires non-empty display text. Rig uses
+            // daemon's send contract requires non-empty display text. Happy Agent uses
             // the image media types as the canonical display fallback.
             const requestText =
                 input.text.trim().length > 0

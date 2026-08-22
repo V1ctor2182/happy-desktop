@@ -39,14 +39,14 @@ export function SplashScreenPage() {
             </Specimen>
 
             <Specimen
-                detail="A slow local Rig start adds a quiet note below the mark; the mark itself does not move"
+                detail="A slow local Happy Agent start adds a quiet note below the mark; the mark itself does not move"
                 label="With a note"
                 number="03"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     <div style={{ width: "640px", height: "400px" }}>
-                        <SplashScreen note="Still starting Rig…" />
+                        <SplashScreen note="Still starting Happy Agent…" />
                     </div>
                     <DimensionRule label="640 × 400 host · mark 64 × 64 · note centered below" />
                 </div>

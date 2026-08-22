@@ -45,7 +45,7 @@ function gridOf(lines: TerminalCellSnapshot[][], cursorX = 2): TerminalGridSnaps
     };
 }
 
-const connectedGrid = gridOf([run(0, "happy@rig$ ls"), run(0, "README.md")]);
+const connectedGrid = gridOf([run(0, "happy@agent$ ls"), run(0, "README.md")]);
 // Sparse: 'a' at col 0, 'b' at col 5 → four empty columns between them.
 const sparseGrid = gridOf([[cell(0, "a"), cell(5, "b")]]);
 // Wide: a 2-column glyph at col 0, then a normal glyph at col 3.

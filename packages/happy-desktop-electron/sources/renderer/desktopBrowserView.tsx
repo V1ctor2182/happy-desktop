@@ -200,7 +200,7 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
         this.elementApply(undefined);
         if (this.state.ready) this.setState({ ready: false });
         if (!sessionId || !desktop) {
-            this.props.browserFailed({ message: "The browser has no Rig session." });
+            this.props.browserFailed({ message: "The browser has no Happy Agent session." });
             return;
         }
         void desktop.browserProxyApply({ sessionId }).then(
@@ -213,7 +213,7 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
                     message:
                         error instanceof Error
                             ? error.message
-                            : "The Rig browser proxy could not be opened.",
+                            : "The Happy Agent browser proxy could not be opened.",
                 });
             },
         );

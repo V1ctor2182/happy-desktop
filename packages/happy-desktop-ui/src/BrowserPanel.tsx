@@ -31,7 +31,7 @@ export interface BrowserFailure {
 }
 
 export interface BrowserContentProps {
-    /** Rig session whose network boundary owns this browser guest. */
+    /** Happy Agent session whose network boundary owns this browser guest. */
     readonly sessionId?: string;
     /** Initial location for the Chromium guest. Further navigation uses the controller. */
     readonly source: string;
@@ -52,7 +52,7 @@ export interface BrowserPanelProps {
     renderContent?: BrowserContentRenderer;
     onLocationChange?(url: string): void;
     onTitleChange?(title: string): void;
-    /** Why Rig-bound browser navigation is unavailable while the guest remains mounted. */
+    /** Why Happy Agent-bound browser navigation is unavailable while the guest remains mounted. */
     unavailable?: string;
 }
 

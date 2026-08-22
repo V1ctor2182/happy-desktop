@@ -7,7 +7,7 @@ import type {
     GroupsState,
     MutationRejectedDelta,
     ProjectGroup,
-    RigConnection,
+    HappyAgentConnection,
     SessionState,
 } from "./types.js";
 import {
@@ -20,12 +20,12 @@ import {
 
 interface Harness {
     daemon: FakeHappyAgentDaemon;
-    connection: RigConnection;
+    connection: HappyAgentConnection;
     waits: number[];
     rejections: MutationRejectedDelta[];
 }
 
-const openConnections: RigConnection[] = [];
+const openConnections: HappyAgentConnection[] = [];
 
 afterEach(() => {
     for (const connection of openConnections.splice(0)) connection.close();
@@ -35,7 +35,7 @@ function harnessOpen(daemon = fakeHappyAgentDaemonCreate()): Harness {
     const waits: number[] = [];
     const rejections: MutationRejectedDelta[] = [];
     const connection = connectHappyAgent({
-        endpoint: "http://rig.test/",
+        endpoint: "http://happy-agent.test/",
         token: "token",
         client: daemon.client,
         // Record every backoff but never actually sleep; a macrotask hop keeps
@@ -57,7 +57,7 @@ interface GroupsWatch {
     errors: unknown[];
 }
 
-function groupsWatch(connection: RigConnection): GroupsWatch {
+function groupsWatch(connection: HappyAgentConnection): GroupsWatch {
     const watch: GroupsWatch = {
         projects: [],
         state: { connection: "connecting", sessionsComplete: false },
@@ -82,7 +82,7 @@ interface SessionWatch {
     deltas: ChatDelta[];
 }
 
-function sessionWatch(connection: RigConnection, sessionId: string): SessionWatch {
+function sessionWatch(connection: HappyAgentConnection, sessionId: string): SessionWatch {
     const watch: SessionWatch = { elements: [], session: undefined, errors: [], deltas: [] };
     connection.connectSession({
         sessionId,

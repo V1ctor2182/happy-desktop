@@ -1,14 +1,14 @@
 import type {
-    RigModelPreferenceDocument,
-    RigModelPreferencePersistence,
-    RigPermissionMode,
-    RigServiceTier,
-    RigSettingsInitial,
-    RigSettingsSnapshot,
-    RigThinkingLevel,
+    HappyAgentModelPreferenceDocument,
+    HappyAgentModelPreferencePersistence,
+    HappyAgentPermissionMode,
+    HappyAgentServiceTier,
+    HappyAgentSettingsInitial,
+    HappyAgentSettingsSnapshot,
+    HappyAgentThinkingLevel,
     TitleShimmerPersistence,
 } from "happy-desktop-state";
-import { RIG_DEFAULT_THINKING_LEVEL } from "happy-desktop-state";
+import { HAPPY_AGENT_DEFAULT_THINKING_LEVEL } from "happy-desktop-state";
 import type {
     DesktopAppearanceMode,
     DesktopConfig,
@@ -34,14 +34,14 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set([
 export interface DesktopPreferences {
     readonly initialAppearance: DesktopAppearanceMode;
     readonly initialScrollbarVisibility: DesktopScrollbarVisibility;
-    readonly initialSettings: RigSettingsInitial;
-    readonly preferencePersistence: RigModelPreferencePersistence;
+    readonly initialSettings: HappyAgentSettingsInitial;
+    readonly preferencePersistence: HappyAgentModelPreferencePersistence;
     readonly titleShimmerPersistence: TitleShimmerPersistence;
     appearanceChanged(
         mode: DesktopAppearanceMode,
         scrollbarVisibility: DesktopScrollbarVisibility,
     ): void;
-    settingsChanged(snapshot: RigSettingsSnapshot): void;
+    settingsChanged(snapshot: HappyAgentSettingsSnapshot): void;
 }
 
 /**
@@ -68,7 +68,7 @@ export function desktopPreferencesCreate(
         });
     };
 
-    const preferencePersistence: RigModelPreferencePersistence = {
+    const preferencePersistence: HappyAgentModelPreferencePersistence = {
         read: () => preferenceDocument(config),
         write(document) {
             commit(configFromPreferenceDocument(config, document));
@@ -168,11 +168,11 @@ export function desktopPreferencesCreate(
     };
 }
 
-function settingsInitial(config: DesktopConfig): RigSettingsInitial {
+function settingsInitial(config: DesktopConfig): HappyAgentSettingsInitial {
     const effort =
         thinkingLevel(config.defaultEffort) ??
         thinkingLevel(config.defaultModel?.effort) ??
-        RIG_DEFAULT_THINKING_LEVEL;
+        HAPPY_AGENT_DEFAULT_THINKING_LEVEL;
     return {
         ...(config.defaultModel
             ? {
@@ -185,12 +185,12 @@ function settingsInitial(config: DesktopConfig): RigSettingsInitial {
     };
 }
 
-function preferenceDocument(config: DesktopConfig): RigModelPreferenceDocument {
+function preferenceDocument(config: DesktopConfig): HappyAgentModelPreferenceDocument {
     const preferences: {
         [providerId: string]: {
             [modelId: string]: {
-                effort: RigThinkingLevel | null;
-                serviceTier: RigServiceTier | null;
+                effort: HappyAgentThinkingLevel | null;
+                serviceTier: HappyAgentServiceTier | null;
             };
         };
     } = {};
@@ -204,7 +204,7 @@ function preferenceDocument(config: DesktopConfig): RigModelPreferenceDocument {
     }
     const defaultEffort = thinkingLevel(config.defaultModel?.effort);
     return {
-        defaultEffort: thinkingLevel(config.defaultEffort) ?? RIG_DEFAULT_THINKING_LEVEL,
+        defaultEffort: thinkingLevel(config.defaultEffort) ?? HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
         ...(config.defaultModel
             ? {
                   defaultSelection: {
@@ -222,7 +222,7 @@ function preferenceDocument(config: DesktopConfig): RigModelPreferenceDocument {
 
 function configFromPreferenceDocument(
     current: DesktopConfig,
-    document: RigModelPreferenceDocument,
+    document: HappyAgentModelPreferenceDocument,
 ): DesktopConfig {
     const modelPreferences: DesktopModelPreference[] = [];
     for (const [providerId, models] of Object.entries(document.preferences)) {
@@ -269,11 +269,11 @@ function configFromPreferenceDocument(
     };
 }
 
-function thinkingLevel(value: string | undefined): RigThinkingLevel | undefined {
-    return value && THINKING_LEVELS.has(value) ? (value as RigThinkingLevel) : undefined;
+function thinkingLevel(value: string | undefined): HappyAgentThinkingLevel | undefined {
+    return value && THINKING_LEVELS.has(value) ? (value as HappyAgentThinkingLevel) : undefined;
 }
 
-function permissionMode(value: string | undefined): RigPermissionMode {
+function permissionMode(value: string | undefined): HappyAgentPermissionMode {
     switch (value) {
         case "workspace_write":
         case "read_only":

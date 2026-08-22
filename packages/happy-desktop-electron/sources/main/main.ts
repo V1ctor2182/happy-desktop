@@ -62,7 +62,7 @@ import {
     mediaPreviewResolve,
     mediaPreviewTitle,
 } from "./mediaPreviewWindow";
-import { localRigConnectorCreate, localRuntimeProbe } from "./localRig";
+import { localHappyAgentConnectorCreate, localRuntimeProbe } from "./localHappyAgent";
 import { LocalOnboarding } from "./localOnboarding";
 import { NotesStore } from "./notesStore";
 import {
@@ -71,9 +71,12 @@ import {
     noteTitleOptionalValidate,
     noteTitleValidate,
 } from "./notesIpcValidation";
-import { desktopBrowserProxyTargetValidate } from "./rigIpcValidation";
+import { desktopBrowserProxyTargetValidate } from "./happyAgentIpcValidation";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
-import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
+import {
+    happyAgentBrowserProxyCreate,
+    type HappyAgentBrowserProxyHandle,
+} from "./happyAgentBrowserProxy";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import { DesktopDebugController } from "./desktopDebugController";
 import { desktopMainInspectorStart } from "./desktopInspector";
@@ -249,7 +252,7 @@ let onboarding: LocalOnboarding;
 let notesStore: NotesStore;
 let quitting = false;
 let happyBrowserUserAgent = "";
-let browserProxy: RigBrowserProxyHandle | undefined;
+let browserProxy: HappyAgentBrowserProxyHandle | undefined;
 let htmlPreviewProxy: HtmlPreviewProxyHandle | undefined;
 let browserProxyConnectionId: number | undefined;
 /** Which local session the live tunnel was built for. */
@@ -312,7 +315,7 @@ function desktopDebugRuntimeLog(snapshot: ReturnType<DesktopRuntime["get"]>): vo
     }
 }
 
-/** Starts the Rig inspector for each fresh local connection in CLI debug mode. */
+/** Starts the Happy Agent inspector for each fresh local connection in CLI debug mode. */
 function desktopDebugDaemonStartIfReady(snapshot: ReturnType<DesktopRuntime["get"]>): void {
     const debugController = desktopDebugController;
     if (
@@ -330,16 +333,16 @@ function desktopDebugDaemonStartIfReady(snapshot: ReturnType<DesktopRuntime["get
         .then((debugSnapshot) => {
             const target = debugSnapshot.daemon;
             if (target.status === "running" && target.url) {
-                desktopDebugLog(`Rig daemon inspector: ${target.url}`);
+                desktopDebugLog(`Happy Agent daemon inspector: ${target.url}`);
             } else {
                 desktopDebugError(
-                    `Rig daemon inspector did not start (${target.status})${
+                    `Happy Agent daemon inspector did not start (${target.status})${
                         target.error ? `: ${target.error}` : ""
                     }`,
                 );
             }
         })
-        .catch((error) => desktopDebugError("Rig daemon inspector startup failed", error));
+        .catch((error) => desktopDebugError("Happy Agent daemon inspector startup failed", error));
 }
 
 function desktopProfilerPublish(snapshot: DesktopProfilerSnapshot): void {
@@ -375,7 +378,7 @@ async function directoryPickShow(owner: BrowserWindow | undefined): Promise<stri
     const options: OpenDialogOptions = {
         buttonLabel: "Choose",
         properties: ["openDirectory", "createDirectory"],
-        title: "Choose a Rig working directory",
+        title: "Choose a Happy Agent working directory",
     };
     const result = owner
         ? await dialog.showOpenDialog(owner, options)
@@ -452,7 +455,7 @@ function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
     return browserProxySerial(async () => {
         const snapshot = runtime.get();
         if (snapshot.phase !== "ready" || snapshot.mode !== "local")
-            throw new Error("The local Rig daemon is unavailable.");
+            throw new Error("The local Happy Agent daemon is unavailable.");
         if (
             browserProxyTarget?.sessionId === target.sessionId &&
             browserProxyConnectionId === snapshot.connectionId
@@ -461,7 +464,7 @@ function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
 
         await browserProxyFailClosed();
         const connectionId = snapshot.connectionId;
-        const candidate = await rigBrowserProxyCreate({
+        const candidate = await happyAgentBrowserProxyCreate({
             sessionId: target.sessionId,
             openHttpProxy: () => browserProxyOpen(target),
         });
@@ -472,7 +475,7 @@ function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
             current.connectionId !== connectionId
         ) {
             candidate.close();
-            throw new Error("The local Rig connection changed while opening the browser.");
+            throw new Error("The local Happy Agent connection changed while opening the browser.");
         }
         try {
             const browserSession = browserSessionGet();
@@ -967,15 +970,15 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
 }
 
 /**
- * Every Rig proxy this process is currently running. A file may be shown in a
+ * Every Happy Agent proxy this process is currently running. A file may be shown in a
  * window of its own only if its address is on one of them, which is what keeps a
- * privileged window pointed at this machine's own Rigs and nothing else.
+ * privileged window pointed at this machine's own Happy Agents and nothing else.
  */
 function mediaPreviewBases(): readonly (string | undefined)[] {
     const snapshot = runtime.get();
     return [
-        snapshot.phase === "ready" && snapshot.activeTarget.authentication === "rig"
-            ? snapshot.activeTarget.rigHttpUrl
+        snapshot.phase === "ready" && snapshot.activeTarget.authentication === "happyAgent"
+            ? snapshot.activeTarget.happyAgentHttpUrl
             : undefined,
     ];
 }
@@ -1109,7 +1112,7 @@ function mediaPreviewShow(preview: DesktopMediaPreview): void {
 
 /**
  * Retires the preview window once the address behind it can no longer be served.
- * The file is addressed on a Rig proxy, so a Rig that goes away takes the
+ * The file is addressed on a Happy Agent proxy, so a Happy Agent that goes away takes the
  * window with it rather than leaving a frame around a request that will now fail.
  */
 function mediaPreviewRevalidate(): void {
@@ -1284,8 +1287,8 @@ void app
             () => process.env,
         );
         const managedDaemon = !(
-            launchEnvironment.RIG_SERVER_SOCKET_PATH?.trim() &&
-            launchEnvironment.RIG_SERVER_TOKEN_PATH?.trim()
+            launchEnvironment.HAPPY_AGENT_SERVER_SOCKET_PATH?.trim() &&
+            launchEnvironment.HAPPY_AGENT_SERVER_TOKEN_PATH?.trim()
         );
         daemonController = await DesktopDaemonController.create({
             environment: launchEnvironment,
@@ -1297,7 +1300,7 @@ void app
             if (window && !window.isDestroyed())
                 window.webContents.send(desktopIpc.daemonChanged, snapshot);
         });
-        const connector = localRigConnectorCreate({
+        const connector = localHappyAgentConnectorCreate({
             daemonBinary: daemonController,
             debug: desktopDebugLog,
             environment: launchEnvironment,
@@ -1311,7 +1314,7 @@ void app
                 root: desktopRoot,
             },
             {
-                localRigConnector: connector,
+                localHappyAgentConnector: connector,
                 // A hosted local renderer and the Vite development renderer both
                 // call the loopback proxy cross-origin. Only their exact,
                 // build-owned origin receives CORS access.
@@ -1567,10 +1570,11 @@ void app
             if (!presenting || presenting.webContents !== event.sender)
                 throw new Error("This window cannot open a preview window.");
             // The renderer names the file; this process decides whether that
-            // name is one of its own Rig's, so a window is never opened onto an
+            // name is one of its own Happy Agent's, so a window is never opened onto an
             // address this build is not already serving.
             const preview = mediaPreviewResolve(raw, mediaPreviewBases());
-            if (!preview) throw new Error("That file is not served by a Rig in this window.");
+            if (!preview)
+                throw new Error("That file is not served by a Happy Agent in this window.");
             mediaPreviewShow(preview);
         });
         ipcMain.handle(desktopIpc.mediaPreviewGet, (event) =>
@@ -1589,7 +1593,7 @@ void app
             const options: OpenDialogOptions = {
                 buttonLabel: "Add",
                 // No `createDirectory`: what is chosen here becomes a project,
-                // and Rig only accepts the top level of a Git repository — so a
+                // and Happy Agent only accepts the top level of a Git repository — so a
                 // folder made in this dialog could only ever be refused.
                 properties: ["openDirectory"],
                 title: "Choose a project folder",
@@ -1606,6 +1610,10 @@ void app
         ipcMain.handle(desktopIpc.onboardingProjectChoose, (event) => {
             onboardingSenderRequire(event.sender);
             return onboarding.projectChoose();
+        });
+        ipcMain.handle(desktopIpc.onboardingAssistantsContinue, (event) => {
+            onboardingSenderRequire(event.sender);
+            onboarding.assistantsContinue();
         });
         ipcMain.handle(desktopIpc.onboardingProfileCreate, (event, input: unknown) => {
             onboardingSenderRequire(event.sender);

@@ -78,7 +78,7 @@ function desktopSettingsVersionOneMigrate(
             !isRecord(candidate) ||
             !desktopTopologyIdValid(candidate.id) ||
             candidate.mode !== "local" ||
-            (candidate.rig !== "embedded" && candidate.rig !== "global")
+            (candidate.happyAgent !== "embedded" && candidate.happyAgent !== "global")
         )
             return undefined;
         topologies.push({ id: candidate.id, mode: "local" });

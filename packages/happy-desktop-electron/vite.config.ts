@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import { lottieLocalWasmPlugin } from "happy-desktop-ui/vite";
-import { browserLocalRigPlugin } from "./sources/main/browserDevServer";
+import { browserLocalHappyAgentPlugin } from "./sources/main/browserDevServer";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("./package.json") as { readonly version: string };
@@ -66,7 +66,7 @@ export default defineConfig({
         __HAPPY2_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),
     },
     plugins: [
-        // The Rig terminal protocol (@slopus/ghostty-web) decodes compressed wire
+        // The Happy Agent terminal protocol (@slopus/ghostty-web) decodes compressed wire
         // frames with node:zlib and node Buffer; these polyfills make them real in
         // the browser instead of empty externals that would throw at runtime.
         nodePolyfills({
@@ -81,7 +81,7 @@ export default defineConfig({
         // ships hardcoded CDN URLs for its binary. This cuts them out so the
         // renderer can only ever load the copy bundled here.
         lottieLocalWasmPlugin(),
-        browserLocalRigPlugin(),
+        browserLocalHappyAgentPlugin(),
         ...(localWebBuild ? [localWebVersionPlugin(localWebBuild)] : []),
     ],
     resolve: {

@@ -1,4 +1,4 @@
-import type { RigHistoryDocument, RigHistoryPersistence } from "happy-desktop-app";
+import type { HappyAgentHistoryDocument, HappyAgentHistoryPersistence } from "happy-desktop-app";
 
 const HISTORY_KEY = "happy2.router-history.v1";
 
@@ -8,7 +8,7 @@ const HISTORY_KEY = "happy2.router-history.v1";
  * under that key — an older build's, truncated, hand-edited — so it is handed
  * over as `unknown` for the window owning the stack to parse.
  */
-export function desktopHistoryPersistence(): RigHistoryPersistence {
+export function desktopHistoryPersistence(): HappyAgentHistoryPersistence {
     return {
         read(): unknown {
             try {
@@ -18,7 +18,7 @@ export function desktopHistoryPersistence(): RigHistoryPersistence {
                 return undefined;
             }
         },
-        write(document: RigHistoryDocument) {
+        write(document: HappyAgentHistoryDocument) {
             try {
                 localStorage.setItem(HISTORY_KEY, JSON.stringify(document));
             } catch {

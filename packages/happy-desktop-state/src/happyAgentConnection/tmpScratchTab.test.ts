@@ -6,7 +6,7 @@ import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
 it("scratch: optimistic workspace and session are in the group stream before the daemon answers", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     const connection = connectHappyAgent({
-        endpoint: "http://rig.test/",
+        endpoint: "http://happy-agent.test/",
         token: "token",
         client: daemon.client,
         wait: () => new Promise((resolve) => setTimeout(resolve, 0)),

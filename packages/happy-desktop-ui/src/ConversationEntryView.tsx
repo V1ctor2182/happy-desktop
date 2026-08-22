@@ -19,7 +19,7 @@ import {
     ConversationRequestView,
     type ConversationRequestDecision,
 } from "./ConversationRequestView";
-import { type RigUserInputAnswerMap } from "./RigUserInputPrompt";
+import { type HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 
@@ -41,11 +41,11 @@ export type ConversationEntryViewProps = {
     /** Consecutive entry from the same author: no avatar/author row. */
     grouped?: boolean;
     /** Answers a pending question request entry. */
-    onRequestAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Options ticked into this question so far, when the owner keeps them. */
     requestSelection?: Readonly<Record<string, readonly string[]>>;
     /** Reports each tick to an owner that keeps the selection. */
-    onRequestSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    onRequestSelectionChange?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Approves or denies a pending gate request entry. */
     onRequestDecide?: (requestId: string, decision: ConversationRequestDecision) => void;
     /**
@@ -288,7 +288,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     }
     if (entry.kind === "notice") {
         /* Compute preparation is the runtime materializing the workspace, not
-           the agent working: Rig attributes it to every session running out of
+           the agent working: Happy Agent attributes it to every session running out of
            that directory, including ones with no turn in flight. So it takes no
            agent identity header — it is the session's own machine, reported in
            order among the rows it holds up. */

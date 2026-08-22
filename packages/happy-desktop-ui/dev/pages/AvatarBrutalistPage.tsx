@@ -8,7 +8,7 @@ const IDS = [
     "ses_9f2a",
     "ses_1b74",
     "prj_happy2",
-    "prj_rig",
+    "prj_happy_agent",
     "steve@korshakov.com",
     "Claude",
     "Codex",

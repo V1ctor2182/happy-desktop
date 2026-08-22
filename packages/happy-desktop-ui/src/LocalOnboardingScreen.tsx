@@ -1,5 +1,22 @@
+import { type AssistantMarkName } from "./AssistantMark";
+import { SetupAssistants, type SetupAssistantEntry } from "./SetupAssistants";
 import { SetupPage, type SetupPageProgress } from "./SetupPage";
 import { TextField } from "./TextField";
+
+/** The coding assistants Happy looks for, and nothing beyond them. */
+export type LocalOnboardingAssistantId = "claude" | "codex" | "grok";
+
+/**
+ * One of them as the machine answered for it: the command is here, or it is
+ * not. Whether a command that is here can actually run is the connected Happy Agent's
+ * answer rather than the shell's, and the screen showing this carries it.
+ */
+export interface LocalOnboardingAssistant {
+    readonly id: LocalOnboardingAssistantId;
+    readonly status: "found" | "missing";
+    /** Where the machine keeps it, when it has it. */
+    readonly command?: string;
+}
 
 /**
  * The Happy Agent archive arriving, while it is arriving. Counted by the
@@ -13,7 +30,6 @@ export interface LocalOnboardingDownload {
 export type LocalOnboardingView =
     | { readonly kind: "checking"; readonly message?: string }
     | { readonly kind: "node-missing" }
-    | { readonly kind: "rig-missing"; readonly message?: string }
     | {
           readonly busy: boolean;
           readonly download?: LocalOnboardingDownload;
@@ -26,9 +42,14 @@ export type LocalOnboardingView =
     | { readonly kind: "connect-failed"; readonly message: string; readonly retrying: boolean }
     | {
           readonly kind: "providers-missing";
-          /** The assistants Rig looked for, in the order it named them. */
-          readonly providers: readonly string[];
+          /** The three, in the order their cards are read. */
+          readonly assistants: readonly LocalOnboardingAssistant[];
           readonly retrying: boolean;
+      }
+    /** What the machine turned out to have, reported once after an install. */
+    | {
+          readonly kind: "assistants-found";
+          readonly assistants: readonly LocalOnboardingAssistant[];
       }
     | { readonly kind: "examining" }
     | {
@@ -42,6 +63,7 @@ export type LocalOnboardingView =
 
 export interface LocalOnboardingScreenProps {
     readonly view: LocalOnboardingView;
+    onAssistantsContinue(): void;
     onConnectRetry(): void;
     onDaemonDownload(): void;
     onProjectChoose(): void;
@@ -50,8 +72,8 @@ export interface LocalOnboardingScreenProps {
     onProfileCreate(): void;
 }
 
-/** What a reader is told to run when Happy cannot start their Rig itself. */
-const DAEMON_START_COMMAND = "rig daemon start";
+/** What a reader is told to run when Happy cannot start their Happy Agent itself. */
+const DAEMON_START_COMMAND = "happy-agent start";
 
 /**
  * The download as the button reports it: the counted share and both sizes while
@@ -77,21 +99,62 @@ function byteSize(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Turns Rig's provider ids into something that reads like a sentence. */
-function providersPhrase(providers: readonly string[]): string {
-    const names = providers.map((provider) => PROVIDER_NAMES[provider] ?? provider);
-    if (names.length === 0) return "a coding assistant";
-    if (names.length === 1) return names[0] as string;
-    return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1] as string}`;
+/**
+ * Each assistant as its column says it: whose mark it carries, the product's
+ * name, and the command that name is on this machine.
+ *
+ * The id is the command, which is why nothing here is looked up twice — but all
+ * three are written out separately anyway. What a person is told to install and
+ * what they are told to type are not always the same word, and the mark belongs
+ * to the company rather than to the command: Codex is OpenAI's, so that is what
+ * its mark is called here. Putting the wrong name on somebody else's trademark
+ * is not a shortcut worth taking.
+ */
+const ASSISTANTS: Record<
+    LocalOnboardingAssistantId,
+    { command: string; mark: AssistantMarkName; name: string }
+> = {
+    claude: { command: "claude", mark: "claude", name: "Claude Code" },
+    codex: { command: "codex", mark: "openai", name: "Codex" },
+    grok: { command: "grok", mark: "grok", name: "Grok" },
+};
+
+/**
+ * One card on the report that follows an install: what is on the machine, and
+ * where.
+ *
+ * A found assistant shows the path the shell gave, because the one question
+ * somebody has about a machine that "has" a command is which one it found —
+ * two versions on a PATH is the ordinary case, not the exotic one.
+ */
+function assistantFoundEntry(assistant: LocalOnboardingAssistant): SetupAssistantEntry {
+    const { mark, name } = ASSISTANTS[assistant.id];
+    return {
+        detail: assistant.command ?? "Not installed",
+        detailKind: assistant.command ? "path" : "sentence",
+        id: assistant.id,
+        mark,
+        name,
+        status: assistant.status === "found" ? "found" : "missing",
+    };
 }
 
-/** What each provider Rig knows is actually called on someone's machine. */
-const PROVIDER_NAMES: Record<string, string> = {
-    bedrock: "Amazon Bedrock",
-    claude: "Claude Code",
-    codex: "Codex",
-    grok: "Grok",
-};
+/**
+ * The same column on the screen Happy Agent's refusal raises, where a found
+ * command means something more specific: it is here, and nobody has signed in
+ * to it. So the line stops being a location and becomes the one instruction on
+ * the screen.
+ */
+function assistantSignInEntry(assistant: LocalOnboardingAssistant): SetupAssistantEntry {
+    const { command, mark, name } = ASSISTANTS[assistant.id];
+    return {
+        detail: assistant.status === "missing" ? "Not installed" : `Run ${command} to sign in`,
+        id: assistant.id,
+        mark,
+        name,
+        status: assistant.status === "found" ? "signed-out" : "missing",
+    };
+}
 
 /**
  * First-run setup for this machine, as a sequence of centred pages.
@@ -123,17 +186,17 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     if (view.kind === "connecting")
         return (
             <SetupPage
-                copy="Starting your Rig and waiting for it to answer."
+                copy="Starting your Happy Agent and waiting for it to answer."
                 data-testid="local-onboarding-screen"
                 scene="snail"
-                title="Connecting to Rig…"
+                title="Connecting to Happy Agent…"
             />
         );
 
     if (view.kind === "examining")
         return (
             <SetupPage
-                copy="Reading which projects your Rig already holds."
+                copy="Reading which projects your Happy Agent already holds."
                 data-testid="local-onboarding-screen"
                 scene="owl"
                 title="Looking around…"
@@ -143,23 +206,10 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     if (view.kind === "node-missing")
         return (
             <SetupPage
-                copy="Rig runs on Node, and Happy will not put a runtime on your machine by itself. Install Node and setup continues on its own."
+                copy="Happy Agent runs on Node, and Happy will not put a runtime on your machine by itself. Install Node and setup continues on its own."
                 data-testid="local-onboarding-screen"
                 scene="wand"
                 title="Node.js is required"
-            />
-        );
-
-    if (view.kind === "rig-missing")
-        return (
-            <SetupPage
-                copy={
-                    view.message ??
-                    "Install Rig globally outside Happy. Happy will detect it and start its daemon automatically."
-                }
-                data-testid="local-onboarding-screen"
-                scene="robot"
-                title="Rig is required"
             />
         );
 
@@ -211,15 +261,40 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     if (view.kind === "providers-missing")
         return (
             <SetupPage
-                // Nothing is broken here, so nothing on this screen says so. Rig
+                // Nothing is broken here, so nothing on this screen says so. Happy Agent
                 // runs the coding assistants already signed in on this machine —
                 // it has none yet, which is the last ordinary step of setting one
                 // up, and it clears itself the moment one is signed in.
-                copy={`Rig runs the coding assistants you have already signed in to, and none are signed in yet. Sign in to ${providersPhrase(view.providers)} in a terminal, and Happy picks it up from there.`}
+                copy="Happy runs the coding assistants already set up on this machine. Here is what it found; set one up in a terminal and Happy picks it up from there."
                 data-testid="local-onboarding-screen"
                 scene="owl"
-                title="No coding assistant yet"
-            />
+                title="Set up a coding assistant"
+            >
+                <SetupAssistants
+                    assistants={view.assistants.map(assistantSignInEntry)}
+                    data-testid="local-onboarding-assistants"
+                />
+            </SetupPage>
+        );
+
+    // The install is done and the agent is answering. This is the one moment the
+    // machine's own inventory is worth a screen, so it gets one — and a button
+    // rather than a timer, because it is the person's to read for as long as
+    // they want.
+    if (view.kind === "assistants-found")
+        return (
+            <SetupPage
+                action={{ label: "Continue", onSelect: props.onAssistantsContinue }}
+                copy="Happy Agent is running. It found these coding assistants on this machine, and will run whichever of them you are signed in to."
+                data-testid="local-onboarding-screen"
+                scene="sparkles"
+                title="Happy Agent is ready"
+            >
+                <SetupAssistants
+                    assistants={view.assistants.map(assistantFoundEntry)}
+                    data-testid="local-onboarding-assistants"
+                />
+            </SetupPage>
         );
 
     if (view.kind === "profile-required")
@@ -233,7 +308,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 }}
                 copy={
                     view.message ??
-                    "Rig uses this identity for your work and for messages shared with other Rigs."
+                    "Happy Agent uses this identity for your work and for messages shared with other Happy Agents."
                 }
                 data-testid="local-onboarding-screen"
                 scene="sparkles"
@@ -279,7 +354,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 copy={view.message}
                 data-testid="local-onboarding-screen"
                 scene="owl"
-                title="Happy could not reach Rig"
+                title="Happy could not reach Happy Agent"
             />
         );
 

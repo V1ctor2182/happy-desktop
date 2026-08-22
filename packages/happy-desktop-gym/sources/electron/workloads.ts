@@ -13,7 +13,7 @@ import { gymLiveToolMutationLineCount } from "./inferenceServer.js";
 import { electronEntrypointResolve } from "./paths.js";
 import { gymProfilerArtifactReferenceRead } from "./profilerArtifacts.js";
 import type { HappyAgentJournalEvent, HappyAgentStreamHandle } from "./happyAgentProtocol.js";
-import type { StartedRigRuntime } from "./rigRuntime.js";
+import type { StartedHappyAgentRuntime } from "./happyAgentRuntime.js";
 import type {
     ElectronRunResult,
     GymProfilerArtifactReference,
@@ -400,7 +400,7 @@ interface StreamingPaintMeasurement {
 export async function electronWorkloadsRun(options: {
     readonly paths: GymRunPaths;
     readonly manifest: GymManifest;
-    readonly runtime: StartedRigRuntime;
+    readonly runtime: StartedHappyAgentRuntime;
     readonly projects: readonly GymProject[];
     readonly sessionIds: readonly string[];
     readonly clusterSessionIds: readonly string[];
@@ -627,7 +627,7 @@ async function completeOnboarding(page: Page): Promise<void> {
             (await page.getByRole("button", { name: /Install the CLI/ }).count()) > 0
         ) {
             throw new Error(
-                "Happy onboarding requires a native project chooser or Rig install; the isolated Gym could not continue through the public UI.",
+                "Happy onboarding requires a native project chooser or Happy Agent install; the isolated Gym could not continue through the public UI.",
             );
         }
         if (!sawOnboarding && !welcomeClicked) return;
@@ -667,7 +667,7 @@ async function workloadRun(
     options: {
         readonly paths: GymRunPaths;
         readonly manifest: GymManifest;
-        readonly runtime: StartedRigRuntime;
+        readonly runtime: StartedHappyAgentRuntime;
         readonly projects: readonly GymProject[];
         readonly sessionIds: readonly string[];
         readonly clusterSessionIds: readonly string[];
@@ -862,7 +862,7 @@ async function workloadRun(
 async function archiveReconcileRun(
     page: Page,
     options: {
-        readonly runtime: StartedRigRuntime;
+        readonly runtime: StartedHappyAgentRuntime;
         readonly projects: readonly GymProject[];
     },
     mark: (name: string) => Promise<void>,
@@ -959,7 +959,7 @@ async function historyBack(page: Page): Promise<void> {
     await page.waitForTimeout(150);
 }
 
-/** How many sidebar rows name one group; rows carry Rig then group. */
+/** How many sidebar rows name one group; rows carry Happy Agent then group. */
 async function sidebarGroupRowCount(page: Page, groupId: string): Promise<number> {
     return page.locator(`[data-item-id="local/${groupId}"]`).count();
 }
@@ -1864,7 +1864,7 @@ async function markdownCompletionBarrier(
 }
 
 async function concurrentSubmissions(
-    client: StartedRigRuntime["client"],
+    client: StartedHappyAgentRuntime["client"],
     material: GymGoldReplayMaterial,
     targets: readonly MixedSessionTarget[],
     label: string,
@@ -1917,7 +1917,7 @@ async function concurrentSubmissions(
 }
 
 async function agentStreamCollectorCreate(
-    client: StartedRigRuntime["client"],
+    client: StartedHappyAgentRuntime["client"],
     sessionId: string,
     after: string | undefined,
 ): Promise<PreAttachedSessionStream> {
@@ -1981,7 +1981,7 @@ async function longChatScrollRun(
     page: Page,
     app: ElectronApplication,
     options: {
-        readonly runtime: StartedRigRuntime;
+        readonly runtime: StartedHappyAgentRuntime;
         readonly sessionIds: readonly string[];
         profilerActive(): boolean;
     },
@@ -2061,7 +2061,7 @@ async function sessionSwitchLoadRun(
     page: Page,
     app: ElectronApplication,
     options: {
-        readonly runtime: StartedRigRuntime;
+        readonly runtime: StartedHappyAgentRuntime;
         readonly sessionIds: readonly string[];
         profilerActive(): boolean;
     },
@@ -4185,7 +4185,7 @@ function goldReplayDetails(material: GymGoldReplayMaterial): Record<string, unkn
         messageCount: material.messages.length,
         messageSources: material.messages.map((message) => message.source),
         path: material.path,
-        replayMode: "gold-submitted-message-patterns-through-real-rig",
+        replayMode: "gold-submitted-message-patterns-through-real-happy-agent",
     };
 }
 
@@ -4211,7 +4211,7 @@ async function mixedReplayRun(
     options: {
         readonly manifest: GymManifest;
         readonly paths: GymRunPaths;
-        readonly runtime: StartedRigRuntime;
+        readonly runtime: StartedHappyAgentRuntime;
         readonly projects: readonly GymProject[];
         readonly sessionIds: readonly string[];
         profilerActive(): boolean;
@@ -4296,7 +4296,7 @@ async function mixedReplayRun(
     const liveToolMarker = "Gym live tool mutation · mixed replay";
     const liveToolLineCount = gymLiveToolMutationLineCount(options.manifest.profile);
     const liveFilePath = join(
-        options.paths.rigWorkspacePath,
+        options.paths.happyAgentWorkspacePath,
         "src/changes/modified/deep/large-modified.md",
     );
     const baselineLiveFileLines = (await readFile(liveFilePath, "utf8"))
@@ -4444,7 +4444,7 @@ async function mixedReplayRun(
 
         // Keep this checkout foregrounded while the isolated tool mutates its
         // deterministic file. The Changed-files projection is the UI/event
-        // barrier for Git watcher → Rig scanner → SSE → Happy reconciliation.
+        // barrier for Git watcher → Happy Agent scanner → SSE → Happy reconciliation.
         await navigateRoute(page, liveToolTarget.route);
         await waitForSessionUiReady(page, liveToolTarget.route, liveToolTarget.id);
         const changedPaths = [
@@ -4487,7 +4487,7 @@ async function mixedReplayRun(
         // `changedFiles` ends on added-large.md. Re-open the exact modified
         // row after the real tool mutation so the virtualized row itself,
         // rather than the currently selected diff body or aggregate summary,
-        // proves Git watcher → Rig → SSE → UI reconciliation.
+        // proves Git watcher → Happy Agent → SSE → UI reconciliation.
         const changedFileStats = await changedFileStatsBarrier(
             page,
             changedPaths[0]!,
@@ -4735,7 +4735,7 @@ async function mixedReplayRun(
 
 async function mixedSessionTargetsRead(
     sessionIds: readonly string[],
-    runtime: StartedRigRuntime,
+    runtime: StartedHappyAgentRuntime,
 ): Promise<readonly MixedSessionTarget[]> {
     const targets = await Promise.all(
         sessionIds.map(async (id): Promise<MixedSessionTarget | undefined> => {
@@ -4759,7 +4759,7 @@ async function mixedSessionTargetsRead(
 }
 
 async function sessionRunBarrierWait(
-    client: StartedRigRuntime["client"],
+    client: StartedHappyAgentRuntime["client"],
     submission: MixedSubmission,
     onEvent?: SessionRunEventObserver,
     preAttached?: PreAttachedSessionStream,
@@ -4818,7 +4818,7 @@ async function sessionRunBarrierWait(
                 settled = true;
                 reject(
                     new Error(
-                        `Rig mixed replay run ${submission.runId} failed in ${submission.sessionId}: ${JSON.stringify(event).slice(0, 2_000)}`,
+                        `Happy Agent mixed replay run ${submission.runId} failed in ${submission.sessionId}: ${JSON.stringify(event).slice(0, 2_000)}`,
                     ),
                 );
                 collector.handle.close();
@@ -4829,7 +4829,7 @@ async function sessionRunBarrierWait(
                 if (!messageSubmittedSeen || !runStartedSeen || !firstAgentEventSeen) {
                     reject(
                         new Error(
-                            `Rig stream barrier for ${submission.runId} violated the submitted→started→agent→finished sequence.`,
+                            `Happy Agent stream barrier for ${submission.runId} violated the submitted→started→agent→finished sequence.`,
                         ),
                     );
                     collector.handle.close();
@@ -4878,7 +4878,7 @@ async function sessionRunBarrierWait(
                 settled = true;
                 reject(
                     new Error(
-                        `Rig session stream ended before run ${submission.runId} finished in ${submission.sessionId}.`,
+                        `Happy Agent session stream ended before run ${submission.runId} finished in ${submission.sessionId}.`,
                     ),
                 );
                 cursor.close();
@@ -5098,7 +5098,7 @@ async function performanceCapture(
 
 async function firstSessionLocation(
     sessionIds: readonly string[],
-    runtime: StartedRigRuntime,
+    runtime: StartedHappyAgentRuntime,
     preferWorkspace = false,
 ): Promise<{ readonly route: string; readonly sessionId: string } | undefined> {
     const ids = preferWorkspace ? [...sessionIds.slice(1), ...sessionIds.slice(0, 1)] : sessionIds;
@@ -5223,7 +5223,7 @@ async function waitForFileMutation(
                 return;
             }
         } catch {
-            // The managed checkout can be briefly unavailable while Rig
+            // The managed checkout can be briefly unavailable while Happy Agent
             // materializes the worktree; keep the barrier alive until its
             // explicit deadline.
         }

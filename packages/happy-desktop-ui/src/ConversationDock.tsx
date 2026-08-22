@@ -15,7 +15,7 @@ export type ConversationDockProps = {
     composer: ComposerSnapshot;
     /** Keeps the session configuration visible while making its write end inert. */
     disabled?: boolean;
-    /** Keeps the draft editable but disables submission to an unavailable Rig. */
+    /** Keeps the draft editable but disables submission to an unavailable Happy Agent. */
     submitDisabled?: boolean;
     /** In-context reason the draft cannot currently be submitted. */
     unavailable?: string;
@@ -203,7 +203,7 @@ export function ConversationDock(props: ConversationDockProps) {
                 </Banner>
             ) : null}
             {props.unavailable ? (
-                <Banner icon="link" tone="neutral" title="Rig unavailable">
+                <Banner icon="link" tone="neutral" title="Happy Agent unavailable">
                     {props.unavailable}
                 </Banner>
             ) : null}

@@ -5,7 +5,7 @@ const EXPERIMENTS_KEY = "happy2.experiments.v1";
 /**
  * Where this machine remembers whether the reader asked for the unfinished
  * features. It is deliberately the window's own storage rather than anything a
- * Rig holds: the choice is about what this app offers, so it has to survive a
+ * Happy Agent holds: the choice is about what this app offers, so it has to survive a
  * connection going away and must never follow the reader onto another machine.
  */
 export function desktopExperimentsPersistence(): ExperimentsPersistence {

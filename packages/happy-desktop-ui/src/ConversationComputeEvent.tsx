@@ -51,7 +51,7 @@ const STATES: Record<
     failed: { label: "Compute failed", glyph: "alert-circle-outline", tone: "error" },
 };
 
-/** A duration a reader can read at a glance, from Rig's millisecond measure. */
+/** A duration a reader can read at a glance, from Happy Agent's millisecond measure. */
 function elapsedLabel(elapsedMs: number): string {
     const seconds = Math.round(elapsedMs / 1_000);
     if (seconds < 60) return `${String(seconds)}s`;
@@ -72,7 +72,7 @@ function elapsedLabel(elapsedMs: number): string {
  * The line a reader always gets is the daemon's own sentence. The provider,
  * phase, and instance behind it are one disclosure away rather than crowding the
  * row, and they are the fields a reader repeats when reporting a broken
- * provider. Nothing here is derived from anything but the values Rig published.
+ * provider. Nothing here is derived from anything but the values Happy Agent published.
  */
 export function ConversationComputeEvent(props: ConversationComputeEventProps) {
     const [open, setOpen] = useState(props.defaultExpanded ?? false);

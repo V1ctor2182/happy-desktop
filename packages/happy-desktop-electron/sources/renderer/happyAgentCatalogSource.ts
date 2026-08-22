@@ -2,22 +2,22 @@ import {
     type GitChangeSnapshot,
     type GroupSession,
     type ProjectGroup,
-    type RigConnection,
-    type RigGitChangedFile,
-    type RigPermissionMode,
-    type RigProject,
-    type RigProjectAvatar,
-    type RigProjectCatalog,
-    type RigProjectId,
-    type RigServiceTier,
-    type RigSessionCatalogSnapshot,
-    type RigSessionCatalogSource,
-    type RigSessionId,
-    type RigSessionStatus,
-    type RigSessionSummary,
-    type RigThinkingLevel,
-    type RigWorktree,
-    type RigWorktreeId,
+    type HappyAgentConnection,
+    type HappyAgentGitChangedFile,
+    type HappyAgentPermissionMode,
+    type HappyAgentProject,
+    type HappyAgentProjectAvatar,
+    type HappyAgentProjectCatalog,
+    type HappyAgentProjectId,
+    type HappyAgentServiceTier,
+    type HappyAgentSessionCatalogSnapshot,
+    type HappyAgentSessionCatalogSource,
+    type HappyAgentSessionId,
+    type HappyAgentSessionStatus,
+    type HappyAgentSessionSummary,
+    type HappyAgentThinkingLevel,
+    type HappyAgentWorktree,
+    type HappyAgentWorktreeId,
 } from "happy-desktop-state";
 
 /**
@@ -26,17 +26,17 @@ import {
  * this adapter only holds the newest complete projection for synchronous reads.
  */
 export function happyAgentCatalogSourceCreate(
-    rig: RigConnection,
+    happyAgent: HappyAgentConnection,
     baseUrl: string,
-): RigSessionCatalogSource {
+): HappyAgentSessionCatalogSource {
     const base = baseUrl.replace(/\/$/, "");
-    let snapshot: RigSessionCatalogSnapshot | undefined;
-    let connection: ReturnType<RigConnection["connectGroups"]> | undefined;
+    let snapshot: HappyAgentSessionCatalogSnapshot | undefined;
+    let connection: ReturnType<HappyAgentConnection["connectGroups"]> | undefined;
     let disposed = false;
     const listeners = new Set<() => void>();
     const errorListeners = new Set<(error: unknown) => void>();
     const waiting = new Set<{
-        resolve: (value: RigSessionCatalogSnapshot) => void;
+        resolve: (value: HappyAgentSessionCatalogSnapshot) => void;
         reject: (error: unknown) => void;
     }>();
 
@@ -57,7 +57,7 @@ export function happyAgentCatalogSourceCreate(
 
     const start = (): void => {
         if (disposed || connection) return;
-        connection = rig.connectGroups({
+        connection = happyAgent.connectGroups({
             onChange: (projects, state) => {
                 if (!state.sessionsComplete) return;
                 publish(projects);
@@ -68,10 +68,11 @@ export function happyAgentCatalogSourceCreate(
 
     return {
         read() {
-            if (disposed) return Promise.reject(new Error("The Rig catalog source is disposed."));
+            if (disposed)
+                return Promise.reject(new Error("The Happy Agent catalog source is disposed."));
             if (snapshot) return Promise.resolve(snapshot);
             start();
-            return new Promise<RigSessionCatalogSnapshot>((resolve, reject) => {
+            return new Promise<HappyAgentSessionCatalogSnapshot>((resolve, reject) => {
                 waiting.add({ resolve, reject });
             });
         },
@@ -90,7 +91,7 @@ export function happyAgentCatalogSourceCreate(
             disposed = true;
             connection?.close();
             connection = undefined;
-            const error = new Error("The Rig catalog source was disposed.");
+            const error = new Error("The Happy Agent catalog source was disposed.");
             for (const waiter of waiting) waiter.reject(error);
             waiting.clear();
             listeners.clear();
@@ -102,18 +103,18 @@ export function happyAgentCatalogSourceCreate(
 function catalogProject(
     groups: readonly ProjectGroup[],
     baseUrl: string,
-): RigSessionCatalogSnapshot {
-    const projects: RigProject[] = [];
-    const worktrees: RigWorktree[] = [];
-    const sessions: RigSessionSummary[] = [];
+): HappyAgentSessionCatalogSnapshot {
+    const projects: HappyAgentProject[] = [];
+    const worktrees: HappyAgentWorktree[] = [];
+    const sessions: HappyAgentSessionSummary[] = [];
 
     for (const group of groups) {
         projects.push(projectProject(group, baseUrl));
         sessions.push(...group.sessions.filter((session) => !session.archived).map(sessionProject));
         for (const workspace of group.workspaces) {
             worktrees.push({
-                id: workspace.id as RigWorktreeId,
-                projectId: group.id as RigProjectId,
+                id: workspace.id as HappyAgentWorktreeId,
+                projectId: group.id as HappyAgentProjectId,
                 name: workspace.name,
                 orderKey: workspace.orderKey,
                 path: workspace.path,
@@ -133,14 +134,14 @@ function catalogProject(
         }
     }
 
-    const catalog: RigProjectCatalog = { projects, worktrees };
+    const catalog: HappyAgentProjectCatalog = { projects, worktrees };
     return { catalog, sessions };
 }
 
-function projectProject(group: ProjectGroup, baseUrl: string): RigProject {
+function projectProject(group: ProjectGroup, baseUrl: string): HappyAgentProject {
     const avatar = avatarProject(group.avatar, baseUrl);
     return {
-        id: group.id as RigProjectId,
+        id: group.id as HappyAgentProjectId,
         name: group.name,
         orderKey: group.orderKey,
         path: group.path,
@@ -158,7 +159,10 @@ function projectProject(group: ProjectGroup, baseUrl: string): RigProject {
     };
 }
 
-function avatarProject(value: object | undefined, baseUrl: string): RigProjectAvatar | undefined {
+function avatarProject(
+    value: object | undefined,
+    baseUrl: string,
+): HappyAgentProjectAvatar | undefined {
     if (value === undefined) return undefined;
     const avatar = value as {
         readonly url?: unknown;
@@ -181,7 +185,7 @@ function avatarProject(value: object | undefined, baseUrl: string): RigProjectAv
 
 function gitProject(
     git: GitChangeSnapshot | undefined,
-): Pick<RigProject, "changedFiles" | "addedLines" | "deletedLines" | "changes"> {
+): Pick<HappyAgentProject, "changedFiles" | "addedLines" | "deletedLines" | "changes"> {
     if (git === undefined) return {};
     return {
         changedFiles: git.changedFiles,
@@ -212,7 +216,7 @@ function gitProject(
     };
 }
 
-function gitStatusProject(status: string): RigGitChangedFile["status"] {
+function gitStatusProject(status: string): HappyAgentGitChangedFile["status"] {
     if (status === "added") return "added";
     if (status === "deleted") return "deleted";
     if (status === "renamed" || status === "copied") return "renamed";
@@ -220,19 +224,20 @@ function gitStatusProject(status: string): RigGitChangedFile["status"] {
     return "modified";
 }
 
-function sessionProject(session: GroupSession): RigSessionSummary {
+function sessionProject(session: GroupSession): HappyAgentSessionSummary {
     const effort = thinkingLevel(session.effort);
-    const serviceTier = session.serviceTier === "fast" ? ("fast" as RigServiceTier) : undefined;
+    const serviceTier =
+        session.serviceTier === "fast" ? ("fast" as HappyAgentServiceTier) : undefined;
     return {
-        id: session.id as RigSessionId,
-        projectId: session.scope.projectId as RigProjectId,
+        id: session.id as HappyAgentSessionId,
+        projectId: session.scope.projectId as HappyAgentProjectId,
         ...(session.scope.kind === "workspace"
-            ? { worktreeId: session.scope.workspaceId as RigWorktreeId }
+            ? { worktreeId: session.scope.workspaceId as HappyAgentWorktreeId }
             : {}),
         ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
         ...(session.parentSessionId === undefined
             ? {}
-            : { parentSessionId: session.parentSessionId as RigSessionId }),
+            : { parentSessionId: session.parentSessionId as HappyAgentSessionId }),
         cwd: session.cwd,
         displayCwd: session.cwd,
         providerId: session.providerId,
@@ -240,7 +245,7 @@ function sessionProject(session: GroupSession): RigSessionSummary {
         permissionMode: permissionMode(session.permissionMode),
         ...(effort ? { effort } : {}),
         ...(serviceTier ? { serviceTier } : {}),
-        status: session.status as RigSessionStatus,
+        status: session.status as HappyAgentSessionStatus,
         ...(session.wait === undefined
             ? {}
             : { wait: { startedAt: session.wait.startedAt, dueAt: session.wait.dueAt } }),
@@ -255,7 +260,7 @@ function sessionProject(session: GroupSession): RigSessionSummary {
     };
 }
 
-export function permissionMode(value: string): RigPermissionMode {
+export function permissionMode(value: string): HappyAgentPermissionMode {
     if (
         value === "auto" ||
         value === "workspace_write" ||
@@ -267,7 +272,7 @@ export function permissionMode(value: string): RigPermissionMode {
     return "auto";
 }
 
-export function thinkingLevel(value: string | undefined): RigThinkingLevel | undefined {
+export function thinkingLevel(value: string | undefined): HappyAgentThinkingLevel | undefined {
     if (
         value === "off" ||
         value === "on" ||

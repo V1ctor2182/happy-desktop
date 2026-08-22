@@ -17,6 +17,13 @@ export interface ConnectionHeaderProps {
      * strip the window used to be dragged by.
      */
     readonly windowControls?: boolean;
+    /**
+     * The window is in macOS full screen, where the traffic lights are gone.
+     * The band stops standing in for a title bar: it closes the space it kept
+     * clear of the lights and returns to its own short height, while staying
+     * draggable for the same reason every other lane does.
+     */
+    readonly windowFullScreen?: boolean;
 }
 
 /**
@@ -46,6 +53,9 @@ export function ConnectionHeader(props: ConnectionHeaderProps) {
             data-happy-desktop-ui="connection-header"
             data-testid="connection-header"
             data-window-controls={props.windowControls === true ? "" : undefined}
+            data-window-full-screen={
+                props.windowControls === true && props.windowFullScreen === true ? "" : undefined
+            }
             // Polite, not assertive: this interrupts nothing the reader is
             // doing, and a machine that drops and returns must not talk over
             // whatever they are in the middle of.

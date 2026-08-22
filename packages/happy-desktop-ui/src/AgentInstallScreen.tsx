@@ -95,7 +95,7 @@ const AGENTS_SHOWN = 5;
  * It takes the whole window because it is not a background task: the agent that
  * runs every session on this machine is being stopped and replaced, so for the
  * moment there is nothing else the window could truthfully show. It is only ever
- * the local machine's agent — a Rig on another machine is restarted by whoever
+ * the local machine's agent — a Happy Agent on another machine is restarted by whoever
  * owns it and never takes this window.
  *
  * Nothing here is a percentage or an estimate. The daemon says which of its

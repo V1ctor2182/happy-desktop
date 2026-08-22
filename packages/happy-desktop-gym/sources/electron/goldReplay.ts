@@ -22,7 +22,7 @@ export interface GymGoldReplayMaterial {
 /**
  * The UI replay recording is a gold source of realistic prompt, steering, and
  * tool-motion patterns. The mixed Electron workload extracts only submitted
- * user text and sends it through real Rig sessions; it never injects the
+ * user text and sends it through real Happy Agent sessions; it never injects the
  * recording's captured event rows into the durable server.
  */
 export async function gymGoldReplayMaterialRead(

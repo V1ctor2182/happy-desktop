@@ -2,15 +2,18 @@ import { useSyncExternalStore, type ReactNode } from "react";
 import { SplashCover } from "happy-desktop-ui";
 import type { DesktopRuntimeSnapshot } from "../shared/desktopContract";
 import type { LocalOnboardingStore } from "./localOnboardingStore";
-import type { RigDirectoryEntry, RigDirectoryStore } from "./rigDirectoryStore";
+import type {
+    HappyAgentDirectoryEntry,
+    HappyAgentDirectoryStore,
+} from "./happyAgentDirectoryStore";
 import type { DesktopRuntimeStore } from "./runtimeStore";
 
 /**
  * Whether this window has ever finished starting up.
  *
  * A window-lifetime fact rather than component state: the mark belongs in front
- * of the very first mount and never again, so losing a Rig an hour later
- * degrades the surfaces that Rig owns instead of replacing the app with a
+ * of the very first mount and never again, so losing a Happy Agent an hour later
+ * degrades the surfaces that Happy Agent owns instead of replacing the app with a
  * loader. Module scope is what makes that hold however the tree below remounts —
  * a flag inside a component could be reset by a remount, which is exactly the
  * case it exists to rule out.
@@ -22,7 +25,7 @@ let booted = false;
  *
  * The single caller is the agent restart, which discards the entire app and
  * builds it again from nothing. That is a real cold start — new stores, no
- * carried state, every Rig connected from scratch — so the mark belongs in front
+ * carried state, every Happy Agent connected from scratch — so the mark belongs in front
  * of it exactly as it belongs in front of the first one. This is not a way to
  * bring the cover back for a disconnect; a disconnect never calls it.
  */
@@ -30,13 +33,13 @@ export function desktopBootForget(): void {
     booted = false;
 }
 
-/** A Rig that has said something conclusive about what it holds. */
-function rigSettled(rig: RigDirectoryEntry): boolean {
-    // Only a Rig that is up owes an answer about its projects. One that is
+/** A Happy Agent that has said something conclusive about what it holds. */
+function happyAgentSettled(happyAgent: HappyAgentDirectoryEntry): boolean {
+    // Only a Happy Agent that is up owes an answer about its projects. One that is
     // unreachable has already given its answer, and waiting for a catalog it
     // cannot send would hold the mark for as long as that machine stays down.
-    if (rig.status !== "connected") return rig.status !== "connecting";
-    return rig.projectsStatus !== "loading";
+    if (happyAgent.status !== "connected") return happyAgent.status !== "connecting";
+    return happyAgent.projectsStatus !== "loading";
 }
 
 /**
@@ -49,7 +52,7 @@ function rigSettled(rig: RigDirectoryEntry): boolean {
  */
 function bootReady(
     runtime: DesktopRuntimeSnapshot | undefined,
-    rigs: readonly RigDirectoryEntry[],
+    happyAgents: readonly HappyAgentDirectoryEntry[],
     setupAnswered: boolean,
 ): boolean {
     // Nothing published yet: the main process has not even read its settings.
@@ -65,8 +68,8 @@ function bootReady(
     if (!setupAnswered) return false;
     // Connected, so the workspace is what comes next: wait for it to be worth
     // looking at rather than mounting an app around an empty sidebar.
-    if (rigs.length === 0) return false;
-    return rigs.every(rigSettled);
+    if (happyAgents.length === 0) return false;
+    return happyAgents.every(happyAgentSettled);
 }
 
 /** Keep the one allowed initial cover honest about what the window is waiting for. */
@@ -85,11 +88,11 @@ function bootNote(runtime: DesktopRuntimeSnapshot | undefined): string | undefin
  * leaves and a new one arrives a frame later, which is the flicker this replaces.
  * One cover, mounted once, spans all of it.
  *
- * It is deliberately the one full-app loader the multirig plan allows, and only
+ * It is deliberately the one full-app loader the multiple-happy-agents plan allows, and only
  * that one. `booted` latches on the first complete boot, so no later disconnect,
  * reconnect, or navigation can bring it back.
  *
- * Nothing here has a timeout, because nothing here waits on silence: a Rig that
+ * Nothing here has a timeout, because nothing here waits on silence: a Happy Agent that
  * cannot be reached resolves to `disconnected` or `error` on its own and counts
  * as settled, so the window opens onto a truthful failure rather than being held
  * by a machine that is never going to answer.
@@ -97,7 +100,7 @@ function bootNote(runtime: DesktopRuntimeSnapshot | undefined): string | undefin
 export function DesktopBootGate(props: {
     children: ReactNode;
     onboarding: LocalOnboardingStore;
-    rigs: RigDirectoryStore;
+    happyAgents: HappyAgentDirectoryStore;
     runtime: DesktopRuntimeStore;
 }) {
     const runtime = useSyncExternalStore(
@@ -105,14 +108,18 @@ export function DesktopBootGate(props: {
         props.runtime.get,
         props.runtime.get,
     );
-    const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
+    const directory = useSyncExternalStore(
+        props.happyAgents.subscribe,
+        props.happyAgents.get,
+        props.happyAgents.get,
+    );
     const setup = useSyncExternalStore(
         props.onboarding.subscribe,
         props.onboarding.get,
         props.onboarding.get,
     );
     if (booted) return <>{props.children}</>;
-    const ready = bootReady(runtime, directory.rigs, setup.onboarding !== undefined);
+    const ready = bootReady(runtime, directory.happyAgents, setup.onboarding !== undefined);
     if (ready) booted = true;
     return (
         <SplashCover note={bootNote(runtime)} ready={ready}>

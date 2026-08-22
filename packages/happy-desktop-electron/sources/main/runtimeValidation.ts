@@ -14,7 +14,7 @@ export function desktopStartRequestValidate(request: unknown): DesktopStartReque
         Object.keys(request).every((key) => key === "mode")
     )
         return { mode: "local" };
-    throw new Error("Happy Desktop supports local Rig mode only.");
+    throw new Error("Happy Desktop supports local Happy Agent mode only.");
 }
 
 export function desktopTopologyFromRequest(
@@ -31,7 +31,7 @@ export function desktopTopologyRequest(_topology: DesktopTopology): DesktopStart
 
 export function desktopTopologyTarget(topology: DesktopTopology): DesktopTopologyTarget {
     return {
-        detail: `System Rig · ${topology.id.slice(-6)}`,
+        detail: `System Happy Agent · ${topology.id.slice(-6)}`,
         id: topology.id,
         kind: "local",
         label: "This Mac",
@@ -41,17 +41,17 @@ export function desktopTopologyTarget(topology: DesktopTopology): DesktopTopolog
 
 export function desktopActiveTarget(
     topology: DesktopTopology,
-    rigVersion?: string,
-    rigHttpUrl?: string,
+    happyAgentVersion?: string,
+    happyAgentHttpUrl?: string,
 ): DesktopActiveTarget {
-    if (!rigVersion) throw new Error("The local Rig version is unavailable.");
-    if (!rigHttpUrl) throw new Error("The local Rig HTTP proxy is unavailable.");
+    if (!happyAgentVersion) throw new Error("The local Happy Agent version is unavailable.");
+    if (!happyAgentHttpUrl) throw new Error("The local Happy Agent HTTP proxy is unavailable.");
     return {
         ...desktopTopologyTarget(topology),
-        authentication: "rig",
+        authentication: "happyAgent",
         mode: "local",
-        rigVersion,
-        rigHttpUrl,
+        happyAgentVersion,
+        happyAgentHttpUrl,
     };
 }
 

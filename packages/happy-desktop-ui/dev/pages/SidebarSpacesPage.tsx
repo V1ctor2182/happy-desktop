@@ -38,7 +38,7 @@ const workSections: SidebarSection[] = [
         items: [
             { id: "happy2", initials: "H", kind: "project", label: "happy2" },
             { depth: 1, id: "happy2-spaces", kind: "workspace", label: "sidebar-spaces" },
-            { id: "rig", initials: "R", kind: "project", label: "rig" },
+            { id: "happy-agent", initials: "H", kind: "project", label: "happy-agent" },
         ],
         label: "Projects",
     },

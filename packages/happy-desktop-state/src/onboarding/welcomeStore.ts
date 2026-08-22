@@ -2,7 +2,7 @@
  * Whether the person has been welcomed to Happy on this machine yet.
  *
  * First-run setup derives every stage it shows from a fact it can check again —
- * whether Node is there, whether Rig is installed, whether this Rig has ever
+ * whether Node is there, whether Happy Agent is installed, whether this Happy Agent has ever
  * been used — which is what lets an interrupted setup resume truthfully instead
  * of at a position someone remembered. The welcome is the one screen that has no
  * such fact behind it: nothing about the machine says whether its owner has read

@@ -18,7 +18,7 @@ import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRunt
  * are the same window setting, and two declarations of it would eventually
  * disagree about what the third option is called.
  */
-import type { RigAppearanceChoice } from "./pages/settings/RigGeneralSettings";
+import type { HappyAgentAppearanceChoice } from "./pages/settings/HappyAgentGeneralSettings";
 import { ScrollArea } from "./Scrollbar";
 import { WindowDragRegion } from "./TitleBar";
 import { Ionicon } from "./vectorIcons/VectorIcon";
@@ -46,8 +46,8 @@ export interface WelcomeScreenProps {
     readonly actionLabel?: string;
     onAction(): void;
     /** Which appearance this window is on. */
-    readonly appearance: RigAppearanceChoice;
-    onAppearanceChange(appearance: RigAppearanceChoice): void;
+    readonly appearance: HappyAgentAppearanceChoice;
+    onAppearanceChange(appearance: HappyAgentAppearanceChoice): void;
 }
 
 /**
@@ -77,8 +77,8 @@ const ART_SIZE = 160;
  * still gets the promise of what happens next, which "Theme" never gave them.
  */
 const APPEARANCE_CYCLE: Record<
-    RigAppearanceChoice,
-    { readonly next: RigAppearanceChoice; readonly label: string }
+    HappyAgentAppearanceChoice,
+    { readonly next: HappyAgentAppearanceChoice; readonly label: string }
 > = {
     system: { next: "light", label: "Appearance follows the system. Switch to light." },
     light: { next: "dark", label: "Appearance is light. Switch to dark." },
@@ -359,7 +359,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
  * this machine is on" mark, and it cannot be mistaken for either of the two
  * states it sits between.
  */
-function appearanceGlyph(appearance: RigAppearanceChoice) {
+function appearanceGlyph(appearance: HappyAgentAppearanceChoice) {
     if (appearance === "light") return <Icon name="sun" size={16} />;
     if (appearance === "dark") return <Icon name="moon" size={16} />;
     return <Ionicon name="contrast-outline" size={16} />;

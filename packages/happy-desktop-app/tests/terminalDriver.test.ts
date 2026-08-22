@@ -155,7 +155,7 @@ async function tick(): Promise<void> {
     }
 }
 
-it("drives the real Rig protocol: input, output, resize, exit", async () => {
+it("drives the real Happy Agent protocol: input, output, resize, exit", async () => {
     const inputs: string[] = [];
     const resizes: { cols: number; rows: number }[] = [];
     const protocol = new RemoteTerminalProtocolServer({

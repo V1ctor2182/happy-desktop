@@ -1,15 +1,15 @@
 import { BrowserTerminalConnection, TERMINAL_PROTOCOL, terminalSocketUrl } from "happy-desktop-app";
 import type {
-    RigHostServices,
-    RigOpenInTarget,
-    RigOpenInTargets,
-    RigWorkspaceFileBytes,
+    HappyAgentHostServices,
+    HappyAgentOpenInTarget,
+    HappyAgentOpenInTargets,
+    HappyAgentWorkspaceFileBytes,
 } from "happy-desktop-state";
 
-const OPEN_IN_RECENT_KEY = "happy2.rig.open-in-recent.v1";
+const OPEN_IN_RECENT_KEY = "happy2.happy-agent.open-in-recent.v1";
 const TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy2-capability.";
 
-type WorkspaceFileBytesResponse = Omit<RigWorkspaceFileBytes, "url">;
+type WorkspaceFileBytesResponse = Omit<HappyAgentWorkspaceFileBytes, "url">;
 
 function recentTargetRead(): string | undefined {
     try {
@@ -78,11 +78,14 @@ async function postJson<Value>(baseUrl: string, path: string, body: unknown): Pr
  * Renderer access to the small set of services that truly belong to the
  * desktop host. Agent resources use `HappyAgentClient` directly.
  */
-export function happyAgentHostServicesCreate(baseUrl: string): RigHostServices {
+export function happyAgentHostServicesCreate(baseUrl: string): HappyAgentHostServices {
     const capability = capabilityOf(baseUrl);
     return {
-        openInTargetsRead: async (): Promise<RigOpenInTargets> => {
-            const targets = await getJson<readonly RigOpenInTarget[]>(baseUrl, "/open-in-targets");
+        openInTargetsRead: async (): Promise<HappyAgentOpenInTargets> => {
+            const targets = await getJson<readonly HappyAgentOpenInTarget[]>(
+                baseUrl,
+                "/open-in-targets",
+            );
             const recentId = recentTargetRead();
             return {
                 targets,
@@ -102,7 +105,7 @@ export function happyAgentHostServicesCreate(baseUrl: string): RigHostServices {
             workspaceId,
             path,
             signal,
-        ): Promise<RigWorkspaceFileBytes> => {
+        ): Promise<HappyAgentWorkspaceFileBytes> => {
             const file = await getJson<WorkspaceFileBytesResponse>(
                 baseUrl,
                 "/workspace-file-bytes",

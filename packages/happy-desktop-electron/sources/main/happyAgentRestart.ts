@@ -6,7 +6,11 @@ import type {
 } from "../shared/desktopContract";
 import type { HappyAgentBinary } from "./happyAgentBinaryConfig";
 import type { HappyDaemonPaths } from "./happyAgentBinaryPaths";
-import { RigDaemonClient, rigDaemonTokenRead, type DrainWaitingFor } from "./rigDaemonClient";
+import {
+    HappyAgentDaemonClient,
+    happyAgentDaemonTokenRead,
+    type DrainWaitingFor,
+} from "./happyAgentDaemonClient";
 
 /**
  * How long the running daemon is given to finish the work it already admitted.
@@ -83,7 +87,7 @@ export async function happyAgentRestartRun(options: HappyAgentRestartOptions): P
  * sockets to close — but it is not given the long wait, and the signal escalates
  * if it does not take the hint.
  */
-async function daemonStop(client: RigDaemonClient, killed: boolean): Promise<void> {
+async function daemonStop(client: HappyAgentDaemonClient, killed: boolean): Promise<void> {
     const { pid } = await client.shutdown();
     if (!killed) {
         await processExitAwait(pid, EXIT_TIMEOUT_MS);
@@ -104,10 +108,12 @@ async function daemonStop(client: RigDaemonClient, killed: boolean): Promise<voi
  * here: either way there is no process holding work that must be allowed to
  * finish, which is the only question this step is asking.
  */
-async function daemonClientOpen(paths: HappyDaemonPaths): Promise<RigDaemonClient | undefined> {
-    const token = await rigDaemonTokenRead(paths.tokenPath);
+async function daemonClientOpen(
+    paths: HappyDaemonPaths,
+): Promise<HappyAgentDaemonClient | undefined> {
+    const token = await happyAgentDaemonTokenRead(paths.tokenPath);
     if (!token) return undefined;
-    const client = new RigDaemonClient({ socketPath: paths.socketPath, token });
+    const client = new HappyAgentDaemonClient({ socketPath: paths.socketPath, token });
     try {
         await client.health();
         return client;
@@ -125,7 +131,7 @@ async function daemonClientOpen(paths: HappyDaemonPaths): Promise<RigDaemonClien
  * recomputed on every poll instead of by a timer of its own.
  */
 async function drainAwait(
-    client: RigDaemonClient,
+    client: HappyAgentDaemonClient,
     killSignal: AbortSignal,
     onWaiting: (waitingFor: readonly DesktopDrainComponent[], killable: boolean) => void,
 ): Promise<void> {
@@ -185,9 +191,9 @@ async function processExitAwait(pid: number, timeoutMs: number): Promise<void> {
 async function readyAwait(paths: HappyDaemonPaths): Promise<void> {
     const deadline = Date.now() + START_TIMEOUT_MS;
     for (;;) {
-        const token = await rigDaemonTokenRead(paths.tokenPath);
+        const token = await happyAgentDaemonTokenRead(paths.tokenPath);
         if (token) {
-            const client = new RigDaemonClient({ socketPath: paths.socketPath, token });
+            const client = new HappyAgentDaemonClient({ socketPath: paths.socketPath, token });
             const health = await client.health().catch(() => undefined);
             if (health?.ready === true && health.draining !== true) return;
         }

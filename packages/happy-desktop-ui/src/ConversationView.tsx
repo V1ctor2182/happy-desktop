@@ -7,7 +7,7 @@ import type {
     ConversationToolCall,
 } from "happy-desktop-state";
 import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
-import { RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./RigActivityControl";
+import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 import {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
@@ -40,7 +40,7 @@ import {
     messageTextLayoutFontGenerationGet,
     messageTextLayoutFontGenerationSubscribe,
 } from "./messageTextLayout";
-import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
+import type { HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { ScrollArea } from "./Scrollbar";
 import { Spinner } from "./Spinner";
 import { WindowOverlay } from "./WindowOverlay";
@@ -151,7 +151,7 @@ export type ConversationViewProps = {
     composer: ComposerSnapshot;
     /** Keeps the conversation readable while disabling every composer action. */
     composerDisabled?: boolean;
-    /** Keeps the local draft editable while disabling submission to the Rig. */
+    /** Keeps the local draft editable while disabling submission to the Happy Agent. */
     composerSubmitDisabled?: boolean;
     /** In-context reason submission is unavailable. */
     composerUnavailable?: string;
@@ -188,7 +188,7 @@ export type ConversationViewProps = {
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
     onAbort?: () => void;
-    onRequestAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
     /**
@@ -198,7 +198,7 @@ export type ConversationViewProps = {
      */
     requestSelections?: ReadonlyMap<string, Readonly<Record<string, readonly string[]>>>;
     /** Reports each tick to the owner that keeps the selections. */
-    onRequestSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    onRequestSelectionChange?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -530,7 +530,7 @@ export function ConversationView(props: ConversationViewProps) {
                         // bottom of every conversation and is measured there, so
                         // that case corrects itself rather than needing a width.
                         (props.activityControl && !statusVisible && !activityClosesTurnStatus
-                            ? RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT
+                            ? HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT
                             : 0) +
                         queued.reduce(
                             (total, entry, index) =>

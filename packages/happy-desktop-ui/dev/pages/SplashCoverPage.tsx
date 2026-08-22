@@ -63,7 +63,10 @@ export function SplashCoverPage() {
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     <div style={frame}>
-                        <SplashCover note="Connecting to your local Rig daemon…" ready={false}>
+                        <SplashCover
+                            note="Connecting to your local Happy Agent daemon…"
+                            ready={false}
+                        >
                             <Underneath />
                         </SplashCover>
                     </div>

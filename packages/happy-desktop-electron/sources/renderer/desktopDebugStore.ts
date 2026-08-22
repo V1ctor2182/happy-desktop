@@ -1,12 +1,12 @@
 import type {
-    AppRigDebugSnapshot,
-    AppRigDebugStore,
-    AppRigDebugTargetSnapshot,
+    AppHappyAgentDebugSnapshot,
+    AppHappyAgentDebugStore,
+    AppHappyAgentDebugTargetSnapshot,
 } from "happy-desktop-app";
 import type { DesktopDebugSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 
-const stopped: AppRigDebugTargetSnapshot = { status: "stopped" };
-const initialSnapshot: AppRigDebugSnapshot = {
+const stopped: AppHappyAgentDebugTargetSnapshot = { status: "stopped" };
+const initialSnapshot: AppHappyAgentDebugSnapshot = {
     daemon: stopped,
     daemonConnected: false,
     loading: true,
@@ -22,7 +22,7 @@ type Target = "main" | "renderer" | "daemon";
  * The bridge subscription exists only while Dev Tools is mounted; operations
  * project their pending state immediately and reconcile from native snapshots.
  */
-export function desktopDebugStoreCreate(bridge: HappyDesktopBridge): AppRigDebugStore {
+export function desktopDebugStoreCreate(bridge: HappyDesktopBridge): AppHappyAgentDebugStore {
     let snapshot = initialSnapshot;
     const listeners = new Set<() => void>();
     let bridgeClose: (() => void) | undefined;
@@ -119,6 +119,6 @@ export function desktopDebugStoreCreate(bridge: HappyDesktopBridge): AppRigDebug
     };
 }
 
-function isPending(status: AppRigDebugTargetSnapshot["status"]): boolean {
+function isPending(status: AppHappyAgentDebugTargetSnapshot["status"]): boolean {
     return status === "starting" || status === "stopping";
 }

@@ -56,25 +56,25 @@ const presentations: Record<WorkspaceLifecyclePhase, PhasePresentation> = {
     creating: {
         tone: "progress",
         title: (name) => `Creating “${name}”`,
-        body: "Rig is preparing this workspace's checkout. Chats can be started and written into now; Rig runs their work as soon as the checkout is there.",
+        body: "Happy Agent is preparing this workspace's checkout. Chats can be started and written into now; Happy Agent runs their work as soon as the checkout is there.",
     },
     failed: {
         icon: "alert",
         tone: "danger",
         title: (name) => `“${name}” could not be created`,
-        body: "Rig started preparing this workspace's checkout and stopped. Nothing further will happen to it.",
+        body: "Happy Agent started preparing this workspace's checkout and stopped. Nothing further will happen to it.",
     },
     refused: {
         icon: "alert",
         tone: "danger",
         title: (name) => `“${name}” was not created`,
-        body: "Rig declined the request, so no checkout was started and there is nothing left of this workspace on the machine.",
+        body: "Happy Agent declined the request, so no checkout was started and there is nothing left of this workspace on the machine.",
     },
     missing: {
         icon: "unlink",
         tone: "warning",
         title: (name) => `“${name}” is no longer on disk`,
-        body: "Rig prepared this workspace's checkout and its directory is not there any more. It was removed outside Happy.",
+        body: "Happy Agent prepared this workspace's checkout and its directory is not there any more. It was removed outside Happy.",
     },
 };
 /**

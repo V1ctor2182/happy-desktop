@@ -10,7 +10,7 @@ const PATH_MAX = 1024;
  * at.
  *
  * The renderer names the file, and the renderer is where a page could one day
- * name something else, so the address is checked against the Rig proxies this
+ * name something else, so the address is checked against the Happy Agent proxies this
  * process is actually running rather than trusted. It must be the media route on
  * one of those proxies exactly — not merely something under the capability
  * prefix, because everything else under it is an API this window has no reason

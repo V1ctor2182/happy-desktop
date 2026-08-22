@@ -3,8 +3,8 @@
 ## Where we are going
 
 Agents can plug content into fixed places in the app called slots. A slot is a
-UI location that Happy renders and rig maintains: entries are created by
-agents, stored on the rig side, and pushed to the app. Rig only verifies
+UI location that Happy renders and Happy Agent maintains: entries are created by
+agents, stored on the Happy Agent side, and pushed to the app. Happy Agent only verifies
 types — it does not judge content.
 
 The slots are:
@@ -43,16 +43,16 @@ then attaches the webapp to some place in the app.
 
 ## How we get there
 
-Rig comes first. Rig's own master plan for slots specifies the storage, the
+Happy Agent comes first. Happy Agent's own master plan for slots specifies the storage, the
 API, the webapp folder and serving, and the agent tools; that work happens in
-the rig repository. Happy builds on the finished rig behavior: it subscribes
+the Happy Agent repository. Happy builds on the finished Happy Agent behavior: it subscribes
 to slot changes, renders each slot in its location with the entries in scope,
 executes button actions, and opens webapps through the existing preview
 machinery.
 
 ## How we know it is done
 
-- An agent can create a slot entry through rig and it appears in the right
+- An agent can create a slot entry through Happy Agent and it appears in the right
   place in Happy without a reload, and disappears when removed.
 - Text entries render markdown with working links; button entries perform
   each of the listed actions.

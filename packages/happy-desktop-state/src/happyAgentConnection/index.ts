@@ -3,8 +3,8 @@ export { connectHappyAgent } from "./connectHappyAgent.js";
 export { projectNumericIdentity } from "./projection.js";
 export {
     CHECKING_SERVER_COMPATIBILITY,
-    MAXIMUM_RIG_PROTOCOL_VERSION,
-    MINIMUM_RIG_PROTOCOL_VERSION,
+    MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
+    MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
     describeServerCompatibility,
     serverCompatibility,
 } from "./compatibility.js";

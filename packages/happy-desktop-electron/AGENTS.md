@@ -13,8 +13,8 @@ The desktop package owns only what genuinely requires Electron or the local
 machine:
 
 - window, menu, and update lifecycle;
-- child-process supervision for Rig and PTY lifecycles;
-- the local Rig daemon connection and its projection into `happy-desktop-state` shapes;
+- child-process supervision for Happy Agent and PTY lifecycles;
+- the local Happy Agent daemon connection and its projection into `happy-desktop-state` shapes;
 - durable desktop settings;
 - the narrow preload IPC bridge.
 
@@ -81,19 +81,19 @@ Electron processes together. The existing build identity gives concurrent
 worktrees distinct application names and user-data directories.
 
 `pnpm dev:web` is the browser-only development loop. It automatically connects
-to the user's normal local Rig daemon, starting it when necessary. No topology
+to the user's normal local Happy Agent daemon, starting it when necessary. No topology
 chooser, account, or cloud origin is involved.
 
 How browser development works, and what to preserve when changing it:
 
-- The shared Vite configuration installs `browserLocalRigPlugin()`.
-- `browserLocalRigPlugin()` (`sources/main/browserDevServer.ts`) injects a
+- The shared Vite configuration installs `browserLocalHappyAgentPlugin()`.
+- `browserLocalHappyAgentPlugin()` (`sources/main/browserDevServer.ts`) injects a
   `happy2-browser-local` meta tag. A meta tag, not an inline script, because the
   page CSP forbids inline scripts and would silently drop the signal.
 - The renderer entry picks the browser dev bridge when that tag is present and
   `window.happyDesktop` is absent.
-- The dev server mounts the same `rigProxyHandle` used by the packaged app, so
-  the renderer talks to an identical projected Rig surface in both modes.
+- The dev server mounts the same `happyAgentProxyHandle` used by the packaged app, so
+  the renderer talks to an identical projected Happy Agent surface in both modes.
 
 Keep the development and packaged paths behaviorally identical at that proxy
 boundary. A feature that works only in one of them is a bug. Native-only
@@ -104,12 +104,12 @@ environment.
 `pnpm dev:desktop` and `pnpm dev:desktop:electron` remain aliases of the default
 Electron loop.
 
-## Rig boundary
+## Happy Agent boundary
 
-No `@slopus` wire type may cross into the renderer. `sources/main/rigProjection.ts`
+No `@slopus` wire type may cross into the renderer. `sources/main/happyAgentProjection.ts`
 projects daemon responses and events into `happy-desktop-state` shapes, and
-`sources/main/rigProxyHandle.ts` is the single request handler shared by the
-packaged `node:http` proxy and the Vite dev middleware. Add new Rig capability by
+`sources/main/happyAgentProxyHandle.ts` is the single request handler shared by the
+packaged `node:http` proxy and the Vite dev middleware. Add new Happy Agent capability by
 extending that projection and handler, and cover it with tests next to them —
 never by leaking a protocol type or a raw daemon URL to `renderer/`.
 

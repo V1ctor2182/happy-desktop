@@ -2,7 +2,7 @@
 
 `happy-desktop-app` is the local desktop application layer. It composes product
 state, navigation, and visual components into the screens driven by connected
-Rig daemons.
+Happy Agent daemons.
 
 Read the repository root `AGENTS.md` and `DESIGN.md` first; everything there
 still applies. This file adds the rules specific to this package.
@@ -61,8 +61,8 @@ both of which this package is the primary subject of.
 
 ## Navigation
 
-Routing is TanStack Router. The local Rig route tree in
-`sources/navigation/rigRouter.tsx` owns the mapping between a URL and the active
+Routing is TanStack Router. The local Happy Agent route tree in
+`sources/navigation/happyAgentRouter.tsx` owns the mapping between a URL and the active
 screen for both the Electron renderer and browser-local development.
 
 Only durable, shareable destinations are routed: which screen is open and which
@@ -71,4 +71,4 @@ entity it addresses. Two rules follow.
 - Transient view state is not in the URL. A layer a user would not expect to
   survive a reload, or to travel in a link, does not belong in the address.
 - Values a route needs that the URL does not carry arrive through
-  `RigRouterContext`; do not rebuild another navigation facade around it.
+  `HappyAgentRouterContext`; do not rebuild another navigation facade around it.

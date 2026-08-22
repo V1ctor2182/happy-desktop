@@ -52,10 +52,10 @@ export function SetupPagePage() {
                     <div style={frame}>
                         <SetupPage
                             action={{ label: "Try again", onSelect: noop }}
-                            command="rig daemon start"
-                            copy="connect ENOENT /Users/you/.happy/rig/server.sock"
+                            command="happy-agent start"
+                            copy="connect ENOENT /Users/you/.happy/agent/server.sock"
                             scene="owl"
-                            title="Happy could not reach Rig"
+                            title="Happy could not reach Happy Agent"
                         />
                     </div>
                     <DimensionRule label="Command is selectable · monospace on surface-high" />
@@ -86,8 +86,8 @@ export function SetupPagePage() {
                                         actionLabel: "Install the CLI",
                                         actionVariant: "primary",
                                         description:
-                                            "Rig is a coding agent you run from a terminal, always in sync with this app.",
-                                        id: "rig",
+                                            "Happy Agent is a coding agent you run from a terminal, always in sync with this app.",
+                                        id: "happy-agent",
                                         scene: "robot",
                                         title: "Install CLI tools",
                                     },
@@ -109,7 +109,7 @@ export function SetupPagePage() {
                     <div style={frame}>
                         <SetupPage
                             action={{ busy: true, label: "Check again", onSelect: noop }}
-                            copy="Rig runs the coding assistants you have already signed in to, and none are signed in yet. Sign in to Codex, Claude Code or Grok in a terminal, and Happy picks it up from there."
+                            copy="Happy Agent runs the coding assistants you have already signed in to, and none are signed in yet. Sign in to Codex, Claude Code or Grok in a terminal, and Happy picks it up from there."
                             scene="owl"
                             title="No coding assistant yet"
                         />

@@ -1,44 +1,44 @@
 import "./styles.css";
 
 export {
-    AppRigView,
-    type AppRigDirectorySnapshot,
-    type AppRigDirectoryStore,
-    type AppRigEntry,
-    type AppRigSession,
-    type AppRigUpdate,
-    type AppRigViewProps,
-} from "./AppRigView";
+    AppHappyAgentView,
+    type AppHappyAgentDirectorySnapshot,
+    type AppHappyAgentDirectoryStore,
+    type AppHappyAgentEntry,
+    type AppHappyAgentSession,
+    type AppHappyAgentUpdate,
+    type AppHappyAgentViewProps,
+} from "./AppHappyAgentView";
 export {
-    type AppRigDaemonInstall,
-    type AppRigDaemonRestartReason,
-    type AppRigDaemonSnapshot,
-    type AppRigDaemonStore,
-    type AppRigDaemonVersion,
-    type AppRigDrainAgent,
-    type AppRigDrainComponent,
-    type AppRigDebugSnapshot,
-    type AppRigDebugStore,
-    type AppRigDebugTargetSnapshot,
-    type AppRigProfilerCapabilities,
-    type AppRigProfilerSnapshot,
-    type AppRigProfilerStore,
-} from "./views/AppRigSettingsView";
+    type AppHappyAgentDaemonInstall,
+    type AppHappyAgentDaemonRestartReason,
+    type AppHappyAgentDaemonSnapshot,
+    type AppHappyAgentDaemonStore,
+    type AppHappyAgentDaemonVersion,
+    type AppHappyAgentDrainAgent,
+    type AppHappyAgentDrainComponent,
+    type AppHappyAgentDebugSnapshot,
+    type AppHappyAgentDebugStore,
+    type AppHappyAgentDebugTargetSnapshot,
+    type AppHappyAgentProfilerCapabilities,
+    type AppHappyAgentProfilerSnapshot,
+    type AppHappyAgentProfilerStore,
+} from "./views/AppHappyAgentSettingsView";
 export {
-    rigHistoryCreate,
-    type RigHistoryDocument,
-    type RigHistoryPersistence,
-    type RigRouterHistory,
-} from "./navigation/rigHistory";
+    happyAgentHistoryCreate,
+    type HappyAgentHistoryDocument,
+    type HappyAgentHistoryPersistence,
+    type HappyAgentRouterHistory,
+} from "./navigation/happyAgentHistory";
 export {
-    rigMemoryHistoryCreate,
-    rigRouterConversationOpen,
-    rigRouterGroupOpen,
-    rigRouterGroupForget,
-    rigRouterCreate,
-    type RigRouter,
-    type RigRouterContext,
-} from "./navigation/rigRouter";
+    happyAgentMemoryHistoryCreate,
+    happyAgentRouterConversationOpen,
+    happyAgentRouterGroupOpen,
+    happyAgentRouterGroupForget,
+    happyAgentRouterCreate,
+    type HappyAgentRouter,
+    type HappyAgentRouterContext,
+} from "./navigation/happyAgentRouter";
 export { DesktopStartupScreen, type DesktopStartupValues } from "happy-desktop-ui";
 export {
     BrowserTerminalConnection,

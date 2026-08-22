@@ -1,11 +1,14 @@
-import type { RigDirectorySnapshot, RigDirectoryStore } from "./rigDirectoryStore";
+import type {
+    HappyAgentDirectorySnapshot,
+    HappyAgentDirectoryStore,
+} from "./happyAgentDirectoryStore";
 
 /**
- * How many conversations are waiting for the person across every Rig in this
+ * How many conversations are waiting for the person across every Happy Agent in this
  * window.
  *
  * This counts exactly the fact the sidebar already draws a dot for: a
- * conversation summary's `unread`, which a Rig sets durably when a turn finishes
+ * conversation summary's `unread`, which a Happy Agent sets durably when a turn finishes
  * or an agent needs an answer. Reading the same projection rather than deriving
  * a second one is the point — the Dock and the sidebar cannot disagree about
  * what is waiting, and opening a conversation clears both at once because
@@ -15,10 +18,10 @@ import type { RigDirectorySnapshot, RigDirectoryStore } from "./rigDirectoryStor
  * the Dock speaks for the whole window and a worktree is not a place a reader
  * would think to look separately.
  */
-export function rigDirectoryUnreadCount(snapshot: RigDirectorySnapshot): number {
+export function happyAgentDirectoryUnreadCount(snapshot: HappyAgentDirectorySnapshot): number {
     let count = 0;
-    for (const rig of snapshot.rigs)
-        for (const project of rig.projects) {
+    for (const happyAgent of snapshot.happyAgents)
+        for (const project of happyAgent.projects) {
             for (const conversation of project.conversations) if (conversation.unread) count += 1;
             for (const worktree of project.worktrees)
                 for (const conversation of worktree.conversations)
@@ -28,13 +31,13 @@ export function rigDirectoryUnreadCount(snapshot: RigDirectorySnapshot): number 
 }
 
 /**
- * Keeps the Dock's count following the Rig directory for as long as the window
+ * Keeps the Dock's count following the Happy Agent directory for as long as the window
  * lives, and returns the way to stop.
  *
- * The directory store is the one subscribed to rather than any Rig's workspace,
+ * The directory store is the one subscribed to rather than any Happy Agent's workspace,
  * and that is what makes the count survive a connection: reconnecting replaces a
- * Rig's product stores, and the directory is what re-subscribes to the
- * replacement and republishes. A Rig that goes down empties its projects through
+ * Happy Agent's product stores, and the directory is what re-subscribes to the
+ * replacement and republishes. A Happy Agent that goes down empties its projects through
  * the same path, so a teardown reports zero rather than leaving the last number
  * it happened to have.
  *
@@ -42,12 +45,12 @@ export function rigDirectoryUnreadCount(snapshot: RigDirectorySnapshot): number 
  * waiting states that instead of inheriting whatever was on the icon.
  */
 export function dockUnreadPublish(
-    directory: RigDirectoryStore,
+    directory: HappyAgentDirectoryStore,
     report: (count: number) => void,
 ): () => void {
     let published: number | undefined;
     const publish = () => {
-        const count = rigDirectoryUnreadCount(directory.get());
+        const count = happyAgentDirectoryUnreadCount(directory.get());
         // Reconciles arrive constantly while an agent is working and almost none
         // of them change this number; only a change is worth an IPC message.
         if (count === published) return;

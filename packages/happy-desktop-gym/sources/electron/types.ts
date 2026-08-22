@@ -73,15 +73,15 @@ export interface GymRunPaths {
     readonly home: string;
     readonly tmp: string;
     readonly workspace: string;
-    readonly rigServer: string;
+    readonly happyAgentServer: string;
     readonly socketPath: string;
     readonly electronUserData: string;
     /**
      * The actual ready worktree mounted as `/workspace` for JustBash. It is
-     * selected after Rig creates the worktrees and persisted with the run so
+     * selected after Happy Agent creates the worktrees and persisted with the run so
      * tool mutations exercise a managed checkout rather than a fixture copy.
      */
-    readonly rigWorkspacePath: string;
+    readonly happyAgentWorkspacePath: string;
     readonly bin: string;
     readonly artifacts: string;
     readonly marker: string;
@@ -177,7 +177,7 @@ export interface GymInferenceServer {
     stop(): Promise<void>;
 }
 
-export interface RigRuntime {
+export interface HappyAgentRuntime {
     readonly command: string;
     readonly environment: Record<string, string>;
     readonly socketPath: string;

@@ -834,7 +834,7 @@ export function Composer(props: ComposerProps) {
             return;
         }
         /*
-         * Escape stops the run, the way it does in the Rig TUI, and it is the
+         * Escape stops the run, the way it does in the Happy Agent TUI, and it is the
          * last thing Escape can mean here: every popover above has already had
          * its turn and returned. What is half-written stays written — the draft
          * was aimed at the run being called off, not at the next one — and a

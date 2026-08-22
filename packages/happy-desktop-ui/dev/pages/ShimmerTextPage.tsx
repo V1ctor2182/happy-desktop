@@ -152,8 +152,8 @@ export function ShimmerTextPage() {
                         Reading the repository
                     </ShimmerText>
                     <ShimmerText phase={0.5} tone="muted">
-                        Rig is preparing this workspace’s checkout and will run the first message as
-                        soon as it is there
+                        HappyAgent is preparing this workspace’s checkout and will run the first
+                        message as soon as it is there
                     </ShimmerText>
                 </div>
             </Specimen>

@@ -1,9 +1,9 @@
 # Happy Desktop shell
 
 This package is the macOS Electron shell for Happy Desktop. It starts or
-connects to the user's normal local Rig daemon, projects the daemon through a
+connects to the user's normal local Happy Agent daemon, projects the daemon through a
 loopback boundary, and hosts the shared local application renderer. The shell
-opens one Rig connection — its host — and that Rig owns whatever peering it
+opens one Happy Agent connection — its host — and that Happy Agent owns whatever peering it
 does with other machines.
 
 It contains no Happy server, account authentication, hosted workspace topology,
@@ -21,7 +21,7 @@ The default is Portless loopback mode (`https://…localhost`); it does not
 require Wi-Fi. Use `pnpm dev --lan` only for deliberate device testing.
 
 Use `pnpm dev --debug` to start the development-only main-process, renderer, and
-Rig inspectors. Electron prints each loopback URL; set
+Happy Agent inspectors. Electron prints each loopback URL; set
 `HAPPY2_DEBUG_RENDERER_PORT` to choose the renderer CDP port explicitly.
 
 Use the profile development flavor from the workspace root:

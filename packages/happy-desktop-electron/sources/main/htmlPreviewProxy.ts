@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { workspaceFileLoad, type RigProxyClient } from "./rigProxyHandle";
+import { workspaceFileLoad, type HappyAgentProxyClient } from "./happyAgentProxyHandle";
 
 export interface HtmlPreviewProxyHandle {
     /** Loopback port Chromium's preview profile is pointed at as its HTTP proxy. */
@@ -13,7 +13,7 @@ export interface HtmlPreviewProxyHandle {
      * names the site a document is served as; the client it closes over reads
      * every asset through the workspace-rooted `/v0` file API.
      */
-    register(client: RigProxyClient): {
+    register(client: HappyAgentProxyClient): {
         readonly workspace: (workspaceId: string, filePath: string) => string;
     };
     close(): void;
@@ -84,7 +84,7 @@ const PREVIEW_SITE_LIMIT = 32;
 
 /** One isolated preview origin backed by a Happy Agent workspace folder. */
 interface PreviewSite {
-    readonly client: RigProxyClient;
+    readonly client: HappyAgentProxyClient;
     readonly workspaceId: string;
     readonly directory: string;
 }

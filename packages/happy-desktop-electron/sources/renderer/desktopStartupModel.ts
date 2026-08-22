@@ -6,7 +6,7 @@ export function desktopStartupValues(_request?: DesktopStartRequest): DesktopSta
     return { mode: "local" };
 }
 
-/** The startup screen can only request the local Rig runtime. */
+/** The startup screen can only request the local Happy Agent runtime. */
 export function desktopStartRequestFromValues(_values: DesktopStartupValues): DesktopStartRequest {
     return { mode: "local" };
 }

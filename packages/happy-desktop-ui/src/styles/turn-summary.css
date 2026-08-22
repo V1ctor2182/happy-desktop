@@ -50,7 +50,7 @@
 
 /* The summary brings its own transcript-row padding, which the settled line
    already owns; inside this slot it is only text. */
-.happy2-turn-summary__trailing .happy2-rig-activity-transcript {
+.happy2-turn-summary__trailing .happy2-happy-agent-activity-transcript {
     height: auto;
     padding: 0;
 }

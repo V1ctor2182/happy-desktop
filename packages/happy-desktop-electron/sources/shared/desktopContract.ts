@@ -11,7 +11,7 @@ export type DesktopMode = "local";
 export type DesktopAppearanceMode = "dark" | "light" | "system";
 export type DesktopScrollbarVisibility = "always" | "automatic";
 
-/** Access granted to a newly created local Rig session. */
+/** Access granted to a newly created local Happy Agent session. */
 export type DesktopPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
 
 /** One provider-qualified model identity in desktop preferences. */
@@ -34,9 +34,9 @@ export interface DesktopModelPreference extends DesktopModelIdentity {
 
 /**
  * Machine-local desktop preferences. Theme, scrollbar behavior, and explicit
- * title motion belong here because they must survive every window and Rig
- * lifetime. Model ids are provider-qualified because the same model can be
- * offered through more than one account/provider.
+ * title motion belong here because they must survive every window and Happy
+ * Agent lifetime. Model ids are provider-qualified because the same model can
+ * be offered through more than one account/provider.
  */
 export interface DesktopConfig {
     readonly appearance: DesktopAppearanceMode;
@@ -66,15 +66,15 @@ export interface DesktopTopologyTarget {
 }
 
 export type DesktopActiveTarget = DesktopTopologyTarget & {
-    authentication: "rig";
+    authentication: "happyAgent";
     mode: "local";
-    rigVersion: string;
+    happyAgentVersion: string;
     /**
-     * Loopback base URL of the main process's Rig HTTP proxy. The renderer's
-     * connection loader probes `${rigHttpUrl}/health` directly; this is the
+     * Loopback base URL of the main process's Happy Agent HTTP proxy. The renderer's
+     * connection loader probes `${happyAgentHttpUrl}/health` directly; this is the
      * only channel the renderer uses to reach the local daemon.
      */
-    rigHttpUrl: string;
+    happyAgentHttpUrl: string;
 };
 
 export interface DesktopUpdateSnapshot {
@@ -340,7 +340,7 @@ export const buildIdentityArgument = "--happy2-build-identity=";
 
 /**
  * Where local first-run setup currently stands. The stage is always derived from
- * what this machine actually has — a Node runtime, the global `rig` command, a
+ * what this machine actually has — a Node runtime, an installed agent, a
  * connected daemon — plus the choices already recorded durably, so a restart, a
  * reinstall that keeps user data, or an interrupted install resumes at the same
  * stage or at the nearest truthful earlier one rather than at a remembered step
@@ -353,8 +353,6 @@ export type LocalOnboardingStage =
     | "checking"
     /** No Node runtime; Happy cannot install one, so the person is asked to. */
     | "nodeMissing"
-    /** Node is present but the global `rig` command is unavailable. */
-    | "rigMissing"
     /** Happy Agent is not installed yet; the renderer may ask the shell to download it. */
     | "daemonDownload"
     /**
@@ -368,39 +366,49 @@ export type LocalOnboardingStage =
      * the machine gave before the agent was installed, which by then was untrue.
      */
     | "daemonStarting"
-    /** `rig` exists; the normal user daemon is being started or connected to. */
+    /** The agent exists; the normal user daemon is being started or connected to. */
     | "connecting"
     /** The daemon could not be reached; the desktop runtime carries the reason. */
     | "connectFailed"
     /**
-     * Rig is installed and working, but no coding assistant on this machine is
+     * Happy Agent is installed and working, but no coding assistant on this machine is
      * signed in, so it has nothing to run a session with. Kept apart from
      * `connectFailed` because nothing is broken: this is the last ordinary step
      * of setting the machine up, and it clears itself the moment an assistant is
      * signed in.
      */
     | "providersMissing"
-    /** Rig requires a human identity before it can finish setup. */
+    /**
+     * Happy has just installed and started the agent, and reports which coding
+     * assistants this machine turned out to have.
+     *
+     * Shown once per install, whether or not anything is missing, and passed by
+     * the one button on it. It is a report rather than a question: the machine
+     * was read while the agent was being fetched, and this is the only moment
+     * that answer is worth anybody's attention.
+     */
+    | "assistantsFound"
+    /** Happy Agent requires a human identity before it can finish setup. */
     | "profileRequired"
-    /** Rig Connect is resolving the daemon-owned onboarding status. */
+    /** Happy Agent Connect is resolving the daemon-owned onboarding status. */
     | "examining"
-    /** Everything else is settled and this Rig is demonstrably unused. */
+    /** Everything else is settled and this Happy Agent is demonstrably unused. */
     | "project"
     | "complete";
 
 /**
- * How much is known about whether the connected Rig has been used before.
+ * How much is known about whether the connected Happy Agent has been used before.
  *
  * It is deliberately not a boolean with an absent third case: "not read yet"
- * and "could not be read" are different from "this Rig is new", and only the
- * last of them may ever lead to Happy registering anything in someone's Rig.
+ * and "could not be read" are different from "this Happy Agent is new", and only the
+ * last of them may ever lead to Happy registering anything in someone's Happy Agent.
  */
 export type LocalOnboardingFreshness =
-    /** No authoritative answer yet for the Rig currently connected. */
+    /** No authoritative answer yet for the Happy Agent currently connected. */
     | "checking"
-    /** This Rig holds no project of its own: it has never been used.  */
+    /** This Happy Agent holds no project of its own: it has never been used.  */
     | "fresh"
-    /** This Rig already holds projects, archived or not. */
+    /** This Happy Agent already holds projects, archived or not. */
     | "used"
     /** Its catalog could not be read, so nothing may be concluded from it. */
     | "error";
@@ -412,21 +420,37 @@ export interface LocalOnboardingNode {
     readonly version: string;
 }
 
-/** The globally installed Rig command the user's login shell resolves. */
-export interface LocalOnboardingRig {
-    readonly path: string;
-    /** Version of the running daemon, once one has been connected to. */
-    readonly version?: string;
+/**
+ * The command-line assistants Happy sets a machine up with.
+ *
+ * Three, named here once. Happy Agent can be taught to run others and says so in its own
+ * settings; setup deliberately asks about these and stops, because a first run
+ * is not the place to survey a field — it is the place to get one assistant
+ * working.
+ */
+export type LocalAssistantId = "claude" | "codex" | "grok";
+
+/** What the login-shell probe found out about one assistant. */
+export interface LocalAssistantState {
+    readonly id: LocalAssistantId;
+    /** Where the machine keeps the command, when the machine has it at all. */
+    readonly command?: string;
+    /**
+     * Only what the machine can actually answer: the command is here, or it is
+     * not. Whether a present command is signed in is Happy Agent's question rather than
+     * the shell's, so it is not claimed here — the stage supplies that, because
+     * `providersMissing` is itself Happy Agent's answer that none of them works.
+     */
+    readonly status: "found" | "missing";
 }
 
 export interface LocalOnboardingSnapshot {
     readonly stage: LocalOnboardingStage;
     readonly node?: LocalOnboardingNode;
-    readonly rig?: LocalOnboardingRig;
     /**
-     * Whether the Rig connected right now has ever been used. Rig publishes no
+     * Whether the Happy Agent connected right now has ever been used. Happy Agent publishes no
      * first-run flag, so this is read from its catalog and is re-read for every
-     * connection: a replaced Rig data directory is a different answer, and a
+     * connection: a replaced Happy Agent data directory is a different answer, and a
      * remembered one would let setup skip or repeat itself untruthfully.
      */
     readonly freshness: LocalOnboardingFreshness;
@@ -444,18 +468,18 @@ export interface LocalOnboardingSnapshot {
     /** Displayable detail for the current stage: why it failed, or what to do. */
     readonly message?: string;
     /**
-     * The coding assistants Rig looked for and found no credentials for, in the
-     * order it named them. Present only at `providersMissing`.
+     * The three assistants setup looks for, each with what this machine holds
+     * and what Happy Agent can do with it. Present only at `providersMissing`.
      */
-    readonly providers?: readonly string[];
-    /** An attempt to reach Rig is running, started from a failed stage. */
+    readonly assistants?: readonly LocalAssistantState[];
+    /** An attempt to reach Happy Agent is running, started from a failed stage. */
     readonly retrying?: boolean;
 }
 
 /**
  * One note in this machine's collection. A note belongs to the machine rather
- * than to a Rig connection, so it travels over the desktop bridge instead of a
- * Rig's HTTP proxy and stays available whichever Rig the window is looking at.
+ * than to a Happy Agent connection, so it travels over the desktop bridge instead of a
+ * Happy Agent's HTTP proxy and stays available whichever Happy Agent the window is looking at.
  */
 export interface DesktopNoteSummary {
     readonly id: string;
@@ -486,7 +510,7 @@ export interface DesktopNoteApplyRequest {
 
 /**
  * One file a window of its own is showing, as that window is allowed to see it:
- * an address on one of this process's own Rig proxies, and the workspace path
+ * an address on one of this process's own Happy Agent proxies, and the workspace path
  * read back out of it. Never a daemon endpoint, a token, or a path on disk the
  * window could read for itself.
  *
@@ -601,7 +625,7 @@ export interface HappyDesktopBridge {
      * body every hop holds whole. A video is the case that makes that plain.
      */
     attachmentSourcePath(file: File): string | undefined;
-    /** Points this window's browser guests at one local Rig session's network boundary. */
+    /** Points this window's browser guests at one local Happy Agent session's network boundary. */
     browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
@@ -639,7 +663,7 @@ export interface HappyDesktopBridge {
     /**
      * Shows the file at one address in a window outside this one, reusing the
      * preview window if it is already open. Rejected unless the address is the
-     * media route of a Rig proxy this process is currently running.
+     * media route of a Happy Agent proxy this process is currently running.
      */
     mediaPreviewOpen(url: string): Promise<void>;
     directoryPick(): Promise<string | undefined>;
@@ -649,7 +673,7 @@ export interface HappyDesktopBridge {
     daemonCheck(): Promise<void>;
     /**
      * Drains and restarts the local daemon onto the version already downloaded
-     * here. Only the local host is ever restarted this way; a remote Rig updates
+     * here. Only the local host is ever restarted this way; a remote Happy Agent updates
      * itself and never takes this window.
      */
     daemonInstall(): Promise<void>;
@@ -703,11 +727,13 @@ export interface HappyDesktopBridge {
     }): Promise<void>;
     /**
      * Opens the native folder picker, requires a Git repository root, and opens
-     * it as this Rig's first project. Picking, validating, and registering all
+     * it as this Happy Agent's first project. Picking, validating, and registering all
      * happen in the main process; the window never learns a path it did not
      * already receive in a snapshot.
      */
     onboardingProjectChoose(): Promise<void>;
+    /** Passes the report of what this machine has, and lets setup continue. */
+    onboardingAssistantsContinue(): Promise<void>;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
     runtimeReset(): Promise<void>;
     runtimeRetry(): Promise<void>;
@@ -792,6 +818,7 @@ export const desktopIpc = {
     noteRename: "happy2:notes:rename",
     notesChanged: "happy2:notes:changed",
     notesList: "happy2:notes:list",
+    onboardingAssistantsContinue: "happy2:onboarding:assistants-continue",
     onboardingChanged: "happy2:onboarding:changed",
     onboardingGet: "happy2:onboarding:get",
     onboardingProfileCreate: "happy2:onboarding:profile-create",

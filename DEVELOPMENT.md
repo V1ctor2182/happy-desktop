@@ -7,7 +7,7 @@ Everything here runs from the repository root unless a path says otherwise.
 - macOS
 - Node.js 24 or newer
 - pnpm 10.28.1 or newer (the repository pins `pnpm@10.28.1` via `packageManager`)
-- a globally installed `rig` command
+- a globally installed `Happy Agent` command
 
 ```sh
 pnpm install
@@ -20,14 +20,14 @@ pnpm dev
 ```
 
 Starts the complete Electron development environment against your normal local
-Rig daemon. It runs behind Portless in loopback mode by default, so it needs no
+Happy Agent daemon. It runs behind Portless in loopback mode by default, so it needs no
 Wi-Fi and serves an `https://…localhost` URL.
 
 Flags, combinable:
 
 | Flag        | Effect                                                                  |
 | ----------- | ----------------------------------------------------------------------- |
-| `--debug`   | Starts main-process, renderer, and Rig inspectors and prints their URLs |
+| `--debug`   | Starts main-process, renderer, and Happy Agent inspectors and prints their URLs |
 | `--lan`     | Portless LAN mode (`.local`), only for deliberate device testing        |
 | `--profile` | Preloads the dormant React profiler (see Profiling below)               |
 
@@ -43,12 +43,12 @@ pnpm blueprint    # the happy-desktop-ui component blueprint
 ## First-run sandbox
 
 ```sh
-pnpm dev:sandbox [--reset] [--no-rig] [--name=x]
+pnpm dev:sandbox [--reset] [--no-happy-agent] [--name=x]
 ```
 
 Runs the desktop against a throwaway home directory so onboarding can be
-replayed as often as needed without touching the Rig you actually work in.
-`--reset` wipes the sandbox, `--no-rig` simulates a machine where Rig is not
+replayed as often as needed without touching the Happy Agent you actually work in.
+`--reset` wipes the sandbox, `--no-happy-agent` simulates a machine where Happy Agent is not
 installed, `--name=x` keeps several sandboxes apart.
 
 ## Profiling

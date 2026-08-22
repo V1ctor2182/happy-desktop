@@ -9,7 +9,7 @@ export function CompactActivityRowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The shared two-line activity grammar used by goals, tasks, and terminals in the Rig activity panel."
+            summary="The shared two-line activity grammar used by goals, tasks, and terminals in the Happy Agent activity panel."
             title="CompactActivityRow"
         >
             <Specimen

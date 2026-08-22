@@ -114,8 +114,8 @@ export function BrowserPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="known Rig offline · retained guest stays mounted · navigation and retry are unavailable"
-                label="Rig offline"
+                detail="known Happy Agent offline · retained guest stays mounted · navigation and retry are unavailable"
+                label="Happy Agent offline"
                 number="05"
                 stage="app"
             >
@@ -124,7 +124,7 @@ export function BrowserPanelPage() {
                         active
                         initialUrl="https://happy.engineering/"
                         renderContent={BrowserPreview}
-                        unavailable="Rig is offline. Showing the last loaded page."
+                        unavailable="Happy Agent is offline. Showing the last loaded page."
                     />
                 </div>
             </Specimen>

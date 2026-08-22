@@ -317,8 +317,8 @@ export function ChangedFileDiffPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="known Rig offline · the edit draft and diff remain · Command-S waits for reconnect"
-                label="Rig offline"
+                detail="known Happy Agent offline · the edit draft and diff remain · Command-S waits for reconnect"
+                label="Happy Agent offline"
                 number="10"
                 stage="surface"
             >

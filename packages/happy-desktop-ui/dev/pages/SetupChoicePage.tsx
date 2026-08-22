@@ -19,8 +19,8 @@ const setupOptions = [
         actionLabel: "Install the CLI",
         actionVariant: "primary",
         description:
-            "Rig is a coding agent you run from a terminal, always in sync with this app — start work in one and pick it up in the other, or on your phone. Uses the Node v22.11.0 already here.",
-        id: "rig",
+            "Happy Agent is a coding agent you run from a terminal, always in sync with this app — start work in one and pick it up in the other, or on your phone. Uses the Node v22.11.0 already here.",
+        id: "happy-agent",
         scene: "robot",
         title: "Install CLI tools",
     },

@@ -8,14 +8,14 @@ import type {
     GymRunPaths,
 } from "./types.js";
 import type { GymHappyAgentClient } from "./happyAgentProtocol.js";
-import type { StartedRigRuntime } from "./rigRuntime.js";
+import type { StartedHappyAgentRuntime } from "./happyAgentRuntime.js";
 import type { GymInferenceServer } from "./types.js";
-import { rigRuntimeCreate } from "./rigRuntime.js";
+import { happyAgentRuntimeCreate } from "./happyAgentRuntime.js";
 
 const historyCompactionInterval = 16;
 
 export interface SeededHistory {
-    readonly runtime: StartedRigRuntime;
+    readonly runtime: StartedHappyAgentRuntime;
     readonly sessionIds: readonly string[];
     readonly clusterWorkspaceId: string;
     readonly clusterSessionIds: readonly string[];
@@ -28,14 +28,15 @@ export async function durableHistorySeed(
     paths: GymRunPaths,
     manifest: GymManifest,
     projects: readonly GymProject[],
-    runtime: StartedRigRuntime,
+    runtime: StartedHappyAgentRuntime,
     inference: GymInferenceServer,
 ): Promise<SeededHistory> {
     const checkouts = await readyCheckouts(projects, runtime.client);
     if (checkouts.length === 0)
-        throw new Error("No ready Rig checkout exists for session seeding.");
+        throw new Error("No ready Happy Agent checkout exists for session seeding.");
     const clusterCheckout =
-        checkouts.find((checkout) => checkout.path === paths.rigWorkspacePath) ?? checkouts[0];
+        checkouts.find((checkout) => checkout.path === paths.happyAgentWorkspacePath) ??
+        checkouts[0];
     if (clusterCheckout === undefined) {
         throw new Error("No ready managed workspace exists for the durable session cluster.");
     }
@@ -119,7 +120,7 @@ export async function durableHistorySeed(
 
     const persistedSessionId = sessionIds[0];
     if (persistedSessionId === undefined) {
-        throw new Error("Rig did not create a session for persistence verification.");
+        throw new Error("Happy Agent did not create a session for persistence verification.");
     }
     const beforeRestartMessages = await runtime.client.agentMessageCount(persistedSessionId);
     if (beforeRestartMessages === 0) {
@@ -128,14 +129,14 @@ export async function durableHistorySeed(
 
     await runtime.stop();
     await inference.start();
-    const restarted = await rigRuntimeCreate(paths, inference);
+    const restarted = await happyAgentRuntimeCreate(paths, inference);
     const afterRestart = await restarted.client.getAgent(persistedSessionId);
     const afterRestartMessages = await restarted.client.agentMessageCount(persistedSessionId);
     const persistedAfterRestart =
         afterRestart.agent.id === persistedSessionId &&
         afterRestartMessages >= beforeRestartMessages;
     if (!persistedAfterRestart) {
-        throw new Error("Rig durable history did not survive daemon restart.");
+        throw new Error("Happy Agent durable history did not survive daemon restart.");
     }
     return {
         runtime: restarted,
@@ -197,7 +198,7 @@ export async function catalogSnapshotRead(
     const workspaceLists = await Promise.all(
         registeredProjects.projects.map((project) => client.listWorkspaces(project.id)),
     );
-    // Current Rig includes each registered project's root checkout in this
+    // Current Happy Agent includes each registered project's root checkout in this
     // collection; the Gym's worktree target counts only checkouts beside it.
     const projectPaths = new Set(registeredProjects.projects.map((project) => project.path));
     const workspaces = workspaceLists

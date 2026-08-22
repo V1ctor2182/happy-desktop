@@ -249,7 +249,7 @@ export class DesktopDaemonController {
      *
      * This is the only kind of path that interrupts anybody's work, so it is
      * never taken on Happy's own initiative. It concerns the local machine's
-     * daemon alone; a remote Rig is restarted by whoever owns it.
+     * daemon alone; a remote Happy Agent is restarted by whoever owns it.
      */
     install(): Promise<void> {
         return this.serial(() => this.restartCore("install", this.snapshotValue.readyVersion));

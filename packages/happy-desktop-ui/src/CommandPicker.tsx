@@ -102,7 +102,7 @@ export function CommandPicker(props: CommandPickerProps) {
 type CommandMeta = { description: string; icon: IconName };
 
 /**
- * How each Rig session command reads in the picker. A command the composer offers
+ * How each Happy Agent session command reads in the picker. A command the composer offers
  * but this table does not know still appears, wearing its own label.
  */
 const COMMAND_META: Record<string, CommandMeta> = {

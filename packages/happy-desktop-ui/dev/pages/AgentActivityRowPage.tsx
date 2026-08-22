@@ -2,22 +2,22 @@ import type { ConversationToolCall } from "happy-desktop-state";
 import { AgentActivityRow } from "../../src/AgentActivityRow";
 import { ComponentPage, Specimen } from "../kit";
 import {
-    rigAwaitingTool,
-    rigCompactionCompletedTool,
-    rigCompactionFailedTool,
-    rigCompactionRunningTool,
-    rigElevatedTool,
-    rigExecTool,
-    rigExplorationTool,
-    rigFailedTool,
-    rigFileDiffTool,
-    rigGenericTool,
-    rigMcpInterruptedTool,
-    rigMcpTool,
-    rigRunningTool,
-    rigStoppedTool,
-    rigTerminalTool,
-} from "./rigChatFixtures";
+    happyAgentAwaitingTool,
+    happyAgentCompactionCompletedTool,
+    happyAgentCompactionFailedTool,
+    happyAgentCompactionRunningTool,
+    happyAgentElevatedTool,
+    happyAgentExecTool,
+    happyAgentExplorationTool,
+    happyAgentFailedTool,
+    happyAgentFileDiffTool,
+    happyAgentGenericTool,
+    happyAgentMcpInterruptedTool,
+    happyAgentMcpTool,
+    happyAgentRunningTool,
+    happyAgentStoppedTool,
+    happyAgentTerminalTool,
+} from "./happyAgentChatFixtures";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-148";
@@ -44,18 +44,20 @@ export function AgentActivityRowPage() {
                     }}
                 >
                     <AgentActivityRow
-                        activity={{ kind: "tool", tool: rigFileDiffTool }}
+                        activity={{ kind: "tool", tool: happyAgentFileDiffTool }}
                         defaultExpanded
                     />
                     <AgentActivityRow
-                        activity={{ kind: "tool", tool: rigExecTool }}
+                        activity={{ kind: "tool", tool: happyAgentExecTool }}
                         defaultExpanded
                     />
                     <AgentActivityRow
-                        activity={{ kind: "tool", tool: rigTerminalTool }}
+                        activity={{ kind: "tool", tool: happyAgentTerminalTool }}
                         defaultExpanded
                     />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigExplorationTool }} />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: happyAgentExplorationTool }}
+                    />
                 </div>
             </Specimen>
 
@@ -74,19 +76,23 @@ export function AgentActivityRowPage() {
                     }}
                 >
                     <AgentActivityRow
-                        activity={{ kind: "tool", tool: rigRunningTool }}
+                        activity={{ kind: "tool", tool: happyAgentRunningTool }}
                         time="10:42 AM"
                     />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigAwaitingTool }} />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigElevatedTool }} />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigFailedTool }} />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigStoppedTool }} />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigGenericTool }} />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigCompactionRunningTool }} />
+                    <AgentActivityRow activity={{ kind: "tool", tool: happyAgentAwaitingTool }} />
+                    <AgentActivityRow activity={{ kind: "tool", tool: happyAgentElevatedTool }} />
+                    <AgentActivityRow activity={{ kind: "tool", tool: happyAgentFailedTool }} />
+                    <AgentActivityRow activity={{ kind: "tool", tool: happyAgentStoppedTool }} />
+                    <AgentActivityRow activity={{ kind: "tool", tool: happyAgentGenericTool }} />
                     <AgentActivityRow
-                        activity={{ kind: "tool", tool: rigCompactionCompletedTool }}
+                        activity={{ kind: "tool", tool: happyAgentCompactionRunningTool }}
                     />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigCompactionFailedTool }} />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: happyAgentCompactionCompletedTool }}
+                    />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: happyAgentCompactionFailedTool }}
+                    />
                 </div>
             </Specimen>
 
@@ -104,8 +110,10 @@ export function AgentActivityRowPage() {
                         width: "720px",
                     }}
                 >
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigMcpTool }} />
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigMcpInterruptedTool }} />
+                    <AgentActivityRow activity={{ kind: "tool", tool: happyAgentMcpTool }} />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: happyAgentMcpInterruptedTool }}
+                    />
                 </div>
             </Specimen>
 
@@ -196,7 +204,7 @@ export function AgentActivityRowPage() {
 
 /** A command far wider than a 420px row, so the scroll and its fade are visible. */
 const longExecTool: ConversationToolCall = {
-    ...rigExecTool,
+    ...happyAgentExecTool,
     toolCallId: "tool-exec-long",
     presentation: {
         type: "execCommand",

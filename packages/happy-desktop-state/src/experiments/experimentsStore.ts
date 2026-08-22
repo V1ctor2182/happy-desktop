@@ -1,7 +1,7 @@
 /**
  * Whether this copy of the app offers the features that are not finished yet.
  *
- * It is the window's own switch, not a Rig's and not an account's: it says what
+ * It is the window's own switch, not a Happy Agent's and not an account's: it says what
  * this installation shows the person sitting at it, so turning it on somewhere
  * else changes nothing here. That is why it is kept by the host's own storage
  * rather than by any machine the window connects to — a feature is unfinished

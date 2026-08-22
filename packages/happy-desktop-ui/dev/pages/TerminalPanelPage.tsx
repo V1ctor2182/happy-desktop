@@ -41,7 +41,7 @@ const grid: TerminalGridSnapshot = {
     title: "workspace",
     cursor: { x: 2, y: 3, visible: true },
     lines: [
-        { cells: run(0, "happy@rig:/workspace$ pnpm test") },
+        { cells: run(0, "happy@agent:/workspace$ pnpm test") },
         {
             cells: [
                 ...run(0, "Tests", { bold: true }),
@@ -58,7 +58,7 @@ const grid: TerminalGridSnapshot = {
     // blueprint only ever shows a screen that fits, which is exactly the case
     // where the transcript's scrolling cannot be seen.
     scrollback: Array.from({ length: 60 }, (_, index) => ({
-        cells: run(0, `happy@rig:/workspace$ echo line ${String(index + 1)}`),
+        cells: run(0, `happy@agent:/workspace$ echo line ${String(index + 1)}`),
     })),
 };
 
@@ -77,11 +77,11 @@ export function TerminalPanelPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Resizable interactive terminal dock rendering the Rig binary-protocol grid."
+            summary="Resizable interactive terminal dock rendering the Happy Agent binary-protocol grid."
             title="Terminal panel"
         >
             <Specimen
-                detail="connected · 80 × 24 · styled Rig grid cells with cursor · no chrome above the grid"
+                detail="connected · 80 × 24 · styled Happy Agent grid cells with cursor · no chrome above the grid"
                 label="Connected"
                 number="01"
                 stage="app"
@@ -91,8 +91,8 @@ export function TerminalPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="Rig reconnecting · PTY status retained · grid mounted read-only"
-                label="Rig reconnecting"
+                detail="Happy Agent reconnecting · PTY status retained · grid mounted read-only"
+                label="Happy Agent reconnecting"
                 number="02"
                 stage="app"
             >
@@ -100,16 +100,16 @@ export function TerminalPanelPage() {
                     <TerminalPanel
                         grid={grid}
                         height={280}
-                        rigAvailability="reconnecting"
-                        rigAvailabilityReason="Waiting for the peer route"
+                        happyAgentAvailability="reconnecting"
+                        happyAgentAvailabilityReason="Waiting for the peer route"
                         status="connected"
                         {...handlers}
                     />
                 </div>
             </Specimen>
             <Specimen
-                detail="Rig unavailable · reason in context · selection, copy, scroll, and links retained"
-                label="Rig unavailable"
+                detail="Happy Agent unavailable · reason in context · selection, copy, scroll, and links retained"
+                label="Happy Agent unavailable"
                 number="03"
                 stage="app"
             >
@@ -117,8 +117,8 @@ export function TerminalPanelPage() {
                     <TerminalPanel
                         grid={grid}
                         height={280}
-                        rigAvailability="unavailable"
-                        rigAvailabilityReason="The remote machine is offline"
+                        happyAgentAvailability="unavailable"
+                        happyAgentAvailabilityReason="The remote machine is offline"
                         status="disconnected"
                         {...handlers}
                     />

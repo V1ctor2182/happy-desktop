@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
-import type { LocalRigConnection } from "./localRig";
-import { localRigConnectorCreate } from "./localRig";
+import type { LocalHappyAgentConnection } from "./localHappyAgent";
+import { localHappyAgentConnectorCreate } from "./localHappyAgent";
 import {
     noteApplyRequestValidate,
     noteIdValidate,
@@ -10,20 +10,20 @@ import {
     noteTitleValidate,
 } from "./notesIpcValidation";
 import { NotesStore } from "./notesStore";
-import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
-import { rigProxyHandle } from "./rigProxyHandle";
-import { rigTerminalBridgeCreate } from "./rigTerminalBridge";
+import { happyAgentDaemonConnectionUnavailable } from "./happyAgentDaemonClient";
+import { happyAgentProxyHandle } from "./happyAgentProxyHandle";
+import { happyAgentTerminalBridgeCreate } from "./happyAgentTerminalBridge";
 
-const endpoint = "/__happy2_local_rig";
+const endpoint = "/__happy2_local_happy_agent";
 const maximumBridgeBodyBytes = 3 * 1024 * 1024;
 
 interface DevRuntime {
-    readonly connection: LocalRigConnection;
+    readonly connection: LocalHappyAgentConnection;
 }
 
-export interface BrowserLocalRigOptions {
+export interface BrowserLocalHappyAgentOptions {
     /** Opens one daemon connection; injectable so tests drive reconnection deterministically. */
-    readonly connect?: () => Promise<LocalRigConnection>;
+    readonly connect?: () => Promise<LocalHappyAgentConnection>;
     /** Overrides the normal home-directory config path for an isolated host. */
     readonly desktopConfigPath?: string;
 }
@@ -39,8 +39,8 @@ export interface BrowserLocalRigOptions {
  * this connection's token, so restarting the daemon under a running `vite` heals
  * on the renderer's next health probe instead of serving 503 until a restart.
  */
-export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plugin {
-    const connect = options.connect ?? (() => localRigConnectorCreate().connect());
+export function browserLocalHappyAgentPlugin(options: BrowserLocalHappyAgentOptions = {}): Plugin {
+    const connect = options.connect ?? (() => localHappyAgentConnectorCreate().connect());
     let desktopConfigTask: Promise<DesktopConfigStore> | undefined;
     const desktopConfig = (): Promise<DesktopConfigStore> => {
         desktopConfigTask ??= DesktopConfigStore.create(
@@ -66,7 +66,7 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
     // reconnect and re-read the token, which is how the dev bridge recovers
     // without the user reloading Vite.
     const runtimeInvalidate = (error: unknown, expected?: Promise<DevRuntime>): void => {
-        if (!rigDaemonConnectionUnavailable(error)) return;
+        if (!happyAgentDaemonConnectionUnavailable(error)) return;
         if (expected !== undefined && runtimeTask !== expected) return;
         const stale = runtimeTask;
         runtimeTask = undefined;
@@ -76,7 +76,7 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
         );
     };
     return {
-        name: "happy2-browser-local-rig",
+        name: "happy2-browser-local-happy-agent",
         apply: "serve",
         transformIndexHtml() {
             // Signal browser-local mode to the renderer without import.meta.env, so
@@ -103,7 +103,7 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
             // A terminal's bytes cannot ride the middleware stack, so the dev
             // bridge claims the one upgrade path it owns and leaves every other
             // upgrade — Vite's own HMR socket above all — to Vite's listeners.
-            const terminals = rigTerminalBridgeCreate({
+            const terminals = happyAgentTerminalBridgeCreate({
                 allowedOrigin: rendererOrigin,
                 client: () => runtime().then(({ connection }) => connection.client),
                 expectedHost: () => expectedHost,
@@ -128,7 +128,7 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
                         pending = runtime();
                         const active = await pending;
                         const bridgePath = path.slice(endpoint.length) || "/";
-                        const handled = await rigProxyHandle({
+                        const handled = await happyAgentProxyHandle({
                             client: active.connection.client,
                             method: request.method ?? "GET",
                             path: bridgePath,
@@ -229,14 +229,14 @@ async function handleRequest(
     try {
         const body = JSON.parse(await bodyRead(request)) as { action?: string; input?: unknown };
         // Notes are answered before the daemon connection is required, since they
-        // are this machine's own files and have nothing to do with a Rig.
+        // are this machine's own files and have nothing to do with a Happy Agent.
         const notes = await notesActionHandle(body.action ?? "", body.input);
         if (notes.handled) {
             json(response, 200, { value: notes.value });
             return;
         }
         // Desktop config is another machine-local capability. Like notes, it
-        // stays available even while the normal Rig daemon is offline.
+        // stays available even while the normal Happy Agent daemon is offline.
         const config = await desktopConfigActionHandle(
             body.action ?? "",
             body.input,
@@ -252,14 +252,14 @@ async function handleRequest(
         json(response, 200, {
             value: {
                 activeTarget: {
-                    authentication: "rig",
-                    detail: "Normal local Rig daemon",
+                    authentication: "happyAgent",
+                    detail: "Normal local Happy Agent daemon",
                     id: "browser-local",
                     kind: "local",
                     label: "Local browser",
                     mode: "local",
-                    rigVersion: active.connection.version,
-                    rigHttpUrl: endpoint,
+                    happyAgentVersion: active.connection.version,
+                    happyAgentHttpUrl: endpoint,
                 },
                 activeTargetId: "browser-local",
                 connectionId: 1,

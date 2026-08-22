@@ -1,10 +1,10 @@
 import type {
-    RigAnsweredUserInput,
-    RigChatTranscriptConnect,
-    RigConnection,
+    HappyAgentAnsweredUserInput,
+    HappyAgentChatTranscriptConnect,
+    HappyAgentConnection,
 } from "happy-desktop-state";
 
-const NO_ANSWERED_INPUTS: readonly RigAnsweredUserInput[] = [];
+const NO_ANSWERED_INPUTS: readonly HappyAgentAnsweredUserInput[] = [];
 
 /**
  * Adapts one Happy Agent session subscription to the retained chat store.
@@ -14,8 +14,8 @@ const NO_ANSWERED_INPUTS: readonly RigAnsweredUserInput[] = [];
  * slot, which the current agent API does not expose independently.
  */
 export function happyAgentTranscriptConnectCreate(
-    connection: RigConnection,
-): RigChatTranscriptConnect {
+    connection: HappyAgentConnection,
+): HappyAgentChatTranscriptConnect {
     return (options) => {
         const session = connection.connectSession({
             sessionId: options.sessionId,

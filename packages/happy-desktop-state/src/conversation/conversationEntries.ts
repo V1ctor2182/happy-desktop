@@ -249,7 +249,7 @@ function delegationEqual(
 }
 
 /**
- * Whether two turn summaries render identically. The rig rebuilds a turn summary
+ * Whether two turn summaries render identically. The agent rebuilds a turn summary
  * on every activity tick while its `changePts` stays put, so without this a
  * running message would keep its first "View trace" projection forever.
  */

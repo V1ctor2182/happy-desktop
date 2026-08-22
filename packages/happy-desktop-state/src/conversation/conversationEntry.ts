@@ -60,18 +60,18 @@ export type ConversationAttachment =
           readonly thumbnailUrl?: string;
           /** Capability-scoped HTTP(S) address the host may open or download. */
           readonly openUrl?: string;
-          /** Imported applet identity, opened through the owning Rig rather than as a URL. */
+          /** Imported applet identity, opened through the owning Happy Agent rather than as a URL. */
           readonly applet?: string;
           readonly appletPath?: string;
           readonly appletQuery?: Readonly<Record<string, string>>;
       };
 
 /**
- * The render projection of one authored local-Rig message.
+ * The render projection of one authored local-Happy Agent message.
  */
 export interface ConversationMessageProjection {
     readonly id: string;
-    /** Local Rig session identity; retained under its historical render-field name. */
+    /** Local Happy Agent session identity; retained under its historical render-field name. */
     readonly chatId: string;
     readonly sessionId?: string;
     readonly sequence: string;
@@ -229,7 +229,7 @@ export type ConversationActivity =
           readonly mono: boolean;
       };
 
-/** Something waiting on a human: the payload behind a local Rig request entry. */
+/** Something waiting on a human: the payload behind a local Happy Agent request entry. */
 export type ConversationRequest =
     | {
           readonly kind: "userInput";
@@ -353,7 +353,7 @@ export interface ConversationServiceNoticeEntry extends ConversationNoticeEntryB
 
 /**
  * The lifecycle a compute instance reports while it materializes the workspace a
- * session runs in. These are exactly the states Rig publishes on a compute
+ * session runs in. These are exactly the states Happy Agent publishes on a compute
  * preparation notice, so a reader is never shown a phase the daemon did not
  * declare.
  */
@@ -380,8 +380,8 @@ export type ConversationComputeState =
  * concrete payload behind that sentence, so a row can say which provider, which
  * step, how far, and how long instead of restating one line of prose.
  *
- * Every field is projected verbatim from Rig's own notice. Nothing is inferred:
- * a metric Rig did not measure is absent rather than guessed.
+ * Every field is projected verbatim from Happy Agent's own notice. Nothing is inferred:
+ * a metric Happy Agent did not measure is absent rather than guessed.
  */
 export interface ConversationComputeNoticeEntry extends ConversationNoticeEntryBase {
     readonly variant: "compute";
@@ -396,7 +396,7 @@ export interface ConversationComputeNoticeEntry extends ConversationNoticeEntryB
     readonly message: string;
     /** Materialization progress in percent, when the provider reports one. */
     readonly percent?: number;
-    /** Milliseconds spent preparing so far, when Rig measured it. */
+    /** Milliseconds spent preparing so far, when Happy Agent measured it. */
     readonly elapsedMs?: number;
 }
 

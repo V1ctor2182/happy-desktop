@@ -1,13 +1,13 @@
 import { HAPPY_AGENT_PROTOCOL_VERSION } from "@slopus/happy-agent-client";
 import type { ServerCompatibility } from "./types.js";
 
-export const MINIMUM_RIG_PROTOCOL_VERSION = HAPPY_AGENT_PROTOCOL_VERSION;
-export const MAXIMUM_RIG_PROTOCOL_VERSION = HAPPY_AGENT_PROTOCOL_VERSION;
+export const MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION = HAPPY_AGENT_PROTOCOL_VERSION;
+export const MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION = HAPPY_AGENT_PROTOCOL_VERSION;
 
 export const CHECKING_SERVER_COMPATIBILITY: ServerCompatibility = {
     status: "checking",
-    minimumSupportedProtocolVersion: MINIMUM_RIG_PROTOCOL_VERSION,
-    maximumSupportedProtocolVersion: MAXIMUM_RIG_PROTOCOL_VERSION,
+    minimumSupportedProtocolVersion: MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
+    maximumSupportedProtocolVersion: MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
 };
 
 export function serverCompatibility(
@@ -16,12 +16,14 @@ export function serverCompatibility(
     const version =
         Number.isSafeInteger(protocolVersion) && protocolVersion >= 0 ? protocolVersion : 0;
     const supported = {
-        minimumSupportedProtocolVersion: MINIMUM_RIG_PROTOCOL_VERSION,
-        maximumSupportedProtocolVersion: MAXIMUM_RIG_PROTOCOL_VERSION,
+        minimumSupportedProtocolVersion: MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
+        maximumSupportedProtocolVersion: MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
         serverProtocolVersion: version,
     };
-    if (version < MINIMUM_RIG_PROTOCOL_VERSION) return { ...supported, status: "server_outdated" };
-    if (version > MAXIMUM_RIG_PROTOCOL_VERSION) return { ...supported, status: "client_outdated" };
+    if (version < MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION)
+        return { ...supported, status: "server_outdated" };
+    if (version > MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION)
+        return { ...supported, status: "client_outdated" };
     return { ...supported, status: "compatible" };
 }
 

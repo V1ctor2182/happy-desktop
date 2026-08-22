@@ -1,6 +1,6 @@
 import type {
-    RigViewPreferencesDocument,
-    RigViewPreferencesPersistence,
+    HappyAgentViewPreferencesDocument,
+    HappyAgentViewPreferencesPersistence,
 } from "happy-desktop-state";
 
 const VIEW_PREFERENCES_KEY = "happy2.view-preferences.v1";
@@ -21,13 +21,13 @@ const WRITE_SETTLE_MS = 250;
  * Where this machine remembers how each checkout is arranged — the right panel's
  * width, and how its files are listed.
  *
- * The window's own storage rather than anything a Rig holds: how someone likes
+ * The window's own storage rather than anything a Happy Agent holds: how someone likes
  * to look at a project is about the person in front of this app, and a machine
- * they connect to has no opinion about it. It also has to survive a Rig going
+ * they connect to has no opinion about it. It also has to survive a Happy Agent going
  * away, which anything kept inside a connection would not.
  */
-function persistenceCreate(): RigViewPreferencesPersistence {
-    let pending: RigViewPreferencesDocument | undefined;
+function persistenceCreate(): HappyAgentViewPreferencesPersistence {
+    let pending: HappyAgentViewPreferencesDocument | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const flush = (): void => {
@@ -61,7 +61,7 @@ function persistenceCreate(): RigViewPreferencesPersistence {
         read() {
             try {
                 const value = localStorage.getItem(VIEW_PREFERENCES_KEY);
-                return value ? (JSON.parse(value) as RigViewPreferencesDocument) : undefined;
+                return value ? (JSON.parse(value) as HappyAgentViewPreferencesDocument) : undefined;
             } catch {
                 return undefined;
             }
@@ -77,13 +77,13 @@ function persistenceCreate(): RigViewPreferencesPersistence {
 /**
  * The window's one view-preferences store.
  *
- * A singleton because every Rig this window connects to arranges the same
+ * A singleton because every Happy Agent this window connects to arranges the same
  * localStorage record and installs the same unload listeners: one instance per
- * connection would race its siblings' writes and add a listener per Rig that
+ * connection would race its siblings' writes and add a listener per Happy Agent that
  * ever connected.
  */
-let shared: RigViewPreferencesPersistence | undefined;
-export function desktopViewPreferencesPersistence(): RigViewPreferencesPersistence {
+let shared: HappyAgentViewPreferencesPersistence | undefined;
+export function desktopViewPreferencesPersistence(): HappyAgentViewPreferencesPersistence {
     shared ??= persistenceCreate();
     return shared;
 }

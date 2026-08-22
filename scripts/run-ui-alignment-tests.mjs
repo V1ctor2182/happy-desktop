@@ -31,7 +31,7 @@ Chromium, Firefox, and WebKit need Mach service access that an inherited
 sandbox denies. Launching them here would make the browser processes abort and
 macOS display native crash dialogs.
 
-Rerun this command with unsandboxed/full-access execution. In Rig, request
+Rerun this command with unsandboxed/full-access execution. In Happy Agent, request
 reviewed Full-access execution for the browser test command.`);
     process.exit(1);
 }

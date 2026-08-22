@@ -33,7 +33,7 @@ export function localWebNavigationAllowed(candidateValue: string, rendererOrigin
 
 export type DesktopWindowTarget = { key: "local"; kind: "local" };
 
-/** The desktop product always renders its local Rig client. */
+/** The desktop product always renders its local Happy Agent client. */
 export function desktopWindowTarget(_snapshot: DesktopRuntimeSnapshot): DesktopWindowTarget {
     return { key: "local", kind: "local" };
 }

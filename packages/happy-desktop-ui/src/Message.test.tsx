@@ -191,7 +191,7 @@ it("keeps an inline timestamp attached to the final message text with a non-brea
         () =>
             stage(
                 "inline-time-wrap-reference",
-                <Message agent author="Rig" body={messageText} compact />,
+                <Message agent author="Happy Agent" body={messageText} compact />,
             ),
         { width: 480, height: 120 },
     );
@@ -203,7 +203,7 @@ it("keeps an inline timestamp attached to the final message text with a non-brea
                     <style>
                         {`[data-testid="inline-time-wrap"] [data-happy-desktop-ui="message-hover-meta"] { opacity: 1; }`}
                     </style>
-                    <Message agent author="Rig" body={messageText} compact time="4:02 PM" />
+                    <Message agent author="Happy Agent" body={messageText} compact time="4:02 PM" />
                 </>,
             ),
         { width: 480, height: 120 },

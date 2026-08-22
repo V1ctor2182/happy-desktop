@@ -9,7 +9,7 @@ export interface SplashScreenProps {
     /** Accessible name for the mark, e.g. the product it is starting. */
     readonly label?: string;
     /**
-     * A single quiet reassurance line under the mark, e.g. "Still starting Rig…".
+     * A single quiet reassurance line under the mark, e.g. "Still starting Happy Agent…".
      * Absent by default: most loads resolve before there is anything worth
      * saying, and the mark stays optically centered whether or not this is set.
      */
@@ -24,7 +24,7 @@ export interface SplashScreenProps {
  * brand" — a bright mark reads as a deliberate splash and fights the crossfade
  * it is about to lose. It carries no spinner, because it is on screen only as
  * long as the first probe takes and anything more would flash; the optional
- * `note` exists for the one case that isn't instant — a slow local Rig start —
+ * `note` exists for the one case that isn't instant — a slow local Happy Agent start —
  * and never shifts the mark's position when it appears. The owner crossfades
  * this screen to whatever resolves — the sign-in card or the workspace — so the
  * mark dissolves rather than cutting away. Props only: no timers, no state, no

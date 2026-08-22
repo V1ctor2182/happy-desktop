@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it, onTestFinished } from "vitest";
-import type { RigSessionId, RigWorkspaceStore } from "happy-desktop-state";
-import { appearanceStoreCreate, rigSettingsStoreCreate } from "happy-desktop-state";
-import type { AppRigDirectorySnapshot, AppRigDirectoryStore } from "../../sources/AppRigView";
-import { rigHistoryCreate } from "../../sources/navigation/rigHistory";
+import type { HappyAgentSessionId, HappyAgentWorkspaceStore } from "happy-desktop-state";
+import { appearanceStoreCreate, happyAgentSettingsStoreCreate } from "happy-desktop-state";
+import type {
+    AppHappyAgentDirectorySnapshot,
+    AppHappyAgentDirectoryStore,
+} from "../../sources/AppHappyAgentView";
+import { happyAgentHistoryCreate } from "../../sources/navigation/happyAgentHistory";
 import {
-    rigRouterCreate,
-    rigRouterGroupForget,
-    type RigRouterContext,
-} from "../../sources/navigation/rigRouter";
-import { rigRoutePath, rigRoutePathParse, type RigRoute } from "../../sources/navigation/rigRoute";
+    happyAgentRouterCreate,
+    happyAgentRouterGroupForget,
+    type HappyAgentRouterContext,
+} from "../../sources/navigation/happyAgentRouter";
+import {
+    happyAgentRoutePath,
+    happyAgentRoutePathParse,
+    type HappyAgentRoute,
+} from "../../sources/navigation/happyAgentRoute";
 
 /**
  * Archiving a project takes it out of the window's navigation entirely. These
@@ -24,12 +31,12 @@ function persistenceFake() {
         write: (document: unknown) => {
             held = JSON.parse(JSON.stringify(document));
         },
-        peek: () => held as { entries: RigRoute[]; index: number } | undefined,
+        peek: () => held as { entries: HappyAgentRoute[]; index: number } | undefined,
     };
 }
 
 /** Where the window is standing, and what it would go back to, in order. */
-function stack(history: ReturnType<typeof rigHistoryCreate>) {
+function stack(history: ReturnType<typeof happyAgentHistoryCreate>) {
     const document = (history as unknown as { location: { pathname: string } }).location;
     return document.pathname;
 }
@@ -42,7 +49,7 @@ beforeEach(() => {
 
 describe("a window's own stack", () => {
     it("removes every place inside the archived group, not just the open one", () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1");
         history.push("/chats/r1/g1");
         history.push("/chats/r1/g1/c1");
@@ -57,7 +64,7 @@ describe("a window's own stack", () => {
     });
 
     it("leaves nothing to reach by going forward", () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1");
         history.push("/chats/r1/g1");
         history.push("/chats/r1/g1/c1");
@@ -73,7 +80,7 @@ describe("a window's own stack", () => {
     });
 
     it("never steps back onto a place that is gone", () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1");
         history.push("/chats/r1/g1");
         history.push("/chats/r1/g1/c1");
@@ -90,7 +97,7 @@ describe("a window's own stack", () => {
     });
 
     it("keeps a reader who was somewhere else exactly where they were", () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1/g1");
         history.push("/settings/appearance");
 
@@ -99,7 +106,7 @@ describe("a window's own stack", () => {
     });
 
     it("is inert when the archived group is not one this window has been in", () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1/g9");
 
         expect(history.groupForget("r1", "g1")).toBe(false);
@@ -107,7 +114,7 @@ describe("a window's own stack", () => {
     });
 
     it("does not leave the same place twice in a row after removing between them", () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1");
         history.push("/chats/r1/g1/c1");
         history.push("/chats/r1");
@@ -122,8 +129,8 @@ describe("a window's own stack", () => {
     });
 
     it("falls back to one addressable place when the whole stack was in the group", () => {
-        const history = rigHistoryCreate({
-            initialEntries: [{ kind: "group", rigId: "r1", groupId: "g1" }],
+        const history = happyAgentHistoryCreate({
+            initialEntries: [{ kind: "group", happyAgentId: "r1", groupId: "g1" }],
         });
         history.push("/chats/r1/g1/c1");
 
@@ -136,24 +143,24 @@ describe("a window's own stack", () => {
 describe("what a window keeps between runs", () => {
     it("stores places, never path strings", () => {
         const storage = persistenceFake();
-        const history = rigHistoryCreate({ persistence: storage });
+        const history = happyAgentHistoryCreate({ persistence: storage });
         history.push("/chats/r1/g1/c1");
 
         expect(storage.peek()?.entries.at(-1)).toEqual({
             chatId: "c1",
             groupId: "g1",
             kind: "chat",
-            rigId: "r1",
+            happyAgentId: "r1",
         });
     });
 
     it("reopens where the reader was left, with what they can go back to intact", () => {
         const storage = persistenceFake();
-        const first = rigHistoryCreate({ persistence: storage });
+        const first = happyAgentHistoryCreate({ persistence: storage });
         first.push("/chats/r1");
         first.push("/chats/r1/g1");
 
-        const reopened = rigHistoryCreate({ persistence: storage });
+        const reopened = happyAgentHistoryCreate({ persistence: storage });
 
         expect(reopened.length).toBe(3);
         expect(stack(reopened)).toBe("/chats/r1/g1");
@@ -165,14 +172,14 @@ describe("what a window keeps between runs", () => {
         const storage = persistenceFake();
         storage.write({
             entries: [
-                { kind: "rig", rigId: "r1" },
-                { kind: "somethingThisBuildRemoved", rigId: "r1" },
-                { kind: "group", rigId: "r1", groupId: "g1" },
+                { kind: "happyAgent", happyAgentId: "r1" },
+                { kind: "somethingThisBuildRemoved", happyAgentId: "r1" },
+                { kind: "group", happyAgentId: "r1", groupId: "g1" },
             ],
             index: 2,
         });
 
-        const history = rigHistoryCreate({ persistence: storage });
+        const history = happyAgentHistoryCreate({ persistence: storage });
 
         expect(history.length).toBe(2);
         expect(stack(history)).toBe("/chats/r1/g1");
@@ -182,13 +189,13 @@ describe("what a window keeps between runs", () => {
         for (const damaged of [null, 42, "a string", {}, { entries: [] }, { entries: "no" }]) {
             const storage = persistenceFake();
             storage.write(damaged);
-            expect(stack(rigHistoryCreate({ persistence: storage }))).toBe("/");
+            expect(stack(happyAgentHistoryCreate({ persistence: storage }))).toBe("/");
         }
     });
 
     it("does not let an archived place survive in the record", () => {
         const storage = persistenceFake();
-        const history = rigHistoryCreate({ persistence: storage });
+        const history = happyAgentHistoryCreate({ persistence: storage });
         history.push("/chats/r1");
         history.push("/chats/r1/g1/c1");
 
@@ -207,7 +214,7 @@ describe("what a window keeps between runs", () => {
  */
 describe("the document's own history", () => {
     it("is not a second way to move", () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1");
 
         window.dispatchEvent(new PopStateEvent("popstate", { state: { happyTicket: 0 } }));
@@ -217,7 +224,7 @@ describe("the document's own history", () => {
 
     it("does not grow an entry per step this window takes", () => {
         const before = window.history.length;
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1");
         history.push("/chats/r1/g1");
         history.push("/chats/r1/g1/c1");
@@ -234,7 +241,7 @@ describe("the document's own history", () => {
  */
 describe("an address arriving in the document's URL", () => {
     it("is somewhere to go, not something to ignore", async () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1");
 
         window.location.hash = "/chats/r1/g9";
@@ -244,7 +251,7 @@ describe("an address arriving in the document's URL", () => {
     });
 
     it("is not acted on when it only reflects where the window already is", async () => {
-        const history = rigHistoryCreate();
+        const history = happyAgentHistoryCreate();
         history.push("/chats/r1/g1");
         const before = history.length;
 
@@ -259,45 +266,47 @@ describe("an address arriving in the document's URL", () => {
 });
 
 describe("every place this window can address", () => {
-    const ALL: RigRoute[] = [
+    const ALL: HappyAgentRoute[] = [
         { kind: "home" },
         { kind: "chats" },
-        { kind: "rig", rigId: "r1" },
-        { kind: "group", groupId: "g1", rigId: "r1" },
-        { chatId: "c1", groupId: "g1", kind: "chat", rigId: "r1" },
-        { kind: "inbox", rigId: "r1" },
+        { kind: "happyAgent", happyAgentId: "r1" },
+        { kind: "group", groupId: "g1", happyAgentId: "r1" },
+        { chatId: "c1", groupId: "g1", kind: "chat", happyAgentId: "r1" },
+        { kind: "inbox", happyAgentId: "r1" },
         { kind: "blueprint" },
         { kind: "settings" },
         { kind: "settingsSection", section: "appearance" },
     ];
 
     it("survives being written as a path and read back", () => {
-        for (const route of ALL) expect(rigRoutePathParse(rigRoutePath(route))).toEqual(route);
+        for (const route of ALL)
+            expect(happyAgentRoutePathParse(happyAgentRoutePath(route))).toEqual(route);
     });
 
     it("keeps an identifier that looks like path syntax whole", () => {
-        const route: RigRoute = { groupId: "c?d#e", kind: "group", rigId: "a/b" };
-        expect(rigRoutePathParse(rigRoutePath(route))).toEqual(route);
+        const route: HappyAgentRoute = { groupId: "c?d#e", kind: "group", happyAgentId: "a/b" };
+        expect(happyAgentRoutePathParse(happyAgentRoutePath(route))).toEqual(route);
     });
 
     it("refuses a path that names no place", () => {
         for (const path of ["/nope", "/chats/a/b/c/d", "/inbox", "/blueprint/x", "relative"])
-            expect(rigRoutePathParse(path)).toBeUndefined();
+            expect(happyAgentRoutePathParse(path)).toBeUndefined();
     });
 });
 
-/** One connected Rig named `local`, whose workspace records what was applied. */
-function directory(applied: string[]): AppRigDirectoryStore {
+/** One connected Happy Agent named `local`, whose workspace records what was applied. */
+function directory(applied: string[]): AppHappyAgentDirectoryStore {
     const workspace = {
         get: () => ({ list: { projects: { type: "loading" } }, conversation: {} }),
         subscribe: () => () => undefined,
-        conversationOpen: (conversationId: RigSessionId) => applied.push(`open:${conversationId}`),
+        conversationOpen: (conversationId: HappyAgentSessionId) =>
+            applied.push(`open:${conversationId}`),
         conversationClose: () => applied.push("close"),
         groupOpen: (groupId: string) => applied.push(`group:${groupId}`),
         [Symbol.dispose]: () => undefined,
-    } as unknown as RigWorkspaceStore;
-    const snapshot: AppRigDirectorySnapshot = {
-        rigs: [
+    } as unknown as HappyAgentWorkspaceStore;
+    const snapshot: AppHappyAgentDirectorySnapshot = {
+        happyAgents: [
             {
                 id: "local",
                 label: "This Mac",
@@ -305,27 +314,27 @@ function directory(applied: string[]): AppRigDirectoryStore {
                 session: { workspace },
             },
         ],
-    } as unknown as AppRigDirectorySnapshot;
+    } as unknown as AppHappyAgentDirectorySnapshot;
     return {
         get: () => snapshot,
         subscribe: () => () => undefined,
-        rigActivate: () => undefined,
-    } as unknown as AppRigDirectoryStore;
+        happyAgentActivate: () => undefined,
+    } as unknown as AppHappyAgentDirectoryStore;
 }
 
 describe("the router the window actually renders", () => {
     /** A router standing where the given addresses left it. */
     async function routerAt(...addresses: readonly string[]) {
         const applied: string[] = [];
-        const history = rigHistoryCreate();
-        const router = rigRouterCreate(history);
+        const history = happyAgentHistoryCreate();
+        const router = happyAgentRouterCreate(history);
         onTestFinished(() => router.history.destroy());
         router.update({
             context: {
                 appearance: appearanceStoreCreate(),
-                rigs: directory(applied),
-                settings: rigSettingsStoreCreate(),
-            } as RigRouterContext,
+                happyAgents: directory(applied),
+                settings: happyAgentSettingsStoreCreate(),
+            } as HappyAgentRouterContext,
         });
         await router.load();
         for (const address of addresses) {
@@ -342,11 +351,11 @@ describe("the router the window actually renders", () => {
         );
         expect(router.state.location.pathname).toBe("/chats/local/prj_one/ses_one");
 
-        rigRouterGroupForget(router, "local", "prj_one");
+        happyAgentRouterGroupForget(router, "local", "prj_one");
         await router.load();
 
         // The address the window shows is one that still exists, and it is all
-        // that is left: the window opened on `/`, which redirects onto the Rig's
+        // that is left: the window opened on `/`, which redirects onto the Happy Agent's
         // own list in place, so the two addresses inside the project were the
         // only other things the stack held.
         expect(router.state.location.pathname).toBe("/chats/local");
@@ -356,7 +365,7 @@ describe("the router the window actually renders", () => {
     it("does not move a reader who is looking at something else", async () => {
         const { router } = await routerAt("/chats/local/prj_one", "/settings/general");
 
-        rigRouterGroupForget(router, "local", "prj_one");
+        happyAgentRouterGroupForget(router, "local", "prj_one");
         await router.load();
 
         expect(router.state.location.pathname).toBe("/settings/general");
@@ -365,7 +374,7 @@ describe("the router the window actually renders", () => {
     it("does not move anyone when another machine's group is archived", async () => {
         const { router } = await routerAt("/chats/local/prj_one/ses_one");
 
-        rigRouterGroupForget(router, "other-machine", "prj_one");
+        happyAgentRouterGroupForget(router, "other-machine", "prj_one");
         await router.load();
 
         expect(router.state.location.pathname).toBe("/chats/local/prj_one/ses_one");

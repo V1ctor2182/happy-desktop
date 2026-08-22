@@ -2,7 +2,7 @@
  * Whether activity is also reported by a band of light travelling through
  * session, project, and workspace titles.
  *
- * This is the window's own visual choice rather than a Rig setting. Its stored
+ * This is the window's own visual choice rather than a Happy Agent setting. Its stored
  * document is deliberately an optional override: a release may change the
  * product default for everyone who has never chosen, while a reader who has
  * chosen keeps exactly what they asked for.

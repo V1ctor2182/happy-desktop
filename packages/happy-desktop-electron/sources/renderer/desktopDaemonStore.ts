@@ -1,7 +1,7 @@
-import type { AppRigDaemonSnapshot, AppRigDaemonStore } from "happy-desktop-app";
+import type { AppHappyAgentDaemonSnapshot, AppHappyAgentDaemonStore } from "happy-desktop-app";
 import type { DesktopDaemonSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 
-const initial: AppRigDaemonSnapshot = {
+const initial: AppHappyAgentDaemonSnapshot = {
     install: { phase: "idle" },
     managed: true,
     operation: "checking",
@@ -11,13 +11,13 @@ const initial: AppRigDaemonSnapshot = {
 };
 
 /** Adapts the narrow native daemon bridge into the settings surface store. */
-export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppRigDaemonStore {
+export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppHappyAgentDaemonStore {
     const listeners = new Set<() => void>();
     let snapshot = initial;
     let unsubscribe: (() => void) | undefined;
     let eventReceived = false;
 
-    const publish = (next: AppRigDaemonSnapshot): void => {
+    const publish = (next: AppHappyAgentDaemonSnapshot): void => {
         snapshot = next;
         for (const listener of listeners) listener();
     };
@@ -114,7 +114,7 @@ export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppRigDaem
     };
 }
 
-function daemonProject(snapshot: DesktopDaemonSnapshot): AppRigDaemonSnapshot {
+function daemonProject(snapshot: DesktopDaemonSnapshot): AppHappyAgentDaemonSnapshot {
     return {
         ...(snapshot.availableVersion ? { availableVersion: snapshot.availableVersion } : {}),
         ...(snapshot.error ? { error: snapshot.error } : {}),

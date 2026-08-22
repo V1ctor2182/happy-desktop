@@ -1,8 +1,8 @@
-import type { AppRigProfilerSnapshot, AppRigProfilerStore } from "happy-desktop-app";
+import type { AppHappyAgentProfilerSnapshot, AppHappyAgentProfilerStore } from "happy-desktop-app";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
 import type { DesktopProfilerSnapshot } from "../shared/desktopProfiler";
 
-const initialSnapshot: AppRigProfilerSnapshot = {
+const initialSnapshot: AppHappyAgentProfilerSnapshot = {
     capabilities: {
         liveDebuggerAttach: false,
         nativeTrace: false,
@@ -14,7 +14,7 @@ const initialSnapshot: AppRigProfilerSnapshot = {
     status: "unavailable",
 };
 
-export function desktopProfilerStoreCreate(bridge: HappyDesktopBridge): AppRigProfilerStore {
+export function desktopProfilerStoreCreate(bridge: HappyDesktopBridge): AppHappyAgentProfilerStore {
     let snapshot = initialSnapshot;
     const listeners = new Set<() => void>();
     let closeBridge: (() => void) | undefined;

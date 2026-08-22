@@ -1,11 +1,11 @@
 import {
     type HappyAgentClient,
-    type RigProviderModelTokenUsage,
-    type RigProviderTokenCounts,
-    type RigProviderUsageEntry,
-    type RigProviderUsageReading,
-    type RigProviderUsageSource,
-    type RigProviderUsageWindow,
+    type HappyAgentProviderModelTokenUsage,
+    type HappyAgentProviderTokenCounts,
+    type HappyAgentProviderUsageEntry,
+    type HappyAgentProviderUsageReading,
+    type HappyAgentProviderUsageSource,
+    type HappyAgentProviderUsageWindow,
     type happyAgentProtocol,
 } from "happy-desktop-state";
 
@@ -16,13 +16,15 @@ type UsageWindow = "hour" | "day" | "week" | "month";
 const WINDOWS: readonly UsageWindow[] = ["hour", "day", "week", "month"];
 
 /** Reads daemon token usage only while the Usage settings category is observed. */
-export function happyAgentUsageSourceCreate(client: HappyAgentClient): RigProviderUsageSource {
+export function happyAgentUsageSourceCreate(
+    client: HappyAgentClient,
+): HappyAgentProviderUsageSource {
     return {
         subscribe(listener) {
             let closed = false;
             let loading = false;
             let request: AbortController | undefined;
-            let providers: readonly RigProviderUsageEntry[] = [];
+            let providers: readonly HappyAgentProviderUsageEntry[] = [];
             let loadedAt: number | undefined;
 
             const load = (): void => {
@@ -66,7 +68,7 @@ export function happyAgentUsageSourceCreate(client: HappyAgentClient): RigProvid
 function usageProject(
     usage: happyAgentProtocol.DaemonUsageResponse,
     capturedAt: number,
-): readonly RigProviderUsageEntry[] {
+): readonly HappyAgentProviderUsageEntry[] {
     const providersById = new Map(
         (usage.providers ?? []).map((provider) => [provider.providerId, provider]),
     );
@@ -97,8 +99,8 @@ function usageProject(
 
 function accountUsageProject(
     usage: happyAgentProtocol.ProviderAccountUsage,
-    models: readonly RigProviderModelTokenUsage[],
-): RigProviderUsageReading {
+    models: readonly HappyAgentProviderModelTokenUsage[],
+): HappyAgentProviderUsageReading {
     const fiveHour = windowProject(usage.windows.fiveHour);
     const weekly = windowProject(usage.windows.weekly);
     const monthly = windowProject(usage.windows.monthly);
@@ -129,7 +131,7 @@ function accountUsageProject(
 
 function windowProject(
     window: happyAgentProtocol.ProviderAccountUsageWindow | null,
-): RigProviderUsageWindow | undefined {
+): HappyAgentProviderUsageWindow | undefined {
     if (window === null) return undefined;
     return {
         usedPercent: window.usedPercent,
@@ -143,7 +145,7 @@ function modelsProject(
     usage: happyAgentProtocol.DaemonUsageResponse,
     providerId: string,
     configuredModelIds: readonly string[],
-): readonly RigProviderModelTokenUsage[] {
+): readonly HappyAgentProviderModelTokenUsage[] {
     // The provider entry is the authoritative complete catalog. Rolling token
     // windows are deliberately sparse, so deriving rows from them alone hides
     // every model that has not spent tokens during the reported periods.
@@ -153,7 +155,7 @@ function modelsProject(
 
     return [...modelIds]
         .map(
-            (modelId): RigProviderModelTokenUsage => ({
+            (modelId): HappyAgentProviderModelTokenUsage => ({
                 modelId,
                 ...countsFor(usage.hour, providerId, modelId, "hour"),
                 ...countsFor(usage.day, providerId, modelId, "day"),
@@ -172,7 +174,7 @@ function modelsProject(
 }
 
 /** Everything one model consumed over the widest window the daemon reports. */
-function monthTokens(model: RigProviderModelTokenUsage): number {
+function monthTokens(model: HappyAgentProviderModelTokenUsage): number {
     const counts = model.month;
     if (counts === undefined) return 0;
     return (
@@ -185,12 +187,12 @@ function countsFor(
     providerId: string,
     modelId: string,
     window: UsageWindow,
-): Partial<Record<UsageWindow, RigProviderTokenCounts>> {
+): Partial<Record<UsageWindow, HappyAgentProviderTokenCounts>> {
     const counts = usage[providerId]?.[modelId];
     return counts === undefined ? {} : { [window]: tokenCountsProject(counts) };
 }
 
-function tokenCountsProject(counts: happyAgentProtocol.ModelUsage): RigProviderTokenCounts {
+function tokenCountsProject(counts: happyAgentProtocol.ModelUsage): HappyAgentProviderTokenCounts {
     return {
         cacheReadTokens: counts.cacheRead,
         cacheWriteTokens: counts.cacheWrite,

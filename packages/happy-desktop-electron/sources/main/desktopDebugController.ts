@@ -27,7 +27,7 @@ const stopped: DesktopDebugTargetSnapshot = { status: "stopped" };
  *
  * Operations serialize per target but remain independent across targets, so
  * Start all can bring up every runtime concurrently and show a truthful partial
- * result if, for example, Rig is disconnected while Happy itself is debuggable.
+ * result if, for example, Happy Agent is disconnected while Happy itself is debuggable.
  */
 export class DesktopDebugController {
     readonly #options: DesktopDebugControllerOptions;
@@ -75,7 +75,7 @@ export class DesktopDebugController {
                     previous.status === "stopped"
                         ? stopped
                         : {
-                              error: "Rig disconnected; its inspector may still be listening. Reconnect to stop it.",
+                              error: "Happy Agent disconnected; its inspector may still be listening. Reconnect to stop it.",
                               status: "unavailable",
                               ...(previous.url ? { url: previous.url } : {}),
                           },
@@ -110,9 +110,9 @@ export class DesktopDebugController {
                 const daemon = this.#options.daemon();
                 if (!daemon) {
                     const previous = this.#targets.daemon;
-                    if (!previous.url) throw new Error("The local Rig is not connected.");
+                    if (!previous.url) throw new Error("The local Happy Agent is not connected.");
                     this.#targetSet("daemon", {
-                        error: "Rig is disconnected; its inspector may still be listening. Reconnect to stop it.",
+                        error: "Happy Agent is disconnected; its inspector may still be listening. Reconnect to stop it.",
                         status: "unavailable",
                         url: previous.url,
                     });
@@ -129,7 +129,7 @@ export class DesktopDebugController {
                               url: result.inspectorUrl,
                           }
                         : {
-                              error: "Rig disconnected after starting; its inspector may still be listening. Reconnect to stop it.",
+                              error: "Happy Agent disconnected after starting; its inspector may still be listening. Reconnect to stop it.",
                               status: "unavailable",
                               url: result.inspectorUrl,
                           },
@@ -182,7 +182,7 @@ export class DesktopDebugController {
                         "daemon",
                         previous.url
                             ? {
-                                  error: "Rig is disconnected; its inspector may still be listening. Reconnect to stop it.",
+                                  error: "Happy Agent is disconnected; its inspector may still be listening. Reconnect to stop it.",
                                   status: "unavailable",
                                   url: previous.url,
                               }

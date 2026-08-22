@@ -6,6 +6,6 @@ export * from "./happyAgentProtocol.js";
 export * from "./inferenceServer.js";
 export * from "./manifest.js";
 export * from "./paths.js";
-export * from "./rigRuntime.js";
+export * from "./happyAgentRuntime.js";
 export * from "./types.js";
 export * from "./workloads.js";

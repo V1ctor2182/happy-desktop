@@ -136,7 +136,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
                     // Persisting that object once per request makes the
                     // diagnostic log grow quadratically with history (the
                     // realistic seed reached multiple gigabytes before 200
-                    // calls). Durable history is already persisted by Rig;
+                    // calls). Durable history is already persisted by Happy Agent;
                     // the Gym log keeps bounded, synthetic request evidence.
                     contextSummary: contextSummaryRead(payload.context),
                 })}\n`,
@@ -164,7 +164,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
             const summary = contextSummaryRead(request.context);
             return {
                 content: [{ type: "text", text: "Gym compacted deterministic context." }],
-                // Rig retains the complete transcript separately. The
+                // Happy Agent retains the complete transcript separately. The
                 // provider context only needs a small native checkpoint so
                 // subsequent seed turns do not re-serialize every prior
                 // response and exhaust the daemon's heap.
@@ -201,7 +201,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
             typeof request.options.sessionId === "string" ? request.options.sessionId : undefined;
         const liveTool = this.liveToolResponseNeeded(latestUserText, sessionId);
         if (liveTool) {
-            // Rig invokes the provider again after executing a tool call. Keep
+            // Happy Agent invokes the provider again after executing a tool call. Keep
             // the deterministic script finite: one tool block per stable
             // prompt marker, followed by a terminal text-only response.
             this.#toolCallEmittedScriptKeys.add(scriptKey);
@@ -266,7 +266,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
                     textDeltaChunkSize: 16,
                     textDeltaDelayMs: 24,
                     // Keep the generic running row painted long enough for the
-                    // frame probe to establish its real geometry before Rig
+                    // frame probe to establish its real geometry before Happy Agent
                     // replaces it with the file-diff presentation.
                     toolCallDeltaDelayMs: 600,
                     completionDelayMs: 20,
@@ -301,7 +301,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
             });
         }
         content.push({ type: "text", text });
-        // Replay responses must stay thinking+text only. Rig asks the provider
+        // Replay responses must stay thinking+text only. Happy Agent asks the provider
         // again after a tool result, and treating every replay inference as a
         // tool request creates an unbounded tool → inference loop. History
         // tool-heavy turns may retain one deterministic tool call per script,
@@ -433,7 +433,7 @@ function deterministicThinking(
         `profile=${manifest.profile}`,
         `script=${scriptKey}`,
         `session=${sessionId ?? "unknown"}`,
-        "This thinking payload is intentionally chunked so foreground UI work overlaps durable Rig streaming.",
+        "This thinking payload is intentionally chunked so foreground UI work overlaps durable Happy Agent streaming.",
         "The mixed lane keeps this stream correlated with session switches, transcript scrolls, and file watcher updates.",
     ].join(" · ");
 }

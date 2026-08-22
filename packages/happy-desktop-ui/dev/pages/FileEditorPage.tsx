@@ -154,8 +154,8 @@ export function FileEditorPage() {
                 )}
             </Specimen>
             <Specimen
-                detail="known Rig offline · the unsaved draft remains editable · persistence waits for reconnect"
-                label="Rig offline"
+                detail="known Happy Agent offline · the unsaved draft remains editable · persistence waits for reconnect"
+                label="Happy Agent offline"
                 number="05"
                 stage="surface"
             >
@@ -168,7 +168,7 @@ export function FileEditorPage() {
                         onValueChange={() => {}}
                         path="src/components/Counter.tsx"
                         saveDisabled
-                        status="Rig is offline. Draft preserved locally."
+                        status="Happy Agent is offline. Draft preserved locally."
                         value={sample.replace("Count:", "Total:")}
                     />,
                     420,

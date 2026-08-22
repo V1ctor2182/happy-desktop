@@ -71,7 +71,7 @@ export function ConnectionHeaderPage() {
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     <div style={frame}>
-                        <ConnectionHeader message="This Rig connection is closed." />
+                        <ConnectionHeader message="This Happy Agent connection is closed." />
                         <div style={body}>The app, still fully usable</div>
                     </div>
                     <DimensionRule label="Alert glyph replaces the spinner" />
@@ -79,7 +79,7 @@ export function ConnectionHeaderPage() {
             </Specimen>
 
             <Specimen
-                detail="As the window's top edge · 78px kept clear for the macOS traffic lights, mirrored on the right so the line stays on the window's centre, and the band is the drag lane"
+                detail="As the window's top edge · the title bar's own 40px, so the traffic lights land centred in it, with 78px kept clear for them and mirrored on the right so the line stays on the window's centre. The band is the drag lane."
                 label="Window controls"
                 number="04"
                 stage="chrome"
@@ -93,14 +93,34 @@ export function ConnectionHeaderPage() {
                         />
                         <div style={body}>The app, below the window chrome</div>
                     </div>
-                    <DimensionRule label="78px reservation both sides · line centred on the window" />
+                    <DimensionRule label="Band 40px · 78px reservation both sides · line centred on the window" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Full screen · the traffic lights are gone, so the band keeps nothing clear of them and goes back to its own short height"
+                label="Full screen"
+                number="05"
+                stage="chrome"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <ConnectionHeader
+                            message="This Mac is unreachable."
+                            retrying
+                            windowControls
+                            windowFullScreen
+                        />
+                        <div style={body}>The app, below a band of ordinary height</div>
+                    </div>
+                    <DimensionRule label="Band 32px · no reservation · still the drag lane" />
                 </div>
             </Specimen>
 
             <Specimen
                 detail="A long reason truncates rather than growing the band to two lines"
                 label="Long message"
-                number="05"
+                number="06"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>

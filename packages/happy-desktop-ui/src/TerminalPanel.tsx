@@ -31,14 +31,14 @@ export interface TerminalPanelProps {
     error?: string;
     exitCode?: number | null;
     /**
-     * Availability of the Rig that owns this terminal, independently of the
+     * Availability of the Happy Agent that owns this terminal, independently of the
      * terminal session's own status. A missing value is treated as available.
      * Reconnecting and unavailable terminals retain their grid as a readable,
      * selectable surface but stop forwarding input and PTY resize requests.
      */
-    rigAvailability?: "available" | "reconnecting" | "unavailable";
-    /** Human-readable context for a degraded Rig, such as the last route error. */
-    rigAvailabilityReason?: string;
+    happyAgentAvailability?: "available" | "reconnecting" | "unavailable";
+    /** Human-readable context for a degraded Happy Agent, such as the last route error. */
+    happyAgentAvailabilityReason?: string;
     /**
      * Fixed height in pixels, for a terminal docked at the bottom of a surface it
      * shares with other content. Omitting it — together with `onHeightChange` —
@@ -114,13 +114,13 @@ export function TerminalPanel(props: TerminalPanelProps) {
     const previousScrollbackTail = useRef<TerminalRowSnapshot | undefined>(undefined);
     const [focused, focusedSet] = useState(false);
     const visualAvailability =
-        props.rigAvailability ??
+        props.happyAgentAvailability ??
         (props.status === "connected"
             ? undefined
             : props.status === "connecting"
               ? ("reconnecting" as const)
               : ("unavailable" as const));
-    // A terminal transport failure has the same byte-safety rule as a whole-Rig
+    // A terminal transport failure has the same byte-safety rule as a whole-Happy Agent
     // outage: keep the grid, but never enqueue input while no live PTY can accept it.
     const readOnly = visualAvailability === "reconnecting" || visualAvailability === "unavailable";
     // Whether new output should keep scrolling the screen into view. A terminal
@@ -147,7 +147,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
     useLayoutEffect(() => {
         if (!collapsed) inputFocus();
     }, [collapsed]);
-    // A Rig outage can begin while its terminal owns keyboard capture. Release
+    // A Happy Agent outage can begin while its terminal owns keyboard capture. Release
     // that invisible field immediately without disturbing selection in the
     // retained grid, and do not steal focus back merely because the route heals.
     // eslint-disable-next-line happy2-react/no-layout-effect -- synchronously release the imperative terminal capture field when it becomes read-only
@@ -351,7 +351,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
     }
     const cursor = props.grid?.cursor;
     const scrollback = props.grid?.scrollback ?? [];
-    const availability = rigAvailabilityLabel(props);
+    const availability = happyAgentAvailabilityLabel(props);
     const notice = noticeLabel(props);
     return (
         <section
@@ -359,7 +359,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
             data-collapsed={collapsed ? "" : undefined}
             data-fill={height === undefined ? "" : undefined}
             data-happy-desktop-ui="terminal-panel"
-            data-rig-availability={readOnly ? visualAvailability : undefined}
+            data-happy-agent-availability={readOnly ? visualAvailability : undefined}
             style={
                 collapsed
                     ? undefined
@@ -640,7 +640,7 @@ function terminalKeySequence(
  * also where its Reconnect control lives.
  */
 function noticeLabel(props: TerminalPanelProps): string | undefined {
-    const availability = rigAvailabilityLabel(props);
+    const availability = happyAgentAvailabilityLabel(props);
     if (props.error) return availability ? `${props.error} · ${availability}` : props.error;
     if (props.status === "exited") {
         const exited = `Exited ${props.exitCode ?? ""}`.trim();
@@ -651,9 +651,14 @@ function noticeLabel(props: TerminalPanelProps): string | undefined {
     return availability;
 }
 
-function rigAvailabilityLabel(props: TerminalPanelProps): string | undefined {
-    if (props.rigAvailability === undefined || props.rigAvailability === "available") return;
+function happyAgentAvailabilityLabel(props: TerminalPanelProps): string | undefined {
+    if (props.happyAgentAvailability === undefined || props.happyAgentAvailability === "available")
+        return;
     const status =
-        props.rigAvailability === "reconnecting" ? "Rig reconnecting" : "Rig unavailable";
-    return props.rigAvailabilityReason ? `${status}: ${props.rigAvailabilityReason}` : status;
+        props.happyAgentAvailability === "reconnecting"
+            ? "HappyAgent reconnecting"
+            : "HappyAgent unavailable";
+    return props.happyAgentAvailabilityReason
+        ? `${status}: ${props.happyAgentAvailabilityReason}`
+        : status;
 }

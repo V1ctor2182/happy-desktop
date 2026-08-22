@@ -16,7 +16,7 @@ const transcript: CSSProperties = {
 /**
  * One session waiting on its machine: the provider is asked for an instance, the
  * image is pulled, the workspace is copied, and the agent finally gets a place to
- * work. Every value is shaped exactly as Rig's compute preparation notice sends
+ * work. Every value is shaped exactly as Happy Agent's compute preparation notice sends
  * it, so the fixture and the product row are the same row.
  */
 const preparation: readonly ConversationComputeNoticeEntry[] = [

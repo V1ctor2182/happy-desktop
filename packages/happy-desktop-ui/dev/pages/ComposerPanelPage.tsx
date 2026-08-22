@@ -1,13 +1,13 @@
 import type {
-    RigBackgroundProcess,
-    RigGoal,
-    RigSessionUsage,
-    RigSubagentSummary,
-    RigTask,
+    HappyAgentBackgroundProcess,
+    HappyAgentGoal,
+    HappyAgentSessionUsage,
+    SubagentSummary,
+    HappyAgentTask,
 } from "happy-desktop-state";
 import { ComposerPanel } from "../../src/ComposerPanel";
-import { RigActivityPanel } from "../../src/RigActivityPanel";
-import { RigUsagePanel } from "../../src/RigUsagePanel";
+import { HappyAgentActivityPanel } from "../../src/HappyAgentActivityPanel";
+import { HappyAgentUsagePanel } from "../../src/HappyAgentUsagePanel";
 import { ComponentPage, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -16,14 +16,14 @@ export const componentNumber = "C-249";
 // Fixed "now" keeps subagent elapsed timing and quota resets deterministic.
 const NOW = Date.UTC(2026, 6, 25, 17, 0, 0);
 
-const goal: RigGoal = {
+const goal: HappyAgentGoal = {
     objective: "Keep every session readout out of the transcript's way.",
     status: "active",
     createdAt: NOW - 3_600_000,
     updatedAt: NOW - 60_000,
 };
 
-const tasks: readonly RigTask[] = [
+const tasks: readonly HappyAgentTask[] = [
     {
         id: "t1",
         subject: "Move the readouts above the composer",
@@ -44,9 +44,9 @@ const tasks: readonly RigTask[] = [
 ];
 
 /** Enough subagents that the card's bound is what decides its height. */
-const subagents: readonly RigSubagentSummary[] = Array.from({ length: 6 }, (_value, index) => ({
-    id: `sub-${String(index + 1)}` as RigSubagentSummary["id"],
-    parentSessionId: "s1" as RigSubagentSummary["parentSessionId"],
+const subagents: readonly SubagentSummary[] = Array.from({ length: 6 }, (_value, index) => ({
+    id: `sub-${String(index + 1)}` as SubagentSummary["id"],
+    parentSessionId: "s1" as SubagentSummary["parentSessionId"],
     description: "Adversarial review of the session title",
     taskName: `adversarial_review_${String(index + 1)}`,
     modelId: "openai/gpt-5.6-sol",
@@ -60,7 +60,7 @@ const subagents: readonly RigSubagentSummary[] = Array.from({ length: 6 }, (_val
         "The generic parse error rules out the simple path: that one emits a provider error with a specific message before parsing.",
 }));
 
-const backgroundProcesses: readonly RigBackgroundProcess[] = [
+const backgroundProcesses: readonly HappyAgentBackgroundProcess[] = [
     {
         id: 1,
         command: "pnpm --dir packages/happy-desktop-electron dev",
@@ -69,7 +69,7 @@ const backgroundProcesses: readonly RigBackgroundProcess[] = [
     },
 ];
 
-const usage: RigSessionUsage = {
+const usage: HappyAgentSessionUsage = {
     currentProviderId: "openai",
     groups: [
         {
@@ -116,7 +116,7 @@ export function ComposerPanelPage() {
             >
                 <div style={{ width: "560px" }}>
                     <ComposerPanel onClose={() => undefined} title="Session activity">
-                        <RigActivityPanel
+                        <HappyAgentActivityPanel
                             backgroundProcesses={backgroundProcesses}
                             goal={goal}
                             now={NOW}
@@ -140,7 +140,7 @@ export function ComposerPanelPage() {
                         status="Updating…"
                         title="Session usage"
                     >
-                        <RigUsagePanel loading usage={usage} />
+                        <HappyAgentUsagePanel loading usage={usage} />
                     </ComposerPanel>
                 </div>
             </Specimen>
@@ -153,7 +153,7 @@ export function ComposerPanelPage() {
             >
                 <div style={{ width: "560px" }}>
                     <ComposerPanel onClose={() => undefined} title="Session activity">
-                        <RigActivityPanel
+                        <HappyAgentActivityPanel
                             backgroundProcesses={[]}
                             now={NOW}
                             subagents={[]}
@@ -171,7 +171,7 @@ export function ComposerPanelPage() {
             >
                 <div style={{ width: "880px" }}>
                     <ComposerPanel onClose={() => undefined} title="Session activity">
-                        <RigActivityPanel
+                        <HappyAgentActivityPanel
                             backgroundProcesses={backgroundProcesses}
                             now={NOW}
                             onBackgroundProcessStop={() => undefined}
@@ -190,7 +190,7 @@ export function ComposerPanelPage() {
             >
                 <div style={{ width: "360px" }}>
                     <ComposerPanel onClose={() => undefined} title="Session activity">
-                        <RigActivityPanel
+                        <HappyAgentActivityPanel
                             backgroundProcesses={backgroundProcesses}
                             now={NOW}
                             onBackgroundProcessStop={() => undefined}

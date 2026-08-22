@@ -5,7 +5,7 @@
  * License: CC0-1.0 (no rights reserved).
  * Source: https://github.com/rocicorp/fractional-indexing
  *
- * Converted from JavaScript to TypeScript for Rig.
+ * Converted from JavaScript to TypeScript for Happy Agent.
  */
 
 export const BASE_62_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";

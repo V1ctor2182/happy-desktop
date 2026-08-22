@@ -14,7 +14,7 @@
 ## What Happy is
 
 Happy is a macOS desktop workspace for doing serious work with coding agents.
-It connects to the local Happy Agent (Rig) daemon and turns that connection
+It connects to the local Happy Agent (Happy Agent) daemon and turns that connection
 into a complete working environment: your projects and workspaces in the
 sidebar, durable agent conversations in the middle, and the files, terminals,
 and previews the work actually touches beside them.
@@ -43,7 +43,7 @@ running, come back later, and pick up exactly where it left off.
 ## Local by design
 
 Happy has no hosted account, no central service, and no telemetry. The app is
-an Electron shell that starts or attaches to your normal local Rig daemon and
+an Electron shell that starts or attaches to your normal local Happy Agent daemon and
 talks to it over an authenticated local boundary — the same
 `happy-agent-client` protocol throughout, whether the renderer runs in the
 desktop shell or in a browser during development.

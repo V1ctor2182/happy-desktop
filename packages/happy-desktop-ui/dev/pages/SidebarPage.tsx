@@ -665,9 +665,21 @@ const ALIGNMENT_WORKTREES: readonly {
         working: false,
     },
     { added: 3504, deleted: 907, id: "file-viewer", label: "File viewer polish", working: true },
-    { added: 245, deleted: 82, id: "rig-documents", label: "Rig documents", working: false },
+    {
+        added: 245,
+        deleted: 82,
+        id: "happy-agent-documents",
+        label: "Happy Agent documents",
+        working: false,
+    },
     { added: 1200, deleted: 34, id: "slots", label: "Contribution slots", working: false },
-    { added: 96, deleted: 0, id: "multirigs", label: "Multirigs", working: false },
+    {
+        added: 96,
+        deleted: 0,
+        id: "multiple-happy-agents",
+        label: "Multiple Happy Agents",
+        working: false,
+    },
     { added: 12800, deleted: 4310, id: "portless", label: "Portless loopback", working: false },
 ];
 
@@ -825,7 +837,7 @@ function sketchCount(lines: number): string {
 /** The rows a machine's section holds, reused by each heading-action state. */
 const HEADING_ACTION_ITEMS: SidebarItem[] = [
     { id: "happy2", initials: "H", kind: "project", label: "happy2" },
-    { id: "rig", initials: "R", kind: "project", label: "rig" },
+    { id: "happy-agent", initials: "H", kind: "project", label: "happy-agent" },
 ];
 
 const HEADING_ACTION_STATES: readonly {
@@ -838,7 +850,7 @@ const HEADING_ACTION_STATES: readonly {
         rule: "18 px control · always visible · glyph 12",
         section: {
             action: { icon: "plus", label: "Add project", reveal: "always" },
-            id: "rig:local",
+            id: "happy-agent:local",
             items: HEADING_ACTION_ITEMS,
             label: "This Mac",
         },
@@ -848,7 +860,7 @@ const HEADING_ACTION_STATES: readonly {
         rule: "spinner 12 in the 18 px control · not pressable",
         section: {
             action: { busy: true, icon: "plus", label: "Add project", reveal: "always" },
-            id: "rig:local",
+            id: "happy-agent:local",
             items: HEADING_ACTION_ITEMS,
             label: "This Mac",
         },
@@ -859,7 +871,7 @@ const HEADING_ACTION_STATES: readonly {
         section: {
             action: { icon: "plus", label: "Add project", reveal: "always" },
             error: "“notes” is not a Git repository. Add a folder with a repository in it.",
-            id: "rig:local",
+            id: "happy-agent:local",
             items: HEADING_ACTION_ITEMS,
             label: "This Mac",
         },

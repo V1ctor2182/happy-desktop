@@ -50,7 +50,7 @@ export function terminalDriverCreateWith(emulatorCreate: EmulatorCreate): Termin
 }
 
 /**
- * The terminal driver `happy-desktop-state` needs: it owns the Rig binary protocol
+ * The terminal driver `happy-desktop-state` needs: it owns the Happy Agent binary protocol
  * client, the Ghostty WebAssembly emulator that parses live VT output, and the
  * reconnect loop. The store only issues intents and receives normalized grid
  * snapshots, so the protocol library and Node stream types stay in the app.
@@ -349,7 +349,7 @@ function safeReconnectState(
     }
 }
 
-/** Converts a Rig semantic grid recovery frame into the normalized render model. */
+/** Converts a Happy Agent semantic grid recovery frame into the normalized render model. */
 function gridStateToSnapshot(state: RemoteTerminalGridState): TerminalGridSnapshot {
     const palette = state.palette;
     const styles = state.styles;

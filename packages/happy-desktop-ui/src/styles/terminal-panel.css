@@ -73,7 +73,7 @@
 /*
  * A running terminal has no chrome: the tab already names it, and its own first
  * line says where it is, so a title bar above the grid only repeated both. What
- * remains is a line that appears when the session is dead or its Rig is
+ * remains is a line that appears when the session is dead or its HappyAgent is
  * degraded — the one thing the grid cannot say for itself — carrying the
  * Reconnect control with it.
  */
@@ -169,21 +169,21 @@
 }
 
 /*
- * A terminal owned by a reconnecting or unavailable Rig retains the exact same
+ * A terminal owned by a reconnecting or unavailable HappyAgent retains the exact same
  * grid DOM and scrollport. Solid secondary ink and the ordinary surface token
  * remove live ANSI emphasis without opacity/filter tricks, so selection, copy,
  * history, and links stay fully usable in either appearance.
  */
-.happy2-terminal-panel[data-rig-availability] .happy2-terminal-panel__rows {
+.happy2-terminal-panel[data-happy-agent-availability] .happy2-terminal-panel__rows {
     color: var(--text-secondary);
 }
 
-.happy2-terminal-panel[data-rig-availability] .happy2-terminal-panel__cell {
+.happy2-terminal-panel[data-happy-agent-availability] .happy2-terminal-panel__cell {
     color: inherit !important;
     background: var(--surface) !important;
 }
 
-.happy2-terminal-panel[data-rig-availability] .happy2-terminal-panel__cursor {
+.happy2-terminal-panel[data-happy-agent-availability] .happy2-terminal-panel__cursor {
     background: transparent;
     box-shadow: inset 0 0 0 1px var(--text-secondary);
     opacity: 1;

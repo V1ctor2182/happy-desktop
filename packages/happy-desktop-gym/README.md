@@ -7,8 +7,8 @@ isolated, host-native Electron performance gym for Happy Agent.
 
 The gym creates a disposable run under
 `.context/happy-desktop-gym/runs/<profile>-<uuid>` by default. It writes an
-ownership marker, temporary `HOME`/`TMPDIR`/Rig server directory/Electron
-user-data directory, deterministic Git repositories and real Rig worktrees,
+ownership marker, temporary `HOME`/`TMPDIR`/Happy Agent server directory/Electron
+user-data directory, deterministic Git repositories and real Happy Agent worktrees,
 then seeds agents and durable transcripts through the Happy Agent `/v0` API.
 It never writes daemon storage directly. Preparation proves the exact
 project/worktree catalog, durable agent transcript, and seeded-turn invariants
@@ -71,8 +71,8 @@ pnpm --dir packages/happy-desktop-gym gym:electron run \
   --workload window-edge-resize
 ```
 
-When Happy Desktop does not have a bundled Rig package, point the gym at an
-existing Rig build with `HAPPY_DESKTOP_RIG_ENTRYPOINT=/absolute/path/to/dist/main.js`.
+When Happy Desktop does not have a bundled Happy Agent package, point the gym at an
+existing Happy Agent build with `HAPPY_DESKTOP_AGENT_ENTRYPOINT=/absolute/path/to/dist/main.js`.
 
 `mixed-replay` is the end-to-end lane. It reads the existing
 `gold-five-minute-session.v1.json` recording for its real submitted-message

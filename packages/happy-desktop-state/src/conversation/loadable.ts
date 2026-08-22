@@ -2,7 +2,7 @@ import type { UserError } from "../types.js";
 
 /**
  * The one loading vocabulary for every product surface. Promoted out of the
- * chat module so the local (Rig) stack speaks it too instead of carrying its
+ * chat module so the local (Happy Agent) stack speaks it too instead of carrying its
  * own `"loading" | "ready" | "error"` string plus loose `error` fields.
  */
 export type Loadable<Value> =

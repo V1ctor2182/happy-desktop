@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
-/** Filesystem locations shared by Happy, Rig, and the Happy Agent daemon. */
+/** Filesystem locations shared by Happy, Happy Agent, and the Happy Agent daemon. */
 export interface HappyDaemonPaths {
     readonly agentDirectory: string;
     readonly binaryConfigPath: string;

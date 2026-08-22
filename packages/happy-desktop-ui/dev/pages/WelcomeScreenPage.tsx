@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { RigAppearanceChoice } from "../../src/pages/settings/RigGeneralSettings";
+import type { HappyAgentAppearanceChoice } from "../../src/pages/settings/HappyAgentGeneralSettings";
 import { ThemeScope } from "../../src/ThemeScope";
 import { WelcomeScreen, type WelcomeSlide } from "../../src/WelcomeScreen";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -41,7 +41,7 @@ const long: WelcomeSlide = {
     id: "long",
     art: { kind: "scene", name: "owl" },
     title: "Everything you left running",
-    copy: "Sessions on this machine and on every machine your Rig is peered with come back to the same window, in the same order you left them, whether they finished while you were watching or overnight.",
+    copy: "Sessions on this machine and on every machine your Happy Agent is peered with come back to the same window, in the same order you left them, whether they finished while you were watching or overnight.",
 };
 
 const shortFirst = [clear, brand, agents, build] as const;
@@ -66,7 +66,7 @@ const noop = () => {};
  * app wires the same two props to the real window setting.
  */
 function AppearanceSpecimen() {
-    const [appearance, setAppearance] = useState<RigAppearanceChoice>("system");
+    const [appearance, setAppearance] = useState<HappyAgentAppearanceChoice>("system");
     return (
         <ThemeScope mode={appearance}>
             <WelcomeScreen

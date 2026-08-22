@@ -3,35 +3,35 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import {
     DesktopStartupScreen,
-    rigHistoryCreate,
-    rigRouterConversationOpen,
-    rigRouterGroupOpen,
-    rigRouterGroupForget,
-    rigRouterCreate,
-    type AppRigDaemonInstall,
-    type AppRigDaemonStore,
-    type AppRigUpdate,
-    type AppRigDebugStore,
-    type AppRigProfilerStore,
-    type RigRouter,
+    happyAgentHistoryCreate,
+    happyAgentRouterConversationOpen,
+    happyAgentRouterGroupOpen,
+    happyAgentRouterGroupForget,
+    happyAgentRouterCreate,
+    type AppHappyAgentDaemonInstall,
+    type AppHappyAgentDaemonStore,
+    type AppHappyAgentUpdate,
+    type AppHappyAgentDebugStore,
+    type AppHappyAgentProfilerStore,
+    type HappyAgentRouter,
 } from "happy-desktop-app";
 import {
-    RIG_DEFAULT_THINKING_LEVEL,
+    HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
     appearanceStoreCreate,
     experimentsStoreCreate,
     titleShimmerStoreCreate,
     welcomeStoreCreate,
-    rigNavigationOrderStoreCreate,
-    rigSidebarCollapseStoreCreate,
-    rigSettingsStoreCreate,
+    happyAgentNavigationOrderStoreCreate,
+    happyAgentSidebarCollapseStoreCreate,
+    happyAgentSettingsStoreCreate,
     type AppearanceStore,
     type ExperimentsStore,
     type WelcomeStore,
-    type RigNavigationOrderStore,
-    type RigSidebarCollapseStore,
-    type RigSettingsStore,
+    type HappyAgentNavigationOrderStore,
+    type HappyAgentSidebarCollapseStore,
+    type HappyAgentSettingsStore,
     type TitleShimmerStore,
-    type RigWindowStore,
+    type HappyAgentWindowStore,
 } from "happy-desktop-state";
 import {
     CodeHighlightWorkers,
@@ -64,7 +64,11 @@ import {
     localOnboardingView,
     type LocalOnboardingStore,
 } from "./localOnboardingStore";
-import { LOCAL_RIG_ID, rigDirectoryStoreCreate, type RigDirectoryStore } from "./rigDirectoryStore";
+import {
+    LOCAL_HAPPY_AGENT_ID,
+    happyAgentDirectoryStoreCreate,
+    type HappyAgentDirectoryStore,
+} from "./happyAgentDirectoryStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { localWebBuild } from "./localWebBuild";
@@ -94,7 +98,7 @@ import {
 
 /**
  * Hands one workspace file to the shell to show in a window of its own. The
- * shell decides whether the address is one of its Rigs' and refuses otherwise,
+ * shell decides whether the address is one of its Happy Agents' and refuses otherwise,
  * so a failure here is reported rather than retried against another route.
  */
 function desktopMediaWindowOpen(bridge: HappyDesktopBridge): MediaWindowOpener {
@@ -139,7 +143,7 @@ function desktopAppearanceSynchronize(
 
 interface WorkspaceUpdate {
     readonly action: "install" | "refresh";
-    readonly snapshot: AppRigUpdate;
+    readonly snapshot: AppHappyAgentUpdate;
 }
 
 function workspaceUpdate(
@@ -215,30 +219,30 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
 }
 
 /**
- * Mounts the workspace router as soon as this window has a Rig directory to
- * render. Which Rig is on screen — and whether it has connected yet — is the
+ * Mounts the workspace router as soon as this window has a Happy Agent directory to
+ * render. Which Happy Agent is on screen — and whether it has connected yet — is the
  * directory's business and the URL's, not this boundary's, so a machine that is
  * still connecting no longer holds the whole window on a startup screen.
  */
-function RigBoundary(props: {
+function HappyAgentBoundary(props: {
     appearance: AppearanceStore;
-    daemon?: AppRigDaemonStore;
-    debug: AppRigDebugStore;
-    profiler: AppRigProfilerStore;
+    daemon?: AppHappyAgentDaemonStore;
+    debug: AppHappyAgentDebugStore;
+    profiler: AppHappyAgentProfilerStore;
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
     platform: "desktop" | "web";
-    router: RigRouter;
-    navigationOrder: RigNavigationOrderStore;
-    sidebarCollapse: RigSidebarCollapseStore;
-    rigs: RigDirectoryStore;
-    settings: RigSettingsStore;
+    router: HappyAgentRouter;
+    navigationOrder: HappyAgentNavigationOrderStore;
+    sidebarCollapse: HappyAgentSidebarCollapseStore;
+    happyAgents: HappyAgentDirectoryStore;
+    settings: HappyAgentSettingsStore;
     titleShimmer: TitleShimmerStore;
     update?: WorkspaceUpdate;
-    windowState: RigWindowStore;
+    windowState: HappyAgentWindowStore;
 }) {
     const update = props.update;
     return (
@@ -268,7 +272,7 @@ function RigBoundary(props: {
                 navigationOrder: props.navigationOrder,
                 sidebarCollapse: props.sidebarCollapse,
                 platform: props.platform,
-                rigs: props.rigs,
+                happyAgents: props.happyAgents,
                 settings: props.settings,
                 titleShimmer: props.titleShimmer,
                 windowState: props.windowState,
@@ -282,10 +286,10 @@ function RigBoundary(props: {
  * First-run setup, while there is any of it left to do.
  *
  * Within local mode it does own the whole window until the machine can actually
- * run Rig and the person has answered the questions that follow, so the
+ * run Happy Agent and the person has answered the questions that follow, so the
  * workspace below is never mounted against a machine that is not ready. Which
  * stage is on is the main process's answer, so a restart, an interrupted
- * install, or a Rig that disappeared resumes here rather than in a remembered
+ * install, or a Happy Agent that disappeared resumes here rather than in a remembered
  * position.
  */
 function DesktopOnboardingGate(props: {
@@ -326,6 +330,7 @@ function DesktopOnboardingGate(props: {
         );
     return (
         <LocalOnboardingScreen
+            onAssistantsContinue={() => props.store.assistantsContinue()}
             onConnectRetry={() => props.store.connectRetry()}
             onDaemonDownload={() => props.store.daemonDownload()}
             onProfileCreate={() => props.store.profileCreate()}
@@ -374,7 +379,7 @@ const WELCOME_SLIDES: readonly WelcomeSlide[] = [
     },
 ];
 
-/** True while the runtime is working on, or running, this machine's own Rig. */
+/** True while the runtime is working on, or running, this machine's own Happy Agent. */
 function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
     if (snapshot.phase === "choosing") return false;
     if (snapshot.phase === "ready") return snapshot.mode === "local";
@@ -383,27 +388,27 @@ function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
 
 interface DesktopRendererProps {
     appearance: AppearanceStore;
-    daemon?: AppRigDaemonStore;
-    debug: AppRigDebugStore;
-    profiler: AppRigProfilerStore;
+    daemon?: AppHappyAgentDaemonStore;
+    debug: AppHappyAgentDebugStore;
+    profiler: AppHappyAgentProfilerStore;
     onboarding: LocalOnboardingStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
-    navigationOrder: RigNavigationOrderStore;
-    sidebarCollapse: RigSidebarCollapseStore;
+    navigationOrder: HappyAgentNavigationOrderStore;
+    sidebarCollapse: HappyAgentSidebarCollapseStore;
     platform: "desktop" | "web";
-    rigRouter: RigRouter;
-    rigs: RigDirectoryStore;
-    settings: RigSettingsStore;
+    happyAgentRouter: HappyAgentRouter;
+    happyAgents: HappyAgentDirectoryStore;
+    settings: HappyAgentSettingsStore;
     titleShimmer: TitleShimmerStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
     welcome: WelcomeStore;
     localWebUpdate: LocalWebUpdateStore;
-    windowState: RigWindowStore;
+    windowState: HappyAgentWindowStore;
 }
 
 /**
@@ -417,7 +422,11 @@ function DesktopRenderer(props: DesktopRendererProps) {
         // Outside every screen below, so one mark spans the whole run-up to a
         // workspace instead of being unmounted and remounted as the window moves
         // between the screens that boot crosses.
-        <DesktopBootGate onboarding={props.onboarding} rigs={props.rigs} runtime={props.store}>
+        <DesktopBootGate
+            onboarding={props.onboarding}
+            happyAgents={props.happyAgents}
+            runtime={props.store}
+        >
             <DesktopScreens {...props} />
         </DesktopBootGate>
     );
@@ -439,14 +448,14 @@ function DesktopScreens(props: DesktopRendererProps) {
             // reason this one is not up. The gate stays mounted across that so
             // the workspace below it is never rebuilt by the change.
             ready={snapshot?.phase === "ready"}
-            rigs={props.rigs}
+            happyAgents={props.happyAgents}
             {...(props.daemon ? { daemon: props.daemon } : {})}
             {...(snapshot?.update ? { update: snapshot.update } : {})}
         >
             <DesktopRuntimeContent {...props} hostedUpdate={hostedUpdate} snapshot={snapshot} />
         </DesktopProtocolGate>
     );
-    // Local setup gates the workspace until this machine can run Rig.
+    // Local setup gates the workspace until this machine can run Happy Agent.
     const gated =
         !snapshot || !desktopLocalPhase(snapshot) ? (
             content
@@ -468,7 +477,7 @@ function DesktopScreens(props: DesktopRendererProps) {
 /**
  * The workspace's own line about being out of touch with the machine.
  *
- * It reads the Rig directory rather than any one surface, because losing the
+ * It reads the Happy Agent directory rather than any one surface, because losing the
  * machine is not a fact about a surface: every project, session, and terminal in
  * the workspace is equally out of reach, and saying so once at the top beats
  * saying it on each of them.
@@ -479,15 +488,28 @@ function DesktopScreens(props: DesktopRendererProps) {
  * that is not connected, and a band repeating it above them would be a second
  * voice talking over the one the reader is meant to act on.
  *
- * Only a Rig that has actually dropped gets a line. `connecting` is deliberately
+ * Only a Happy Agent that has actually dropped gets a line. `connecting` is deliberately
  * silent — that is startup, and the boot cover is already speaking for it; a
  * band that appeared during every launch would mean nothing by the time it
  * mattered.
  */
-function DesktopConnectionHeader(props: { platform: "desktop" | "web"; rigs: RigDirectoryStore }) {
-    const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
-    const lost = directory.rigs.find(
-        (rig) => rig.status === "disconnected" || rig.status === "error",
+function DesktopConnectionHeader(props: {
+    platform: "desktop" | "web";
+    happyAgents: HappyAgentDirectoryStore;
+    windowState: HappyAgentWindowStore;
+}) {
+    const directory = useSyncExternalStore(
+        props.happyAgents.subscribe,
+        props.happyAgents.get,
+        props.happyAgents.get,
+    );
+    const windowState = useSyncExternalStore(
+        props.windowState.subscribe,
+        props.windowState.get,
+        props.windowState.get,
+    );
+    const lost = directory.happyAgents.find(
+        (happyAgent) => happyAgent.status === "disconnected" || happyAgent.status === "error",
     );
     if (!lost) return null;
     return (
@@ -500,6 +522,10 @@ function DesktopConnectionHeader(props: { platform: "desktop" | "web"; rigs: Rig
             // band the traffic lights; the browser development server draws web
             // chrome above it and needs neither the inset nor the drag lane.
             windowControls={props.platform === "desktop"}
+            // Full screen takes the lights away, and the band shaped around
+            // them has to hear about it: no store the band could read reports
+            // this, and no CSS query asks it.
+            windowFullScreen={windowState.fullScreen}
         />
     );
 }
@@ -509,14 +535,14 @@ function DesktopConnectionHeader(props: { platform: "desktop" | "web"; rigs: Rig
  *
  * This is the entire tree for as long as a restart runs — not a screen over the
  * app, but the app's replacement. It renders one thing from one store, and that
- * store reaches the main process directly, so nothing here depends on a Rig, a
+ * store reaches the main process directly, so nothing here depends on a Happy Agent, a
  * session, a project, or a connection. That is what lets the rest be thrown
  * away: there is nothing left holding a reference to the machine going down.
  *
- * Only ever the local host. A Rig on another machine is restarted by whoever
+ * Only ever the local host. A Happy Agent on another machine is restarted by whoever
  * owns it and never touches this window.
  */
-function DesktopAgentRestartWindow(props: { daemon: AppRigDaemonStore }) {
+function DesktopAgentRestartWindow(props: { daemon: AppHappyAgentDaemonStore }) {
     const daemon = useSyncExternalStore(props.daemon.subscribe, props.daemon.get, props.daemon.get);
     const view = agentInstallView(daemon.install);
     // The supervisor mounts this only while a restart is running and replaces it
@@ -533,7 +559,7 @@ function DesktopAgentRestartWindow(props: { daemon: AppRigDaemonStore }) {
 }
 
 /** The restart as the screen takes it, or nothing while none is running. */
-function agentInstallView(install: AppRigDaemonInstall): AgentInstallView | undefined {
+function agentInstallView(install: AppHappyAgentDaemonInstall): AgentInstallView | undefined {
     switch (install.phase) {
         case "idle":
             return undefined;
@@ -566,9 +592,9 @@ function agentInstallView(install: AppRigDaemonInstall): AgentInstallView | unde
 }
 
 /**
- * The window when this build and the host's Rig cannot read each other.
+ * The window when this build and the host's Happy Agent cannot read each other.
  *
- * Every other unavailability in Happy belongs beside the Rig it affects, and
+ * Every other unavailability in Happy belongs beside the Happy Agent it affects, and
  * this one deliberately does not. A version gap is not a connection that might
  * come back: the daemon is up, answering, and speaking a protocol this build has
  * no code for, so nothing behind this screen would work and nothing anyone does
@@ -581,18 +607,23 @@ function agentInstallView(install: AppRigDaemonInstall): AgentInstallView | unde
  */
 function DesktopProtocolGate(props: {
     children: ReactNode;
-    daemon?: AppRigDaemonStore;
+    daemon?: AppHappyAgentDaemonStore;
     onUpdateInstall(): void;
     /** False while the runtime still owns the window with a screen of its own. */
     ready: boolean;
-    rigs: RigDirectoryStore;
+    happyAgents: HappyAgentDirectoryStore;
     update?: DesktopUpdateSnapshot;
 }) {
-    const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
+    const directory = useSyncExternalStore(
+        props.happyAgents.subscribe,
+        props.happyAgents.get,
+        props.happyAgents.get,
+    );
     const daemonStore = props.daemon ?? unavailableDaemonStore;
     const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const mismatch = props.ready
-        ? directory.rigs.find((rig) => rig.id === LOCAL_RIG_ID)?.protocolMismatch
+        ? directory.happyAgents.find((happyAgent) => happyAgent.id === LOCAL_HAPPY_AGENT_ID)
+              ?.protocolMismatch
         : undefined;
     if (!mismatch) return <>{props.children}</>;
     // Happy is behind. It updates itself, so the only useful thing on screen is
@@ -611,7 +642,7 @@ function DesktopProtocolGate(props: {
                           },
                       }
                     : {})}
-                copy={`Rig on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy reads up to ${mismatch.supportedMaximum}. ${
+                copy={`Happy Agent on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy reads up to ${mismatch.supportedMaximum}. ${
                     downloaded
                         ? "The update is downloaded and ready to install."
                         : "Happy is looking for its own update and will offer it here as soon as it has one."
@@ -660,7 +691,7 @@ const unavailableDaemonSnapshot = {
     updateAvailable: false,
     versions: [],
 } as const;
-const unavailableDaemonStore: AppRigDaemonStore = {
+const unavailableDaemonStore: AppHappyAgentDaemonStore = {
     daemonCheck: () => undefined,
     daemonInstall: () => undefined,
     daemonInstallDismiss: () => undefined,
@@ -732,9 +763,13 @@ function DesktopRuntimeContent(
     // surface in it down rather than covering any of them.
     return (
         <div className="happy2-connection-frame">
-            <DesktopConnectionHeader platform={props.platform} rigs={props.rigs} />
+            <DesktopConnectionHeader
+                platform={props.platform}
+                happyAgents={props.happyAgents}
+                windowState={props.windowState}
+            />
             <div className="happy2-connection-frame__body">
-                <RigBoundary
+                <HappyAgentBoundary
                     appearance={props.appearance}
                     bridge={props.bridge}
                     {...(props.daemon ? { daemon: props.daemon } : {})}
@@ -747,8 +782,8 @@ function DesktopRuntimeContent(
                     navigationOrder={props.navigationOrder}
                     sidebarCollapse={props.sidebarCollapse}
                     platform={props.platform}
-                    router={props.rigRouter}
-                    rigs={props.rigs}
+                    router={props.happyAgentRouter}
+                    happyAgents={props.happyAgents}
                     settings={props.settings}
                     titleShimmer={props.titleShimmer}
                     update={workspaceUpdate(snapshot.update, hostedUpdate)}
@@ -835,7 +870,7 @@ if (mediaPreviewBridge) {
      */
     interface DesktopShellStores {
         readonly appearance: AppearanceStore;
-        readonly daemon?: AppRigDaemonStore;
+        readonly daemon?: AppHappyAgentDaemonStore;
     }
     let shell: DesktopShellStores | undefined;
     /**
@@ -874,13 +909,13 @@ if (mediaPreviewBridge) {
      * lets the ordinary boot cover do its ordinary job while the fresh app
      * connects and reads its state back.
      *
-     * This is the deliberate exception to the multirig plan's rule against
+     * This is the deliberate exception to the multiple-happy-agents plan's rule against
      * connection-driven app loaders. The rule exists so an arbitrary network
      * failure cannot take someone's work away; this is not one. It happens only
      * because a person asked for it, only for the machine-local agent, and never
-     * for a Rig that merely went quiet.
+     * for a Happy Agent that merely went quiet.
      */
-    const restartSupervise = (config: DesktopConfig, daemon: AppRigDaemonStore): void => {
+    const restartSupervise = (config: DesktopConfig, daemon: AppHappyAgentDaemonStore): void => {
         let covering = false;
         daemon.subscribe(() => {
             const running = daemon.get().install.phase !== "idle";
@@ -907,13 +942,15 @@ if (mediaPreviewBridge) {
         // The local router outlives any single daemon connection, so it is created
         // here and the session store navigates through it when a conversation it
         // created should be opened.
-        const rigHistory = rigHistoryCreate({ persistence: desktopHistoryPersistence() });
-        const rigRouter = rigRouterCreate(rigHistory);
+        const happyAgentHistory = happyAgentHistoryCreate({
+            persistence: desktopHistoryPersistence(),
+        });
+        const happyAgentRouter = happyAgentRouterCreate(happyAgentHistory);
         // The shell's Back and Forward arrive as a direction and are walked here.
         appDisposers.push(
             desktopBridge.navigationStepSubscribe((step) => {
-                if (step.direction === "back") rigHistory.back();
-                else rigHistory.forward();
+                if (step.direction === "back") happyAgentHistory.back();
+                else happyAgentHistory.forward();
             }),
         );
         // Chromium acts on macOS side buttons after mouseup, before auxclick is
@@ -922,8 +959,8 @@ if (mediaPreviewBridge) {
             if (event.button !== 3 && event.button !== 4) return;
             event.preventDefault();
             event.stopImmediatePropagation();
-            if (event.button === 3) rigHistory.back();
-            else rigHistory.forward();
+            if (event.button === 3) happyAgentHistory.back();
+            else happyAgentHistory.forward();
         };
         window.addEventListener("mouseup", sideButtonWalk, { capture: true });
         appDisposers.push(() =>
@@ -956,16 +993,20 @@ if (mediaPreviewBridge) {
         // Defaults and model picker memory belong to the desktop, not one daemon.
         // The state stores stay synchronous while the bridge persists their typed
         // snapshots through the main process.
-        const settings = rigSettingsStoreCreate(preferences.initialSettings);
+        const settings = happyAgentSettingsStoreCreate(preferences.initialSettings);
         appDisposers.push(settings.subscribe(() => preferences.settingsChanged(settings.get())));
         // How the reader arranged the sidebar's pinned rows. It is the window's
         // Those rows are window chrome whether or not any machine is reachable,
         // so the arrangement must outlive every connection this window makes.
-        const navigationOrder = rigNavigationOrderStoreCreate(desktopNavigationOrderPersistence());
+        const navigationOrder = happyAgentNavigationOrderStoreCreate(
+            desktopNavigationOrderPersistence(),
+        );
         // Which projects the reader folded shut, kept beside that arrangement
         // and for the same reason: a fold is about this window's
         // sidebar, so no machine coming or going may undo it.
-        const sidebarCollapse = rigSidebarCollapseStoreCreate(desktopSidebarCollapsePersistence());
+        const sidebarCollapse = happyAgentSidebarCollapseStoreCreate(
+            desktopSidebarCollapsePersistence(),
+        );
         // Whether this window offers the features that are not finished yet. It
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
@@ -976,17 +1017,19 @@ if (mediaPreviewBridge) {
         const titleShimmer = titleShimmerStoreCreate(preferences.titleShimmerPersistence);
         // Whether this machine's owner has been welcomed. Kept beside the two
         // above because it answers the same kind of question: what this
-        // installation shows, rather than anything a Rig knows.
+        // installation shows, rather than anything a Happy Agent knows.
         const welcome = welcomeStoreCreate(desktopWelcomePersistence());
-        // Every Rig in this window, each with its own product stores. The router is
-        // told to resolve its address again whenever the set of connected Rigs
+        // Every Happy Agent in this window, each with its own product stores. The router is
+        // told to resolve its address again whenever the set of connected Happy Agents
         // changes, so a machine that connects after the URL already named it opens
         // the addressed conversation without the reader navigating twice.
-        const rigs = rigDirectoryStoreCreate(desktopBridge, runtimeStore, {
-            conversationOpen: (rigId, location) =>
-                rigRouterConversationOpen(rigRouter, rigId, location),
-            groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
-            groupForget: (rigId, groupId) => rigRouterGroupForget(rigRouter, rigId, groupId),
+        const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
+            conversationOpen: (happyAgentId, location) =>
+                happyAgentRouterConversationOpen(happyAgentRouter, happyAgentId, location),
+            groupOpen: (happyAgentId, groupId) =>
+                happyAgentRouterGroupOpen(happyAgentRouter, happyAgentId, groupId),
+            groupForget: (happyAgentId, groupId) =>
+                happyAgentRouterGroupForget(happyAgentRouter, happyAgentId, groupId),
             modelPreferencePersistence: preferences.preferencePersistence,
             // A shell is told which background it is drawing on when it starts and
             // never hears about it again, so every terminal takes the appearance
@@ -995,21 +1038,25 @@ if (mediaPreviewBridge) {
         });
         let materialized = "";
         appDisposers.push(
-            rigs.subscribe(() => {
-                const current = rigs
+            happyAgents.subscribe(() => {
+                const current = happyAgents
                     .get()
-                    .rigs.map((rig) => `${rig.id}:${rig.session ? "up" : "down"}`)
+                    .happyAgents.map(
+                        (happyAgent) => `${happyAgent.id}:${happyAgent.session ? "up" : "down"}`,
+                    )
                     .join(",");
                 if (current === materialized) return;
                 materialized = current;
-                void rigRouter.invalidate();
+                void happyAgentRouter.invalidate();
             }),
         );
         // What is waiting for the person is a fact about the whole window, not
         // about the screen that happens to be open, so the Dock is marked from
-        // the same directory the sidebar reads rather than from any one Rig.
-        appDisposers.push(dockUnreadPublish(rigs, (count) => desktopBridge.dockUnreadSet(count)));
-        // This window renders the Rig tree directly rather than through `App`, so
+        // the same directory the sidebar reads rather than from any one Happy Agent.
+        appDisposers.push(
+            dockUnreadPublish(happyAgents, (count) => desktopBridge.dockUnreadSet(count)),
+        );
+        // This window renders the Happy Agent tree directly rather than through `App`, so
         // it has to start the highlighting pool itself: without this the file
         // viewer and every diff in the primary desktop surface tokenize on the
         // main thread, which is exactly where a large file must not be parsed.
@@ -1035,8 +1082,8 @@ if (mediaPreviewBridge) {
                         // Only the Electron window hides its title bar; the browser
                         // development server renders the same tree with web chrome.
                         platform={browserLocal ? "web" : "desktop"}
-                        rigRouter={rigRouter}
-                        rigs={rigs}
+                        happyAgentRouter={happyAgentRouter}
+                        happyAgents={happyAgents}
                         localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
                         settings={settings}
                         titleShimmer={titleShimmer}
@@ -1053,7 +1100,7 @@ if (mediaPreviewBridge) {
         console.error("Could not read desktop preferences.", error);
         start({
             appearance: "system",
-            defaultEffort: RIG_DEFAULT_THINKING_LEVEL,
+            defaultEffort: HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
             defaultPermissionMode: "auto",
             modelPreferences: [],
             scrollbarVisibility: "automatic",

@@ -184,6 +184,26 @@
 }
 
 /*
+ * The unmeasured sweep, on the track rather than on the fill.
+ *
+ * It used to be the fill itself, widened to a travelling segment, and that made
+ * the first real number a lie in the wrong direction: the fill's computed width
+ * was the segment's, so the moment bytes were counted the bar animated from
+ * whatever the sweep happened to be to the true fraction — visibly shrinking on
+ * any download whose first report was under a third. Kept apart, the fill leaves
+ * zero exactly once, in the direction a download actually goes.
+ */
+.happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-track::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    width: 35%;
+    border-radius: inherit;
+    background: var(--text);
+    animation: happy2-setup-page-progress-sweep 1.15s ease-in-out infinite;
+}
+
+/*
  * The fill is the full ink of the page rather than an accent: this bar is the
  * only thing moving on the screen while it is up, and it means the same thing
  * the primary button meant a moment ago.
@@ -202,15 +222,20 @@
     transition: width 260ms ease-out;
 }
 
-/* Nothing is measured yet, so nothing is claimed: the fill becomes a short
-   segment travelling the empty track, which says "running" without asserting a
-   position. */
+/* Grows from empty even when its first paint already carries a number — an
+   archive small enough to be part-way down before the bar exists still starts
+   at zero, because a bar that appears half full reads as a bar that lost the
+   beginning. */
+@starting-style {
+    .happy2-setup-page__progress-fill {
+        width: 0;
+    }
+}
+
+/* Nothing is measured yet, so nothing is claimed: the fill stays at zero and
+   the track's own sweep says "running" without asserting a position. */
 .happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-fill {
-    position: absolute;
-    inset-block: 0;
-    width: 35%;
-    animation: happy2-setup-page-progress-sweep 1.15s ease-in-out infinite;
-    transition: none;
+    width: 0;
 }
 
 @keyframes happy2-setup-page-progress-sweep {
@@ -266,7 +291,10 @@
 
     .happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-fill {
         width: 100%;
-        animation: none;
         opacity: 0.4;
+    }
+
+    .happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-track::after {
+        content: none;
     }
 }

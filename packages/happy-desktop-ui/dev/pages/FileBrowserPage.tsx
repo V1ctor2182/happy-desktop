@@ -30,7 +30,7 @@ const changed: FileTreeBuildEntry[] = [
         deletedLines: 0,
     },
     {
-        path: "packages/happy-desktop-app/sources/AppRigView.tsx",
+        path: "packages/happy-desktop-app/sources/AppHappyAgentView.tsx",
         gitStatus: "modified",
         addedLines: 24,
         deletedLines: 38,
@@ -334,8 +334,8 @@ export function FileBrowserPage() {
             </Specimen>
 
             <Specimen
-                detail="known Rig offline · retained rows and local selection remain · remote reads and writes are unavailable"
-                label="Rig offline"
+                detail="known Happy Agent offline · retained rows and local selection remain · remote reads and writes are unavailable"
+                label="Happy Agent offline"
                 number="10"
                 stage="surface"
             >
@@ -349,20 +349,20 @@ export function FileBrowserPage() {
                             nodes={fileTreeFlatten(changed)}
                             scope="changed"
                             scopeUnavailable={{
-                                all: "Rig must reconnect before loading all files.",
+                                all: "Happy Agent must reconnect before loading all files.",
                             }}
                             selectedId="packages/happy-desktop-ui/src/FileTree.tsx"
-                            unavailable="Rig is offline. Showing the last synced file list."
+                            unavailable="Happy Agent is offline. Showing the last synced file list."
                         />,
                     )}
                     {panelFrame(
                         <FileBrowser
                             count={everything.length}
-                            fileActionsUnavailable="Rig must reconnect before opening files."
+                            fileActionsUnavailable="Happy Agent must reconnect before opening files."
                             layout="tree"
                             nodes={fileTreeBuild(everything, untouched)}
                             scope="all"
-                            unavailable="Rig is offline. Showing the cached checkout."
+                            unavailable="Happy Agent is offline. Showing the cached checkout."
                         />,
                     )}
                 </div>

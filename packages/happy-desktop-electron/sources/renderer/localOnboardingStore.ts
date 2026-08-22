@@ -1,5 +1,9 @@
-import type { LocalOnboardingView } from "happy-desktop-ui";
-import type { HappyDesktopBridge, LocalOnboardingSnapshot } from "../shared/desktopContract";
+import type { LocalOnboardingAssistant, LocalOnboardingView } from "happy-desktop-ui";
+import type {
+    HappyDesktopBridge,
+    LocalAssistantState,
+    LocalOnboardingSnapshot,
+} from "../shared/desktopContract";
 
 export interface LocalOnboardingViewSnapshot {
     readonly onboarding?: LocalOnboardingSnapshot;
@@ -17,6 +21,7 @@ export interface LocalOnboardingStore {
     connectRetry(): void;
     daemonDownload(): void;
     projectChoose(): void;
+    assistantsContinue(): void;
     profileNameUpdate(value: string): void;
     profileEmailUpdate(value: string): void;
     profileCreate(): void;
@@ -109,7 +114,7 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
             };
         },
         connectRetry() {
-            attempt(bridge.runtimeRetry(), "Happy could not ask Rig to start again.");
+            attempt(bridge.runtimeRetry(), "Happy could not ask Happy Agent to start again.");
         },
         daemonDownload() {
             if (snapshot.pending) return;
@@ -122,6 +127,9 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
         },
         projectChoose() {
             attempt(bridge.onboardingProjectChoose(), "Happy could not open a project.");
+        },
+        assistantsContinue() {
+            attempt(bridge.onboardingAssistantsContinue(), "Happy could not continue setup.");
         },
         profileNameUpdate(value) {
             publish({ ...snapshot, profileName: value });
@@ -161,11 +169,6 @@ export function localOnboardingView(
             return { kind: "checking", ...(message ? { message } : {}) };
         case "nodeMissing":
             return { kind: "node-missing" };
-        case "rigMissing":
-            return {
-                kind: "rig-missing",
-                ...(message ? { message } : {}),
-            };
         case "daemonDownload":
             return {
                 busy,
@@ -180,14 +183,19 @@ export function localOnboardingView(
         case "connectFailed":
             return {
                 kind: "connect-failed",
-                message: message ?? "Happy could not reach your Rig daemon.",
+                message: message ?? "Happy could not reach your Happy Agent daemon.",
                 retrying: onboarding.retrying === true,
             };
         case "providersMissing":
             return {
+                assistants: assistantsProject(onboarding.assistants),
                 kind: "providers-missing",
-                providers: onboarding.providers ?? [],
                 retrying: onboarding.retrying === true,
+            };
+        case "assistantsFound":
+            return {
+                assistants: assistantsProject(onboarding.assistants),
+                kind: "assistants-found",
             };
         case "profileRequired":
             return {
@@ -205,6 +213,17 @@ export function localOnboardingView(
             return undefined;
     }
     return undefined;
+}
+
+/** The shell's answer about the three assistants, as the screen takes it. */
+function assistantsProject(
+    assistants: readonly LocalAssistantState[] | undefined,
+): readonly LocalOnboardingAssistant[] {
+    return (assistants ?? []).map((assistant) => ({
+        ...(assistant.command ? { command: assistant.command } : {}),
+        id: assistant.id,
+        status: assistant.status,
+    }));
 }
 
 function errorMessage(error: unknown): string {

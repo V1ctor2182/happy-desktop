@@ -1,8 +1,8 @@
 import {
     type HappyAgentClient,
-    type RigProfile,
-    type RigProfileActions,
-    type RigProfileSource,
+    type HappyAgentProfile,
+    type HappyAgentProfileActions,
+    type HappyAgentProfileSource,
     type happyAgentProtocol,
     UserError,
 } from "happy-desktop-state";
@@ -10,8 +10,8 @@ import {
 const POLL_MS = 5_000;
 
 export interface HappyAgentProfileAdapter {
-    readonly actions: RigProfileActions;
-    readonly source: RigProfileSource;
+    readonly actions: HappyAgentProfileActions;
+    readonly source: HappyAgentProfileSource;
 }
 
 /**
@@ -21,7 +21,7 @@ export interface HappyAgentProfileAdapter {
 export function happyAgentProfileSourceCreate(client: HappyAgentClient): HappyAgentProfileAdapter {
     let latestUpdatedAt = 0;
 
-    const profileProject = (profile: happyAgentProtocol.Profile): RigProfile | undefined => {
+    const profileProject = (profile: happyAgentProtocol.Profile): HappyAgentProfile | undefined => {
         if (profile.email === null && profile.name === null) return undefined;
         return {
             email: profile.email ?? "",
@@ -46,7 +46,7 @@ export function happyAgentProfileSourceCreate(client: HappyAgentClient): HappyAg
                 const projected = profileProject(updated.profile);
                 if (projected === undefined)
                     throw new UserError(
-                        "Rig saved an empty profile. Add a name and email, then try again.",
+                        "Happy Agent saved an empty profile. Add a name and email, then try again.",
                     );
                 return projected;
             },

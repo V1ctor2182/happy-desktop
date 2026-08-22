@@ -15,20 +15,20 @@ const SAFE_PROFILE_ENVIRONMENT = new Set([
     "LOGNAME",
     "OPENAI_API_KEY",
     "PATH",
-    "RIG_CONFIGURATION_DIRECTORY",
-    "RIG_DISABLE_HAPPY_SYNC",
-    "RIG_GYM_DISPLAY_WORKSPACE",
-    "RIG_GYM_HOME_PATH",
-    "RIG_GYM_INFERENCE_URL",
-    "RIG_GYM_PROVIDER_OVERRIDES",
-    "RIG_GYM_RUNTIME",
-    "RIG_GYM_TOKEN",
-    "RIG_GYM_WORKSPACE_PATH",
-    "RIG_MODEL",
-    "RIG_PERMISSION_MODE",
-    "RIG_PROVIDER",
-    "RIG_SERVER_DIRECTORY",
-    "RIG_SERVER_SOCKET_PATH",
+    "HAPPY_AGENT_CONFIGURATION_DIRECTORY",
+    "HAPPY_AGENT_DISABLE_HAPPY_SYNC",
+    "HAPPY_AGENT_GYM_DISPLAY_WORKSPACE",
+    "HAPPY_AGENT_GYM_HOME_PATH",
+    "HAPPY_AGENT_GYM_INFERENCE_URL",
+    "HAPPY_AGENT_GYM_PROVIDER_OVERRIDES",
+    "HAPPY_AGENT_GYM_RUNTIME",
+    "HAPPY_AGENT_GYM_TOKEN",
+    "HAPPY_AGENT_GYM_WORKSPACE_PATH",
+    "HAPPY_AGENT_MODEL",
+    "HAPPY_AGENT_PERMISSION_MODE",
+    "HAPPY_AGENT_PROVIDER",
+    "HAPPY_AGENT_SERVER_DIRECTORY",
+    "HAPPY_AGENT_SERVER_SOCKET_PATH",
     "SHELL",
     "TERM",
     "TMPDIR",
@@ -91,10 +91,10 @@ export async function gymRunPathsCreate(
         home: join(root, "home"),
         tmp: join(root, "tmp"),
         workspace: join(root, "workspace"),
-        rigServer: join(root, "rig-server"),
+        happyAgentServer: join(root, "happy-agent-server"),
         socketPath,
         electronUserData: join(root, "electron-user-data"),
-        rigWorkspacePath: join(root, "workspace"),
+        happyAgentWorkspacePath: join(root, "workspace"),
         bin: join(root, "bin"),
         artifacts,
         marker: join(root, OWNER_MARKER),
@@ -107,7 +107,7 @@ export async function gymRunPathsCreate(
         mkdir(paths.home, { recursive: true }),
         mkdir(paths.tmp, { recursive: true }),
         mkdir(paths.workspace, { recursive: true }),
-        mkdir(paths.rigServer, { recursive: true }),
+        mkdir(paths.happyAgentServer, { recursive: true }),
         mkdir(paths.electronUserData, { recursive: true }),
         mkdir(paths.bin, { recursive: true }),
         mkdir(paths.artifacts, { recursive: true }),
@@ -129,7 +129,7 @@ export async function gymRunPathsRead(root: string): Promise<GymRunPaths> {
     const marker = await gymRunMarkerRead(rootPath);
     const workspaceRoot = workspaceRootResolve();
     assertSafeRunRoot(rootPath, workspaceRoot);
-    const socketPath = marker.socketPath ?? join(rootPath, "rig-server", "server.sock");
+    const socketPath = marker.socketPath ?? join(rootPath, "happy-agent-server", "server.sock");
     socketPathValidate(socketPath, workspaceRoot, rootPath);
     return {
         workspaceRoot,
@@ -137,10 +137,10 @@ export async function gymRunPathsRead(root: string): Promise<GymRunPaths> {
         home: join(rootPath, "home"),
         tmp: join(rootPath, "tmp"),
         workspace: join(rootPath, "workspace"),
-        rigServer: join(rootPath, "rig-server"),
+        happyAgentServer: join(rootPath, "happy-agent-server"),
         socketPath,
         electronUserData: join(rootPath, "electron-user-data"),
-        rigWorkspacePath: join(rootPath, "workspace"),
+        happyAgentWorkspacePath: join(rootPath, "workspace"),
         bin: join(rootPath, "bin"),
         artifacts: artifactDirectoryResolve(rootPath, workspaceRoot, marker.artifactDirectory),
         marker: join(rootPath, OWNER_MARKER),
@@ -151,11 +151,11 @@ export async function gymRunPathsRead(root: string): Promise<GymRunPaths> {
     };
 }
 
-export function gymRunPathsWithRigWorkspace(
+export function gymRunPathsWithHappyAgentWorkspace(
     paths: GymRunPaths,
-    rigWorkspacePath: string,
+    happyAgentWorkspacePath: string,
 ): GymRunPaths {
-    return { ...paths, rigWorkspacePath };
+    return { ...paths, happyAgentWorkspacePath };
 }
 
 export async function gymRunClean(root: string): Promise<void> {
@@ -166,7 +166,7 @@ export async function gymRunClean(root: string): Promise<void> {
         throw new Error(`Unsupported Gym ownership marker at ${resolved}`);
     }
     const workspaceRoot = workspaceRootResolve();
-    const socketPath = marker.socketPath ?? join(resolved, "rig-server", "server.sock");
+    const socketPath = marker.socketPath ?? join(resolved, "happy-agent-server", "server.sock");
     socketPathValidate(socketPath, workspaceRoot, resolved);
     await unlink(socketPath).catch(() => undefined);
     await rm(resolved, { force: true, recursive: true, maxRetries: 3, retryDelay: 50 });
@@ -194,11 +194,11 @@ export async function gymRunProfileWrite(
     ]);
 }
 
-export async function gymRigLauncherWrite(
+export async function gymHappyAgentLauncherWrite(
     paths: GymRunPaths,
-    rigEntrypoint: string,
+    happyAgentEntrypoint: string,
 ): Promise<string> {
-    const launcher = join(paths.bin, "rig");
+    const launcher = join(paths.bin, "happy-agent");
     await symlink(process.execPath, join(paths.bin, "node")).catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     });
@@ -208,7 +208,7 @@ const allowed = new Set(${JSON.stringify([...SAFE_PROFILE_ENVIRONMENT])});
 const environment = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => allowed.has(name)),
 );
-const result = spawnSync(process.execPath, [${JSON.stringify(rigEntrypoint)}, ...process.argv.slice(2)], {
+const result = spawnSync(process.execPath, [${JSON.stringify(happyAgentEntrypoint)}, ...process.argv.slice(2)], {
   env: environment,
   stdio: "inherit",
 });
@@ -241,8 +241,8 @@ export function electronEntrypointResolve(workspaceRoot = workspaceRootResolve()
     };
 }
 
-export function rigEntrypointResolve(workspaceRoot = workspaceRootResolve()): string {
-    const configured = process.env.HAPPY_DESKTOP_RIG_ENTRYPOINT?.trim();
+export function happyAgentEntrypointResolve(workspaceRoot = workspaceRootResolve()): string {
+    const configured = process.env.HAPPY_DESKTOP_AGENT_ENTRYPOINT?.trim();
     return (
         configured ||
         join(
@@ -273,10 +273,10 @@ function socketPathValidate(socketPath: string, workspaceRoot: string, root: str
     const workspaceContext = resolve(workspaceRoot, ".context");
     if (
         !pathWithin(workspaceContext, socketPath) &&
-        !pathWithin(join(root, "rig-server"), socketPath)
+        !pathWithin(join(root, "happy-agent-server"), socketPath)
     ) {
         throw new Error(
-            "Gym socket paths must stay inside the run .rig-server directory or .context.",
+            "Gym socket paths must stay inside the run .happy-agent-server directory or .context.",
         );
     }
 }

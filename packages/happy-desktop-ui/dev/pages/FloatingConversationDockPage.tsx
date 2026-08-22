@@ -8,11 +8,14 @@ import {
     ConversationDock,
     FloatingConversationDock,
 } from "../../src/ConversationDock";
-import { RigControlMenu, RigSessionControls } from "../../src/RigSessionControls";
+import {
+    HappyAgentControlMenu,
+    HappyAgentSessionControls,
+} from "../../src/HappyAgentSessionControls";
 import { Sidebar } from "../../src/Sidebar";
-import { rigComposerModelControlProps } from "../../src/rigComposerModelControl";
+import { happyAgentComposerModelControlProps } from "../../src/happyAgentComposerModelControl";
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
-import { rigMenus } from "./rigChatFixtures";
+import { happyAgentMenus } from "./happyAgentChatFixtures";
 import { videoClipWide } from "./videoClips";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -119,7 +122,7 @@ function dock(
             composer={composer({ attachments, text: value })}
             composerControls={
                 <ComposerModelControl
-                    {...rigComposerModelControlProps(rigMenus, {
+                    {...happyAgentComposerModelControlProps(happyAgentMenus, {
                         onEffortChange: noop,
                         onModelChange: noop,
                     })}
@@ -128,11 +131,11 @@ function dock(
             composerFooterControl={
                 <ComposerFooterBar
                     leading={
-                        <RigSessionControls
+                        <HappyAgentSessionControls
                             fields={["permission", "tier"]}
                             menuPlacement="above"
                             variant="ghost"
-                            menus={rigMenus}
+                            menus={happyAgentMenus}
                             onEffortChange={noop}
                             onModelChange={noop}
                             onPermissionModeChange={noop}
@@ -140,7 +143,7 @@ function dock(
                         />
                     }
                     trailing={
-                        <RigControlMenu
+                        <HappyAgentControlMenu
                             items={chatItems}
                             label="Chat"
                             menuAlign="end"
@@ -300,8 +303,8 @@ export function FloatingConversationDockPage() {
                 </AppShell>
             </FullScreenSpecimen>
             <Specimen
-                detail="known Rig offline · the draft remains editable while submission is unavailable"
-                label="Rig offline"
+                detail="known Happy Agent offline · the draft remains editable while submission is unavailable"
+                label="Happy Agent offline"
                 number="04"
                 stage="surface"
             >
@@ -315,8 +318,8 @@ export function FloatingConversationDockPage() {
                     }}
                 >
                     {dock(
-                        "Keep this draft here until the Rig reconnects.",
-                        "Rig is offline. The draft is preserved.",
+                        "Keep this draft here until the Happy Agent reconnects.",
+                        "Happy Agent is offline. The draft is preserved.",
                     )}
                 </Box>
             </Specimen>

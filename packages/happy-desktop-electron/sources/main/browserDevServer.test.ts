@@ -1,11 +1,11 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it, vi } from "vitest";
-import { browserLocalRigPlugin } from "./browserDevServer";
-import type { LocalRigConnection } from "./localRig";
-import { RigDaemonHttpError, type RigDaemonClient } from "./rigDaemonClient";
+import { browserLocalHappyAgentPlugin } from "./browserDevServer";
+import type { LocalHappyAgentConnection } from "./localHappyAgent";
+import { HappyAgentDaemonHttpError, type HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 
-const endpoint = "/__happy2_local_rig";
+const endpoint = "/__happy2_local_happy_agent";
 
 type Middleware = (
     request: IncomingMessage,
@@ -53,15 +53,18 @@ function healthReady(version: string) {
 }
 
 /** One daemon connection whose health answers from a scripted queue. */
-function connectionWith(health: () => Promise<unknown>, close = vi.fn()): LocalRigConnection {
+function connectionWith(
+    health: () => Promise<unknown>,
+    close = vi.fn(),
+): LocalHappyAgentConnection {
     return {
-        client: { health } as unknown as RigDaemonClient,
+        client: { health } as unknown as HappyAgentDaemonClient,
         version: "0.0.55",
         close,
     };
 }
 
-function middlewareOf(plugin: ReturnType<typeof browserLocalRigPlugin>): Middleware {
+function middlewareOf(plugin: ReturnType<typeof browserLocalHappyAgentPlugin>): Middleware {
     let middleware: Middleware | undefined;
     const server = {
         config: { server: { host: "127.0.0.1", port: 5174 } },
@@ -87,19 +90,19 @@ async function health(middleware: Middleware): Promise<Captured> {
     return captured;
 }
 
-describe("browserLocalRigPlugin", () => {
+describe("browserLocalHappyAgentPlugin", () => {
     it("reconnects with a fresh token after the daemon restarts", async () => {
         const staleClose = vi.fn();
         const connect = vi
-            .fn<() => Promise<LocalRigConnection>>()
+            .fn<() => Promise<LocalHappyAgentConnection>>()
             .mockResolvedValueOnce(
                 connectionWith(
-                    () => Promise.reject(new RigDaemonHttpError(401, "invalid token")),
+                    () => Promise.reject(new HappyAgentDaemonHttpError(401, "invalid token")),
                     staleClose,
                 ),
             )
             .mockResolvedValueOnce(connectionWith(() => Promise.resolve(healthReady("0.0.55"))));
-        const middleware = middlewareOf(browserLocalRigPlugin({ connect }));
+        const middleware = middlewareOf(browserLocalHappyAgentPlugin({ connect }));
 
         const failed = await health(middleware);
         expect(failed.status).toBe(401);
@@ -113,9 +116,9 @@ describe("browserLocalRigPlugin", () => {
 
     it("keeps one connection while the daemon answers", async () => {
         const connect = vi
-            .fn<() => Promise<LocalRigConnection>>()
+            .fn<() => Promise<LocalHappyAgentConnection>>()
             .mockResolvedValue(connectionWith(() => Promise.resolve(healthReady("0.0.55"))));
-        const middleware = middlewareOf(browserLocalRigPlugin({ connect }));
+        const middleware = middlewareOf(browserLocalHappyAgentPlugin({ connect }));
 
         expect((await health(middleware)).status).toBe(200);
         expect((await health(middleware)).status).toBe(200);
@@ -124,10 +127,12 @@ describe("browserLocalRigPlugin", () => {
 
     it("retries a connect that failed while the daemon was down", async () => {
         const connect = vi
-            .fn<() => Promise<LocalRigConnection>>()
-            .mockRejectedValueOnce(new Error("Timed out while waiting for the normal Rig daemon."))
+            .fn<() => Promise<LocalHappyAgentConnection>>()
+            .mockRejectedValueOnce(
+                new Error("Timed out while waiting for the normal Happy Agent daemon."),
+            )
             .mockResolvedValueOnce(connectionWith(() => Promise.resolve(healthReady("0.0.55"))));
-        const middleware = middlewareOf(browserLocalRigPlugin({ connect }));
+        const middleware = middlewareOf(browserLocalHappyAgentPlugin({ connect }));
 
         expect((await health(middleware)).status).toBe(503);
         expect((await health(middleware)).status).toBe(200);

@@ -5,23 +5,23 @@ import { composerStoreCreate } from "../src/modules/composer/composerState.js";
 import { noteStoreCreate } from "../src/notes/noteStore.js";
 import type { NotesTransport } from "../src/notes/notesTypes.js";
 import { welcomeStoreCreate } from "../src/onboarding/welcomeStore.js";
-import { rigGlobalDocumentStoreCreate } from "../src/rig/rigInstructionsStore.js";
-import { rigInboxStoreCreate } from "../src/rig/rigInboxStore.js";
-import { rigMenusStoreCreate } from "../src/rig/rigMenusStore.js";
-import { rigNavigationOrderStoreCreate } from "../src/rig/rigNavigationOrderStore.js";
-import { rigPanelStoreCreate } from "../src/rig/rigPanelStore.js";
-import { rigProfileStoreCreate } from "../src/rig/rigProfileStore.js";
-import { rigProviderUsageStoreCreate } from "../src/rig/rigProviderUsageStore.js";
-import { rigSessionDraftStoreCreate } from "../src/rig/rigSessionDraftStore.js";
-import { rigSettingsStoreCreate } from "../src/rig/rigSettingsStore.js";
-import { rigSidebarCollapseStoreCreate } from "../src/rig/rigSidebarCollapseStore.js";
+import { happyAgentGlobalDocumentStoreCreate } from "../src/happyAgent/happyAgentInstructionsStore.js";
+import { happyAgentInboxStoreCreate } from "../src/happyAgent/happyAgentInboxStore.js";
+import { happyAgentMenusStoreCreate } from "../src/happyAgent/happyAgentMenusStore.js";
+import { happyAgentNavigationOrderStoreCreate } from "../src/happyAgent/happyAgentNavigationOrderStore.js";
+import { happyAgentPanelStoreCreate } from "../src/happyAgent/happyAgentPanelStore.js";
+import { happyAgentProfileStoreCreate } from "../src/happyAgent/happyAgentProfileStore.js";
+import { happyAgentProviderUsageStoreCreate } from "../src/happyAgent/happyAgentProviderUsageStore.js";
+import { happyAgentSessionDraftStoreCreate } from "../src/happyAgent/happyAgentSessionDraftStore.js";
+import { happyAgentSettingsStoreCreate } from "../src/happyAgent/happyAgentSettingsStore.js";
+import { happyAgentSidebarCollapseStoreCreate } from "../src/happyAgent/happyAgentSidebarCollapseStore.js";
 import type {
-    RigGroupId,
-    RigInboxItemId,
-    RigModelCatalog,
-    RigSelection,
-} from "../src/rig/rigTypes.js";
-import { rigWorkspaceMemoryStoreCreate } from "../src/rig/rigWorkspaceMemory.js";
+    HappyAgentGroupId,
+    HappyAgentInboxItemId,
+    HappyAgentModelCatalog,
+    HappyAgentSelection,
+} from "../src/happyAgent/happyAgentTypes.js";
+import { happyAgentWorkspaceMemoryStoreCreate } from "../src/happyAgent/happyAgentWorkspaceMemory.js";
 import { titleShimmerStoreCreate } from "../src/titleShimmer/titleShimmerStore.js";
 
 interface BenchmarkSubject {
@@ -49,7 +49,7 @@ interface BenchmarkResult {
     readonly noOpChangedReferences: readonly string[];
 }
 
-const modelCatalog: RigModelCatalog = {
+const modelCatalog: HappyAgentModelCatalog = {
     defaultModelId: "luna",
     defaultProviderId: "happy",
     models: [
@@ -76,14 +76,14 @@ const modelCatalog: RigModelCatalog = {
     ],
 };
 
-const automaticSelection: RigSelection = {
+const automaticSelection: HappyAgentSelection = {
     providerId: "happy",
     modelId: "luna",
     effort: "medium",
     permissionMode: "auto",
 };
 
-const readOnlySelection: RigSelection = {
+const readOnlySelection: HappyAgentSelection = {
     ...automaticSelection,
     permissionMode: "read_only",
 };
@@ -206,11 +206,11 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigInstructionsStore",
+        module: "happyAgent/happyAgentInstructionsStore",
         operation: "draftUpdate",
         minimumChangedReferences: 1,
         create: () => {
-            const store = rigGlobalDocumentStoreCreate({
+            const store = happyAgentGlobalDocumentStoreCreate({
                 read: async () => "",
                 write: async (value) => value,
             });
@@ -223,14 +223,14 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigInboxStore",
+        module: "happyAgent/happyAgentInboxStore",
         operation: "itemMessageUpdate",
         minimumChangedReferences: 2,
         create: () => {
-            const store = rigInboxStoreCreate({
+            const store = happyAgentInboxStoreCreate({
                 source: { subscribe: () => () => undefined },
             });
-            const itemId = "question" as RigInboxItemId;
+            const itemId = "question" as HappyAgentInboxItemId;
             store.itemMessageUpdate(itemId, "Alpha");
             return {
                 snapshot: store.get,
@@ -241,12 +241,12 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigMenusStore",
+        module: "happyAgent/happyAgentMenusStore",
         operation: "menusSelectionUpdate(permissionMode)",
         minimumChangedReferences: 4,
         iterations: 1_000,
         create: () => {
-            const store = rigMenusStoreCreate({
+            const store = happyAgentMenusStoreCreate({
                 catalog: modelCatalog,
                 selection: automaticSelection,
             });
@@ -258,11 +258,11 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigNavigationOrderStore",
+        module: "happyAgent/happyAgentNavigationOrderStore",
         operation: "itemReorder",
         minimumChangedReferences: 2,
         create: () => {
-            const store = rigNavigationOrderStoreCreate({
+            const store = happyAgentNavigationOrderStoreCreate({
                 read: () => ({ order: ["alpha", "beta"] }),
                 write: () => undefined,
             });
@@ -275,12 +275,12 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigPanelStore",
+        module: "happyAgent/happyAgentPanelStore",
         operation: "panelToggle",
         minimumChangedReferences: 1,
         iterations: 1_000,
         create: () => {
-            const store = rigPanelStoreCreate({
+            const store = happyAgentPanelStoreCreate({
                 terminalOpen: () => {
                     throw new Error("The object-update benchmark never opens a terminal.");
                 },
@@ -294,11 +294,11 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigProfileStore",
+        module: "happyAgent/happyAgentProfileStore",
         operation: "displayNameUpdate",
         minimumChangedReferences: 1,
         create: () => {
-            const store = rigProfileStoreCreate({
+            const store = happyAgentProfileStoreCreate({
                 source: { subscribe: () => () => undefined },
                 actions: {
                     profileSave: async ({ email, name }) => ({
@@ -317,12 +317,12 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigProviderUsageStore",
+        module: "happyAgent/happyAgentProviderUsageStore",
         operation: "source reading",
         minimumChangedReferences: 1,
         create: () => {
             let emit: ((reading: { providers: readonly []; loading: boolean }) => void) | undefined;
-            const store = rigProviderUsageStoreCreate({
+            const store = happyAgentProviderUsageStoreCreate({
                 source: {
                     subscribe: (listener) => {
                         emit = listener;
@@ -344,12 +344,12 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigSessionDraftStore",
+        module: "happyAgent/happyAgentSessionDraftStore",
         operation: "permissionModeUpdate",
         minimumChangedReferences: 6,
         iterations: 1_000,
         create: () => {
-            const store = rigSessionDraftStoreCreate({
+            const store = happyAgentSessionDraftStoreCreate({
                 catalog: modelCatalog,
                 selection: automaticSelection,
             });
@@ -361,11 +361,11 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigSettingsStore",
+        module: "happyAgent/happyAgentSettingsStore",
         operation: "defaultEffortUpdate",
         minimumChangedReferences: 1,
         create: () => {
-            const store = rigSettingsStoreCreate({ defaultEffort: "medium" });
+            const store = happyAgentSettingsStoreCreate({ defaultEffort: "medium" });
             return {
                 snapshot: store.get,
                 change: () => store.defaultEffortUpdate("high"),
@@ -374,11 +374,11 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigSidebarCollapseStore",
+        module: "happyAgent/happyAgentSidebarCollapseStore",
         operation: "rowCollapseToggle",
         minimumChangedReferences: 2,
         create: () => {
-            const store = rigSidebarCollapseStoreCreate();
+            const store = happyAgentSidebarCollapseStoreCreate();
             return {
                 snapshot: store.get,
                 change: () => store.rowCollapseToggle("project"),
@@ -387,12 +387,12 @@ const cases: readonly BenchmarkCase[] = [
         },
     },
     {
-        module: "rig/rigWorkspaceMemory",
+        module: "happyAgent/happyAgentWorkspaceMemory",
         operation: "groupDraftWrite",
         minimumChangedReferences: 1,
         create: () => {
-            const groupId = "project" as RigGroupId;
-            const store = rigWorkspaceMemoryStoreCreate({
+            const groupId = "project" as HappyAgentGroupId;
+            const store = happyAgentWorkspaceMemoryStoreCreate({
                 read: () => ({
                     groups: {
                         [groupId]: { history: [], files: [], draft: "Alpha" },

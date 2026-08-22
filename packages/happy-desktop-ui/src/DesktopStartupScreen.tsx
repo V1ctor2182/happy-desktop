@@ -27,7 +27,7 @@ export interface DesktopStartupScreenProps {
  * The window before anything is running: a wait, a start button, or a failure.
  *
  * Waiting is the mark and nothing else. It is the shortest-lived screen in the
- * product — a few frames on a machine whose Rig is already up — and a headline
+ * product — a few frames on a machine whose Happy Agent is already up — and a headline
  * on it announces itself for exactly long enough to be read as a flash. It is
  * also the same mark the boot gate holds afterwards and then dissolves, so a
  * normal start is one continuous mark from the first frame to the mounted app

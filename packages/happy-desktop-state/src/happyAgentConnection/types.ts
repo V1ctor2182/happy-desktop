@@ -7,13 +7,13 @@ import type {
     MutationId,
     Project,
 } from "@slopus/happy-agent-client";
-import type { RigDebugLogInput } from "../rig/rigDebugLogStore.js";
+import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 
 export type { MutationId };
 
 export type ConnectionState = "connecting" | "live" | "reconnecting" | "closed";
 
-interface RigProfile {
+interface HappyAgentProfile {
     id: string;
     name: string;
     photo?: { data: string; mediaType: string };
@@ -83,7 +83,7 @@ export interface UserMessageElement extends BaseChatElement {
     kind: "user_message";
     messageId: string;
     identity: string | null;
-    profile?: RigProfile;
+    profile?: HappyAgentProfile;
     delivery: "pending_steering" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
@@ -567,7 +567,7 @@ export interface MutationRejectedDelta {
     type: "mutation_rejected";
 }
 
-export interface RigSessionSubscriptionOptions {
+export interface HappyAgentSessionSubscriptionOptions {
     sessionId: string;
     onChange: (elements: readonly ChatElement[], session: SessionState) => void;
     onDelta?: (delta: ChatDelta) => void;
@@ -575,20 +575,20 @@ export interface RigSessionSubscriptionOptions {
     transcriptTurnLimit?: number;
 }
 
-export interface RigSessionConnection {
+export interface HappyAgentSessionConnection {
     elements: () => readonly ChatElement[];
     session: () => SessionState;
     loadMore: (token: string) => void;
     close: () => void;
 }
 
-export interface RigGroupsSubscriptionOptions {
+export interface HappyAgentGroupsSubscriptionOptions {
     onChange: (projects: readonly ProjectGroup[], state: GroupsState) => void;
     onDelta?: (delta: GroupDelta) => void;
     onError?: (error: unknown) => void;
 }
 
-export interface RigGroupsConnection {
+export interface HappyAgentGroupsConnection {
     projects: () => readonly ProjectGroup[];
     state: () => GroupsState;
     close: () => void;
@@ -661,16 +661,16 @@ export interface ConnectHappyAgentOptions {
     onMutationRejected?: (delta: MutationRejectedDelta) => void;
     onCompatibilityChange?: (compatibility: ServerCompatibility) => void;
     /** Receives bounded, display-ready diagnostics without exposing credentials. */
-    onDebugEntry?: (entry: RigDebugLogInput) => void;
+    onDebugEntry?: (entry: HappyAgentDebugLogInput) => void;
     onSessionFinished?: (sessionId: string) => void;
 }
 
-export interface RigConnection {
+export interface HappyAgentConnection {
     compatibility: () => ServerCompatibility;
     /** Interrupts the managed update feed or startup wait so reconnection starts immediately. */
     retry: () => void;
-    connectSession: (options: RigSessionSubscriptionOptions) => RigSessionConnection;
-    connectGroups: (options: RigGroupsSubscriptionOptions) => RigGroupsConnection;
+    connectSession: (options: HappyAgentSessionSubscriptionOptions) => HappyAgentSessionConnection;
+    connectGroups: (options: HappyAgentGroupsSubscriptionOptions) => HappyAgentGroupsConnection;
     projects: {
         add(path: string, options?: ProjectAddOptions): Promise<Project>;
         archive(projectId: string): MutationId;

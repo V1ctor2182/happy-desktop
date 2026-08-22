@@ -1,18 +1,21 @@
 import { useState, type CSSProperties } from "react";
 import type { ConversationRequest, UserError } from "happy-desktop-state";
 import { ApprovalCard, type ApprovalRequest, type ApprovalResolution } from "./ApprovalCard";
-import { RigUserInputPrompt, type RigUserInputAnswerMap } from "./RigUserInputPrompt";
+import {
+    HappyAgentUserInputPrompt,
+    type HappyAgentUserInputAnswerMap,
+} from "./HappyAgentUserInputPrompt";
 
 export type ConversationRequestDecision = "approve" | "deny";
 
 export type ConversationRequestViewProps = {
     request: ConversationRequest;
     /** Answers a structured question request. */
-    onAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    onAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Options ticked into this question so far, when the owner keeps them. */
     selection?: Readonly<Record<string, readonly string[]>>;
     /** Reports each tick to an owner that keeps the selection. */
-    onSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    onSelectionChange?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Approves or denies a permission review. */
     onDecide?: (requestId: string, decision: ConversationRequestDecision) => void;
     /** Disables controls while a prior submission for this surface is in flight. */
@@ -36,7 +39,7 @@ export function ConversationRequestView(props: ConversationRequestViewProps) {
     if (request.kind === "userInput") {
         const answered = request.status === "answered";
         return (
-            <RigUserInputPrompt
+            <HappyAgentUserInputPrompt
                 className={props.className}
                 data-testid={props["data-testid"]}
                 {...(!answered && props.error ? { error: props.error } : {})}

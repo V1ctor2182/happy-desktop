@@ -190,7 +190,7 @@ export function FileBrowser(props: FileBrowserProps) {
                 </div>
             ) : null}
             {local.unavailable ? (
-                <Banner tone="neutral" title="Rig reconnecting">
+                <Banner tone="neutral" title="Happy Agent reconnecting">
                     {local.unavailable}
                 </Banner>
             ) : null}

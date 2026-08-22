@@ -114,7 +114,7 @@ export {
     type ComposerModelChoice,
     type ComposerModelControlProps,
 } from "./ComposerModelControl";
-export { rigComposerModelControlProps } from "./rigComposerModelControl";
+export { happyAgentComposerModelControlProps } from "./happyAgentComposerModelControl";
 export {
     DiffSnippet,
     type DiffLine,
@@ -232,7 +232,10 @@ export {
     type DesktopStartupUpdate,
     type DesktopStartupValues,
 } from "./DesktopStartupScreen";
-export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnectionStatus";
+export {
+    HappyAgentConnectionStatus,
+    type HappyAgentConnectionStatusProps,
+} from "./HappyAgentConnectionStatus";
 export {
     AgentActivityRow,
     type ActivityMotion,
@@ -266,43 +269,49 @@ export {
 } from "./ConversationDock";
 export { ComposerPanel, type ComposerPanelProps } from "./ComposerPanel";
 export {
-    RigUserInputPrompt,
-    type RigUserInputAnswerMap,
-    type RigUserInputPromptProps,
-    type RigUserInputPromptVariant,
-} from "./RigUserInputPrompt";
+    HappyAgentUserInputPrompt,
+    type HappyAgentUserInputAnswerMap,
+    type HappyAgentUserInputPromptProps,
+    type HappyAgentUserInputPromptVariant,
+} from "./HappyAgentUserInputPrompt";
 export {
-    RigControlMenu,
-    type RigControlMenuProps,
-    RigSessionControls,
-    type RigSessionControlsProps,
-} from "./RigSessionControls";
+    HappyAgentControlMenu,
+    type HappyAgentControlMenuProps,
+    HappyAgentSessionControls,
+    type HappyAgentSessionControlsProps,
+} from "./HappyAgentSessionControls";
 export {
     CommandPicker,
     commandPickerItems,
     type CommandPickerItem,
     type CommandPickerProps,
 } from "./CommandPicker";
-export { RigUsagePanel, type RigUsagePanelProps } from "./RigUsagePanel";
+export { HappyAgentUsagePanel, type HappyAgentUsagePanelProps } from "./HappyAgentUsagePanel";
 export {
-    RigProjectSettingsDialog,
-    type RigProjectComputeChoice,
-    type RigProjectComputeMode,
-    type RigProjectComputeSection,
-    type RigProjectSettingsDialogProps,
-} from "./RigProjectSettingsDialog";
+    HappyAgentProjectSettingsDialog,
+    type HappyAgentProjectComputeChoice,
+    type HappyAgentProjectComputeMode,
+    type HappyAgentProjectComputeSection,
+    type HappyAgentProjectSettingsDialogProps,
+} from "./HappyAgentProjectSettingsDialog";
 export {
-    RigCreateSessionDialog,
-    type RigCreateSessionDestination,
-    type RigCreateSessionDialogProps,
-} from "./RigCreateSessionDialog";
-export { RigProjectCloneDialog, type RigProjectCloneDialogProps } from "./RigProjectCloneDialog";
-export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
+    HappyAgentCreateSessionDialog,
+    type HappyAgentCreateSessionDestination,
+    type HappyAgentCreateSessionDialogProps,
+} from "./HappyAgentCreateSessionDialog";
 export {
-    RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT,
-    RigActivityControl,
-    type RigActivityControlProps,
-} from "./RigActivityControl";
+    HappyAgentProjectCloneDialog,
+    type HappyAgentProjectCloneDialogProps,
+} from "./HappyAgentProjectCloneDialog";
+export {
+    HappyAgentActivityPanel,
+    type HappyAgentActivityPanelProps,
+} from "./HappyAgentActivityPanel";
+export {
+    HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT,
+    HappyAgentActivityControl,
+    type HappyAgentActivityControlProps,
+} from "./HappyAgentActivityControl";
 export {
     SearchField,
     type SearchFieldEditableProps,
@@ -414,6 +423,8 @@ export {
 } from "./StatTile";
 export {
     LocalOnboardingScreen,
+    type LocalOnboardingAssistant,
+    type LocalOnboardingAssistantId,
     type LocalOnboardingDownload,
     type LocalOnboardingScreenProps,
     type LocalOnboardingView,
@@ -434,6 +445,12 @@ export {
     type WelcomeSlideArt,
 } from "./WelcomeScreen";
 export { SetupChoice, type SetupChoiceOption, type SetupChoiceProps } from "./SetupChoice";
+export {
+    SetupAssistants,
+    type SetupAssistantEntry,
+    type SetupAssistantsProps,
+} from "./SetupAssistants";
+export { AssistantMark, type AssistantMarkName, type AssistantMarkProps } from "./AssistantMark";
 export {
     SetupPage,
     type SetupPageAction,
@@ -485,54 +502,57 @@ export {
 } from "./BrowserPanel";
 export { ZoomIndicator } from "./ZoomIndicator";
 export {
-    RigInboxPage,
-    type RigInboxAnswerMap,
-    type RigInboxPageProps,
-} from "./pages/inbox/RigInboxPage";
+    HappyAgentInboxPage,
+    type HappyAgentInboxAnswerMap,
+    type HappyAgentInboxPageProps,
+} from "./pages/inbox/HappyAgentInboxPage";
 export {
-    RigSettingsSection,
-    RigSettingsShell,
-    type RigSettingsCategory,
-    type RigSettingsSectionProps,
-    type RigSettingsShellProps,
-} from "./pages/settings/RigSettingsShell";
+    HappyAgentSettingsSection,
+    HappyAgentSettingsShell,
+    type HappyAgentSettingsCategory,
+    type HappyAgentSettingsSectionProps,
+    type HappyAgentSettingsShellProps,
+} from "./pages/settings/HappyAgentSettingsShell";
 export {
-    RigGeneralSettings,
-    type RigAppearanceChoice,
-    type RigGeneralSettingsProps,
-    type RigScrollbarVisibilityChoice,
-} from "./pages/settings/RigGeneralSettings";
+    HappyAgentGeneralSettings,
+    type HappyAgentAppearanceChoice,
+    type HappyAgentGeneralSettingsProps,
+    type HappyAgentScrollbarVisibilityChoice,
+} from "./pages/settings/HappyAgentGeneralSettings";
 export {
-    RigDebugSettings,
-    type RigDebugSettingsProps,
-    type RigDebugTarget,
-} from "./pages/settings/RigDebugSettings";
+    HappyAgentDebugSettings,
+    type HappyAgentDebugSettingsProps,
+    type HappyAgentDebugTarget,
+} from "./pages/settings/HappyAgentDebugSettings";
 export {
-    RigDebugLogPanel,
-    type RigDebugLogPanelEntry,
-    type RigDebugLogPanelProps,
-} from "./pages/settings/RigDebugLogPanel";
+    HappyAgentDebugLogPanel,
+    type HappyAgentDebugLogPanelEntry,
+    type HappyAgentDebugLogPanelProps,
+} from "./pages/settings/HappyAgentDebugLogPanel";
 export {
-    RigProfilerSettings,
-    type RigProfilerCapabilities,
-    type RigProfilerSettingsProps,
-    type RigProfilerStatus,
-} from "./pages/settings/RigProfilerSettings";
+    HappyAgentProfilerSettings,
+    type HappyAgentProfilerCapabilities,
+    type HappyAgentProfilerSettingsProps,
+    type HappyAgentProfilerStatus,
+} from "./pages/settings/HappyAgentProfilerSettings";
 export {
-    RigInstructionsSettings,
-    type RigInstructionDocument,
-    type RigInstructionsSettingsProps,
-} from "./pages/settings/RigInstructionsSettings";
+    HappyAgentInstructionsSettings,
+    type HappyAgentInstructionDocument,
+    type HappyAgentInstructionsSettingsProps,
+} from "./pages/settings/HappyAgentInstructionsSettings";
 export {
-    RigProviderSettings,
-    type RigProviderModelRow,
-    type RigProviderRow,
-    type RigProviderSettingsProps,
-    type RigProviderStatus,
-} from "./pages/settings/RigProviderSettings";
+    HappyAgentProviderSettings,
+    type HappyAgentProviderModelRow,
+    type HappyAgentProviderRow,
+    type HappyAgentProviderSettingsProps,
+    type HappyAgentProviderStatus,
+} from "./pages/settings/HappyAgentProviderSettings";
 export {
-    RigProfileSettings,
-    type RigProfileSettingsProps,
-} from "./pages/settings/RigProfileSettings";
-export { RigUsageSettings, type RigUsageSettingsProps } from "./pages/settings/RigUsageSettings";
+    HappyAgentProfileSettings,
+    type HappyAgentProfileSettingsProps,
+} from "./pages/settings/HappyAgentProfileSettings";
+export {
+    HappyAgentUsageSettings,
+    type HappyAgentUsageSettingsProps,
+} from "./pages/settings/HappyAgentUsageSettings";
 export { providerAccountName } from "./pages/settings/providerAccountName";

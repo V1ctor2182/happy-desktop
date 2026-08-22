@@ -1,7 +1,7 @@
-import type { RigWindowSnapshot, RigWindowStore } from "happy-desktop-state";
+import type { HappyAgentWindowSnapshot, HappyAgentWindowStore } from "happy-desktop-state";
 import type { DesktopWindowState, HappyDesktopBridge } from "../shared/desktopContract";
 
-const windowed: RigWindowSnapshot = { fullScreen: false };
+const windowed: HappyAgentWindowSnapshot = { fullScreen: false };
 
 /**
  * One coarse bridge subscription owns the window's chrome state for the whole
@@ -9,8 +9,8 @@ const windowed: RigWindowSnapshot = { fullScreen: false };
  * initial read fills in the state the window already had when this surface
  * mounted; a push that arrives first wins over that read.
  */
-export function windowStateStoreCreate(bridge: HappyDesktopBridge): RigWindowStore {
-    let snapshot: RigWindowSnapshot = windowed;
+export function windowStateStoreCreate(bridge: HappyDesktopBridge): HappyAgentWindowStore {
+    let snapshot: HappyAgentWindowSnapshot = windowed;
     let bridgeUnsubscribe: (() => void) | undefined;
     let eventReceived = false;
     const listeners = new Set<() => void>();

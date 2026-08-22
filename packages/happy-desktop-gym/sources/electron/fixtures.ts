@@ -27,7 +27,7 @@ interface RepositoryFixture {
 export interface GitFixturesResult {
     readonly projects: readonly GymProject[];
     readonly fixture: GymFixtureCounts;
-    readonly rigWorkspacePath: string;
+    readonly happyAgentWorkspacePath: string;
 }
 
 /**
@@ -71,7 +71,7 @@ export async function gitFixturesCreate(
         readonly workspace: HappyAgentWorkspace;
     }> = [];
     for (const repository of repositories) {
-        // Registering after this mutation lets Rig's initial project scan expose
+        // Registering after this mutation lets Happy Agent's initial project scan expose
         // the deterministic changed-file projection immediately. Ready
         // worktrees are updated below once their paths exist.
         await workingTreeChangesApply(repository.path, manifest);
@@ -131,12 +131,13 @@ export async function gitFixturesCreate(
         }),
         emptyFixtureCounts(),
     );
-    const rigWorkspacePath = createdWorktrees.find((entry) => !archivedIds.has(entry.workspace.id))
-        ?.workspace.path;
-    if (rigWorkspacePath === undefined) {
+    const happyAgentWorkspacePath = createdWorktrees.find(
+        (entry) => !archivedIds.has(entry.workspace.id),
+    )?.workspace.path;
+    if (happyAgentWorkspacePath === undefined) {
         throw new Error("Gym did not create a ready managed workspace for tool workloads.");
     }
-    return { fixture, projects, rigWorkspacePath };
+    return { fixture, projects, happyAgentWorkspacePath };
 }
 
 function scaleFor(manifest: GymManifest): FixtureScale {
@@ -296,7 +297,7 @@ async function createRepository(
     await runGit(path, ["config", "user.name", "Happy Desktop Gym"], environment);
     await runGit(path, ["add", "."], environment);
     await runGit(path, ["commit", "--quiet", "-m", "Initial deterministic fixture"], environment);
-    // Rig's Git scanner measures working-tree changes against origin/main.
+    // Happy Agent's Git scanner measures working-tree changes against origin/main.
     // The isolated fixture has no network remote, so provide a local remote
     // tracking ref pointing at the real baseline commit instead of making the
     // scanner report an unavailable comparison.
@@ -326,7 +327,7 @@ async function workingTreeChangesApply(path: string, manifest: GymManifest): Pro
         "utf8",
     );
     await mkdir(join(path, "src/changes/renamed"), { recursive: true });
-    // Leave the rename and deletion unstaged. Rig's changed-file projection
+    // Leave the rename and deletion unstaged. Happy Agent's changed-file projection
     // reads the working-tree diff, so staging these entries would hide them
     // from the UI even though `git status` still reports them.
     await rename(

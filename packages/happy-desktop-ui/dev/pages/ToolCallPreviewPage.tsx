@@ -18,7 +18,7 @@ const runningCommand: ConversationToolCall = {
         command:
             "pnpm --dir packages/happy-desktop-electron typecheck --pretty false && rg --hidden --glob '!node_modules' extraordinarily_long_generated_identifier packages/happy-desktop-electron/sources",
         output:
-            "Checking packages/happy-desktop-electron/sources/main/rigProjection.ts\n" +
+            "Checking packages/happy-desktop-electron/sources/main/happyAgentProjection.ts\n" +
             "extraordinarily_long_generated_identifier_without_natural_break_points_stays_inside_the_sidebar",
     },
 };

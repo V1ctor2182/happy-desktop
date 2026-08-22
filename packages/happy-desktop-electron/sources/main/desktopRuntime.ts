@@ -20,25 +20,25 @@ import {
     desktopTopologyTarget,
 } from "./runtimeValidation";
 import {
-    localRigConnectorCreate,
-    type LocalRigConnection,
-    type LocalRigConnector,
-} from "./localRig";
+    localHappyAgentConnectorCreate,
+    type LocalHappyAgentConnection,
+    type LocalHappyAgentConnector,
+} from "./localHappyAgent";
 import { HappyAgentClient } from "@slopus/happy-agent-client";
-import type { LocalRigOnboardingState, LocalRigProfile } from "./localOnboarding";
+import type { LocalHappyAgentOnboardingState, LocalHappyAgentProfile } from "./localOnboarding";
 import {
-    rigDaemonConnectionUnavailable,
-    type RigDaemonInspectorResponse,
-    type RigDaemonInspectorStopResponse,
-} from "./rigDaemonClient";
+    happyAgentDaemonConnectionUnavailable,
+    type HappyAgentDaemonInspectorResponse,
+    type HappyAgentDaemonInspectorStopResponse,
+} from "./happyAgentDaemonClient";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
-import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
+import { happyAgentHttpProxyCreate, type HappyAgentHttpProxyHandle } from "./happyAgentHttpProxy";
 import type { Duplex } from "node:stream";
 
-export type RigHttpProxyStart = (
-    connection: LocalRigConnection,
+export type HappyAgentHttpProxyStart = (
+    connection: LocalHappyAgentConnection,
     onConnectionError: (error: unknown) => void,
-) => Promise<RigHttpProxyHandle>;
+) => Promise<HappyAgentHttpProxyHandle>;
 
 const idleUpdate: DesktopUpdateSnapshot = { status: "idle" };
 /**
@@ -47,7 +47,7 @@ const idleUpdate: DesktopUpdateSnapshot = { status: "idle" };
  * A daemon Happy just asked to start is not listening the instant the command
  * returns, and a socket refused half a second into a cold boot is not a broken
  * machine — it is a machine that is still waking up. Reporting the first refusal
- * as a failure puts a "could not reach Rig" screen in front of someone whose Rig
+ * as a failure puts a "could not reach Happy Agent" screen in front of someone whose Happy Agent
  * was about to answer, so the first few refusals are simply waited out. The
  * delays grow so a genuinely dead daemon still gives up quickly.
  */
@@ -59,18 +59,18 @@ export interface DesktopRuntimePaths {
 }
 
 export interface DesktopRuntimeOptions {
-    readonly localRigConnector?: LocalRigConnector;
-    readonly rigHttpProxyStart?: RigHttpProxyStart;
+    readonly localHappyAgentConnector?: LocalHappyAgentConnector;
+    readonly happyAgentHttpProxyStart?: HappyAgentHttpProxyStart;
     /**
      * The exact hosted or development renderer origin. It is the only browser
-     * origin the loopback Rig proxy answers cross-origin.
+     * origin the loopback Happy Agent proxy answers cross-origin.
      */
     readonly rendererOrigin?: string;
-    /** The window's HTML preview proxy, so a Rig's documents can be published. */
+    /** The window's HTML preview proxy, so a Happy Agent's documents can be published. */
     readonly htmlPreview?: HtmlPreviewProxyHandle;
 }
 
-/** Owns the active local-Rig topology and one immutable renderer snapshot. */
+/** Owns the active local-Happy Agent topology and one immutable renderer snapshot. */
 export class DesktopRuntime implements AsyncDisposable {
     private activationGeneration = 0;
     /** Advances whenever the daemon backing the stable local proxy changes. */
@@ -82,16 +82,16 @@ export class DesktopRuntime implements AsyncDisposable {
     private operation = Promise.resolve();
     private persistOnSuccess = false;
     private reconnectTask?: Promise<void>;
-    private rigConnection?: LocalRigConnection;
+    private happyAgentConnection?: LocalHappyAgentConnection;
     private happyAgentClient?: {
         readonly generation: number;
         readonly client: HappyAgentClient;
     };
-    private rigProxy?: RigHttpProxyHandle;
+    private happyAgentProxy?: HappyAgentHttpProxyHandle;
     private settings?: DesktopSettings;
     private snapshotValue: DesktopRuntimeSnapshot;
-    private readonly connector: LocalRigConnector;
-    private readonly proxyStart: RigHttpProxyStart;
+    private readonly connector: LocalHappyAgentConnector;
+    private readonly proxyStart: HappyAgentHttpProxyStart;
 
     private constructor(
         private readonly paths: DesktopRuntimePaths,
@@ -99,11 +99,11 @@ export class DesktopRuntime implements AsyncDisposable {
         options: DesktopRuntimeOptions,
     ) {
         this.settings = settings;
-        this.connector = options.localRigConnector ?? localRigConnectorCreate();
+        this.connector = options.localHappyAgentConnector ?? localHappyAgentConnectorCreate();
         this.proxyStart =
-            options.rigHttpProxyStart ??
+            options.happyAgentHttpProxyStart ??
             ((connection, onConnectionError) =>
-                rigHttpProxyCreate({
+                happyAgentHttpProxyCreate({
                     client: connection.client,
                     onConnectionError,
                     ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
@@ -121,7 +121,7 @@ export class DesktopRuntime implements AsyncDisposable {
         this.activeTopology = active;
         this.snapshotValue = {
             phase: "starting",
-            message: "Connecting to your local Rig daemon…",
+            message: "Connecting to your local Happy Agent daemon…",
             request: desktopTopologyRequest(active),
             targets: this.targets(),
             update: idleUpdate,
@@ -152,7 +152,7 @@ export class DesktopRuntime implements AsyncDisposable {
         return () => this.listeners.delete(listener);
     }
 
-    localInspectorStart(expectedConnectionId: number): Promise<RigDaemonInspectorResponse> {
+    localInspectorStart(expectedConnectionId: number): Promise<HappyAgentDaemonInspectorResponse> {
         return this.serial(async () => {
             const client = this.localConnectionRequire(expectedConnectionId).client;
             const result = await client.startInspector();
@@ -161,7 +161,9 @@ export class DesktopRuntime implements AsyncDisposable {
         });
     }
 
-    localInspectorStop(expectedConnectionId: number): Promise<RigDaemonInspectorStopResponse> {
+    localInspectorStop(
+        expectedConnectionId: number,
+    ): Promise<HappyAgentDaemonInspectorStopResponse> {
         return this.serial(async () => {
             const client = this.localConnectionRequire(expectedConnectionId).client;
             const result = await client.stopInspector();
@@ -170,35 +172,35 @@ export class DesktopRuntime implements AsyncDisposable {
         });
     }
 
-    /** Resolves Rig's complete ordered onboarding contract for this daemon. */
-    localOnboardingResolve(expectedConnectionId: number): Promise<LocalRigOnboardingState> {
+    /** Resolves Happy Agent's complete ordered onboarding contract for this daemon. */
+    localOnboardingResolve(expectedConnectionId: number): Promise<LocalHappyAgentOnboardingState> {
         return this.serial(() => this.localOnboardingResolveOnce(expectedConnectionId));
     }
 
     private async localOnboardingResolveOnce(
         expectedConnectionId: number,
-    ): Promise<LocalRigOnboardingState> {
+    ): Promise<LocalHappyAgentOnboardingState> {
         const connection = this.localConnectionRequire(expectedConnectionId);
         const client = this.localHappyAgentClient();
-        if (!client) throw new Error("The local Rig daemon is unavailable.");
-        const state = await connectedRigOnboardingResolve(client);
+        if (!client) throw new Error("The local Happy Agent daemon is unavailable.");
+        const state = await connectedHappyAgentOnboardingResolve(client);
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.connectionId !== expectedConnectionId ||
-            this.rigConnection !== connection
+            this.happyAgentConnection !== connection
         )
-            throw new Error("The local Rig changed while Happy was examining it.");
+            throw new Error("The local Happy Agent changed while Happy was examining it.");
         return state;
     }
 
     async localOnboardingProfileCreate(
         expectedConnectionId: number,
         input: { readonly email: string; readonly name: string },
-    ): Promise<LocalRigProfile> {
+    ): Promise<LocalHappyAgentProfile> {
         return this.serial(async () => {
             this.localConnectionRequire(expectedConnectionId);
             const client = this.localHappyAgentClient();
-            if (!client) throw new Error("The local Rig daemon is unavailable.");
+            if (!client) throw new Error("The local Happy Agent daemon is unavailable.");
             const current = await client.getProfile();
             return (
                 await client.updateProfile(input, {
@@ -212,7 +214,7 @@ export class DesktopRuntime implements AsyncDisposable {
         return this.serial(async () => {
             this.localConnectionRequire(expectedConnectionId);
             const client = this.localHappyAgentClient();
-            if (!client) throw new Error("The local Rig daemon is unavailable.");
+            if (!client) throw new Error("The local Happy Agent daemon is unavailable.");
             const catalog = await client.listProjects();
             this.localConnectionRequire(expectedConnectionId);
             return catalog.projects.length > 0 ? "used" : "fresh";
@@ -226,21 +228,21 @@ export class DesktopRuntime implements AsyncDisposable {
         return this.serial(async () => {
             this.localConnectionRequire(expectedConnectionId);
             const client = this.localHappyAgentClient();
-            if (!client) throw new Error("The local Rig daemon is unavailable.");
+            if (!client) throw new Error("The local Happy Agent daemon is unavailable.");
             await client.registerProject({ path });
             return { path };
         });
     }
 
-    private localConnectionRequire(expectedConnectionId: number): LocalRigConnection {
+    private localConnectionRequire(expectedConnectionId: number): LocalHappyAgentConnection {
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.mode !== "local" ||
             this.snapshotValue.connectionId !== expectedConnectionId ||
-            !this.rigConnection
+            !this.happyAgentConnection
         )
-            throw new Error("The local Rig changed before Happy could finish.");
-        return this.rigConnection;
+            throw new Error("The local Happy Agent changed before Happy could finish.");
+        return this.happyAgentConnection;
     }
 
     /** The one shared Happy Agent HTTP client for this local activation. */
@@ -264,8 +266,8 @@ export class DesktopRuntime implements AsyncDisposable {
     private localHappyAgentEndpoint(): string | undefined {
         if (this.snapshotValue.phase !== "ready" || this.snapshotValue.mode !== "local")
             return undefined;
-        const endpoint = this.rigProxy?.url;
-        return endpoint ? `${endpoint.replace(/\/$/u, "")}/rig-connect` : undefined;
+        const endpoint = this.happyAgentProxy?.url;
+        return endpoint ? endpoint.replace(/\/$/u, "") : undefined;
     }
 
     /** Opens one authenticated browser-proxy tunnel for a local session. */
@@ -273,10 +275,10 @@ export class DesktopRuntime implements AsyncDisposable {
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.mode !== "local" ||
-            !this.rigConnection
+            !this.happyAgentConnection
         )
-            throw new Error("The local Rig daemon is unavailable.");
-        return this.rigConnection.client.openHttpProxy(sessionId);
+            throw new Error("The local Happy Agent daemon is unavailable.");
+        return this.happyAgentConnection.client.openHttpProxy(sessionId);
     }
 
     start(request: DesktopStartRequest): Promise<void> {
@@ -305,12 +307,12 @@ export class DesktopRuntime implements AsyncDisposable {
 
     /** Reconnects one failed normal-daemon transport and coalesces concurrent IPC failures. */
     reconnectLocal(error: unknown): Promise<void> {
-        if (!rigDaemonConnectionUnavailable(error)) return Promise.resolve();
+        if (!happyAgentDaemonConnectionUnavailable(error)) return Promise.resolve();
         if (this.reconnectTask) return this.reconnectTask;
         const topology = this.activeTopology;
         const generation = this.activationGeneration;
-        const failedConnection = this.rigConnection;
-        const proxy = this.rigProxy;
+        const failedConnection = this.happyAgentConnection;
+        const proxy = this.happyAgentProxy;
         if (
             !topology ||
             topology.mode !== "local" ||
@@ -327,8 +329,8 @@ export class DesktopRuntime implements AsyncDisposable {
                 this.activationGeneration !== generation ||
                 this.activeTopology?.id !== topology.id ||
                 this.snapshotValue.phase !== "ready" ||
-                this.rigConnection !== failedConnection ||
-                this.rigProxy !== proxy
+                this.happyAgentConnection !== failedConnection ||
+                this.happyAgentProxy !== proxy
             )
                 return;
             const replacement = await this.connector.connect();
@@ -337,8 +339,8 @@ export class DesktopRuntime implements AsyncDisposable {
                 this.activationGeneration !== generation ||
                 this.activeTopology?.id !== topology.id ||
                 this.snapshotValue.phase !== "ready" ||
-                this.rigConnection !== failedConnection ||
-                this.rigProxy !== proxy
+                this.happyAgentConnection !== failedConnection ||
+                this.happyAgentProxy !== proxy
             ) {
                 replacement.close();
                 return;
@@ -351,7 +353,7 @@ export class DesktopRuntime implements AsyncDisposable {
                 replacement.close();
                 throw replaceError;
             }
-            this.rigConnection = replacement;
+            this.happyAgentConnection = replacement;
             this.happyAgentClient = undefined;
             failedConnection.close();
             const snapshot = this.snapshotValue;
@@ -361,7 +363,7 @@ export class DesktopRuntime implements AsyncDisposable {
                     ...snapshot,
                     activeTarget: {
                         ...snapshot.activeTarget,
-                        rigVersion: replacement.version,
+                        happyAgentVersion: replacement.version,
                     },
                     connectionId,
                 });
@@ -420,12 +422,14 @@ export class DesktopRuntime implements AsyncDisposable {
      * Reaches the daemon, waiting out the refusals that a starting daemon gives.
      *
      * Only a connection that failed for a reason another attempt could change is
-     * retried: a missing `rig` command and a daemon that refuses on its own terms
+     * retried: a missing agent and a daemon that refuses on its own terms
      * — no signed-in coding assistant, for instance — will answer exactly the
      * same way in two seconds, and waiting on them only makes the window feel
      * broken. Returns nothing when this activation was superseded while waiting.
      */
-    private async connectAttempt(generation: number): Promise<LocalRigConnection | undefined> {
+    private async connectAttempt(
+        generation: number,
+    ): Promise<LocalHappyAgentConnection | undefined> {
         let failure: unknown;
         for (const [index, delay] of connectAttemptDelaysMs.entries()) {
             if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
@@ -455,7 +459,7 @@ export class DesktopRuntime implements AsyncDisposable {
         if (!inPlace)
             this.publish({
                 phase: "starting",
-                message: "Connecting to your local Rig daemon…",
+                message: "Connecting to your local Happy Agent daemon…",
                 request,
                 targets: this.targets(),
                 update: this.snapshotValue.update,
@@ -467,7 +471,7 @@ export class DesktopRuntime implements AsyncDisposable {
                 connection.close();
                 return;
             }
-            this.rigConnection = connection;
+            this.happyAgentConnection = connection;
             const connectionId = ++this.connectionGeneration;
             const proxy = await this.proxyStart(connection, (error) => {
                 void this.reconnectLocal(error).catch(() => undefined);
@@ -475,12 +479,12 @@ export class DesktopRuntime implements AsyncDisposable {
             if (generation !== this.activationGeneration) {
                 proxy.close();
                 connection.close();
-                this.rigConnection = undefined;
+                this.happyAgentConnection = undefined;
                 return;
             }
-            this.rigProxy = proxy;
-            const rigVersion = connection.version;
-            const rigHttpUrl = proxy.url;
+            this.happyAgentProxy = proxy;
+            const happyAgentVersion = connection.version;
+            const happyAgentHttpUrl = proxy.url;
             if (this.persistOnSuccess) {
                 const settings = desktopSettingsActivate(this.settings, topology);
                 await desktopSettingsWrite(
@@ -491,7 +495,11 @@ export class DesktopRuntime implements AsyncDisposable {
                 this.persistOnSuccess = false;
             }
             if (generation !== this.activationGeneration) return;
-            const activeTarget = desktopActiveTarget(topology, rigVersion, rigHttpUrl);
+            const activeTarget = desktopActiveTarget(
+                topology,
+                happyAgentVersion,
+                happyAgentHttpUrl,
+            );
             this.publish({
                 phase: "ready",
                 activeTarget,
@@ -518,10 +526,10 @@ export class DesktopRuntime implements AsyncDisposable {
 
     private localDispose(): void {
         this.happyAgentClient = undefined;
-        this.rigProxy?.close();
-        this.rigProxy = undefined;
-        this.rigConnection?.close();
-        this.rigConnection = undefined;
+        this.happyAgentProxy?.close();
+        this.happyAgentProxy = undefined;
+        this.happyAgentConnection?.close();
+        this.happyAgentConnection = undefined;
     }
 
     private publish(snapshot: DesktopRuntimeSnapshot): void {
@@ -557,7 +565,7 @@ export class DesktopRuntime implements AsyncDisposable {
  * rather than a moment, and repeating the question just delays saying so.
  */
 function connectAttemptRetryable(error: unknown): boolean {
-    return rigDaemonConnectionUnavailable(error);
+    return happyAgentDaemonConnectionUnavailable(error);
 }
 
 function displayError(error: unknown): string {
@@ -572,9 +580,9 @@ function displayError(error: unknown): string {
  * shell, so compatibility belongs to the renderer connection that actually
  * consumes the protocol. Main asks only for daemon-owned onboarding state.
  */
-async function connectedRigOnboardingResolve(
+async function connectedHappyAgentOnboardingResolve(
     client: HappyAgentClient,
-): Promise<LocalRigOnboardingState> {
+): Promise<LocalHappyAgentOnboardingState> {
     try {
         const state = await client.getOnboarding({
             signal: AbortSignal.timeout(onboardingRequestTimeoutMs),
@@ -583,15 +591,15 @@ async function connectedRigOnboardingResolve(
         if (!state.steps.profile.done) return { state: "profile_required" };
         return { state: "complete" };
     } catch (error) {
-        return rigUnreachableState(error);
+        return happyAgentUnreachableState(error);
     }
 }
 
-function rigUnreachableState(error: unknown): LocalRigOnboardingState {
+function happyAgentUnreachableState(error: unknown): LocalHappyAgentOnboardingState {
     return {
-        message: displayError(error).slice(0, 2_048) || "Rig could not be reached.",
-        state: "rig_unreachable",
+        message: displayError(error).slice(0, 2_048) || "Happy Agent could not be reached.",
+        state: "happy_agent_unreachable",
     };
 }
 
-export { rigDaemonConnectionUnavailable };
+export { happyAgentDaemonConnectionUnavailable };
