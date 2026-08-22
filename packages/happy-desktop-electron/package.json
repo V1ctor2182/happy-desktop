@@ -5,7 +5,8 @@
     "description": "Happy Place macOS desktop app",
     "author": "Slopus",
     "files": [
-        "dist"
+        "dist",
+        "assets/app-icon/generated/app-icon.png"
     ],
     "type": "module",
     "main": "dist/main.js",
@@ -94,7 +95,7 @@
             "entitlements": "build/entitlements.mac.plist",
             "entitlementsInherit": "build/entitlements.mac.plist",
             "hardenedRuntime": true,
-            "icon": "build/icon.icns",
+            "icon": "assets/app-icon/generated/app-icon.icns",
             "notarize": true,
             "target": [
                 {

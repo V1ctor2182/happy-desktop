@@ -116,6 +116,7 @@ console.log(
 function builderConfiguration(base, output, app, flavorName, selectedFlavor) {
     const buildResources = join(desktopDirectory, "build");
     const entitlements = join(buildResources, "entitlements.mac.plist");
+    const icon = join(desktopDirectory, "assets", "app-icon", "generated", "app-icon.icns");
     return {
         ...structuredClone(base),
         appId: selectedFlavor.appId,
@@ -141,13 +142,20 @@ function builderConfiguration(base, output, app, flavorName, selectedFlavor) {
             },
         ],
         ...(flavorName === "local-web"
-            ? { files: ["dist/main.js", "dist/preload.cjs", "package.json"] }
+            ? {
+                  files: [
+                      "dist/main.js",
+                      "dist/preload.cjs",
+                      "assets/app-icon/generated/app-icon.png",
+                      "package.json",
+                  ],
+              }
             : {}),
         mac: {
             ...base.mac,
             entitlements,
             entitlementsInherit: entitlements,
-            icon: join(buildResources, "icon.icns"),
+            icon,
         },
         publish: { ...structuredClone(base.publish), channel: selectedFlavor.channel },
     };

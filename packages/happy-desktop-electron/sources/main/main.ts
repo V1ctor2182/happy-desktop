@@ -135,13 +135,17 @@ if (buildIdentity) app.setPath("userData", `${app.getPath("userData")}-${buildId
 if (!app.requestSingleInstanceLock()) app.quit();
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
-const builtApplicationIconPath = join(dirname, "renderer", "app-icon.png");
-const sourceApplicationIconPath = join(dirname, "..", "public", "app-icon.png");
-const applicationIconPath = existsSync(builtApplicationIconPath)
-    ? builtApplicationIconPath
-    : existsSync(sourceApplicationIconPath)
-      ? sourceApplicationIconPath
-      : undefined;
+const generatedApplicationIconPath = join(
+    dirname,
+    "..",
+    "assets",
+    "app-icon",
+    "generated",
+    "app-icon.png",
+);
+const applicationIconPath = existsSync(generatedApplicationIconPath)
+    ? generatedApplicationIconPath
+    : undefined;
 /*
  * The title carries the checkout as well, because that is what Mission Control,
  * the Window menu, and the app switcher's window list have room to show. The

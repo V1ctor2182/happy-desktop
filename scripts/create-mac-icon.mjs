@@ -1,16 +1,19 @@
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import sharp from "sharp";
 
 const execute = promisify(execFile);
 const workspace = resolve(import.meta.dirname, "..");
-const source = join(workspace, "packages", "happy-desktop-electron", "public", "app-icon.png");
-const buildDirectory = join(workspace, "packages", "happy-desktop-electron", "build");
-const destination = join(buildDirectory, "icon.icns");
-const temporary = await mkdtemp(join(tmpdir(), "happy-icon-"));
+const assetDirectory = join(workspace, "packages", "happy-desktop-electron", "assets", "app-icon");
+const source = join(assetDirectory, "source.png");
+const generatedDirectory = join(assetDirectory, "generated");
+const generatedPng = join(generatedDirectory, "app-icon.png");
+const generatedIcns = join(generatedDirectory, "app-icon.icns");
+const temporaryRoot = join(workspace, ".context");
+await mkdir(temporaryRoot, { recursive: true });
+const temporary = await mkdtemp(join(temporaryRoot, "happy-icon-"));
 const iconset = join(temporary, "Happy.iconset");
 const canvasSize = 1024;
 const tileSize = 824;
@@ -59,14 +62,16 @@ try {
         join(temporary, "icon.icns"),
         iconset,
     ]);
-    await mkdir(buildDirectory, { recursive: true });
-    await rm(destination, { force: true });
-    await rename(join(temporary, "icon.icns"), destination);
-    console.log(`Generated ${destination}.`);
+    await mkdir(generatedDirectory, { recursive: true });
+    await rm(generatedPng, { force: true });
+    await rm(generatedIcns, { force: true });
+    await rename(macArtwork, generatedPng);
+    await rename(join(temporary, "icon.icns"), generatedIcns);
+    console.log(`Generated ${generatedPng} and ${generatedIcns}.`);
 } finally {
     await rm(temporary, { force: true, recursive: true });
 }
 
 async function resize(input, size, output) {
-    await execute("sips", ["-z", String(size), String(size), input, "--out", output]);
+    await sharp(input).resize(size, size).png().toFile(output);
 }
