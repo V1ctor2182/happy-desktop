@@ -1,4 +1,4 @@
-.happy2-composer-attachment-remove {
+.happy-composer-attachment-remove {
     position: absolute;
     z-index: 3;
     top: -14px;
@@ -20,7 +20,7 @@
 /* The full target is centered on the attachment corner. The smaller visible
  * disc keeps that geometry legible without putting a dark control over the
  * image itself. */
-.happy2-composer-attachment-remove::before {
+.happy-composer-attachment-remove::before {
     position: absolute;
     inset: 5px;
     background: var(--surface);
@@ -30,19 +30,19 @@
     content: "";
 }
 
-.happy2-composer-attachment-remove .happy2-icon {
+.happy-composer-attachment-remove .happy-icon {
     position: relative;
 }
 
-.happy2-composer-attachment-remove:hover::before {
+.happy-composer-attachment-remove:hover::before {
     background: var(--surface-ripple);
 }
 
-.happy2-composer-attachment-remove:focus-visible {
+.happy-composer-attachment-remove:focus-visible {
     outline: none;
 }
 
-.happy2-composer-attachment-remove:focus-visible::before {
+.happy-composer-attachment-remove:focus-visible::before {
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }

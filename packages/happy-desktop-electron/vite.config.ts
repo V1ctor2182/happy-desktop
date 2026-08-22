@@ -13,18 +13,18 @@ const packageJson = require("./package.json") as { readonly version: string };
 const unavailableReactDevtoolsCore = fileURLToPath(
     new URL("./sources/renderer/reactDevtoolsCoreUnavailable.ts", import.meta.url),
 );
-const profileBuild = process.env.HAPPY2_DESKTOP_PROFILE === "1";
-const localWebSite = process.env.HAPPY2_LOCAL_WEB_SITE === "1";
+const profileBuild = process.env.HAPPY_DESKTOP_PROFILE === "1";
+const localWebSite = process.env.HAPPY_LOCAL_WEB_SITE === "1";
 const localWebBuild = localWebSite
     ? {
-          buildId: process.env.HAPPY2_LOCAL_WEB_BUILD_ID ?? "development",
+          buildId: process.env.HAPPY_LOCAL_WEB_BUILD_ID ?? "development",
           version: packageJson.version,
       }
     : undefined;
 
 function localWebVersionPlugin(build: NonNullable<typeof localWebBuild>): Plugin {
     return {
-        name: "happy2-local-web-version",
+        name: "happy-local-web-version",
         generateBundle() {
             this.emitFile({
                 fileName: "local-web-version.json",
@@ -37,7 +37,7 @@ function localWebVersionPlugin(build: NonNullable<typeof localWebBuild>): Plugin
 
 function profilerEntryPlugin(enabled: boolean): Plugin {
     return {
-        name: "happy2-profile-entry",
+        name: "happy-profile-entry",
         transformIndexHtml: {
             order: "pre",
             handler(html) {
@@ -61,9 +61,9 @@ export default defineConfig({
     // runtime or reporting attribution that never attached.
     ...(profileBuild ? { server: { hmr: false } } : {}),
     define: {
-        __HAPPY2_DESKTOP_PROFILE__: JSON.stringify(profileBuild),
-        __HAPPY2_LOCAL_WEB_BUILD_ID__: JSON.stringify(localWebBuild?.buildId ?? null),
-        __HAPPY2_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),
+        __HAPPY_DESKTOP_PROFILE__: JSON.stringify(profileBuild),
+        __HAPPY_LOCAL_WEB_BUILD_ID__: JSON.stringify(localWebBuild?.buildId ?? null),
+        __HAPPY_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),
     },
     plugins: [
         // The Happy Agent terminal protocol (@slopus/ghostty-web) decodes compressed wire
@@ -77,7 +77,7 @@ export default defineConfig({
         react(),
         babel({ presets: [reactCompilerPreset()] }),
         profilerEntryPlugin(profileBuild),
-        // Happy2-ui's empty-state marks are drawn by a WASM Lottie renderer that
+        // Happy-ui's empty-state marks are drawn by a WASM Lottie renderer that
         // ships hardcoded CDN URLs for its binary. This cuts them out so the
         // renderer can only ever load the copy bundled here.
         lottieLocalWasmPlugin(),

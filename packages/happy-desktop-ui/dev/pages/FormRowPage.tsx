@@ -131,7 +131,7 @@ export function FormRowPage() {
                                 <Box
                                     height={24}
                                     style={{
-                                        borderRadius: "var(--happy2-radius-sm)",
+                                        borderRadius: "var(--happy-radius-sm)",
                                         background: "var(--text-link)",
                                     }}
                                     width={24}

@@ -13,9 +13,9 @@
  * of hit-testing and out of the accessibility tree without cutting the fade.
  */
 
-.happy2-loading-swap {
-    --happy2-loading-swap-size: 20px;
-    --happy2-loading-swap-duration: 160ms;
+.happy-loading-swap {
+    --happy-loading-swap-size: 20px;
+    --happy-loading-swap-duration: 160ms;
 
     position: relative;
     display: inline-flex;
@@ -23,8 +23,8 @@
     justify-content: center;
     flex: none;
     box-sizing: border-box;
-    width: var(--happy2-loading-swap-size);
-    height: var(--happy2-loading-swap-size);
+    width: var(--happy-loading-swap-size);
+    height: var(--happy-loading-swap-size);
     vertical-align: middle;
 }
 
@@ -32,7 +32,7 @@
  * Both layers occupy the same square, so they are stacked out of flow rather
  * than laid out beside each other; each layer is itself a centring flex box.
  */
-.happy2-loading-swap__layer {
+.happy-loading-swap__layer {
     position: absolute;
     inset: 0;
     display: flex;
@@ -42,21 +42,21 @@
     opacity: 0;
     visibility: hidden;
     transition:
-        opacity var(--happy2-loading-swap-duration) ease,
-        visibility 0s linear var(--happy2-loading-swap-duration);
+        opacity var(--happy-loading-swap-duration) ease,
+        visibility 0s linear var(--happy-loading-swap-duration);
 }
 
-.happy2-loading-swap[data-loading] .happy2-loading-swap__layer[data-layer="spinner"],
-.happy2-loading-swap:not([data-loading]) .happy2-loading-swap__layer[data-layer="content"] {
+.happy-loading-swap[data-loading] .happy-loading-swap__layer[data-layer="spinner"],
+.happy-loading-swap:not([data-loading]) .happy-loading-swap__layer[data-layer="content"] {
     opacity: 1;
     visibility: visible;
     transition:
-        opacity var(--happy2-loading-swap-duration) ease,
+        opacity var(--happy-loading-swap-duration) ease,
         visibility 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy2-loading-swap__layer {
-        --happy2-loading-swap-duration: 1ms;
+    .happy-loading-swap__layer {
+        --happy-loading-swap-duration: 1ms;
     }
 }

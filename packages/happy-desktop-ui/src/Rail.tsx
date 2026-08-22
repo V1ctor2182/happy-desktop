@@ -70,7 +70,7 @@ export function Rail(props: RailProps) {
     } = props;
     const [primaryMenuOpen, setPrimaryMenuOpen] = useState(false);
     const primaryRoot = useRef<HTMLDivElement>(null);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- an open rail menu owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
+    // eslint-disable-next-line happy-react/no-layout-effect -- an open rail menu owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
     useLayoutEffect(() => {
         if (!primaryMenuOpen) return;
         const close = (event: PointerEvent) => {
@@ -102,29 +102,29 @@ export function Rail(props: RailProps) {
     return (
         <nav
             {...rest}
-            className={["happy2-rail", className].filter(Boolean).join(" ")}
+            className={["happy-rail", className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="rail"
             style={style}
         >
-            <div className="happy2-rail__brand" data-happy-desktop-ui="rail-brand">
+            <div className="happy-rail__brand" data-happy-desktop-ui="rail-brand">
                 {brand ? (
                     brand
                 ) : (
                     <img
                         alt=""
                         aria-hidden="true"
-                        className="happy2-rail__brand-image"
+                        className="happy-rail__brand-image"
                         data-happy-desktop-ui="rail-brand-image"
                         draggable={false}
                         src={happyLogoUrl}
                     />
                 )}
             </div>
-            <div className="happy2-rail__items" data-happy-desktop-ui="rail-items">
+            <div className="happy-rail__items" data-happy-desktop-ui="rail-items">
                 {items.map((item) => (
                     <button
                         aria-current={item.id === activeItemId ? "page" : undefined}
-                        className="happy2-rail__item"
+                        className="happy-rail__item"
                         data-active={item.id === activeItemId ? "" : undefined}
                         data-item-id={item.id}
                         data-happy-desktop-ui="rail-item"
@@ -133,14 +133,14 @@ export function Rail(props: RailProps) {
                         type="button"
                     >
                         <span
-                            className="happy2-rail__item-icon"
+                            className="happy-rail__item-icon"
                             data-happy-desktop-ui="rail-item-icon"
                         >
                             <Icon name={item.icon} size={20} />
                             {item.badge
                                 ? ((count) => (
                                       <span
-                                          className="happy2-rail__item-badge"
+                                          className="happy-rail__item-badge"
                                           data-happy-desktop-ui="rail-item-badge"
                                       >
                                           <CountBadge count={count} />
@@ -149,7 +149,7 @@ export function Rail(props: RailProps) {
                                 : null}
                         </span>
                         <span
-                            className="happy2-rail__item-label"
+                            className="happy-rail__item-label"
                             data-happy-desktop-ui="rail-item-label"
                         >
                             {item.label}
@@ -158,13 +158,13 @@ export function Rail(props: RailProps) {
                 ))}
             </div>
             {appearance && onAppearanceToggle ? (
-                <div className="happy2-rail__appearance" data-happy-desktop-ui="rail-appearance">
+                <div className="happy-rail__appearance" data-happy-desktop-ui="rail-appearance">
                     <button
                         aria-label={
                             appearance === "dark" ? "Use light appearance" : "Use dark appearance"
                         }
                         aria-pressed={appearance === "dark"}
-                        className="happy2-rail__appearance-toggle"
+                        className="happy-rail__appearance-toggle"
                         data-happy-desktop-ui="rail-appearance-toggle"
                         onClick={onAppearanceToggle}
                         title={
@@ -177,10 +177,10 @@ export function Rail(props: RailProps) {
                 </div>
             ) : null}
             {primaryAction || footer ? (
-                <div className="happy2-rail__footer" data-happy-desktop-ui="rail-footer">
+                <div className="happy-rail__footer" data-happy-desktop-ui="rail-footer">
                     {primaryAction ? (
                         <div
-                            className="happy2-rail__primary-wrap"
+                            className="happy-rail__primary-wrap"
                             data-happy-desktop-ui="rail-primary-wrap"
                             ref={primaryRoot}
                         >
@@ -190,7 +190,7 @@ export function Rail(props: RailProps) {
                                 }
                                 aria-haspopup={primaryAction.menuItems ? "menu" : undefined}
                                 aria-label={primaryAction.label}
-                                className="happy2-rail__primary"
+                                className="happy-rail__primary"
                                 data-happy-desktop-ui="rail-primary"
                                 onClick={() => {
                                     if (primaryAction.menuItems) {
@@ -205,7 +205,7 @@ export function Rail(props: RailProps) {
                             </button>
                             {primaryMenuOpen && primaryAction.menuItems ? (
                                 <div
-                                    className="happy2-rail__primary-popover"
+                                    className="happy-rail__primary-popover"
                                     data-happy-desktop-ui="rail-primary-popover"
                                 >
                                     <Menu
@@ -224,7 +224,7 @@ export function Rail(props: RailProps) {
                         onFooterSelect ? (
                             <button
                                 aria-label={footerLabel}
-                                className="happy2-rail__footer-action"
+                                className="happy-rail__footer-action"
                                 data-happy-desktop-ui="rail-footer-action"
                                 onClick={onFooterSelect}
                                 type="button"

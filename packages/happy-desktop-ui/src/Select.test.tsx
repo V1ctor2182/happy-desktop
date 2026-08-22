@@ -14,8 +14,8 @@ type Renderer = ReturnType<typeof createRenderer>;
  */
 const fontFamily =
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 const options = [
     { value: "administrator", label: "Administrator" },
@@ -234,7 +234,7 @@ it("holds Select geometry, tokens, typography, chevron centering, and value cent
         const valueMetrics = value.textMetrics();
         expect(valueMetrics.text, `${id} value text`).toBe("Administrator");
         expect(valueMetrics.font, `${id} value font`).toMatchObject({
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0,
             lineHeight: spec.lineHeight,
             size: spec.fontSize,
@@ -309,7 +309,7 @@ it("holds Select geometry, tokens, typography, chevron centering, and value cent
         const labelMetrics = label.textMetrics();
         expect(labelMetrics.text, `${id} label text`).toBe("Role");
         expect(labelMetrics.font, `${id} label font`).toMatchObject({
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0,
             lineHeight: 16,
             size: 12,

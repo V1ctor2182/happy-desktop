@@ -183,7 +183,7 @@ export function ConversationDock(props: ConversationDockProps) {
     ) : null;
     return (
         <div
-            className={["happy2-conversation__dock", props.className].filter(Boolean).join(" ")}
+            className={["happy-conversation__dock", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="conversation-dock"
             data-testid={props["data-testid"]}
             style={props.style}
@@ -207,7 +207,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     {props.unavailable}
                 </Banner>
             ) : null}
-            <div className="happy2-conversation__dock-inner">
+            <div className="happy-conversation__dock-inner">
                 {props.composerAboveControl}
                 <Composer
                     attachmentMultiple
@@ -276,7 +276,7 @@ export type FloatingConversationDockProps = {
 export function FloatingConversationDock(props: FloatingConversationDockProps) {
     return (
         <div
-            className={["happy2-floating-dock", props.className].filter(Boolean).join(" ")}
+            className={["happy-floating-dock", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="floating-dock"
             data-placement={props.placement === "footer" ? "footer" : undefined}
             data-testid={props["data-testid"]}
@@ -284,11 +284,11 @@ export function FloatingConversationDock(props: FloatingConversationDockProps) {
         >
             <div
                 aria-hidden="true"
-                className="happy2-floating-dock__scrim"
+                className="happy-floating-dock__scrim"
                 data-happy-desktop-ui="floating-dock-scrim"
             />
             <div
-                className="happy2-floating-dock__measure"
+                className="happy-floating-dock__measure"
                 data-happy-desktop-ui="floating-dock-measure"
             >
                 {props.children}
@@ -316,13 +316,13 @@ export type ComposerFooterBarProps = {
 export function ComposerFooterBar(props: ComposerFooterBarProps) {
     return (
         <div
-            className={["happy2-composer-footer-bar", props.className].filter(Boolean).join(" ")}
+            className={["happy-composer-footer-bar", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="composer-footer-bar"
             data-testid={props["data-testid"]}
             style={props.style}
         >
-            <div className="happy2-composer-footer-bar__group">{props.leading}</div>
-            <div className="happy2-composer-footer-bar__group">{props.trailing}</div>
+            <div className="happy-composer-footer-bar__group">{props.leading}</div>
+            <div className="happy-composer-footer-bar__group">{props.trailing}</div>
         </div>
     );
 }

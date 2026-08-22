@@ -51,8 +51,8 @@ const TONE_COLORS: Record<ToneName, string> = {
 
 const fontFamily = () =>
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 it(
     "holds Avatar geometry and optical alignment across sizes, kinds, and initials",
@@ -283,7 +283,7 @@ it("anchors the presence dot at every size", { timeout: 90_000 }, async () => {
     }
 
     expect(
-        view.$('[data-testid="offline"]').element.querySelector(".happy2-avatar__presence"),
+        view.$('[data-testid="offline"]').element.querySelector(".happy-avatar__presence"),
     ).toBeNull();
 
     await view.screenshot("Avatar.presence.test");

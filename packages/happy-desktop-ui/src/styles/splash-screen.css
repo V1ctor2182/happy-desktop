@@ -11,12 +11,12 @@
  * mark, which is the one thing this screen must never visibly do.
  */
 
-.happy2-splash-screen,
-.happy2-splash-screen__mark {
+.happy-splash-screen,
+.happy-splash-screen__mark {
     box-sizing: border-box;
 }
 
-.happy2-splash-screen {
+.happy-splash-screen {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -26,12 +26,12 @@
     background: var(--surface);
 }
 
-.happy2-splash-screen__body {
+.happy-splash-screen__body {
     position: relative;
     flex: none;
 }
 
-.happy2-splash-screen__mark {
+.happy-splash-screen__mark {
     display: block;
     flex: none;
     width: 64px;
@@ -43,7 +43,7 @@
     opacity: 0.35;
 }
 
-.happy2-splash-screen__note {
+.happy-splash-screen__note {
     position: absolute;
     top: 100%;
     left: 50%;

@@ -99,7 +99,7 @@ function IoniconCell(props: { name: IoniconName }) {
             </div>
             <span
                 style={{
-                    fontFamily: "var(--happy2-font-mono)",
+                    fontFamily: "var(--happy-font-mono)",
                     fontSize: "9px",
                     lineHeight: "12px",
                     letterSpacing: "0.04em",
@@ -141,7 +141,7 @@ function OcticonCell(props: { name: OcticonName }) {
             </div>
             <span
                 style={{
-                    fontFamily: "var(--happy2-font-mono)",
+                    fontFamily: "var(--happy-font-mono)",
                     fontSize: "9px",
                     lineHeight: "12px",
                     letterSpacing: "0.04em",
@@ -240,7 +240,7 @@ export function VectorIconPage() {
                             <Ionicon name="chatbubbles-outline" size={size} />
                             <span
                                 style={{
-                                    fontFamily: "var(--happy2-font-mono)",
+                                    fontFamily: "var(--happy-font-mono)",
                                     fontSize: "9px",
                                     color: "var(--input-placeholder)",
                                 }}
@@ -283,7 +283,7 @@ export function VectorIconPage() {
                     surfaces whichever appearance the workbench is showing. */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div
-                        className="happy2-theme-dark"
+                        className="happy-theme-dark"
                         style={{
                             display: "flex",
                             gap: "12px",
@@ -299,7 +299,7 @@ export function VectorIconPage() {
                         ))}
                     </div>
                     <div
-                        className="happy2-theme-light"
+                        className="happy-theme-light"
                         style={{
                             display: "flex",
                             gap: "12px",

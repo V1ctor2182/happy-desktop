@@ -35,27 +35,27 @@ export function EventCard(props: EventCardProps) {
         "title",
         "to",
     ]);
-    const rootClass = () => ["happy2-event-card", local.className].filter(Boolean).join(" ");
+    const rootClass = () => ["happy-event-card", local.className].filter(Boolean).join(" ");
     const hasSide = () => Boolean((local.from && local.to) || local.badge || local.time);
     const content = () => (
         <>
             {local.icon
                 ? ((name) => (
                       <span
-                          className="happy2-event-card__chip"
+                          className="happy-event-card__chip"
                           data-happy-desktop-ui="event-card-chip"
                       >
                           <Icon name={name} size={16} />
                       </span>
                   ))(local.icon)
                 : null}
-            <span className="happy2-event-card__text" data-happy-desktop-ui="event-card-text">
-                <span className="happy2-event-card__title" data-happy-desktop-ui="event-card-title">
+            <span className="happy-event-card__text" data-happy-desktop-ui="event-card-text">
+                <span className="happy-event-card__title" data-happy-desktop-ui="event-card-title">
                     {local.title}
                 </span>
                 {local.meta ? (
                     <span
-                        className="happy2-event-card__meta"
+                        className="happy-event-card__meta"
                         data-happy-desktop-ui="event-card-meta"
                     >
                         {local.meta}
@@ -63,21 +63,21 @@ export function EventCard(props: EventCardProps) {
                 ) : null}
             </span>
             {hasSide() ? (
-                <span className="happy2-event-card__side" data-happy-desktop-ui="event-card-side">
+                <span className="happy-event-card__side" data-happy-desktop-ui="event-card-side">
                     {local.from && local.to ? (
                         <span
-                            className="happy2-event-card__transition"
+                            className="happy-event-card__transition"
                             data-happy-desktop-ui="event-card-transition"
                         >
                             <span
-                                className="happy2-event-card__from"
+                                className="happy-event-card__from"
                                 data-happy-desktop-ui="event-card-from"
                             >
                                 {local.from}
                             </span>
                             <Icon name="arrow-right" size={12} />
                             <span
-                                className="happy2-event-card__to"
+                                className="happy-event-card__to"
                                 data-happy-desktop-ui="event-card-to"
                             >
                                 {local.to}
@@ -90,7 +90,7 @@ export function EventCard(props: EventCardProps) {
                     ) : null}
                     {local.time ? (
                         <span
-                            className="happy2-event-card__time"
+                            className="happy-event-card__time"
                             data-happy-desktop-ui="event-card-time"
                         >
                             {local.time}

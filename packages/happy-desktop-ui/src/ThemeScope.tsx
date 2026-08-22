@@ -18,8 +18,8 @@ export function ThemeScope(props: ThemeScopeProps) {
         <div
             className={
                 props.mode === "system"
-                    ? "happy2-theme-scope"
-                    : `happy2-theme-scope happy2-theme-${props.mode}`
+                    ? "happy-theme-scope"
+                    : `happy-theme-scope happy-theme-${props.mode}`
             }
             data-happy-desktop-ui="theme-scope"
             data-scrollbar-visibility={props.scrollbarVisibility ?? "automatic"}

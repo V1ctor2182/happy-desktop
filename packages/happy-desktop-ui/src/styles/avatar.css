@@ -3,24 +3,24 @@
  * Sizes: xs 20 / sm 28 / md 36 / lg 44. Tones use Happy's direct color roles.
  */
 
-.happy2-avatar,
-.happy2-avatar__initials,
-.happy2-avatar__glyph,
-.happy2-avatar__image,
-.happy2-avatar__presence {
+.happy-avatar,
+.happy-avatar__initials,
+.happy-avatar__glyph,
+.happy-avatar__image,
+.happy-avatar__presence {
     box-sizing: border-box;
 }
 
-.happy2-avatar {
+.happy-avatar {
     position: relative;
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--text-secondary);
     color: var(--button-primary-tint);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     font-weight: 700;
     letter-spacing: 0;
@@ -28,129 +28,129 @@
     user-select: none;
 }
 
-.happy2-avatar[data-size="xs"] {
+.happy-avatar[data-size="xs"] {
     width: 20px;
     height: 20px;
     font-size: 8px;
     line-height: 8px;
 }
 
-.happy2-avatar[data-size="sm"] {
+.happy-avatar[data-size="sm"] {
     width: 28px;
     height: 28px;
     font-size: 10px;
     line-height: 10px;
 }
 
-.happy2-avatar[data-size="md"] {
+.happy-avatar[data-size="md"] {
     width: 36px;
     height: 36px;
     font-size: 12px;
     line-height: 12px;
 }
 
-.happy2-avatar[data-size="lg"] {
+.happy-avatar[data-size="lg"] {
     width: 44px;
     height: 44px;
     font-size: 14px;
     line-height: 14px;
 }
 
-.happy2-avatar[data-type="agent"][data-size="xs"] {
+.happy-avatar[data-type="agent"][data-size="xs"] {
     border-radius: 6px;
 }
 
-.happy2-avatar[data-type="agent"][data-size="sm"] {
+.happy-avatar[data-type="agent"][data-size="sm"] {
     border-radius: 7px;
 }
 
-.happy2-avatar[data-type="agent"][data-size="md"] {
+.happy-avatar[data-type="agent"][data-size="md"] {
     border-radius: 9px;
 }
 
-.happy2-avatar[data-type="agent"][data-size="lg"] {
+.happy-avatar[data-type="agent"][data-size="lg"] {
     border-radius: 10px;
 }
 
-.happy2-avatar[data-tone="violet"] {
+.happy-avatar[data-tone="violet"] {
     background: var(--radio-active);
 }
 
-.happy2-avatar[data-tone="ember"] {
+.happy-avatar[data-tone="ember"] {
     background: var(--text-destructive);
 }
 
-.happy2-avatar[data-tone="mint"] {
+.happy-avatar[data-tone="mint"] {
     background: var(--success);
 }
 
-.happy2-avatar[data-tone="ocean"] {
+.happy-avatar[data-tone="ocean"] {
     background: var(--text-link);
 }
 
-.happy2-avatar[data-tone="rose"] {
+.happy-avatar[data-tone="rose"] {
     background: var(--delete-action);
 }
 
-.happy2-avatar[data-tone="amber"] {
+.happy-avatar[data-tone="amber"] {
     background: var(--box-warning-border);
 }
 
-.happy2-avatar[data-tone="slate"] {
+.happy-avatar[data-tone="slate"] {
     background: var(--text-secondary);
 }
 
-.happy2-avatar[data-tone="brand"] {
+.happy-avatar[data-tone="brand"] {
     background: var(--fab-background);
 }
 
 /* A supplied avatar image owns the entire mark. This is especially important
  * for Happy's transparent star, whose silhouette must not inherit a tile. */
-.happy2-avatar[data-image] {
+.happy-avatar[data-image] {
     background: transparent;
 }
 
-.happy2-avatar__initials {
+.happy-avatar__initials {
     display: block;
 }
 
 /* A glyph carries the tile's meaning instead of initials; it inherits the same
  * tint and is box-centered by the font, so it needs no optical nudge. */
-.happy2-avatar__glyph {
+.happy-avatar__glyph {
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 /* Calibrated against the balanced O fixture's visible bounds. */
-.happy2-avatar[data-size="sm"] .happy2-avatar__initials {
+.happy-avatar[data-size="sm"] .happy-avatar__initials {
     transform: translateY(0.5px);
 }
 
-.happy2-avatar[data-size="md"] .happy2-avatar__initials {
+.happy-avatar[data-size="md"] .happy-avatar__initials {
     transform: translateY(0.25px);
 }
 
-.happy2-avatar[data-size="lg"] .happy2-avatar__initials {
+.happy-avatar[data-size="lg"] .happy-avatar__initials {
     transform: translateY(1px);
 }
 
 @supports (-moz-appearance: none) {
-    .happy2-avatar[data-size="sm"] .happy2-avatar__initials,
-    .happy2-avatar[data-size="md"] .happy2-avatar__initials,
-    .happy2-avatar[data-size="lg"] .happy2-avatar__initials {
+    .happy-avatar[data-size="sm"] .happy-avatar__initials,
+    .happy-avatar[data-size="md"] .happy-avatar__initials,
+    .happy-avatar[data-size="lg"] .happy-avatar__initials {
         transform: none;
     }
 }
 
 @supports (background: -webkit-named-image(i)) {
-    .happy2-avatar[data-size="sm"] .happy2-avatar__initials,
-    .happy2-avatar[data-size="lg"] .happy2-avatar__initials {
+    .happy-avatar[data-size="sm"] .happy-avatar__initials,
+    .happy-avatar[data-size="lg"] .happy-avatar__initials {
         transform: none;
     }
 }
 
-.happy2-avatar__image {
+.happy-avatar__image {
     display: block;
     width: 100%;
     height: 100%;
@@ -158,18 +158,18 @@
     object-fit: cover;
 }
 
-.happy2-avatar__presence {
+.happy-avatar__presence {
     position: absolute;
     right: -1px;
     bottom: -1px;
     width: 8px;
     height: 8px;
     border: 2px solid var(--groupped-background);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--status-connected);
 }
 
-.happy2-avatar[data-size="lg"] .happy2-avatar__presence {
+.happy-avatar[data-size="lg"] .happy-avatar__presence {
     width: 10px;
     height: 10px;
 }

@@ -419,8 +419,8 @@ export async function electronWorkloadsRun(options: {
             // The optimized profile is a checked-in Electron build flavor. Do
             // not point the gym at the Vite dev server: its timings include
             // development-only transforms and are not representative.
-            HAPPY2_DESKTOP_PROFILE: "1",
-            HAPPY2_DESKTOP_PROFILE_MODE: "optimized",
+            HAPPY_DESKTOP_PROFILE: "1",
+            HAPPY_DESKTOP_PROFILE_MODE: "optimized",
             HAPPY_DESKTOP_GYM_PROFILE: options.manifest.profile,
             HAPPY_DESKTOP_GYM_ELECTRON_USER_DATA: options.paths.electronUserData,
         },
@@ -580,7 +580,7 @@ async function completeOnboarding(page: Page): Promise<void> {
     while (Date.now() < deadline) {
         if (!welcomeClicked) {
             const welcomeAction = page
-                .locator('[data-happy-desktop-ui="welcome-screen"] .happy2-welcome-screen__action')
+                .locator('[data-happy-desktop-ui="welcome-screen"] .happy-welcome-screen__action')
                 .first();
             if (
                 (await welcomeAction.count()) > 0 &&
@@ -1403,11 +1403,11 @@ async function changedFileStatsBarrier(
                 const insertion =
                     row.querySelector<HTMLElement>(
                         '[data-happy-desktop-ui="file-tree-insertions"]',
-                    ) ?? row.querySelector<HTMLElement>(".happy2-file-tree__stat-added");
+                    ) ?? row.querySelector<HTMLElement>(".happy-file-tree__stat-added");
                 const deletion =
                     row.querySelector<HTMLElement>(
                         '[data-happy-desktop-ui="file-tree-deletions"]',
-                    ) ?? row.querySelector<HTMLElement>(".happy2-file-tree__stat-deleted");
+                    ) ?? row.querySelector<HTMLElement>(".happy-file-tree__stat-deleted");
                 return (
                     insertion?.textContent?.trim() === insertions &&
                     deletion?.textContent?.trim() === deletions
@@ -1427,11 +1427,11 @@ async function changedFileStatsBarrier(
                 const insertion =
                     row?.querySelector<HTMLElement>(
                         '[data-happy-desktop-ui="file-tree-insertions"]',
-                    ) ?? row?.querySelector<HTMLElement>(".happy2-file-tree__stat-added");
+                    ) ?? row?.querySelector<HTMLElement>(".happy-file-tree__stat-added");
                 const deletion =
                     row?.querySelector<HTMLElement>(
                         '[data-happy-desktop-ui="file-tree-deletions"]',
-                    ) ?? row?.querySelector<HTMLElement>(".happy2-file-tree__stat-deleted");
+                    ) ?? row?.querySelector<HTMLElement>(".happy-file-tree__stat-deleted");
                 return {
                     rowText: row?.textContent?.trim(),
                     insertion: insertion?.textContent?.trim(),
@@ -1457,10 +1457,10 @@ async function changedFileStatsBarrier(
         if (row === undefined) return undefined;
         const insertion =
             row.querySelector<HTMLElement>('[data-happy-desktop-ui="file-tree-insertions"]') ??
-            row.querySelector<HTMLElement>(".happy2-file-tree__stat-added");
+            row.querySelector<HTMLElement>(".happy-file-tree__stat-added");
         const deletion =
             row.querySelector<HTMLElement>('[data-happy-desktop-ui="file-tree-deletions"]') ??
-            row.querySelector<HTMLElement>(".happy2-file-tree__stat-deleted");
+            row.querySelector<HTMLElement>(".happy-file-tree__stat-deleted");
         if (insertion === null || deletion === null) return undefined;
         return {
             deletions: deletion.textContent?.trim() ?? "",
@@ -1468,10 +1468,10 @@ async function changedFileStatsBarrier(
             selectors: {
                 deletions:
                     deletion.getAttribute("data-happy-desktop-ui") ??
-                    ".happy2-file-tree__stat-deleted",
+                    ".happy-file-tree__stat-deleted",
                 insertions:
                     insertion.getAttribute("data-happy-desktop-ui") ??
-                    ".happy2-file-tree__stat-added",
+                    ".happy-file-tree__stat-added",
             },
         };
     }, path);
@@ -2214,14 +2214,14 @@ async function transcriptViewportRead(page: Page): Promise<TranscriptViewportMea
         return {
             clientHeight: list.clientHeight,
             renderedRows:
-                virtual?.querySelectorAll(".happy2-message-list__virtual-row[data-index]").length ??
+                virtual?.querySelectorAll(".happy-message-list__virtual-row[data-index]").length ??
                 0,
             scrollHeight: list.scrollHeight,
             scrollTop: list.scrollTop,
             virtualized:
                 content.dataset.virtualized !== undefined &&
                 virtual !== null &&
-                virtual.querySelector(".happy2-message-list__virtual-row[data-index]") !== null,
+                virtual.querySelector(".happy-message-list__virtual-row[data-index]") !== null,
         };
     });
 }
@@ -2283,14 +2283,14 @@ async function transcriptScrollSequence(
                 maxScrollTop,
                 requestedFraction: fraction,
                 renderedRows:
-                    virtual?.querySelectorAll(".happy2-message-list__virtual-row[data-index]")
+                    virtual?.querySelectorAll(".happy-message-list__virtual-row[data-index]")
                         .length ?? 0,
                 scrollHeight: list.scrollHeight,
                 scrollTop: list.scrollTop,
                 virtualized:
                     content.dataset.virtualized !== undefined &&
                     virtual !== null &&
-                    virtual.querySelector(".happy2-message-list__virtual-row[data-index]") !== null,
+                    virtual.querySelector(".happy-message-list__virtual-row[data-index]") !== null,
                 historyLoaderObserved: false,
                 historyScrollHeightBefore,
                 historyScrollHeightAfter: list.scrollHeight,
@@ -2451,7 +2451,7 @@ async function scrollStabilityCapture(
                                 ? position.offsetNode
                                 : position.offsetNode.parentElement;
                         const row = parent?.closest<HTMLElement>(
-                            ".happy2-message-list__virtual-row[data-index]",
+                            ".happy-message-list__virtual-row[data-index]",
                         );
                         const index = Number.parseInt(row?.dataset.index ?? "", 10);
                         const textLength =
@@ -2517,7 +2517,7 @@ async function scrollStabilityCapture(
                             '[data-happy-desktop-ui="message-body"]',
                         );
                         const trackedRow = trackedMessage?.closest<HTMLElement>(
-                            ".happy2-message-list__virtual-row[data-index]",
+                            ".happy-message-list__virtual-row[data-index]",
                         );
                         const trackedIndex = Number.parseInt(trackedRow?.dataset.index ?? "", 10);
                         const settledStatus = Number.isFinite(trackedIndex)
@@ -2527,7 +2527,7 @@ async function scrollStabilityCapture(
                                   ),
                               ].find((summary) => {
                                   const row = summary.closest<HTMLElement>(
-                                      ".happy2-message-list__virtual-row[data-index]",
+                                      ".happy-message-list__virtual-row[data-index]",
                                   );
                                   const index = Number.parseInt(row?.dataset.index ?? "", 10);
                                   return Number.isFinite(index) && index > trackedIndex;
@@ -2564,7 +2564,7 @@ async function scrollStabilityCapture(
                             '[data-happy-desktop-ui="agent-activity-row"]',
                         );
                         const trackedToolVirtualRow = trackedToolCall?.closest<HTMLElement>(
-                            ".happy2-message-list__virtual-row[data-index]",
+                            ".happy-message-list__virtual-row[data-index]",
                         );
                         const trackedToolHeader = trackedToolCall?.querySelector<HTMLElement>(
                             '[data-happy-desktop-ui="agent-activity-header"]',
@@ -2609,7 +2609,7 @@ async function scrollStabilityCapture(
                             const rows = virtual
                                 ? [
                                       ...virtual.querySelectorAll<HTMLElement>(
-                                          ".happy2-message-list__virtual-row[data-index]",
+                                          ".happy-message-list__virtual-row[data-index]",
                                       ),
                                   ]
                                       .map((row) => {
@@ -3304,7 +3304,7 @@ function samplerStart(page: Page): Promise<void> {
                 .querySelector('[data-happy-desktop-ui="app-shell-sidebar"]')
                 ?.getBoundingClientRect();
             const renderedRows = document.querySelectorAll(
-                ".happy2-message-list__virtual-row[data-index]",
+                ".happy-message-list__virtual-row[data-index]",
             ).length;
             frames.push({
                 chatWidth: chat?.width ?? 0,
@@ -3941,7 +3941,7 @@ async function streamingScrollRun(
                         .filter((message) => message.textContent?.includes(String(marker)))
                         .at(-1);
                     const trackedRow = trackedMessage?.closest<HTMLElement>(
-                        ".happy2-message-list__virtual-row[data-index]",
+                        ".happy-message-list__virtual-row[data-index]",
                     );
                     const trackedIndex = Number.parseInt(trackedRow?.dataset.index ?? "", 10);
                     if (!Number.isFinite(trackedIndex)) return false;
@@ -3951,7 +3951,7 @@ async function streamingScrollRun(
                         ),
                     ].some((summary) => {
                         const row = summary.closest<HTMLElement>(
-                            ".happy2-message-list__virtual-row[data-index]",
+                            ".happy-message-list__virtual-row[data-index]",
                         );
                         const index = Number.parseInt(row?.dataset.index ?? "", 10);
                         return Number.isFinite(index) && index > trackedIndex;
@@ -4023,7 +4023,7 @@ async function streamingScrollRun(
                 const listRect = element.getBoundingClientRect();
                 const firstRow = [
                     ...element.querySelectorAll<HTMLElement>(
-                        ".happy2-message-list__virtual-row[data-index]",
+                        ".happy-message-list__virtual-row[data-index]",
                     ),
                 ]
                     .filter((row) => {
@@ -4074,7 +4074,7 @@ async function streamingScrollRun(
     const microEscape = await microList.evaluate((element, baselineIndex) => {
         const firstRow = [
             ...element.querySelectorAll<HTMLElement>(
-                ".happy2-message-list__virtual-row[data-index]",
+                ".happy-message-list__virtual-row[data-index]",
             ),
         ].find((row) => row.dataset.index === baselineIndex);
         const firstRowRect = firstRow?.getBoundingClientRect();

@@ -138,7 +138,7 @@ export function AgentInstallScreen(props: AgentInstallScreenProps) {
               : undefined;
     return (
         <SetupPage
-            className="happy2-agent-install"
+            className="happy-agent-install"
             copy={installCopy(view)}
             data-testid="agent-install-screen"
             // One scene for the whole restart, mounted once. `snail` because
@@ -149,15 +149,15 @@ export function AgentInstallScreen(props: AgentInstallScreenProps) {
             scene="snail"
             title={installTitle(view)}
         >
-            <Box className="happy2-agent-install__waiting">
+            <Box className="happy-agent-install__waiting">
                 {agents.slice(0, AGENTS_SHOWN).map((agent) => (
-                    <span className="happy2-agent-install__agent" key={agent.id}>
+                    <span className="happy-agent-install__agent" key={agent.id}>
                         {STAGE_WORDS[agent.stage]}
                     </span>
                 ))}
-                {more ? <span className="happy2-agent-install__agent">More</span> : null}
+                {more ? <span className="happy-agent-install__agent">More</span> : null}
             </Box>
-            <Box className="happy2-agent-install__action">
+            <Box className="happy-agent-install__action">
                 {action ? (
                     <Button fullWidth onClick={action.onSelect} size="large">
                         {action.label}

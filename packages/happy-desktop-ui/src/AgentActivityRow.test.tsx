@@ -150,7 +150,7 @@ it("renders each tool presentation and status with the correct dot tone", async 
         view.$('[data-testid="diff"] [data-happy-desktop-ui="agent-activity-text"]').element
             .textContent,
     ).toBe("a.ts");
-    expect(view.$('[data-testid="diff"] .happy2-agent-activity__added').element.textContent).toBe(
+    expect(view.$('[data-testid="diff"] .happy-agent-activity__added').element.textContent).toBe(
         "+1",
     );
     expect(
@@ -165,11 +165,11 @@ it("renders each tool presentation and status with the correct dot tone", async 
 
     // Exec output is head/tail truncated (14 lines > 10 budget → 10 shown + elide).
     const outputLines = view.container.querySelectorAll(
-        '[data-testid="exec"] .happy2-agent-activity__output-line',
+        '[data-testid="exec"] .happy-agent-activity__output-line',
     );
     expect(outputLines.length).toBe(10);
     expect(
-        view.container.querySelector('[data-testid="exec"] .happy2-agent-activity__output-elide')
+        view.container.querySelector('[data-testid="exec"] .happy-agent-activity__output-elide')
             ?.textContent,
     ).toBe("… +4 lines");
 
@@ -365,7 +365,7 @@ it("seats a verb on the same line whichever motion profile renders it", async ()
 
     /* And the label box itself is identical between the two, so a row does not
        change height when a tool settles from typing to still. */
-    const typedLabel = bounds('[data-testid="typed-line"] .happy2-typed-text');
-    const stillLabel = bounds('[data-testid="still-line"] .happy2-agent-activity__still-text');
+    const typedLabel = bounds('[data-testid="typed-line"] .happy-typed-text');
+    const stillLabel = bounds('[data-testid="still-line"] .happy-agent-activity__still-text');
     expect(stillLabel.height).toBe(typedLabel.height);
 }, 120_000);

@@ -2,8 +2,6 @@ import { appearanceStoreCreate } from "../src/appearance/appearanceStore.js";
 import { experimentsStoreCreate } from "../src/experiments/experimentsStore.js";
 import { ChatStore } from "../src/happyAgentConnection/ChatStore.js";
 import { composerStoreCreate } from "../src/modules/composer/composerState.js";
-import { noteStoreCreate } from "../src/notes/noteStore.js";
-import type { NotesTransport } from "../src/notes/notesTypes.js";
 import { welcomeStoreCreate } from "../src/onboarding/welcomeStore.js";
 import { happyAgentGlobalDocumentStoreCreate } from "../src/happyAgent/happyAgentInstructionsStore.js";
 import { happyAgentInboxStoreCreate } from "../src/happyAgent/happyAgentInboxStore.js";
@@ -88,24 +86,6 @@ const readOnlySelection: HappyAgentSelection = {
     permissionMode: "read_only",
 };
 
-const unusedNotesTransport: NotesTransport = {
-    notesList: async () => [],
-    noteRead: async () => {
-        throw new Error("The object-update benchmark never opens a note.");
-    },
-    noteCreate: async () => {
-        throw new Error("The object-update benchmark never creates a note.");
-    },
-    noteApply: async () => {
-        throw new Error("The object-update benchmark never saves a note.");
-    },
-    noteRename: async () => {
-        throw new Error("The object-update benchmark never saves a note.");
-    },
-    noteRemove: async () => undefined,
-    notesSubscribe: () => () => undefined,
-};
-
 const cases: readonly BenchmarkCase[] = [
     {
         module: "appearance/appearanceStore",
@@ -184,24 +164,6 @@ const cases: readonly BenchmarkCase[] = [
                 snapshot: () => store.session(),
                 change: () => void store.applyHello({ connection: "live" }),
                 noChange: () => void store.applyHello({ connection: "connecting" }),
-            };
-        },
-    },
-    {
-        module: "notes/noteStore",
-        operation: "noteTitleUpdate",
-        minimumChangedReferences: 1,
-        iterations: 400,
-        create: () => {
-            const store = noteStoreCreate("benchmark", unusedNotesTransport, {
-                setTimeout: () => 1,
-                clearTimeout: () => undefined,
-            });
-            store.noteTitleUpdate("Alpha");
-            return {
-                snapshot: store.get,
-                change: () => store.noteTitleUpdate("Beta"),
-                noChange: () => store.noteTitleUpdate("Alpha"),
             };
         },
     },

@@ -112,7 +112,7 @@ export function FileEditor(props: FileEditorProps) {
     };
     return (
         <section
-            className={["happy2-file-editor", local.className].filter(Boolean).join(" ")}
+            className={["happy-file-editor", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-editor"
             data-dirty={local.dirty ? "" : undefined}
             data-testid={local["data-testid"]}
@@ -120,24 +120,24 @@ export function FileEditor(props: FileEditorProps) {
             style={local.style}
         >
             <header
-                className="happy2-file-editor__header"
+                className="happy-file-editor__header"
                 data-happy-desktop-ui="file-editor-header"
             >
                 <span
-                    className="happy2-file-editor__glyph happy2-file-family-glyph"
+                    className="happy-file-editor__glyph happy-file-family-glyph"
                     data-family={family}
                     data-happy-desktop-ui="file-editor-glyph"
                 >
                     <FileTreeFamilyIcon family={family} size={16} />
                 </span>
-                <FilePathLabel className="happy2-file-editor__heading" path={local.path} />
+                <FilePathLabel className="happy-file-editor__heading" path={local.path} />
                 <span
-                    className="happy2-file-editor__actions"
+                    className="happy-file-editor__actions"
                     data-happy-desktop-ui="file-editor-actions"
                 >
                     {local.status ? (
                         <span
-                            className="happy2-file-editor__status"
+                            className="happy-file-editor__status"
                             data-happy-desktop-ui="file-editor-status"
                         >
                             {local.status}
@@ -195,7 +195,7 @@ export function FileEditor(props: FileEditorProps) {
             </header>
             {local.banner ? (
                 <div
-                    className="happy2-file-editor__banner"
+                    className="happy-file-editor__banner"
                     data-happy-desktop-ui="file-editor-banner"
                 >
                     {local.banner}
@@ -205,7 +205,7 @@ export function FileEditor(props: FileEditorProps) {
                 local.rendered
             ) : (
                 <CodeEditor
-                    className="happy2-file-editor__area"
+                    className="happy-file-editor__area"
                     documentKey={local.documentKey}
                     name={local.path}
                     onSave={() => {

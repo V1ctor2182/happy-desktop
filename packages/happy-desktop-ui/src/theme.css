@@ -7,7 +7,7 @@
  */
 
 @font-face {
-    font-family: "happy2 Figtree";
+    font-family: "happy Figtree";
     font-style: normal;
     font-display: block;
     font-weight: 300 900;
@@ -16,7 +16,7 @@
 }
 
 @font-face {
-    font-family: "happy2 Mono";
+    font-family: "happy Mono";
     font-style: normal;
     font-display: block;
     font-weight: 100 800;
@@ -25,15 +25,15 @@
 }
 
 :root,
-.happy2-theme-light {
+.happy-theme-light {
     color-scheme: light;
 
     /* File tabs, their mode bars, and the path rows below them are one piece
        of chrome. Keep the containing row and its inset controls on one shared
        geometry so adjacent layers cannot drift as components evolve. */
-    --happy2-subheader-height: 32px;
-    --happy2-subheader-control-height: 24px;
-    --happy2-subheader-inset: 4px;
+    --happy-subheader-height: 32px;
+    --happy-subheader-control-height: 24px;
+    --happy-subheader-inset: 4px;
 
     /* Every scrolling list panel — the sidebar, the file listings, any column
        of rows — is inset from both of its edges by the same number, so the gap
@@ -44,7 +44,7 @@
 
        A row's own horizontal padding is stated here too, because the two
        together are what a reader sees on the trailing side: a row's last mark
-       lands `calc(var(--happy2-panel-inset) + var(--happy2-panel-row-padding))`
+       lands `calc(var(--happy-panel-inset) + var(--happy-panel-row-padding))`
        from the scrollbar, and a panel header padded by that same sum stands
        over the rows it names. The leading side reads that way only in a flat
        list — a tree puts its disclosure slot and its depth on top of the inset,
@@ -64,8 +64,8 @@
        insets happen to be near this one; they are not this one, and pointing
        them at this token would silently bend the corners derived from them the
        day it changes. */
-    --happy2-panel-inset: 6px;
-    --happy2-panel-row-padding: 10px;
+    --happy-panel-inset: 6px;
+    --happy-panel-row-padding: 10px;
 
     /* The bar a panel of rows reserves room for — see styles/scrollbar.css, and
        note that code/content surfaces use the same track as an overlay and
@@ -76,17 +76,15 @@
        track is the sum of those two and nothing more. On the near side the bar
        sits straight against the rows, which means the gap a reader sees there is
        the scrollport's own inset and not a second number competing with it. */
-    --happy2-scrollbar-ink: 6px;
-    --happy2-scrollbar-edge-inset: 2px;
-    --happy2-scrollbar-track: calc(
-        var(--happy2-scrollbar-ink) + var(--happy2-scrollbar-edge-inset)
-    );
-    --happy2-scrollbar-color: transparent;
-    --happy2-scrollbar-quiet-color: rgb(128 128 128 / 0.32);
-    --happy2-scrollbar-active-color: rgb(128 128 128 / 0.5);
-    --happy2-scrollbar-interaction-color: rgb(128 128 128 / 0.68);
-    --happy2-scrollbar-rest-color: transparent;
-    --happy2-scrollbar-surface-color: transparent;
+    --happy-scrollbar-ink: 6px;
+    --happy-scrollbar-edge-inset: 2px;
+    --happy-scrollbar-track: calc(var(--happy-scrollbar-ink) + var(--happy-scrollbar-edge-inset));
+    --happy-scrollbar-color: transparent;
+    --happy-scrollbar-quiet-color: rgb(128 128 128 / 0.32);
+    --happy-scrollbar-active-color: rgb(128 128 128 / 0.5);
+    --happy-scrollbar-interaction-color: rgb(128 128 128 / 0.68);
+    --happy-scrollbar-rest-color: transparent;
+    --happy-scrollbar-surface-color: transparent;
 
     --text: #000000;
     --text-destructive: #f44336;
@@ -284,23 +282,23 @@
     --terminal-error: #ff5555;
     --terminal-empty-output: #6272a4;
 
-    --happy2-font-ui: "happy2 Figtree", system-ui, sans-serif;
-    --happy2-font-mono: "happy2 Mono", ui-monospace, monospace;
-    --happy2-font-emoji: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-    --happy2-radius-sm: 6px;
-    --happy2-radius-md: 10px;
-    --happy2-radius-window: 8px;
-    --happy2-radius-shell: 14px;
-    --happy2-radius-pill: 999px;
-    --happy2-chat-measure: 880px;
+    --happy-font-ui: "happy Figtree", system-ui, sans-serif;
+    --happy-font-mono: "happy Mono", ui-monospace, monospace;
+    --happy-font-emoji: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    --happy-radius-sm: 6px;
+    --happy-radius-md: 10px;
+    --happy-radius-window: 8px;
+    --happy-radius-shell: 14px;
+    --happy-radius-pill: 999px;
+    --happy-chat-measure: 880px;
     /* The heading over a conversation may run wider than the transcript it names
        — it is one line of chrome, not prose — but not to the window's full width,
        where a long name and its path sprawl away from the column beneath them. */
-    --happy2-chat-heading-measure: 1120px;
-    --happy2-z-overlay: 1000;
+    --happy-chat-heading-measure: 1120px;
+    --happy-z-overlay: 1000;
     /* Window chrome: what the window reports about itself, which has to be
        legible over whatever the window is showing — including a modal. */
-    --happy2-z-window-chrome: 1100;
+    --happy-z-window-chrome: 1100;
 
     --nl-kind-color: var(--text-link);
     --nl-kind-soft: var(--surface-selected);
@@ -475,7 +473,7 @@
 }
 
 /* Explicit preview/test override. */
-.happy2-theme-dark {
+.happy-theme-dark {
     color-scheme: dark;
     --text: #ffffff;
     --text-destructive: #f48fb1;
@@ -642,11 +640,11 @@
 }
 
 /* ThemeScope intentionally has no layout box. */
-.happy2-theme-scope {
+.happy-theme-scope {
     display: contents;
 }
 
-.happy2-box {
+.happy-box {
     display: block;
     box-sizing: border-box;
 }

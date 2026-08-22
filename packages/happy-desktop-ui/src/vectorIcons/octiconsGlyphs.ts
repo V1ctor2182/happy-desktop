@@ -1,7 +1,7 @@
 /*
  * Octicons name -> Private Use Area codepoint map, generated verbatim from
  * @expo/vector-icons (react-native-vector-icons glyphmaps). Do not hand-edit;
- * regenerate from the upstream glyphmap so happy2 and Happy stay glyph-identical.
+ * regenerate from the upstream glyphmap so happy and Happy stay glyph-identical.
  * 331 glyphs.
  */
 export const octiconsGlyphs = {

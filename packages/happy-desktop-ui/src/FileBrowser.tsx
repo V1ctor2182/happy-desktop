@@ -96,18 +96,18 @@ export function FileBrowser(props: FileBrowserProps) {
     return (
         <section
             aria-label={local.scope === "all" ? "All files" : "Changed files"}
-            className={["happy2-file-browser", local.className].filter(Boolean).join(" ")}
+            className={["happy-file-browser", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-browser"
             data-testid={local["data-testid"]}
             style={local.style}
         >
             <div
-                className="happy2-file-browser__controls"
+                className="happy-file-browser__controls"
                 data-happy-desktop-ui="file-browser-controls"
             >
                 <SegmentedControl
                     aria-label="Files shown"
-                    className="happy2-file-browser__scopes"
+                    className="happy-file-browser__scopes"
                     onChange={(scope) => local.onScopeChange?.(scope as FileBrowserScope)}
                     segments={SCOPES.map((scope) => ({
                         ...scope,
@@ -124,28 +124,28 @@ export function FileBrowser(props: FileBrowserProps) {
                 {local.scope === "changed" ? (
                     <>
                         <span
-                            className="happy2-file-browser__summary"
+                            className="happy-file-browser__summary"
                             data-happy-desktop-ui="file-browser-summary"
                         >
-                            <span className="happy2-file-browser__count">
+                            <span className="happy-file-browser__count">
                                 {`${compactCount(local.count)} ${local.count === 1 ? "file" : "files"}`}
                             </span>
                             {added || deleted ? (
-                                <span className="happy2-file-browser__lines">
+                                <span className="happy-file-browser__lines">
                                     {added ? (
                                         <span
                                             aria-hidden="true"
-                                            className="happy2-file-browser__added"
+                                            className="happy-file-browser__added"
                                         >{`+${compactCount(local.addedLines ?? 0)}`}</span>
                                     ) : null}
                                     {deleted ? (
                                         <span
                                             aria-hidden="true"
-                                            className="happy2-file-browser__deleted"
+                                            className="happy-file-browser__deleted"
                                         >{`−${compactCount(local.deletedLines ?? 0)}`}</span>
                                     ) : null}
                                     {/* Out of flow, so the pair keeps the row's spacing. */}
-                                    <span className="happy2-visually-hidden">
+                                    <span className="happy-visually-hidden">
                                         {changeCountLabel(
                                             local.addedLines ?? 0,
                                             local.deletedLines ?? 0,
@@ -154,11 +154,11 @@ export function FileBrowser(props: FileBrowserProps) {
                                 </span>
                             ) : null}
                         </span>
-                        <div className="happy2-file-browser__layouts" role="group">
+                        <div className="happy-file-browser__layouts" role="group">
                             <button
                                 aria-label="List files"
                                 aria-pressed={local.layout === "flat"}
-                                className="happy2-file-browser__layout"
+                                className="happy-file-browser__layout"
                                 data-active={local.layout === "flat" ? "" : undefined}
                                 data-happy-desktop-ui="file-browser-layout"
                                 onClick={() => local.onLayoutChange?.("flat")}
@@ -169,7 +169,7 @@ export function FileBrowser(props: FileBrowserProps) {
                             <button
                                 aria-label="Nest files into directories"
                                 aria-pressed={local.layout === "tree"}
-                                className="happy2-file-browser__layout"
+                                className="happy-file-browser__layout"
                                 data-active={local.layout === "tree" ? "" : undefined}
                                 data-happy-desktop-ui="file-browser-layout"
                                 onClick={() => local.onLayoutChange?.("tree")}
@@ -182,10 +182,7 @@ export function FileBrowser(props: FileBrowserProps) {
                 ) : null}
             </div>
             {local.note ? (
-                <div
-                    className="happy2-file-browser__note"
-                    data-happy-desktop-ui="file-browser-note"
-                >
+                <div className="happy-file-browser__note" data-happy-desktop-ui="file-browser-note">
                     {local.note}
                 </div>
             ) : null}
@@ -197,7 +194,7 @@ export function FileBrowser(props: FileBrowserProps) {
             {/* The tree does its own scrolling here, because a checkout listing
                 draws only the rows on screen and nothing outside it can know
                 how tall the rest would have been. */}
-            <div className="happy2-file-browser__body" data-happy-desktop-ui="file-browser-body">
+            <div className="happy-file-browser__body" data-happy-desktop-ui="file-browser-body">
                 <FileTree
                     emptyLabel={local.emptyLabel}
                     label={local.scope === "all" ? "All files" : "Changed files"}

@@ -88,7 +88,7 @@ How browser development works, and what to preserve when changing it:
 
 - The shared Vite configuration installs `browserLocalHappyAgentPlugin()`.
 - `browserLocalHappyAgentPlugin()` (`sources/main/browserDevServer.ts`) injects a
-  `happy2-browser-local` meta tag. A meta tag, not an inline script, because the
+  `happy-browser-local` meta tag. A meta tag, not an inline script, because the
   page CSP forbids inline scripts and would silently drop the signal.
 - The renderer entry picks the browser dev bridge when that tag is present and
   `window.happyDesktop` is absent.

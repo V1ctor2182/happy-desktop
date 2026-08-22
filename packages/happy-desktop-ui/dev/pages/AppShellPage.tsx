@@ -34,7 +34,7 @@ function Slot(props: { height?: string; label: string; note?: string; width?: st
             <span
                 style={{
                     color: "var(--text-secondary)",
-                    font: "700 11px var(--happy2-font-mono)",
+                    font: "700 11px var(--happy-font-mono)",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                 }}
@@ -42,7 +42,7 @@ function Slot(props: { height?: string; label: string; note?: string; width?: st
                 {props.label}
             </span>
             {props.note ? (
-                <span style={{ font: "500 10px var(--happy2-font-mono)", letterSpacing: "0.04em" }}>
+                <span style={{ font: "500 10px var(--happy-font-mono)", letterSpacing: "0.04em" }}>
                     {props.note}
                 </span>
             ) : null}

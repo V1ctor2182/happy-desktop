@@ -11,8 +11,8 @@ import { createRenderer } from "./testing";
 
 const fontFamily = () =>
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 it("holds Modal dialog geometry, header/body/footer layout, and painted chrome glyphs", async () => {
     const closed: string[] = [];
@@ -190,7 +190,7 @@ it("holds Modal dialog geometry, header/body/footer layout, and painted chrome g
     expect(title.computedStyle("color")).toBe("rgb(0, 0, 0)");
     const titleMetrics = title.textMetrics();
     expect(titleMetrics.text).toBe("Create a channel");
-    expect(titleMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(titleMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(titleMetrics.font.size).toBe(16);
     expect(titleMetrics.font.weight).toBe("700");
     expect(titleMetrics.font.lineHeight).toBe(24);
@@ -198,7 +198,7 @@ it("holds Modal dialog geometry, header/body/footer layout, and painted chrome g
     expect((await title.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     /* Close: ghost 28px icon Button hugging the 16px right gutter. */
-    const close = view.$('[data-testid="md"] .happy2-modal__close');
+    const close = view.$('[data-testid="md"] .happy-modal__close');
     expect(close.element.tagName).toBe("BUTTON");
     expect(close.element.getAttribute("aria-label")).toBe("Close");
     expect(close.bounds().width).toBe(28);
@@ -208,7 +208,7 @@ it("holds Modal dialog geometry, header/body/footer layout, and painted chrome g
     expect(
         (
             await view
-                .$('[data-testid="md"] .happy2-modal__close [data-happy-desktop-ui="icon"]')
+                .$('[data-testid="md"] .happy-modal__close [data-happy-desktop-ui="icon"]')
                 .visibleMetrics()
         ).pixelCount,
         "close glyph ink",
@@ -397,7 +397,7 @@ it("holds Modal tone treatments and the minimal (no icon / footer / close) form"
             '[data-testid="minimal"] [data-happy-desktop-ui="modal-icon"]',
         ),
     ).toBeNull();
-    expect(view.container.querySelector('[data-testid="minimal"] .happy2-modal__close')).toBeNull();
+    expect(view.container.querySelector('[data-testid="minimal"] .happy-modal__close')).toBeNull();
     expect(
         view.container.querySelector(
             '[data-testid="minimal"] [data-happy-desktop-ui="modal-footer"]',

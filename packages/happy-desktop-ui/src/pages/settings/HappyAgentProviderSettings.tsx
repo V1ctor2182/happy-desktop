@@ -77,7 +77,7 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
         );
     if (props.loading)
         return (
-            <Box className="happy2-happy-agent-settings__pending">
+            <Box className="happy-agent-settings__pending">
                 <Spinner size={16} />
                 <span>Reading the model catalog…</span>
             </Box>
@@ -104,29 +104,29 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
             >
                 {props.providers.map((provider) => (
                     <article
-                        className="happy2-happy-agent-provider"
-                        data-happy2-ui="happy-agent-provider"
+                        className="happy-agent-provider"
+                        data-happy-desktop-ui="happy-agent-provider"
                         data-status={provider.status}
                         key={provider.id}
                     >
-                        <header className="happy2-happy-agent-provider__header">
-                            <Box className="happy2-happy-agent-provider__identity">
+                        <header className="happy-agent-provider__header">
+                            <Box className="happy-agent-provider__identity">
                                 <span
-                                    className="happy2-happy-agent-provider__glyph"
-                                    data-happy2-ui="happy-agent-provider-glyph"
+                                    className="happy-agent-provider__glyph"
+                                    data-happy-desktop-ui="happy-agent-provider-glyph"
                                 >
                                     <Icon name="globe" size={16} />
                                 </span>
-                                <Box className="happy2-happy-agent-provider__naming">
+                                <Box className="happy-agent-provider__naming">
                                     <span
-                                        className="happy2-happy-agent-provider__name"
-                                        data-happy2-ui="happy-agent-provider-name"
+                                        className="happy-agent-provider__name"
+                                        data-happy-desktop-ui="happy-agent-provider-name"
                                     >
                                         {provider.name}
                                     </span>
                                     <span
-                                        className="happy2-happy-agent-provider__meta"
-                                        data-happy2-ui="happy-agent-provider-meta"
+                                        className="happy-agent-provider__meta"
+                                        data-happy-desktop-ui="happy-agent-provider-meta"
                                     >
                                         {providerMeta(provider)}
                                     </span>
@@ -137,18 +137,18 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                 variant={STATUS_VARIANTS[provider.status]}
                             />
                         </header>
-                        <Box className="happy2-happy-agent-provider__models">
+                        <Box className="happy-agent-provider__models">
                             {provider.models.map((model) => (
                                 <Box
-                                    className="happy2-happy-agent-provider__model"
-                                    data-happy2-ui="happy-agent-provider-model"
+                                    className="happy-agent-provider__model"
+                                    data-happy-desktop-ui="happy-agent-provider-model"
                                     key={model.id}
                                 >
-                                    <Box className="happy2-happy-agent-provider__model-text">
-                                        <Box className="happy2-happy-agent-provider__model-title">
+                                    <Box className="happy-agent-provider__model-text">
+                                        <Box className="happy-agent-provider__model-title">
                                             <span
-                                                className="happy2-happy-agent-provider__model-name"
-                                                data-happy2-ui="happy-agent-provider-model-name"
+                                                className="happy-agent-provider__model-name"
+                                                data-happy-desktop-ui="happy-agent-provider-model-name"
                                             >
                                                 {model.name}
                                             </span>
@@ -157,8 +157,8 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                             ) : null}
                                         </Box>
                                         <span
-                                            className="happy2-happy-agent-provider__model-meta"
-                                            data-happy2-ui="happy-agent-provider-model-meta"
+                                            className="happy-agent-provider__model-meta"
+                                            data-happy-desktop-ui="happy-agent-provider-model-meta"
                                         >
                                             {modelMeta(model)}
                                         </span>
@@ -179,8 +179,8 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                             ))}
                             {provider.models.length === 0 ? (
                                 <span
-                                    className="happy2-happy-agent-provider__models-empty"
-                                    data-happy2-ui="happy-agent-provider-models-empty"
+                                    className="happy-agent-provider__models-empty"
+                                    data-happy-desktop-ui="happy-agent-provider-models-empty"
                                 >
                                     This provider offers no models right now.
                                 </span>
@@ -188,8 +188,8 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                         </Box>
                         {STATUS_HINTS[provider.status] ? (
                             <p
-                                className="happy2-happy-agent-provider__hint"
-                                data-happy2-ui="happy-agent-provider-hint"
+                                className="happy-agent-provider__hint"
+                                data-happy-desktop-ui="happy-agent-provider-hint"
                             >
                                 {STATUS_HINTS[provider.status]}
                             </p>

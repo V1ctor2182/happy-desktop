@@ -143,7 +143,7 @@ const messages: ReadonlyMap<HappyAgentInboxItemId, string> = new Map([
 ]);
 
 const location = (candidate: HappyAgentInboxItem): string =>
-    candidate.scope?.kind === "workspace" ? "happy2 · feature worktree" : "happy2";
+    candidate.scope?.kind === "workspace" ? "happy · feature worktree" : "happy";
 
 const time = (candidate: HappyAgentInboxItem): string =>
     candidate.status === "answered" ? "Answered 8m ago" : "Asked 3m ago";

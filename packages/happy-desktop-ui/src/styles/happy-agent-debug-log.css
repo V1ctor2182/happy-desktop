@@ -4,12 +4,12 @@
  * panel owns only the machine output inside its fixed-height viewport.
  */
 
-.happy2-happy-agent-debug-log,
-.happy2-happy-agent-debug-log * {
+.happy-agent-debug-log,
+.happy-agent-debug-log * {
     box-sizing: border-box;
 }
 
-.happy2-happy-agent-debug-log {
+.happy-agent-debug-log {
     display: flex;
     flex-direction: column;
     height: 360px;
@@ -19,11 +19,11 @@
     border: 1px solid var(--divider);
     border-radius: 8px;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-happy-agent-debug-log__header {
+.happy-agent-debug-log__header {
     display: flex;
     align-items: center;
     flex: none;
@@ -34,19 +34,19 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-happy-agent-debug-log__title {
+.happy-agent-debug-log__title {
     flex: none;
     font-size: 12px;
     font-weight: 600;
     line-height: 16px;
 }
 
-.happy2-happy-agent-debug-log__count {
+.happy-agent-debug-log__count {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-variant-numeric: lining-nums tabular-nums;
     line-height: 16px;
@@ -55,24 +55,24 @@
 }
 
 /* A single panel-level action, always visible rather than row-hover chrome. */
-.happy2-happy-agent-debug-log__header .happy2-copy-button {
+.happy-agent-debug-log__header .happy-copy-button {
     opacity: 1;
 }
 
 /* Full-bleed scrollport: its inner code element owns the readable inset. */
-.happy2-happy-agent-debug-log__scrollport {
+.happy-agent-debug-log__scrollport {
     flex: 1 1 0%;
     min-height: 0;
     width: 100%;
     background: var(--diff-context-bg);
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-variant-numeric: lining-nums tabular-nums;
     line-height: 17px;
 }
 
-.happy2-happy-agent-debug-log__viewport {
+.happy-agent-debug-log__viewport {
     margin: 0;
     padding: 0;
     overflow: auto;
@@ -83,12 +83,12 @@
     word-break: break-word;
 }
 
-.happy2-happy-agent-debug-log__viewport:focus-visible {
+.happy-agent-debug-log__viewport:focus-visible {
     outline: 2px solid var(--text-link);
     outline-offset: -2px;
 }
 
-.happy2-happy-agent-debug-log__content {
+.happy-agent-debug-log__content {
     position: relative;
     min-height: 100%;
     width: 100%;
@@ -101,7 +101,7 @@
 /* Entries leave the flow because only the visible portion of the retained
    log exists in the DOM; the virtualizer positions each row where the full
    listing would have put it. */
-.happy2-happy-agent-debug-log__entry {
+.happy-agent-debug-log__entry {
     position: absolute;
     top: 0;
     left: 0;
@@ -116,15 +116,15 @@
     word-break: inherit;
 }
 
-.happy2-happy-agent-debug-log__entry code,
-.happy2-happy-agent-debug-log__empty {
+.happy-agent-debug-log__entry code,
+.happy-agent-debug-log__empty {
     color: inherit;
     font: inherit;
     white-space: inherit;
     word-break: inherit;
 }
 
-.happy2-happy-agent-debug-log__empty {
+.happy-agent-debug-log__empty {
     display: block;
     padding: 12px;
 }

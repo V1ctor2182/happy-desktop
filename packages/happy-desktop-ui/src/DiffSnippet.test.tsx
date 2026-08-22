@@ -103,8 +103,8 @@ it("holds DiffSnippet geometry, colors, typography, and scrolling", async () => 
 
     const monoFamily =
         server.browser === "webkit"
-            ? "happy2 Mono, ui-monospace, monospace"
-            : '"happy2 Mono", ui-monospace, monospace';
+            ? "happy Mono, ui-monospace, monospace"
+            : '"happy Mono", ui-monospace, monospace';
 
     /* — full variant: header, stats, line numbers — */
     const full = view.$('[data-testid="diff-full"]');

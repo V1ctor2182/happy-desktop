@@ -40,7 +40,7 @@ export function Checkbox(props: CheckboxProps) {
     const control = useRef<HTMLInputElement>(null);
     // indeterminate is a DOM property, not an attribute — mirror the prop onto
     // the live input so assistive tech announces the mixed state.
-    // eslint-disable-next-line happy2-react/no-layout-effect -- HTML exposes the mixed checkbox state only through the live input.indeterminate DOM property, so it must be synchronized after commit
+    // eslint-disable-next-line happy-react/no-layout-effect -- HTML exposes the mixed checkbox state only through the live input.indeterminate DOM property, so it must be synchronized after commit
     useLayoutEffect(() => {
         if (control.current) control.current.indeterminate = local.indeterminate ?? false;
     }, [local.indeterminate]);
@@ -48,7 +48,7 @@ export function Checkbox(props: CheckboxProps) {
         local.indeterminate ? "indeterminate" : local.checked ? "checked" : "unchecked";
     return (
         <label
-            className={["happy2-checkbox", local.className].filter(Boolean).join(" ")}
+            className={["happy-checkbox", local.className].filter(Boolean).join(" ")}
             data-checked={local.checked ? "" : undefined}
             data-disabled={local.disabled ? "" : undefined}
             data-indeterminate={local.indeterminate ? "" : undefined}
@@ -61,7 +61,7 @@ export function Checkbox(props: CheckboxProps) {
                 aria-describedby={local["aria-describedby"]}
                 aria-label={local["aria-label"]}
                 checked={local.checked}
-                className="happy2-checkbox__control"
+                className="happy-checkbox__control"
                 data-happy-desktop-ui="checkbox-control"
                 disabled={local.disabled}
                 id={local.id}
@@ -70,15 +70,15 @@ export function Checkbox(props: CheckboxProps) {
                 ref={control}
                 type="checkbox"
             />
-            <span className="happy2-checkbox__box" data-happy-desktop-ui="checkbox-box">
+            <span className="happy-checkbox__box" data-happy-desktop-ui="checkbox-box">
                 {local.indeterminate ? (
-                    <span className="happy2-checkbox__dash" data-happy-desktop-ui="checkbox-mark" />
+                    <span className="happy-checkbox__dash" data-happy-desktop-ui="checkbox-mark" />
                 ) : local.checked ? (
                     <Icon name="check" size={14} />
                 ) : null}
             </span>
             {local.label !== undefined ? (
-                <span className="happy2-checkbox__label" data-happy-desktop-ui="checkbox-label">
+                <span className="happy-checkbox__label" data-happy-desktop-ui="checkbox-label">
                     {local.label}
                 </span>
             ) : null}

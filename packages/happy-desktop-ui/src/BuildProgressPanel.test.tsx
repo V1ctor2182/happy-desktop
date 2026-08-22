@@ -10,8 +10,8 @@ import { createRenderer, type RenderedElement } from "./testing";
 
 const monoFamily = () =>
     server.browser === "webkit"
-        ? "happy2 Mono, ui-monospace, monospace"
-        : '"happy2 Mono", ui-monospace, monospace';
+        ? "happy Mono, ui-monospace, monospace"
+        : '"happy Mono", ui-monospace, monospace';
 
 /* Asserts a text/glyph part paints and its ink stays inside its own box (never
  * a blank or vertically clipped capture). */
@@ -164,8 +164,8 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
         "flex-direction": "column",
         "font-family":
             server.browser === "webkit"
-                ? "happy2 Figtree, system-ui, sans-serif"
-                : '"happy2 Figtree", system-ui, sans-serif',
+                ? "happy Figtree, system-ui, sans-serif"
+                : '"happy Figtree", system-ui, sans-serif',
         "padding-bottom": "0px",
         "padding-left": "0px",
         "padding-right": "0px",

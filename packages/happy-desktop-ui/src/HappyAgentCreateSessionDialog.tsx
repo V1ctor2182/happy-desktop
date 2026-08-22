@@ -30,7 +30,7 @@ export interface HappyAgentCreateSessionDestination {
     readonly label: string;
     /**
      * The project a worktree belongs to. Absent on a project itself, so the
-     * list can say "happy2 · review-fixes" rather than a bare worktree name
+     * list can say "happy · review-fixes" rather than a bare worktree name
      * that means nothing on its own.
      */
     readonly parentLabel?: string;
@@ -183,7 +183,7 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                 data-testid={props["data-testid"]}
                 footer={
                     <div
-                        className="happy2-happy-agent-create-session__footer"
+                        className="happy-agent-create-session__footer"
                         data-happy-desktop-ui="happy-agent-create-session-footer"
                     >
                         {/* Filing several tasks at once should not mean reopening
@@ -196,11 +196,11 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                             onChange={(checked) => props.onKeepOpenChange(checked)}
                         />
                         <div
-                            className="happy2-happy-agent-create-session__actions"
+                            className="happy-agent-create-session__actions"
                             data-happy-desktop-ui="happy-agent-create-session-actions"
                         >
                             <span
-                                className="happy2-happy-agent-create-session__chord"
+                                className="happy-agent-create-session__chord"
                                 data-happy-desktop-ui="happy-agent-create-session-chord"
                             >
                                 <KeyCap keys="⌘ENTER" />
@@ -230,7 +230,7 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                 title="New session"
             >
                 <div
-                    className="happy2-happy-agent-create-session"
+                    className="happy-agent-create-session"
                     data-happy-desktop-ui="happy-agent-create-session"
                 >
                     {props.submitDisabledReason ? (
@@ -239,7 +239,7 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                         </Banner>
                     ) : null}
                     <div
-                        className="happy2-happy-agent-create-session__prompt"
+                        className="happy-agent-create-session__prompt"
                         data-happy-desktop-ui="happy-agent-create-session-prompt"
                         data-scrollbar-axes="vertical"
                         data-scrollbar-host=""
@@ -248,7 +248,7 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                     >
                         <textarea
                             aria-label="Task"
-                            className="happy2-happy-agent-create-session__input"
+                            className="happy-agent-create-session__input"
                             data-happy-desktop-ui="happy-agent-create-session-input"
                             onInput={(event) => props.onTextChange(event.currentTarget.value)}
                             onKeyDown={onPromptKeyDown}
@@ -264,11 +264,11 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                         <ScrollbarTracks controller={scrollbarController} />
                     </div>
                     <div
-                        className="happy2-happy-agent-create-session__where"
+                        className="happy-agent-create-session__where"
                         data-happy-desktop-ui="happy-agent-create-session-where"
                     >
                         <Select
-                            className="happy2-happy-agent-create-session__destination"
+                            className="happy-agent-create-session__destination"
                             data-testid="happy-agent-create-session-destination"
                             disabled={submitting || destinationOptions.length === 0}
                             label="Project"
@@ -281,7 +281,7 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                                 : { value: props.destinationId })}
                         />
                         <span
-                            className="happy2-happy-agent-create-session__path"
+                            className="happy-agent-create-session__path"
                             data-happy-desktop-ui="happy-agent-create-session-path"
                             title={chosen?.displayPath}
                         >
@@ -289,11 +289,11 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                         </span>
                     </div>
                     <div
-                        className="happy2-happy-agent-create-session__how"
+                        className="happy-agent-create-session__how"
                         data-happy-desktop-ui="happy-agent-create-session-how"
                     >
                         <Select
-                            className="happy2-happy-agent-create-session__model"
+                            className="happy-agent-create-session__model"
                             data-testid="happy-agent-create-session-model"
                             disabled={submitting || modelOptions.length === 0}
                             label="Model"

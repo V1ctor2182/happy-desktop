@@ -33,7 +33,7 @@ function Held(props: { percent: number }) {
                 width: "120px",
                 height: "48px",
                 border: "1px solid var(--divider)",
-                borderRadius: "var(--happy2-radius-sm)",
+                borderRadius: "var(--happy-radius-sm)",
                 transform: "translateZ(0)",
             }}
         >

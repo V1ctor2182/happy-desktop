@@ -41,7 +41,7 @@ function EmojiCell(props: {
     return (
         <button
             aria-label={props.item.name}
-            className="happy2-emoji-picker__cell"
+            className="happy-emoji-picker__cell"
             data-emoji-id={props.item.id}
             data-picker-bottom-left={props.bottomLeft ? "" : undefined}
             data-picker-bottom-right={props.bottomRight ? "" : undefined}
@@ -50,12 +50,12 @@ function EmojiCell(props: {
             title={props.item.name}
             type="button"
         >
-            <span className="happy2-emoji-picker__art" data-happy-desktop-ui="emoji-picker-art">
+            <span className="happy-emoji-picker__art" data-happy-desktop-ui="emoji-picker-art">
                 {props.item.imageUrl ? (
                     ((url) => (
                         <img
                             alt=""
-                            className="happy2-emoji-picker__image"
+                            className="happy-emoji-picker__image"
                             data-happy-desktop-ui="emoji-picker-image"
                             draggable={false}
                             src={url}
@@ -63,7 +63,7 @@ function EmojiCell(props: {
                     ))(props.item.imageUrl)
                 ) : (
                     <span
-                        className="happy2-emoji-picker__glyph"
+                        className="happy-emoji-picker__glyph"
                         data-happy-desktop-ui="emoji-picker-glyph"
                     >
                         {props.item.char}
@@ -116,14 +116,11 @@ export function EmojiPicker(props: EmojiPickerProps) {
     return (
         <div
             {...rest}
-            className={["happy2-emoji-picker", local.className].filter(Boolean).join(" ")}
+            className={["happy-emoji-picker", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="emoji-picker"
             style={{ ...local.style, width: `${columns() * CELL + CHROME}px` }}
         >
-            <div
-                className="happy2-emoji-picker__search"
-                data-happy-desktop-ui="emoji-picker-search"
-            >
+            <div className="happy-emoji-picker__search" data-happy-desktop-ui="emoji-picker-search">
                 <TextField
                     fullWidth
                     leadingIcon="search"
@@ -137,17 +134,17 @@ export function EmojiPicker(props: EmojiPickerProps) {
 
             {hasRecent() ? (
                 <section
-                    className="happy2-emoji-picker__section"
+                    className="happy-emoji-picker__section"
                     data-happy-desktop-ui="emoji-picker-recent-section"
                 >
                     <div
-                        className="happy2-emoji-picker__label"
+                        className="happy-emoji-picker__label"
                         data-happy-desktop-ui="emoji-picker-recent-label"
                     >
                         {local.recentLabel ?? "Recently used"}
                     </div>
                     <div
-                        className="happy2-emoji-picker__grid"
+                        className="happy-emoji-picker__grid"
                         data-happy-desktop-ui="emoji-picker-recent-grid"
                         style={{ gridTemplateColumns: gridColumns() }}
                     >
@@ -159,12 +156,12 @@ export function EmojiPicker(props: EmojiPickerProps) {
             ) : null}
 
             <section
-                className="happy2-emoji-picker__section"
+                className="happy-emoji-picker__section"
                 data-happy-desktop-ui="emoji-picker-all-section"
             >
                 {hasRecent() ? (
                     <div
-                        className="happy2-emoji-picker__label"
+                        className="happy-emoji-picker__label"
                         data-happy-desktop-ui="emoji-picker-all-label"
                     >
                         {local.allLabel ?? "All emoji"}
@@ -172,7 +169,7 @@ export function EmojiPicker(props: EmojiPickerProps) {
                 ) : null}
                 {local.emoji.length > 0 ? (
                     <div
-                        className="happy2-emoji-picker__grid"
+                        className="happy-emoji-picker__grid"
                         data-happy-desktop-ui="emoji-picker-grid"
                         style={{ gridTemplateColumns: gridColumns() }}
                     >
@@ -188,7 +185,7 @@ export function EmojiPicker(props: EmojiPickerProps) {
                     </div>
                 ) : (
                     <div
-                        className="happy2-emoji-picker__empty"
+                        className="happy-emoji-picker__empty"
                         data-happy-desktop-ui="emoji-picker-empty"
                     >
                         {local.emptyLabel ?? "No emoji found"}

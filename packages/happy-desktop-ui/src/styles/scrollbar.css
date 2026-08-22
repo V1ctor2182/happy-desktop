@@ -9,65 +9,65 @@
  * quiet, active surface, and direct track interaction. Geometry never changes.
  */
 
-@property --happy2-scrollbar-color {
+@property --happy-scrollbar-color {
     syntax: "<color>";
     inherits: true;
     initial-value: transparent;
 }
 
 [data-scrollbar-visibility="automatic"] {
-    --happy2-scrollbar-rest-color: transparent;
-    --happy2-scrollbar-surface-color: transparent;
+    --happy-scrollbar-rest-color: transparent;
+    --happy-scrollbar-surface-color: transparent;
 }
 
 [data-scrollbar-visibility="always"] {
-    --happy2-scrollbar-rest-color: var(--happy2-scrollbar-quiet-color);
-    --happy2-scrollbar-surface-color: var(--happy2-scrollbar-active-color);
+    --happy-scrollbar-rest-color: var(--happy-scrollbar-quiet-color);
+    --happy-scrollbar-surface-color: var(--happy-scrollbar-active-color);
 }
 
 [data-scrollbar-host] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-rest-color);
+    --happy-scrollbar-color: var(--happy-scrollbar-rest-color);
 }
 
 [data-scrollbar-host][data-scrollbar-surface] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-surface-color);
+    --happy-scrollbar-color: var(--happy-scrollbar-surface-color);
 }
 
 [data-scrollbar-host][data-scrollbar-active=""] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-active-color);
+    --happy-scrollbar-color: var(--happy-scrollbar-active-color);
     transition: none;
 }
 
 [data-scrollbar-host][data-scrollbar-active="idle"] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-rest-color);
-    transition: --happy2-scrollbar-color 480ms linear;
+    --happy-scrollbar-color: var(--happy-scrollbar-rest-color);
+    transition: --happy-scrollbar-color 480ms linear;
 }
 
 [data-scrollbar-visibility="always"] [data-scrollbar-host][data-scrollbar-hover],
 [data-scrollbar-visibility="automatic"]
     [data-scrollbar-host][data-scrollbar-active][data-scrollbar-hover],
 [data-scrollbar-host][data-scrollbar-dragging] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-interaction-color);
+    --happy-scrollbar-color: var(--happy-scrollbar-interaction-color);
 }
 
 /* The composer is the sole always-visible exception in Automatic mode. */
 [data-scrollbar-host][data-scrollbar-always] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-quiet-color);
+    --happy-scrollbar-color: var(--happy-scrollbar-quiet-color);
 }
 
 [data-scrollbar-host][data-scrollbar-always][data-scrollbar-surface],
 [data-scrollbar-host][data-scrollbar-always][data-scrollbar-active=""] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-active-color);
+    --happy-scrollbar-color: var(--happy-scrollbar-active-color);
 }
 
 [data-scrollbar-host][data-scrollbar-always][data-scrollbar-hover],
 [data-scrollbar-host][data-scrollbar-always][data-scrollbar-dragging] {
-    --happy2-scrollbar-color: var(--happy2-scrollbar-interaction-color);
+    --happy-scrollbar-color: var(--happy-scrollbar-interaction-color);
 }
 
 /* Viewport + two optional tracks + their corner are a genuine 2D control. */
 [data-scrollbar-host][data-scrollbar-placement] {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- A scroll viewport and its two perpendicular tracks form a two-dimensional control with a shared corner. */
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- A scroll viewport and its two perpendicular tracks form a two-dimensional control with a shared corner. */
     display: grid;
     position: relative;
     grid-template-rows: minmax(0, 1fr) auto;
@@ -77,7 +77,7 @@
     overflow: hidden;
 }
 
-.happy2-scroll-area__viewport,
+.happy-scroll-area__viewport,
 [data-scrollbar-host] > [data-scrollbar-viewport] {
     grid-row: 1;
     grid-column: 1;
@@ -96,7 +96,7 @@
     height: 0;
 }
 
-.happy2-scrollbar__track {
+.happy-scrollbar__track {
     position: relative;
     z-index: 2;
     display: none;
@@ -108,91 +108,90 @@
     touch-action: none;
 }
 
-.happy2-scrollbar__track[data-axis="vertical"] {
+.happy-scrollbar__track[data-axis="vertical"] {
     grid-row: 1;
     grid-column: 2;
-    width: var(--happy2-scrollbar-track);
-    margin-bottom: var(--happy2-scrollbar-end-inset, 0px);
+    width: var(--happy-scrollbar-track);
+    margin-bottom: var(--happy-scrollbar-end-inset, 0px);
 }
 
-.happy2-scrollbar__track[data-axis="horizontal"] {
+.happy-scrollbar__track[data-axis="horizontal"] {
     grid-row: 2;
     grid-column: 1;
-    height: var(--happy2-scrollbar-track);
+    height: var(--happy-scrollbar-track);
 }
 
-[data-scrollbar-host][data-scrollbar-overflow-y] > .happy2-scrollbar__track[data-axis="vertical"],
+[data-scrollbar-host][data-scrollbar-overflow-y] > .happy-scrollbar__track[data-axis="vertical"],
 [data-scrollbar-host][data-scrollbar-placement="stable-gutter"]
-    > .happy2-scrollbar__track[data-axis="vertical"],
-[data-scrollbar-host][data-scrollbar-overflow-x] > .happy2-scrollbar__track[data-axis="horizontal"],
+    > .happy-scrollbar__track[data-axis="vertical"],
+[data-scrollbar-host][data-scrollbar-overflow-x] > .happy-scrollbar__track[data-axis="horizontal"],
 [data-scrollbar-host][data-scrollbar-placement="stable-gutter"]
-    > .happy2-scrollbar__track[data-axis="horizontal"] {
+    > .happy-scrollbar__track[data-axis="horizontal"] {
     display: block;
 }
 
 [data-scrollbar-host]:not([data-scrollbar-overflow-y])
-    > .happy2-scrollbar__track[data-axis="vertical"]
-    > .happy2-scrollbar__thumb,
+    > .happy-scrollbar__track[data-axis="vertical"]
+    > .happy-scrollbar__thumb,
 [data-scrollbar-host]:not([data-scrollbar-overflow-x])
-    > .happy2-scrollbar__track[data-axis="horizontal"]
-    > .happy2-scrollbar__thumb {
+    > .happy-scrollbar__track[data-axis="horizontal"]
+    > .happy-scrollbar__thumb {
     display: none;
 }
 
-[data-scrollbar-visibility="always"] [data-scrollbar-host] > .happy2-scrollbar__track,
-[data-scrollbar-host][data-scrollbar-always] > .happy2-scrollbar__track,
-[data-scrollbar-host][data-scrollbar-active] > .happy2-scrollbar__track {
+[data-scrollbar-visibility="always"] [data-scrollbar-host] > .happy-scrollbar__track,
+[data-scrollbar-host][data-scrollbar-always] > .happy-scrollbar__track,
+[data-scrollbar-host][data-scrollbar-active] > .happy-scrollbar__track {
     pointer-events: auto;
 }
 
-.happy2-scrollbar__thumb {
-    --happy2-scrollbar-cap: calc(var(--happy2-scrollbar-ink) / 2);
-    --happy2-scrollbar-outer-cap: calc(
-        var(--happy2-scrollbar-cap) + var(--happy2-scrollbar-edge-inset)
+.happy-scrollbar__thumb {
+    --happy-scrollbar-cap: calc(var(--happy-scrollbar-ink) / 2);
+    --happy-scrollbar-outer-cap: calc(
+        var(--happy-scrollbar-cap) + var(--happy-scrollbar-edge-inset)
     );
     position: absolute;
     top: 0;
     left: 0;
     box-sizing: border-box;
-    background-color: var(--happy2-scrollbar-color);
+    background-color: var(--happy-scrollbar-color);
     background-clip: padding-box;
     will-change: transform;
 }
 
-.happy2-scrollbar__track[data-axis="vertical"] > .happy2-scrollbar__thumb {
+.happy-scrollbar__track[data-axis="vertical"] > .happy-scrollbar__thumb {
     width: 100%;
     min-height: 24px;
-    border-right: var(--happy2-scrollbar-edge-inset) solid transparent;
-    border-radius: var(--happy2-scrollbar-cap) var(--happy2-scrollbar-outer-cap)
-        var(--happy2-scrollbar-outer-cap) var(--happy2-scrollbar-cap) / var(--happy2-scrollbar-cap);
+    border-right: var(--happy-scrollbar-edge-inset) solid transparent;
+    border-radius: var(--happy-scrollbar-cap) var(--happy-scrollbar-outer-cap)
+        var(--happy-scrollbar-outer-cap) var(--happy-scrollbar-cap) / var(--happy-scrollbar-cap);
 }
 
-.happy2-scrollbar__track[data-axis="horizontal"] > .happy2-scrollbar__thumb {
+.happy-scrollbar__track[data-axis="horizontal"] > .happy-scrollbar__thumb {
     height: 100%;
     min-width: 24px;
-    border-bottom: var(--happy2-scrollbar-edge-inset) solid transparent;
-    border-radius: var(--happy2-scrollbar-cap) / var(--happy2-scrollbar-cap)
-        var(--happy2-scrollbar-cap) var(--happy2-scrollbar-outer-cap)
-        var(--happy2-scrollbar-outer-cap);
+    border-bottom: var(--happy-scrollbar-edge-inset) solid transparent;
+    border-radius: var(--happy-scrollbar-cap) / var(--happy-scrollbar-cap)
+        var(--happy-scrollbar-cap) var(--happy-scrollbar-outer-cap) var(--happy-scrollbar-outer-cap);
 }
 
 /* File, diff, and editor tracks sit above full-width painted content. */
 [data-scrollbar-host][data-scrollbar-placement="overlay"]
-    > .happy2-scrollbar__track[data-axis="vertical"] {
+    > .happy-scrollbar__track[data-axis="vertical"] {
     position: absolute;
     top: 0;
     right: 0;
-    bottom: var(--happy2-scrollbar-end-inset, 0px);
+    bottom: var(--happy-scrollbar-end-inset, 0px);
     margin-bottom: 0;
 }
 
 [data-scrollbar-host][data-scrollbar-placement="overlay"][data-scrollbar-overflow-x]
-    > .happy2-scrollbar__track[data-axis="vertical"] {
-    bottom: calc(var(--happy2-scrollbar-end-inset, 0px) + var(--happy2-scrollbar-track));
+    > .happy-scrollbar__track[data-axis="vertical"] {
+    bottom: calc(var(--happy-scrollbar-end-inset, 0px) + var(--happy-scrollbar-track));
 }
 
 [data-scrollbar-host][data-scrollbar-placement="overlay"]
-    > .happy2-scrollbar__track[data-axis="horizontal"] {
+    > .happy-scrollbar__track[data-axis="horizontal"] {
     position: absolute;
     right: 0;
     bottom: 0;
@@ -200,6 +199,6 @@
 }
 
 [data-scrollbar-host][data-scrollbar-placement="overlay"][data-scrollbar-overflow-y]
-    > .happy2-scrollbar__track[data-axis="horizontal"] {
-    right: var(--happy2-scrollbar-track);
+    > .happy-scrollbar__track[data-axis="horizontal"] {
+    right: var(--happy-scrollbar-track);
 }

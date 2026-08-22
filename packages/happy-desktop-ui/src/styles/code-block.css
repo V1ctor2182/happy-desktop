@@ -8,12 +8,12 @@
  * `color-scheme`, which the theme sets and the shadow tree inherits.
  */
 
-.happy2-code-block {
+.happy-code-block {
     display: block;
     min-width: 0;
     max-width: 100%;
-    --diffs-font-family: var(--happy2-font-mono);
-    --diffs-header-font-family: var(--happy2-font-ui);
+    --diffs-font-family: var(--happy-font-mono);
+    --diffs-header-font-family: var(--happy-font-ui);
     --diffs-font-size: 12px;
     --diffs-line-height: 20px;
     --diffs-gap-inline: 10px;

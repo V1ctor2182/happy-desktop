@@ -8,19 +8,19 @@
  * read as one list rather than as two kinds of thing.
  */
 
-.happy2-happy-agent-project-settings {
+.happy-agent-project-settings {
     display: flex;
     flex-direction: column;
     gap: 20px;
     box-sizing: border-box;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
 }
 
-.happy2-happy-agent-project-settings * {
+.happy-agent-project-settings * {
     box-sizing: border-box;
 }
 
-.happy2-happy-agent-project-settings__identity {
+.happy-agent-project-settings__identity {
     display: flex;
     flex: none;
     align-items: center;
@@ -28,7 +28,7 @@
     min-width: 0;
 }
 
-.happy2-happy-agent-project-settings__identity-text {
+.happy-agent-project-settings__identity-text {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -36,7 +36,7 @@
     min-width: 0;
 }
 
-.happy2-happy-agent-project-settings__identity-name {
+.happy-agent-project-settings__identity-name {
     overflow: hidden;
     color: var(--text);
     font-size: 15px;
@@ -47,14 +47,14 @@
     white-space: nowrap;
 }
 
-.happy2-happy-agent-project-settings__identity-meta {
+.happy-agent-project-settings__identity-meta {
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;
 }
 
-.happy2-happy-agent-project-settings__field {
+.happy-agent-project-settings__field {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -62,7 +62,7 @@
     min-width: 0;
 }
 
-.happy2-happy-agent-project-settings__label {
+.happy-agent-project-settings__label {
     color: var(--text);
     font-size: 13px;
     font-weight: 600;
@@ -72,7 +72,7 @@
 /* The path well takes TextField's medium control height and inset fill, and is
    plainly not editable: mono, secondary, and carrying the copy instead of a
    caret. */
-.happy2-happy-agent-project-settings__path {
+.happy-agent-project-settings__path {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -81,29 +81,29 @@
     padding: 0 6px 0 10px;
     background: var(--input-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
 }
 
 /* The copy stays out: in a transcript it hides until its row is hovered because
    every line has one, but here there is a single path and a single action on
    it, and a control nobody can see is a control nobody uses. */
-.happy2-happy-agent-project-settings__path .happy2-copy-button {
+.happy-agent-project-settings__path .happy-copy-button {
     opacity: 1;
 }
 
-.happy2-happy-agent-project-settings__path-text {
+.happy-agent-project-settings__path-text {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 16px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy2-happy-agent-project-settings__hint {
+.happy-agent-project-settings__hint {
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 500;
@@ -116,7 +116,7 @@
    choice, the image it may need, and the notes are all immediate children of
    this column, so the image field appearing and disappearing moves nothing but
    itself. */
-.happy2-happy-agent-project-settings__compute {
+.happy-agent-project-settings__compute {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -127,7 +127,7 @@
 /* What the project is set to now, beside the commit that would change it: the
    fact on the left and the act on the right, on one line, so the reader sees
    what they are leaving as they choose what to leave it for. */
-.happy2-happy-agent-project-settings__compute-pending {
+.happy-agent-project-settings__compute-pending {
     display: flex;
     flex: none;
     align-items: center;
@@ -135,7 +135,7 @@
     min-width: 0;
 }
 
-.happy2-happy-agent-project-settings__compute-current {
+.happy-agent-project-settings__compute-current {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -155,7 +155,7 @@
    hairline separates it from the fields above rather than letting it read as one
    more of them, and it keeps the same label/value/note rhythm so the separation
    is the only thing that sets it apart. */
-.happy2-happy-agent-project-settings__archive {
+.happy-agent-project-settings__archive {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -165,7 +165,7 @@
     border-top: 1px solid var(--divider);
 }
 
-.happy2-happy-agent-project-settings__archive-actions {
+.happy-agent-project-settings__archive-actions {
     display: flex;
     flex: none;
     align-items: center;

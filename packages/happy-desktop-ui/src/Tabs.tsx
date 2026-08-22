@@ -99,7 +99,7 @@ function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
     return (
         <span
             aria-label={tab.unread ? `${tab.label} has unread activity` : undefined}
-            className="happy2-tabs__tab-icon"
+            className="happy-tabs__tab-icon"
             data-happy-desktop-ui={
                 tab.unread ? "tab-unread" : mark === null ? "tab-lane" : "tab-icon"
             }
@@ -109,8 +109,8 @@ function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
                 <span
                     className={
                         mark === null
-                            ? "happy2-tabs__tab-unread"
-                            : "happy2-tabs__tab-unread happy2-tabs__tab-unread--corner"
+                            ? "happy-tabs__tab-unread"
+                            : "happy-tabs__tab-unread happy-tabs__tab-unread--corner"
                     }
                 />
             ) : null}
@@ -129,7 +129,7 @@ function tabActivityMark(tab: TabItem) {
         return (
             <span
                 aria-label={`${tab.label} is waiting`}
-                className="happy2-tabs__tab-waiting"
+                className="happy-tabs__tab-waiting"
                 data-happy-desktop-ui="tab-waiting"
                 role="img"
             >
@@ -140,7 +140,7 @@ function tabActivityMark(tab: TabItem) {
         return (
             <span
                 aria-label={`${tab.label} has unsaved changes`}
-                className="happy2-tabs__tab-dirty"
+                className="happy-tabs__tab-dirty"
                 data-happy-desktop-ui="tab-dirty"
                 role="img"
             />
@@ -233,7 +233,7 @@ interface TabDrag {
 }
 
 /** Action ids of the menu's own move entries, which cannot collide with the owner's. */
-const TRANSFER_MENU_PREFIX = "happy2-tabs-transfer:";
+const TRANSFER_MENU_PREFIX = "happy-tabs-transfer:";
 
 /** Where the dragged tab lands: each neighbour it has passed by half its width. */
 function dragTargetIndex(drag: TabDrag, deltaX: number): number {
@@ -318,7 +318,7 @@ export function Tabs(props: TabsProps) {
         x: number;
         y: number;
     }>();
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the context menu must measure its rendered height before clamping the fixed popover to the viewport, and global dismissal listeners require imperative cleanup
+    // eslint-disable-next-line happy-react/no-layout-effect -- the context menu must measure its rendered height before clamping the fixed popover to the viewport, and global dismissal listeners require imperative cleanup
     useLayoutEffect(() => {
         if (!tabMenu) return;
         const bounds = menuRoot.current?.getBoundingClientRect();
@@ -440,7 +440,7 @@ export function Tabs(props: TabsProps) {
     // replaced on every pointer move, and the listener below cares only that
     // there is something to cancel.
     const dragging = drag !== undefined;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- Escape has to reach a drag that owns the pointer capture, and only the document hears it; the listener and the capture both live for one gesture and must be released imperatively
+    // eslint-disable-next-line happy-react/no-layout-effect -- Escape has to reach a drag that owns the pointer capture, and only the document hears it; the listener and the capture both live for one gesture and must be released imperatively
     useLayoutEffect(() => {
         if (!dragging) return;
         // Written out here rather than called from the render body: this effect
@@ -476,7 +476,7 @@ export function Tabs(props: TabsProps) {
     // the sense that matters to a keyboard: it has to be where the next key
     // press lands. The strip that lost it cannot do this, because by the time
     // the move has happened the tab is drawn here instead.
-    // eslint-disable-next-line happy2-react/no-layout-effect -- focus is a property of the document, not of this tree, and must be set on the rendered element before the reader's next key press reaches it
+    // eslint-disable-next-line happy-react/no-layout-effect -- focus is a property of the document, not of this tree, and must be set on the rendered element before the reader's next key press reaches it
     useLayoutEffect(() => {
         const claimed = transferFocusClaim(local.tabs.map((tab) => tab.id));
         if (claimed === undefined) return;
@@ -609,7 +609,7 @@ export function Tabs(props: TabsProps) {
     return (
         <div
             {...rest}
-            className={["happy2-tabs", local.className].filter(Boolean).join(" ")}
+            className={["happy-tabs", local.className].filter(Boolean).join(" ")}
             data-dragging={drag?.moved ? "" : undefined}
             data-happy-desktop-ui="tabs"
             data-size={size()}
@@ -625,7 +625,7 @@ export function Tabs(props: TabsProps) {
                     <button
                         aria-selected={active() ? "true" : "false"}
                         key={tab.id}
-                        className="happy2-tabs__tab"
+                        className="happy-tabs__tab"
                         data-active={active() ? "" : undefined}
                         data-carried={dragged() && drag?.carried ? "" : undefined}
                         data-dragged={dragged() ? "" : undefined}
@@ -658,7 +658,7 @@ export function Tabs(props: TabsProps) {
                         type="button"
                     >
                         {tabLeadingMark(tab, iconSizes[size()])}
-                        <span className="happy2-tabs__tab-label" data-happy-desktop-ui="tab-label">
+                        <span className="happy-tabs__tab-label" data-happy-desktop-ui="tab-label">
                             {/* The tab's own colour, with a pale band wiping
                                 through it. Busy is a passing state, so it may
                                 not restyle the title: the active tab is already
@@ -676,7 +676,7 @@ export function Tabs(props: TabsProps) {
                         </span>
                         {tab.badge !== undefined ? (
                             <CountBadge
-                                className="happy2-tabs__tab-badge"
+                                className="happy-tabs__tab-badge"
                                 count={tab.badge!}
                                 tone={active() ? "accent" : "neutral"}
                             />
@@ -693,12 +693,12 @@ export function Tabs(props: TabsProps) {
                                against a spinner appearing under the pointer. */
                             closable || activity ? (
                                 <span
-                                    className="happy2-tabs__tab-trailing"
+                                    className="happy-tabs__tab-trailing"
                                     data-happy-desktop-ui="tab-trailing"
                                 >
                                     {activity ? (
                                         <span
-                                            className="happy2-tabs__tab-activity"
+                                            className="happy-tabs__tab-activity"
                                             data-happy-desktop-ui="tab-activity"
                                         >
                                             {activity}
@@ -715,7 +715,7 @@ export function Tabs(props: TabsProps) {
                                                 active() ? local.closeShortcut?.aria : undefined
                                             }
                                             aria-label={local.closeLabel ?? "Close tab"}
-                                            className="happy2-tabs__tab-close"
+                                            className="happy-tabs__tab-close"
                                             data-happy-desktop-ui="tab-close"
                                             onClick={(event) => {
                                                 event.stopPropagation();
@@ -742,7 +742,7 @@ export function Tabs(props: TabsProps) {
                         {active() ? (
                             <span
                                 aria-hidden="true"
-                                className="happy2-tabs__tab-underline"
+                                className="happy-tabs__tab-underline"
                                 data-happy-desktop-ui="tab-underline"
                             />
                         ) : null}
@@ -756,13 +756,13 @@ export function Tabs(props: TabsProps) {
                    drop zone is found by hit-testing what is underneath. */
                 <span
                     aria-hidden="true"
-                    className="happy2-tabs__carried"
+                    className="happy-tabs__carried"
                     data-happy-desktop-ui="tab-carried"
                     data-over={drag.zone === undefined ? undefined : ""}
                     style={{ left: drag.pointerX, top: drag.pointerY }}
                 >
                     {tabLeadingMark(local.tabs[drag.from]!, iconSizes[size()])}
-                    <span className="happy2-tabs__tab-label">{local.tabs[drag.from]!.label}</span>
+                    <span className="happy-tabs__tab-label">{local.tabs[drag.from]!.label}</span>
                 </span>
             ) : null}
             {/* Said out loud, never drawn. Both regions stay mounted, because a
@@ -771,7 +771,7 @@ export function Tabs(props: TabsProps) {
             {announcements.map((text, slot) => (
                 <span
                     aria-live="polite"
-                    className="happy2-tabs__announcement"
+                    className="happy-tabs__announcement"
                     data-happy-desktop-ui="tabs-announcement"
                     key={slot === 0 ? "first" : "second"}
                     role="status"
@@ -781,7 +781,7 @@ export function Tabs(props: TabsProps) {
             ))}
             {tabMenu ? (
                 <div
-                    className="happy2-tabs__menu"
+                    className="happy-tabs__menu"
                     data-happy-desktop-ui="tabs-menu"
                     ref={menuRoot}
                     style={{ left: tabMenu.x, top: tabMenu.y }}

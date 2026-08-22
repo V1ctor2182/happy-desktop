@@ -5,7 +5,7 @@
  * region rather than added to it so arming a zone never moves anything.
  */
 
-.happy2-transfer-zone {
+.happy-transfer-zone {
     position: relative;
     display: flex;
     flex: 1 1 auto;
@@ -17,7 +17,7 @@
 /* The invitation is an overlay over the whole region, which is exactly what
    absolute positioning is for: it must cover content it is not part of, and it
    must not take part in the column it is drawn over. */
-.happy2-transfer-zone__invite {
+.happy-transfer-zone__invite {
     position: absolute;
     inset: 0;
     z-index: 3;
@@ -35,25 +35,25 @@
 
 /* Two writers, one appearance: the `state` prop React renders, and the
    attribute a live drag writes onto the element itself. */
-.happy2-transfer-zone[data-transfer-state] .happy2-transfer-zone__invite,
-.happy2-transfer-zone[data-transfer-drag] .happy2-transfer-zone__invite {
+.happy-transfer-zone[data-transfer-state] .happy-transfer-zone__invite,
+.happy-transfer-zone[data-transfer-drag] .happy-transfer-zone__invite {
     display: flex;
 }
 
-.happy2-transfer-zone[data-transfer-state="armed"] .happy2-transfer-zone__invite,
-.happy2-transfer-zone[data-transfer-drag="armed"] .happy2-transfer-zone__invite {
+.happy-transfer-zone[data-transfer-state="armed"] .happy-transfer-zone__invite,
+.happy-transfer-zone[data-transfer-drag="armed"] .happy-transfer-zone__invite {
     outline: 2px dashed var(--divider);
     outline-offset: -8px;
 }
 
-.happy2-transfer-zone[data-transfer-state="over"] .happy2-transfer-zone__invite,
-.happy2-transfer-zone[data-transfer-drag="over"] .happy2-transfer-zone__invite {
+.happy-transfer-zone[data-transfer-state="over"] .happy-transfer-zone__invite,
+.happy-transfer-zone[data-transfer-drag="over"] .happy-transfer-zone__invite {
     background: var(--surface-ripple);
     outline: 2px solid var(--radio-active);
     outline-offset: -8px;
 }
 
-.happy2-transfer-zone__badge {
+.happy-transfer-zone__badge {
     display: flex;
     flex: none;
     gap: 8px;
@@ -64,7 +64,7 @@
     background: var(--surface);
     box-shadow: 0 2px 12px var(--shadow-subtle);
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 13px;
     font-weight: 600;
     font-synthesis: none;
@@ -72,13 +72,13 @@
     transition: opacity 120ms ease;
 }
 
-.happy2-transfer-zone[data-transfer-state="over"] .happy2-transfer-zone__badge,
-.happy2-transfer-zone[data-transfer-drag="over"] .happy2-transfer-zone__badge {
+.happy-transfer-zone[data-transfer-state="over"] .happy-transfer-zone__badge,
+.happy-transfer-zone[data-transfer-drag="over"] .happy-transfer-zone__badge {
     color: var(--text);
     opacity: 1;
 }
 
-.happy2-transfer-zone[data-transfer-state="armed"] .happy2-transfer-zone__badge,
-.happy2-transfer-zone[data-transfer-drag="armed"] .happy2-transfer-zone__badge {
+.happy-transfer-zone[data-transfer-state="armed"] .happy-transfer-zone__badge,
+.happy-transfer-zone[data-transfer-drag="armed"] .happy-transfer-zone__badge {
     opacity: 0.7;
 }

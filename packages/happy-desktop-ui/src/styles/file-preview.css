@@ -11,12 +11,12 @@
  * Colors and type are theme tokens only.
  */
 
-.happy2-file-preview,
-.happy2-file-preview * {
+.happy-file-preview,
+.happy-file-preview * {
     box-sizing: border-box;
 }
 
-.happy2-file-preview {
+.happy-file-preview {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -24,58 +24,58 @@
     min-height: 0;
     height: 100%;
     background: var(--surface);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     color: var(--text);
 }
 
 /* ---- Header ----------------------------------------------------------- */
 
-.happy2-file-preview__header {
+.happy-file-preview__header {
     display: flex;
     flex: none;
     align-items: center;
     gap: 10px;
-    height: var(--happy2-subheader-height);
+    height: var(--happy-subheader-height);
     padding: 0 16px;
     font-size: 12px;
     font-weight: 400;
     line-height: 20px;
 }
 
-.happy2-file-preview__glyph {
+.happy-file-preview__glyph {
     width: 16px;
     height: 16px;
 }
 
-.happy2-file-preview__path {
+.happy-file-preview__path {
     min-width: 0;
 }
 
 /* Pierre paints the diff title as one path in primary ink. Preview uses the
    same path treatment; only its file-family glyph differs from the change
    glyph, while diff totals occupy the trailing side in the comparison view. */
-.happy2-file-preview__path .happy2-file-path-label__directory {
+.happy-file-preview__path .happy-file-path-label__directory {
     color: var(--text);
 }
 
-.happy2-file-preview__meta {
+.happy-file-preview__meta {
     display: block;
     flex: none;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     white-space: nowrap;
 }
 
-.happy2-file-preview__actions {
+.happy-file-preview__actions {
     display: flex;
     flex: none;
     align-items: center;
     gap: 4px;
 }
 
-.happy2-file-preview__updating {
+.happy-file-preview__updating {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -87,7 +87,7 @@
 
 /* ---- Body ------------------------------------------------------------- */
 
-.happy2-file-preview__body {
+.happy-file-preview__body {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -98,7 +98,7 @@
 /* The stage is the room a file that plays sits in: one centered child, with
    room around it. Pictures and recordings have viewers of their own and do not
    pass through here; what is left is sound, which has nothing to show. */
-.happy2-file-preview__stage {
+.happy-file-preview__stage {
     display: flex;
     flex: 1 1 0%;
     align-items: center;
@@ -109,13 +109,13 @@
     background: var(--groupped-background);
 }
 
-.happy2-file-preview__audio {
+.happy-file-preview__audio {
     display: block;
     width: 100%;
     max-width: 420px;
 }
 
-.happy2-file-preview__document {
+.happy-file-preview__document {
     display: block;
     flex: 1 1 0%;
     width: 100%;
@@ -125,7 +125,7 @@
 }
 
 /* Scrollport for the highlighted source: edge-to-edge, no padding of its own. */
-.happy2-file-preview__source {
+.happy-file-preview__source {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -134,8 +134,8 @@
     overflow: hidden;
 }
 
-.happy2-file-preview__source-viewport {
-    --happy2-code-trailing-clearance: calc(var(--happy2-scrollbar-track) + 1ch);
+.happy-file-preview__source-viewport {
+    --happy-code-trailing-clearance: calc(var(--happy-scrollbar-track) + 1ch);
     overflow: auto;
 }
 
@@ -146,7 +146,7 @@
    as the file starting late. The bar is an overlay and takes no layout, so the
    text runs to the pane edge and continues underneath it rather than stopping
    at a reserved lane. */
-.happy2-file-preview__source-renderer {
+.happy-file-preview__source-renderer {
     flex: 0 0 auto;
     min-height: 100%;
     --diffs-gap-block: 0px;
@@ -154,7 +154,7 @@
 
 /* ---- Notices ---------------------------------------------------------- */
 
-.happy2-file-preview__notice {
+.happy-file-preview__notice {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -167,11 +167,11 @@
     text-align: center;
 }
 
-.happy2-file-preview__notice[data-tone="danger"] {
+.happy-file-preview__notice[data-tone="danger"] {
     color: var(--text-destructive);
 }
 
-.happy2-file-preview__notice-title {
+.happy-file-preview__notice-title {
     display: block;
     color: var(--text);
     font-size: 14px;
@@ -179,11 +179,11 @@
     line-height: 20px;
 }
 
-.happy2-file-preview__notice[data-tone="danger"] .happy2-file-preview__notice-title {
+.happy-file-preview__notice[data-tone="danger"] .happy-file-preview__notice-title {
     color: var(--text-destructive);
 }
 
-.happy2-file-preview__notice-detail {
+.happy-file-preview__notice-detail {
     display: block;
     max-width: 360px;
     color: var(--text-secondary);

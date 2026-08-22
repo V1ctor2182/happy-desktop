@@ -9,12 +9,12 @@
  * chip, `delta.trend` tints the delta (success / danger / muted).
  */
 
-.happy2-stat-tile,
-.happy2-stat-tile * {
+.happy-stat-tile,
+.happy-stat-tile * {
     box-sizing: border-box;
 }
 
-.happy2-stat-tile {
+.happy-stat-tile {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -22,15 +22,15 @@
     padding: 16px;
     background: var(--surface);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* ---- Header: label + tone icon chip ---------------------------------- */
 
-.happy2-stat-tile__header {
+.happy-stat-tile__header {
     display: flex;
     flex: none;
     align-items: center;
@@ -40,7 +40,7 @@
     min-width: 0;
 }
 
-.happy2-stat-tile__label {
+.happy-stat-tile__label {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
@@ -53,44 +53,44 @@
     text-overflow: ellipsis;
 }
 
-.happy2-stat-tile__icon {
+.happy-stat-tile__icon {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
     width: 28px;
     height: 28px;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
 }
 
-.happy2-stat-tile[data-tone="neutral"] .happy2-stat-tile__icon {
+.happy-stat-tile[data-tone="neutral"] .happy-stat-tile__icon {
     background: var(--groupped-background);
     color: var(--text-secondary);
 }
 
-.happy2-stat-tile[data-tone="accent"] .happy2-stat-tile__icon {
+.happy-stat-tile[data-tone="accent"] .happy-stat-tile__icon {
     background: var(--surface-selected);
     color: var(--text-link);
 }
 
-.happy2-stat-tile[data-tone="success"] .happy2-stat-tile__icon {
+.happy-stat-tile[data-tone="success"] .happy-stat-tile__icon {
     background: var(--surface-high);
     color: var(--success);
 }
 
-.happy2-stat-tile[data-tone="warning"] .happy2-stat-tile__icon {
+.happy-stat-tile[data-tone="warning"] .happy-stat-tile__icon {
     background: var(--box-warning-background);
     color: var(--box-warning-text);
 }
 
-.happy2-stat-tile[data-tone="danger"] .happy2-stat-tile__icon {
+.happy-stat-tile[data-tone="danger"] .happy-stat-tile__icon {
     background: var(--box-error-background);
     color: var(--warning-critical);
 }
 
 /* ---- Value ----------------------------------------------------------- */
 
-.happy2-stat-tile__value {
+.happy-stat-tile__value {
     display: block;
     flex: none;
     min-width: 0;
@@ -106,7 +106,7 @@
 
 /* ---- Footer: trend delta + hint -------------------------------------- */
 
-.happy2-stat-tile__footer {
+.happy-stat-tile__footer {
     display: flex;
     flex: none;
     align-items: center;
@@ -115,26 +115,26 @@
     min-width: 0;
 }
 
-.happy2-stat-tile__delta {
+.happy-stat-tile__delta {
     display: inline-flex;
     flex: none;
     align-items: center;
     gap: 4px;
 }
 
-.happy2-stat-tile__delta[data-trend="up"] {
+.happy-stat-tile__delta[data-trend="up"] {
     color: var(--success);
 }
 
-.happy2-stat-tile__delta[data-trend="down"] {
+.happy-stat-tile__delta[data-trend="down"] {
     color: var(--text-destructive);
 }
 
-.happy2-stat-tile__delta[data-trend="flat"] {
+.happy-stat-tile__delta[data-trend="flat"] {
     color: var(--text-secondary);
 }
 
-.happy2-stat-tile__delta-arrow {
+.happy-stat-tile__delta-arrow {
     display: block;
     flex: none;
     width: 12px;
@@ -142,7 +142,7 @@
     fill: currentColor;
 }
 
-.happy2-stat-tile__delta-value {
+.happy-stat-tile__delta-value {
     display: block;
     color: currentColor;
     font-size: 13px;
@@ -152,7 +152,7 @@
     white-space: nowrap;
 }
 
-.happy2-stat-tile__hint {
+.happy-stat-tile__hint {
     display: block;
     flex: 0 1 auto;
     min-width: 0;

@@ -6,41 +6,41 @@
  * surface and the active choice alone uses the same fill as a selected row.
  */
 
-.happy2-segmented-control {
+.happy-segmented-control {
     box-sizing: border-box;
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- equal 1fr segment tracks must each be as wide as the widest label; flexbox cannot size auto-width columns equally */
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- equal 1fr segment tracks must each be as wide as the widest label; flexbox cannot size auto-width columns equally */
     display: inline-grid;
     grid-auto-rows: 1fr;
     align-items: stretch;
     gap: 2px;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-segmented-control[data-full-width] {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- keeps the same equal 1fr segment-track model as the auto-width control, now stretched to full width */
+.happy-segmented-control[data-full-width] {
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- keeps the same equal 1fr segment-track model as the auto-width control, now stretched to full width */
     display: grid;
     width: 100%;
 }
 
-.happy2-segmented-control[data-size="compact"] {
-    height: var(--happy2-subheader-control-height);
+.happy-segmented-control[data-size="compact"] {
+    height: var(--happy-subheader-control-height);
 }
 
-.happy2-segmented-control[data-size="small"] {
+.happy-segmented-control[data-size="small"] {
     height: 28px;
 }
 
-.happy2-segmented-control[data-size="medium"] {
+.happy-segmented-control[data-size="medium"] {
     height: 36px;
 }
 
-.happy2-segmented-control[data-size="large"] {
+.happy-segmented-control[data-size="large"] {
     height: 44px;
 }
 
 /* Each segment keeps a transparent border so selection never changes geometry. */
-.happy2-segmented-control__segment {
+.happy-segmented-control__segment {
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -51,10 +51,10 @@
     margin: 0;
     padding: 0 12px;
     border: 1px solid transparent;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -66,62 +66,62 @@
         color 120ms ease;
 }
 
-.happy2-segmented-control[data-size="compact"] .happy2-segmented-control__segment,
-.happy2-segmented-control[data-size="small"] .happy2-segmented-control__segment {
+.happy-segmented-control[data-size="compact"] .happy-segmented-control__segment,
+.happy-segmented-control[data-size="small"] .happy-segmented-control__segment {
     font-size: 12px;
     line-height: 16px;
 }
 
-.happy2-segmented-control[data-size="compact"] .happy2-segmented-control__segment {
+.happy-segmented-control[data-size="compact"] .happy-segmented-control__segment {
     padding: 0 6px;
 }
 
-.happy2-segmented-control[data-size="medium"] .happy2-segmented-control__segment {
+.happy-segmented-control[data-size="medium"] .happy-segmented-control__segment {
     font-size: 13px;
     line-height: 18px;
 }
 
-.happy2-segmented-control[data-size="large"] .happy2-segmented-control__segment {
+.happy-segmented-control[data-size="large"] .happy-segmented-control__segment {
     font-size: 14px;
     line-height: 20px;
 }
 
-.happy2-segmented-control__segment[data-active] {
+.happy-segmented-control__segment[data-active] {
     border-color: var(--surface-selected);
     background: var(--surface-selected);
     color: var(--text);
 }
 
-.happy2-segmented-control__segment:not([data-active]):hover:not(:disabled) {
+.happy-segmented-control__segment:not([data-active]):hover:not(:disabled) {
     color: var(--text);
 }
 
-.happy2-segmented-control__segment:disabled {
+.happy-segmented-control__segment:disabled {
     cursor: not-allowed;
     opacity: 0.48;
 }
 
-.happy2-segmented-control__segment:focus-visible {
+.happy-segmented-control__segment:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -1px;
 }
 
-.happy2-segmented-control__icon {
+.happy-segmented-control__icon {
     display: flex;
     flex: none;
 }
 
-.happy2-segmented-control__label {
+.happy-segmented-control__label {
     display: block;
     flex: none;
 }
 
-.happy2-segmented-control[data-disabled] {
+.happy-segmented-control[data-disabled] {
     cursor: not-allowed;
     opacity: 0.48;
 }
 
-.happy2-segmented-control[data-disabled] .happy2-segmented-control__segment {
+.happy-segmented-control[data-disabled] .happy-segmented-control__segment {
     cursor: not-allowed;
     opacity: 1;
 }

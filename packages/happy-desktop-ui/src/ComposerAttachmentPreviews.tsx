@@ -31,7 +31,7 @@ export type ComposerAttachmentPreviewsProps = {
 export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProps) {
     return (
         <div
-            className={["happy2-composer-attachments", props.className].filter(Boolean).join(" ")}
+            className={["happy-composer-attachments", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="composer-attachments"
             data-testid={props["data-testid"]}
             style={props.style}
@@ -39,7 +39,7 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
             {props.items.map((item) => (
                 <div
                     aria-label={item.detail ? `${item.name}, ${item.detail}` : item.name}
-                    className="happy2-composer-attachments__item"
+                    className="happy-composer-attachments__item"
                     data-happy-desktop-ui="composer-attachment"
                     data-kind={item.kind}
                     key={item.id}
@@ -49,7 +49,7 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
                     {item.kind === "image" && item.url ? (
                         <img
                             alt=""
-                            className="happy2-composer-attachments__media"
+                            className="happy-composer-attachments__media"
                             data-happy-desktop-ui="composer-attachment-image"
                             draggable={false}
                             src={item.url}
@@ -57,7 +57,7 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
                     ) : item.kind === "video" && item.url ? (
                         <video
                             aria-hidden="true"
-                            className="happy2-composer-attachments__media"
+                            className="happy-composer-attachments__media"
                             data-happy-desktop-ui="composer-attachment-video"
                             muted
                             playsInline
@@ -66,17 +66,17 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
                         />
                     ) : (
                         <span
-                            className="happy2-composer-attachments__file"
+                            className="happy-composer-attachments__file"
                             data-happy-desktop-ui="composer-attachment-file"
                         >
                             <Icon name="doc" size={20} />
-                            <span className="happy2-composer-attachments__name">{item.name}</span>
+                            <span className="happy-composer-attachments__name">{item.name}</span>
                         </span>
                     )}
                     {item.kind === "video" ? (
                         <span
                             aria-hidden="true"
-                            className="happy2-composer-attachments__play"
+                            className="happy-composer-attachments__play"
                             data-happy-desktop-ui="composer-attachment-play"
                         >
                             <Icon name="play" size={12} />
@@ -87,7 +87,7 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
                     props.onOpen ? (
                         <button
                             aria-label={`Preview ${item.name}`}
-                            className="happy2-composer-attachments__open"
+                            className="happy-composer-attachments__open"
                             data-happy-desktop-ui="composer-attachment-open"
                             onClick={() => props.onOpen?.(item.id)}
                             type="button"

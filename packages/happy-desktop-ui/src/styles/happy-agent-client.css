@@ -1,4 +1,4 @@
-.happy2-happy-agent-client {
+.happy-agent-client {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -7,15 +7,15 @@
     background: var(--surface);
 }
 
-.happy-desktop-app-shell.happy2-happy-agent-app-shell[data-window-controls]
+.happy-desktop-app-shell.happy-agent-app-shell[data-window-controls]
     .happy-desktop-app-shell__sidebar
-    > .happy2-sidebar
-    > .happy2-sidebar__header {
+    > .happy-sidebar
+    > .happy-sidebar__header {
     height: 104px;
     padding: 48px 16px 0;
 }
 
-.happy2-happy-agent-client__empty-header {
+.happy-agent-client__empty-header {
     display: block;
     flex: none;
     width: 100%;
@@ -24,18 +24,18 @@
     app-region: drag;
 }
 
-.happy2-happy-agent-client__sidebar-footer {
+.happy-agent-client__sidebar-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
 }
 
-.happy2-happy-agent-client__state {
+.happy-agent-client__state {
     display: flex;
     flex-wrap: wrap;
     flex: 1 1 auto;
@@ -44,7 +44,7 @@
     min-height: 0;
 }
 
-.happy2-happy-agent-panel-files {
+.happy-agent-panel-files {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -57,7 +57,7 @@
  * they nest. They sit above the panel's own header so the header keeps naming
  * what is below it rather than competing with the controls that choose it.
  */
-.happy2-happy-agent-file-controls {
+.happy-agent-file-controls {
     display: flex;
     flex: none;
     align-items: center;
@@ -68,28 +68,28 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-happy-agent-panel-files > .happy2-file-panel {
+.happy-agent-panel-files > .happy-file-panel {
     flex: 1 1 0%;
     height: auto;
 }
 
-.happy2-happy-agent-client__banner {
+.happy-agent-client__banner {
     display: flex;
     padding: 8px 12px 0;
 }
 
-.happy2-happy-agent-client__requests {
+.happy-agent-client__requests {
     display: flex;
     flex-direction: column;
     gap: 8px;
     width: 100%;
-    max-width: var(--happy2-chat-measure);
+    max-width: var(--happy-chat-measure);
     margin: 0 auto;
     padding: 0 20px 8px 12px;
     background: var(--surface);
 }
 
-.happy2-happy-agent-client__create {
+.happy-agent-client__create {
     display: flex;
     flex-direction: column;
     gap: 12px;

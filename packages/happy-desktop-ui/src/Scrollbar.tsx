@@ -504,12 +504,12 @@ export function ScrollbarTrack(props: { axis: ScrollbarAxis; controller: Scrollb
     return (
         <div
             aria-hidden="true"
-            className="happy2-scrollbar__track"
+            className="happy-scrollbar__track"
             data-axis={props.axis}
             data-scrollbar-track=""
             ref={trackRef}
         >
-            <div className="happy2-scrollbar__thumb" ref={thumbRef} />
+            <div className="happy-scrollbar__thumb" ref={thumbRef} />
         </div>
     );
 }
@@ -558,7 +558,7 @@ export function ScrollArea(props: ScrollAreaProps) {
     return (
         <div
             {...hostProps}
-            className={["happy2-scroll-area", className].filter(Boolean).join(" ")}
+            className={["happy-scroll-area", className].filter(Boolean).join(" ")}
             data-scrollbar-axes={axes}
             data-scrollbar-host=""
             data-scrollbar-placement={placement}
@@ -566,7 +566,7 @@ export function ScrollArea(props: ScrollAreaProps) {
         >
             <div
                 {...viewportProps}
-                className={["happy2-scroll-area__viewport", viewportClassName]
+                className={["happy-scroll-area__viewport", viewportClassName]
                     .filter(Boolean)
                     .join(" ")}
                 ref={viewportRef}

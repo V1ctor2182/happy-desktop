@@ -929,7 +929,7 @@ function openGroupFind(
 
 /**
  * The composer prompt names where the message lands. A window holds several
- * projects and worktrees at once, and their names read as anything from `happy2`
+ * projects and worktrees at once, and their names read as anything from `happy`
  * to `Fix login redirect`, so the group is quoted rather than glued into a
  * sentence that only reads well for one kind of title.
  */

@@ -9,7 +9,7 @@
  * disagree.
  */
 
-.happy2-lottie-scene {
+.happy-lottie-scene {
     /* A canvas is inline by default, so a text line box would add a few pixels
        under it and the declared square would not be the rendered square. */
     display: block;
@@ -17,12 +17,12 @@
 
 /* It is a control only where it can be replayed — under reduced motion it is
    not a button at all, and must not look like one. */
-.happy2-lottie-scene[role="button"] {
+.happy-lottie-scene[role="button"] {
     cursor: pointer;
 }
 
-.happy2-lottie-scene:focus-visible {
+.happy-lottie-scene:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
 }

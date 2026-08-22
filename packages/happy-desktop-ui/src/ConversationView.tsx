@@ -260,15 +260,15 @@ function elapsedFormat(ms: number): string {
 export function ConversationStatus(props: { elapsedMs?: number; running?: boolean }) {
     return (
         <span
-            className="happy2-conversation__status"
+            className="happy-conversation__status"
             data-happy-desktop-ui="conversation-status"
             data-running={props.running ? "" : undefined}
         >
-            <span aria-hidden="true" className="happy2-conversation__status-dot" />
+            <span aria-hidden="true" className="happy-conversation__status-dot" />
             {props.running ? "Running" : "Idle"}
             {props.running && props.elapsedMs !== undefined ? (
                 <span
-                    className="happy2-conversation__status-elapsed"
+                    className="happy-conversation__status-elapsed"
                     data-happy-desktop-ui="conversation-elapsed"
                 >
                     {elapsedFormat(props.elapsedMs)}
@@ -337,7 +337,7 @@ export function ConversationView(props: ConversationViewProps) {
         <AgentWorkingStatus
             active={statusVisible}
             awaitingInput={awaitingInput}
-            className="happy2-conversation-turn-status"
+            className="happy-conversation-turn-status"
             elapsedMs={props.elapsedMs}
             label={props.workingLabel}
             /* The phase word is the one label whose changes are the whole
@@ -371,13 +371,13 @@ export function ConversationView(props: ConversationViewProps) {
      */
     const workingStatusLine = (
         <div
-            className="happy2-conversation__status-line"
+            className="happy-conversation__status-line"
             data-happy-desktop-ui="conversation-status-line"
         >
             {workingStatus}
             {props.activityControl && !activityClosesTurnStatus ? (
                 <div
-                    className="happy2-conversation__activity-entry"
+                    className="happy-conversation__activity-entry"
                     data-happy-desktop-ui="conversation-activity-entry"
                 >
                     {props.activityControl}
@@ -391,7 +391,7 @@ export function ConversationView(props: ConversationViewProps) {
                 agent
                 author={props.agentAuthor.displayName}
                 body=""
-                className="happy2-message--activity-lead happy2-message--working-lead"
+                className="happy-message--activity-lead happy-message--working-lead"
                 initials={initialsOf(props.agentAuthor.displayName)}
             >
                 {workingStatusLine}
@@ -401,7 +401,7 @@ export function ConversationView(props: ConversationViewProps) {
         );
     const activityFallback = props.activityControl ? (
         <div
-            className="happy2-conversation__activity-fallback"
+            className="happy-conversation__activity-fallback"
             data-happy-desktop-ui="conversation-activity-fallback"
         >
             {props.activityControl}
@@ -414,7 +414,7 @@ export function ConversationView(props: ConversationViewProps) {
         : 0;
     return (
         <section
-            className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
+            className={["happy-conversation", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="conversation-view"
             data-testid={props["data-testid"]}
             style={props.style}
@@ -438,7 +438,7 @@ export function ConversationView(props: ConversationViewProps) {
 
             {props.notice ? (
                 <div
-                    className="happy2-conversation__notice"
+                    className="happy-conversation__notice"
                     data-happy-desktop-ui="conversation-notice"
                 >
                     {props.notice}
@@ -448,18 +448,18 @@ export function ConversationView(props: ConversationViewProps) {
             {props.panel ? (
                 <ScrollArea
                     axes="both"
-                    className="happy2-conversation__panel"
+                    className="happy-conversation__panel"
                     data-happy-desktop-ui="conversation-panel"
-                    viewportClassName="happy2-conversation__panel-viewport"
+                    viewportClassName="happy-conversation__panel-viewport"
                 >
                     {props.panel}
                 </ScrollArea>
             ) : props.loading ? (
                 <ScrollArea
                     axes="both"
-                    className="happy2-conversation__empty happy2-conversation__loading"
+                    className="happy-conversation__empty happy-conversation__loading"
                     data-happy-desktop-ui="conversation-loading"
-                    viewportClassName="happy2-conversation__empty-viewport"
+                    viewportClassName="happy-conversation__empty-viewport"
                 >
                     <Spinner label="Loading conversation" size={20} tone="muted" variant="line" />
                     {activityFallback}
@@ -467,9 +467,9 @@ export function ConversationView(props: ConversationViewProps) {
             ) : props.entries.length === 0 ? (
                 <ScrollArea
                     axes="both"
-                    className="happy2-conversation__empty"
+                    className="happy-conversation__empty"
                     data-happy-desktop-ui="conversation-empty"
-                    viewportClassName="happy2-conversation__empty-viewport"
+                    viewportClassName="happy-conversation__empty-viewport"
                 >
                     <EmptyState
                         // A conversation with nothing in it is an agent waiting
@@ -503,7 +503,7 @@ export function ConversationView(props: ConversationViewProps) {
                             {workingStatusRow}
                             {queued.length > 0 ? (
                                 <div
-                                    className="happy2-conversation__queued"
+                                    className="happy-conversation__queued"
                                     data-happy-desktop-ui="conversation-queued"
                                 >
                                     {queued.map((entry) => (
@@ -587,16 +587,16 @@ export function ConversationView(props: ConversationViewProps) {
                                     [
                                         entry.kind === "turnStatus" &&
                                         conversationTurnStatusAfterActivity(transcript, index)
-                                            ? "happy2-turn-status--after-trace"
+                                            ? "happy-turn-status--after-trace"
                                             : undefined,
                                         conversationEntryResumesAfterActivity(transcript, index)
-                                            ? "happy2-conversation__resumed"
+                                            ? "happy-conversation__resumed"
                                             : undefined,
                                         conversationEntryPrecedesActivity(transcript, index)
-                                            ? "happy2-conversation__continues"
+                                            ? "happy-conversation__continues"
                                             : undefined,
                                         conversationMessageClosedByStatus(transcript, index)
-                                            ? "happy2-conversation__closing"
+                                            ? "happy-conversation__closing"
                                             : undefined,
                                     ]
                                         .filter(Boolean)

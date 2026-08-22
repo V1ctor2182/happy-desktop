@@ -37,7 +37,7 @@ const cell: Record<string, string> = {
 
 const caption: Record<string, string> = {
     color: "var(--text-secondary)",
-    fontFamily: "var(--happy2-font-mono)",
+    fontFamily: "var(--happy-font-mono)",
     fontSize: "10px",
     letterSpacing: "0.06em",
     textTransform: "uppercase",
@@ -255,7 +255,7 @@ export function SpinnerPage() {
                     style={{
                         ...row,
                         background: "var(--button-primary-background)",
-                        borderRadius: "var(--happy2-radius-sm)",
+                        borderRadius: "var(--happy-radius-sm)",
                         padding: "16px 20px",
                     }}
                 >
@@ -287,7 +287,7 @@ export function SpinnerPage() {
                             <span
                                 style={{
                                     color: "var(--text-secondary)",
-                                    fontFamily: "var(--happy2-font-ui)",
+                                    fontFamily: "var(--happy-font-ui)",
                                     fontSize: "13px",
                                 }}
                             >

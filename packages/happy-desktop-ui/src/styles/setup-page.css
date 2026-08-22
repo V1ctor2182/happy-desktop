@@ -17,18 +17,18 @@
  * grid.
  */
 
-.happy2-setup-page,
-.happy2-setup-page__body,
-.happy2-setup-page__stage,
-.happy2-setup-page__title,
-.happy2-setup-page__copy,
-.happy2-setup-page__command,
-.happy2-setup-page__progress,
-.happy2-setup-page__slot {
+.happy-setup-page,
+.happy-setup-page__body,
+.happy-setup-page__stage,
+.happy-setup-page__title,
+.happy-setup-page__copy,
+.happy-setup-page__command,
+.happy-setup-page__progress,
+.happy-setup-page__slot {
     box-sizing: border-box;
 }
 
-.happy2-local-onboarding__profile-form {
+.happy-local-onboarding__profile-form {
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -37,7 +37,7 @@
     align-self: center;
 }
 
-.happy2-setup-page {
+.happy-setup-page {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -47,17 +47,17 @@
     overflow: hidden;
     background: var(--surface);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-setup-page__scroll {
+.happy-setup-page__scroll {
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;
 }
 
-.happy2-setup-page__scroll-viewport {
+.happy-setup-page__scroll-viewport {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -65,7 +65,7 @@
     overflow: auto;
 }
 
-.happy2-setup-page__body {
+.happy-setup-page__body {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -79,7 +79,7 @@
 /* Fixed square whether the art arrives or not: the scene renders nothing until
    its worker runtime loads, and never in an engine that cannot have one, so
    reserving the box here is what stops the title jumping when it appears. */
-.happy2-setup-page__stage {
+.happy-setup-page__stage {
     display: flex;
     flex: none;
     align-items: center;
@@ -88,7 +88,7 @@
     height: 120px;
 }
 
-.happy2-setup-page__title {
+.happy-setup-page__title {
     margin: 0;
     color: var(--text);
     font-size: 32px;
@@ -98,7 +98,7 @@
     text-align: center;
 }
 
-.happy2-setup-page__copy {
+.happy-setup-page__copy {
     max-width: 400px;
     margin: 0;
     color: var(--text-secondary);
@@ -114,14 +114,14 @@
  * of a desktop window is commonly unselectable, and a command nobody can copy
  * is worse than no command at all.
  */
-.happy2-setup-page__command {
+.happy-setup-page__command {
     max-width: 100%;
     padding: 10px 14px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface-high);
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 13px;
     line-height: 20px;
     /* Wraps rather than scrolling: a scrollport may carry no padding of its own,
@@ -135,7 +135,7 @@
 /* The page's own body takes the full measure: a fork, a terminal, or a notice
    is a block, and shrink-wrapping it to its content would leave it ragged
    against the centred words above. */
-.happy2-setup-page__slot {
+.happy-setup-page__slot {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -151,7 +151,7 @@
  * narrower than the copy above on purpose: a bar as wide as a paragraph reads as
  * a divider, and one this length is read as a quantity.
  */
-.happy2-setup-page__progress {
+.happy-setup-page__progress {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -159,10 +159,10 @@
     justify-content: center;
     width: 280px;
     min-height: 36px;
-    animation: happy2-setup-page-progress-in 160ms ease-out both;
+    animation: happy-setup-page-progress-in 160ms ease-out both;
 }
 
-@keyframes happy2-setup-page-progress-in {
+@keyframes happy-setup-page-progress-in {
     from {
         transform: translateY(4px);
         opacity: 0;
@@ -173,13 +173,13 @@
     }
 }
 
-.happy2-setup-page__progress-track {
+.happy-setup-page__progress-track {
     position: relative;
     display: block;
     overflow: hidden;
     width: 100%;
     height: 4px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--surface-selected);
 }
 
@@ -193,14 +193,14 @@
  * any download whose first report was under a third. Kept apart, the fill leaves
  * zero exactly once, in the direction a download actually goes.
  */
-.happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-track::after {
+.happy-setup-page__progress[data-state="waiting"] .happy-setup-page__progress-track::after {
     content: "";
     position: absolute;
     inset-block: 0;
     width: 35%;
     border-radius: inherit;
     background: var(--text);
-    animation: happy2-setup-page-progress-sweep 1.15s ease-in-out infinite;
+    animation: happy-setup-page-progress-sweep 1.15s ease-in-out infinite;
 }
 
 /*
@@ -213,7 +213,7 @@
  * ease turns the same truthful numbers into one continuous movement without
  * ever showing a position the download has not reached.
  */
-.happy2-setup-page__progress-fill {
+.happy-setup-page__progress-fill {
     display: block;
     width: 0;
     height: 100%;
@@ -227,18 +227,18 @@
    at zero, because a bar that appears half full reads as a bar that lost the
    beginning. */
 @starting-style {
-    .happy2-setup-page__progress-fill {
+    .happy-setup-page__progress-fill {
         width: 0;
     }
 }
 
 /* Nothing is measured yet, so nothing is claimed: the fill stays at zero and
    the track's own sweep says "running" without asserting a position. */
-.happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-fill {
+.happy-setup-page__progress[data-state="waiting"] .happy-setup-page__progress-fill {
     width: 0;
 }
 
-@keyframes happy2-setup-page-progress-sweep {
+@keyframes happy-setup-page-progress-sweep {
     from {
         transform: translateX(-100%);
     }
@@ -247,7 +247,7 @@
     }
 }
 
-.happy2-setup-page__progress-line {
+.happy-setup-page__progress-line {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -258,7 +258,7 @@
     line-height: 16px;
 }
 
-.happy2-setup-page__progress-label {
+.happy-setup-page__progress-label {
     flex: none;
     color: var(--text);
     font-weight: 500;
@@ -266,7 +266,7 @@
 
 /* Tabular figures so a count that changes several times a second changes its
    digits rather than its width. */
-.happy2-setup-page__progress-detail {
+.happy-setup-page__progress-detail {
     overflow: hidden;
     min-width: 0;
     color: var(--text-secondary);
@@ -281,20 +281,20 @@
  * full track — visibly not a finished download, and visibly not stalled at zero.
  */
 @media (prefers-reduced-motion: reduce) {
-    .happy2-setup-page__progress {
+    .happy-setup-page__progress {
         animation: none;
     }
 
-    .happy2-setup-page__progress-fill {
+    .happy-setup-page__progress-fill {
         transition: none;
     }
 
-    .happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-fill {
+    .happy-setup-page__progress[data-state="waiting"] .happy-setup-page__progress-fill {
         width: 100%;
         opacity: 0.4;
     }
 
-    .happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-track::after {
+    .happy-setup-page__progress[data-state="waiting"] .happy-setup-page__progress-track::after {
         content: none;
     }
 }

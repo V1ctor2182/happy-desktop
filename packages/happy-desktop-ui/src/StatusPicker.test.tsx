@@ -12,8 +12,8 @@ type Renderer = ReturnType<typeof createRenderer>;
 /* WebKit reports the family unquoted; textMetrics() strips quotes for both. */
 const fontFamily = () =>
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 /*
  * Per-state status-dot colors, resolved from semantic tokens by the segment's
@@ -132,7 +132,7 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
         height: "36px",
     });
     // Online is the second option, so the pill index resolves to 1.
-    expect(track.computedStyle("--happy2-sp-index"), "pill index").toBe("1");
+    expect(track.computedStyle("--happy-sp-index"), "pill index").toBe("1");
     expect(
         view.$(sp()).element.querySelectorAll('[data-happy-desktop-ui="status-picker-segment"]')
             .length,
@@ -180,7 +180,7 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
     expect(onlineLabel.computedStyle("color"), "active color").toBe("rgb(0, 0, 0)");
     expect(onlineLabel.textMetrics(), "active label typography").toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0.13,
             lineHeight: 18,
             size: 13,
@@ -282,7 +282,7 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
     expect(input.computedStyle("color"), "input color").toBe("rgb(0, 0, 0)");
     expect(input.textMetrics(), "input typography").toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0,
             lineHeight: 38,
             size: 13,
@@ -373,7 +373,7 @@ it("holds StatusPicker availability sweep and empty-status state", async () => {
     for (const [index, value] of AVAILABILITY.entries()) {
         const root = `[data-testid="sweep-${value}"]`;
         const track = view.$(`${root} [data-happy-desktop-ui="status-picker-segmented"]`);
-        expect(track.computedStyle("--happy2-sp-index"), `${value} index`).toBe(String(index));
+        expect(track.computedStyle("--happy-sp-index"), `${value} index`).toBe(String(index));
 
         const seg = view.$(
             `${root} [data-availability="${value}"][data-happy-desktop-ui="status-picker-segment"]`,

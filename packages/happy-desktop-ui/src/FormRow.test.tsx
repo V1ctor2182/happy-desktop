@@ -129,8 +129,8 @@ it("holds FormRow layout, typography, colors, divider, and control alignment", a
     await view.ready();
     const fontFamily =
         (server.browser as Engine) === "webkit"
-            ? "happy2 Figtree, system-ui, sans-serif"
-            : '"happy2 Figtree", system-ui, sans-serif';
+            ? "happy Figtree, system-ui, sans-serif"
+            : '"happy Figtree", system-ui, sans-serif';
     // ---- Inline row contract ------------------------------------------------
     const inline = view.$('[data-testid="inline"]');
     // text 20 + 4 + 16 = 40 content, + 32 padding + 1 hairline = 73.
@@ -190,7 +190,7 @@ it("holds FormRow layout, typography, colors, divider, and control alignment", a
     const label = view.$('[data-testid="inline"] [data-happy-desktop-ui="form-row-label"]');
     expect(label.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0,
             lineHeight: 20,
             size: 13,
@@ -204,7 +204,7 @@ it("holds FormRow layout, typography, colors, divider, and control alignment", a
     );
     expect(description.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0,
             lineHeight: 16,
             size: 12,

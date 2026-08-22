@@ -8,18 +8,18 @@
  * pixel. Selection is the tuned `check` Icon glyph inside a fixed 18px box.
  */
 
-.happy2-data-table {
+.happy-data-table {
     box-sizing: border-box;
     display: block;
     overflow: hidden;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
 }
 
-.happy2-data-table__table {
+.happy-data-table__table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
@@ -28,7 +28,7 @@
 
 /* Header ---------------------------------------------------------------- */
 
-.happy2-data-table__th {
+.happy-data-table__th {
     position: sticky;
     top: 0;
     z-index: 1;
@@ -46,11 +46,11 @@
     vertical-align: middle;
 }
 
-.happy2-data-table[data-dense] .happy2-data-table__th {
+.happy-data-table[data-dense] .happy-data-table__th {
     height: 36px;
 }
 
-.happy2-data-table__head-label {
+.happy-data-table__head-label {
     display: block;
     max-width: 100%;
     overflow: hidden;
@@ -60,7 +60,7 @@
 
 /* Body ------------------------------------------------------------------ */
 
-.happy2-data-table__td {
+.happy-data-table__td {
     box-sizing: border-box;
     height: 48px;
     padding: 0 16px;
@@ -73,15 +73,15 @@
     vertical-align: middle;
 }
 
-.happy2-data-table[data-dense] .happy2-data-table__td {
+.happy-data-table[data-dense] .happy-data-table__td {
     height: 36px;
 }
 
-.happy2-data-table__body tr:last-child .happy2-data-table__td {
+.happy-data-table__body tr:last-child .happy-data-table__td {
     box-shadow: none;
 }
 
-.happy2-data-table__cell {
+.happy-data-table__cell {
     display: block;
     max-width: 100%;
     overflow: hidden;
@@ -91,35 +91,35 @@
 
 /* Alignment ------------------------------------------------------------- */
 
-.happy2-data-table [data-align="start"] {
+.happy-data-table [data-align="start"] {
     text-align: left;
 }
 
-.happy2-data-table [data-align="center"] {
+.happy-data-table [data-align="center"] {
     text-align: center;
 }
 
-.happy2-data-table [data-align="end"] {
+.happy-data-table [data-align="end"] {
     text-align: right;
 }
 
 /* Row states ------------------------------------------------------------ */
 
-.happy2-data-table__row[data-clickable] {
+.happy-data-table__row[data-clickable] {
     cursor: pointer;
 }
 
-.happy2-data-table__row:hover .happy2-data-table__td {
+.happy-data-table__row:hover .happy-data-table__td {
     background: var(--surface-ripple);
 }
 
-.happy2-data-table__row[data-selected] .happy2-data-table__td {
+.happy-data-table__row[data-selected] .happy-data-table__td {
     background: var(--surface-selected);
 }
 
 /* Row actions ----------------------------------------------------------- */
 
-.happy2-data-table__actions {
+.happy-data-table__actions {
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
@@ -127,7 +127,7 @@
     vertical-align: middle;
 }
 
-.happy2-data-table__sr {
+.happy-data-table__sr {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -141,13 +141,13 @@
 
 /* Selection checkbox ---------------------------------------------------- */
 
-.happy2-data-table__th--select,
-.happy2-data-table__td--select {
+.happy-data-table__th--select,
+.happy-data-table__td--select {
     padding: 0;
     text-align: center;
 }
 
-.happy2-data-table__check {
+.happy-data-table__check {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -155,13 +155,13 @@
     padding: 0;
     margin: 0;
     border: none;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: none;
     cursor: pointer;
     vertical-align: middle;
 }
 
-.happy2-data-table__check-box {
+.happy-data-table__check-box {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -169,7 +169,7 @@
     width: 18px;
     height: 18px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--groupped-background);
     color: var(--button-primary-tint);
 }
@@ -177,27 +177,27 @@
 /* A ticked box is a ticked box: this one is the same control as Checkbox and
    fills with the same system colour, rather than inventing a second answer to
    the same question one screen away. */
-.happy2-data-table__check[data-checked] .happy2-data-table__check-box,
-.happy2-data-table__check[data-indeterminate] .happy2-data-table__check-box {
+.happy-data-table__check[data-checked] .happy-data-table__check-box,
+.happy-data-table__check[data-indeterminate] .happy-data-table__check-box {
     border-color: transparent;
     background: var(--radio-active);
 }
 
-.happy2-data-table__check-bar {
+.happy-data-table__check-bar {
     width: 8px;
     height: 2px;
     border-radius: 1px;
     background: currentColor;
 }
 
-.happy2-data-table__check:focus-visible {
+.happy-data-table__check:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
 /* Empty slot ------------------------------------------------------------ */
 
-.happy2-data-table__empty-cell {
+.happy-data-table__empty-cell {
     box-sizing: border-box;
     padding: 32px 16px;
     text-align: center;

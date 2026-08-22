@@ -317,7 +317,7 @@ export function VideoViewer(props: VideoViewerProps) {
      * a new source is a new element and a new element starts at the defaults.
      */
     const born = useRef(settings);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the committed settings are what the create-once attach callback below must see; assigning them here rather than during render leaves render itself pure
+    // eslint-disable-next-line happy-react/no-layout-effect -- the committed settings are what the create-once attach callback below must see; assigning them here rather than during render leaves render itself pure
     useLayoutEffect(() => {
         born.current = settings;
     });
@@ -478,7 +478,7 @@ export function VideoViewer(props: VideoViewerProps) {
     };
 
     const wanted = local.autoFocus === true;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- move real keyboard focus to the frame on mount
+    // eslint-disable-next-line happy-react/no-layout-effect -- move real keyboard focus to the frame on mount
     useLayoutEffect(() => {
         if (wanted) frameElement.current?.focus({ preventScroll: true });
     }, [wanted]);
@@ -613,7 +613,7 @@ export function VideoViewer(props: VideoViewerProps) {
     return (
         <div
             {...rest}
-            className={["happy2-video-viewer", local.className].filter(Boolean).join(" ")}
+            className={["happy-video-viewer", local.className].filter(Boolean).join(" ")}
             data-fullscreen={fullscreen ? "" : undefined}
             data-happy-desktop-ui="video-viewer"
             data-idle={idle ? "" : undefined}
@@ -637,7 +637,7 @@ export function VideoViewer(props: VideoViewerProps) {
         >
             <div
                 aria-label={`${local.name}, video`}
-                className="happy2-video-viewer__frame"
+                className="happy-video-viewer__frame"
                 data-happy-desktop-ui="video-viewer-frame"
                 onKeyDown={keyDown}
                 ref={frameElement}
@@ -664,7 +664,7 @@ export function VideoViewer(props: VideoViewerProps) {
             </div>
             {controls ? (
                 <div
-                    className="happy2-video-viewer__bar"
+                    className="happy-video-viewer__bar"
                     data-happy-desktop-ui="video-viewer-bar"
                     onPointerEnter={() => setOverControls(true)}
                     onPointerLeave={() => setOverControls(false)}
@@ -681,10 +681,10 @@ export function VideoViewer(props: VideoViewerProps) {
                         url={url}
                     />
                     <div
-                        className="happy2-video-viewer__transport"
+                        className="happy-video-viewer__transport"
                         data-happy-desktop-ui="video-viewer-transport"
                     >
-                        <div className="happy2-video-viewer__group">
+                        <div className="happy-video-viewer__group">
                             <Button
                                 aria-label={
                                     live.playing ? "Pause" : live.ended ? "Play again" : "Play"
@@ -709,7 +709,7 @@ export function VideoViewer(props: VideoViewerProps) {
                                 time={position}
                             />
                         </div>
-                        <div className="happy2-video-viewer__group">
+                        <div className="happy-video-viewer__group">
                             <VideoViewerVolume
                                 disabled={!showing}
                                 muted={settings.muted}
@@ -773,7 +773,7 @@ export function VideoViewer(props: VideoViewerProps) {
                 nowhere at all for anyone who cannot. */}
             <span
                 aria-live="polite"
-                className="happy2-video-viewer__announcement"
+                className="happy-video-viewer__announcement"
                 data-happy-desktop-ui="video-viewer-announcement"
                 role="status"
             >
@@ -834,7 +834,7 @@ function VideoViewerStage(props: {
             {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a workspace file has no caption track to offer */}
             <video
                 aria-label={name}
-                className="happy2-video-viewer__video"
+                className="happy-video-viewer__video"
                 data-happy-desktop-ui="video-viewer-video"
                 // A different recording is a different element. Putting a new
                 // address on the same one leaves the previous transfer running
@@ -912,7 +912,7 @@ function VideoViewerStage(props: {
                 surface, and it answers the same Space with far more besides. */}
             <button
                 aria-label={state.playing ? `Pause ${name}` : `Play ${name}`}
-                className="happy2-video-viewer__surface"
+                className="happy-video-viewer__surface"
                 data-happy-desktop-ui="video-viewer-surface"
                 onClick={onActivate}
                 onDoubleClick={onFullscreen}
@@ -931,28 +931,28 @@ function VideoViewerStage(props: {
             {state.status === "opening" ? <VideoViewerOpening name={name} /> : null}
             {state.status === "blocked" ? (
                 <div
-                    className="happy2-video-viewer__notice"
+                    className="happy-video-viewer__notice"
                     data-happy-desktop-ui="video-viewer-blocked"
                 >
                     <Icon name="play" size={20} />
-                    <span className="happy2-video-viewer__notice-title">
+                    <span className="happy-video-viewer__notice-title">
                         {name} is ready to play
                     </span>
-                    <span className="happy2-video-viewer__notice-detail">
+                    <span className="happy-video-viewer__notice-detail">
                         The browser would not start it on its own. Press play to watch it.
                     </span>
                 </div>
             ) : null}
             {state.pictureInPicture ? (
                 <div
-                    className="happy2-video-viewer__notice"
+                    className="happy-video-viewer__notice"
                     data-happy-desktop-ui="video-viewer-detached"
                 >
                     <Ionicon name="tv-outline" size={20} />
-                    <span className="happy2-video-viewer__notice-title">
+                    <span className="happy-video-viewer__notice-title">
                         Playing in a floating window
                     </span>
-                    <span className="happy2-video-viewer__notice-detail">
+                    <span className="happy-video-viewer__notice-detail">
                         The controls here still run it.
                     </span>
                 </div>
@@ -960,7 +960,7 @@ function VideoViewerStage(props: {
             {state.waiting && state.status === "ready" ? (
                 <div
                     aria-label="Buffering"
-                    className="happy2-video-viewer__buffering"
+                    className="happy-video-viewer__buffering"
                     data-happy-desktop-ui="video-viewer-buffering"
                     role="status"
                 >
@@ -1067,7 +1067,7 @@ function VideoViewerTimeline(props: {
                     ? `${timeSpoken(props.time)} of ${timeSpoken(props.duration)}`
                     : "Length unknown"
             }
-            className="happy2-video-viewer__timeline"
+            className="happy-video-viewer__timeline"
             data-happy-desktop-ui="video-viewer-timeline"
             data-scrubbing={props.scrub ? "" : undefined}
             onKeyDown={keyDown}
@@ -1080,9 +1080,9 @@ function VideoViewerTimeline(props: {
             role="slider"
             tabIndex={inert ? -1 : 0}
         >
-            <span className="happy2-video-viewer__track" data-happy-desktop-ui="video-viewer-track">
+            <span className="happy-video-viewer__track" data-happy-desktop-ui="video-viewer-track">
                 <span
-                    className="happy2-video-viewer__buffered"
+                    className="happy-video-viewer__buffered"
                     data-happy-desktop-ui="video-viewer-buffered"
                     style={{
                         left: `${String(bufferedFrom * 100)}%`,
@@ -1090,13 +1090,13 @@ function VideoViewerTimeline(props: {
                     }}
                 />
                 <span
-                    className="happy2-video-viewer__played"
+                    className="happy-video-viewer__played"
                     data-happy-desktop-ui="video-viewer-played"
                     style={{ width: `${String(played * 100)}%` }}
                 />
             </span>
             <span
-                className="happy2-video-viewer__handle"
+                className="happy-video-viewer__handle"
                 data-happy-desktop-ui="video-viewer-handle"
                 style={{ left: `${String(played * 100)}%` }}
             />
@@ -1120,9 +1120,9 @@ function VideoViewerClock(props: {
         ? `-${timeFormat(Math.max(0, props.duration - props.time))}`
         : timeFormat(props.duration);
     return (
-        <span className="happy2-video-viewer__clock" data-happy-desktop-ui="video-viewer-clock">
+        <span className="happy-video-viewer__clock" data-happy-desktop-ui="video-viewer-clock">
             <span
-                className="happy2-video-viewer__elapsed"
+                className="happy-video-viewer__elapsed"
                 data-happy-desktop-ui="video-viewer-elapsed"
             >
                 {timeFormat(props.time)}
@@ -1134,7 +1134,7 @@ function VideoViewerClock(props: {
                             ? "Show the whole length instead of what is left"
                             : "Show what is left instead of the whole length"
                     }
-                    className="happy2-video-viewer__total"
+                    className="happy-video-viewer__total"
                     data-happy-desktop-ui="video-viewer-total"
                     onClick={props.onToggle}
                     type="button"
@@ -1143,7 +1143,7 @@ function VideoViewerClock(props: {
                 </button>
             ) : (
                 <span
-                    className="happy2-video-viewer__total"
+                    className="happy-video-viewer__total"
                     data-happy-desktop-ui="video-viewer-total"
                 >
                     live
@@ -1175,7 +1175,7 @@ function VideoViewerVolume(props: {
                 ? "volume-medium"
                 : "volume-high";
     return (
-        <span className="happy2-video-viewer__volume" data-happy-desktop-ui="video-viewer-volume">
+        <span className="happy-video-viewer__volume" data-happy-desktop-ui="video-viewer-volume">
             <Button
                 aria-label={props.muted ? "Unmute" : "Mute"}
                 aria-pressed={props.muted}
@@ -1189,7 +1189,7 @@ function VideoViewerVolume(props: {
             </Button>
             <input
                 aria-label="Volume"
-                className="happy2-video-viewer__level"
+                className="happy-video-viewer__level"
                 data-happy-desktop-ui="video-viewer-level"
                 disabled={props.disabled}
                 max={1}
@@ -1213,7 +1213,7 @@ function VideoViewerRate(props: {
 }) {
     return (
         <span
-            className="happy2-video-viewer__rate"
+            className="happy-video-viewer__rate"
             data-happy-desktop-ui="video-viewer-rate"
             onBlur={(event) => {
                 // Focus left the button and its list together, which is what
@@ -1242,7 +1242,7 @@ function VideoViewerRate(props: {
             </Button>
             {props.open ? (
                 <span
-                    className="happy2-video-viewer__rates"
+                    className="happy-video-viewer__rates"
                     data-happy-desktop-ui="video-viewer-rates"
                 >
                     <Menu
@@ -1266,9 +1266,9 @@ function VideoViewerRate(props: {
 
 function VideoViewerOpening(props: { name: string }) {
     return (
-        <div className="happy2-video-viewer__notice" data-happy-desktop-ui="video-viewer-loading">
+        <div className="happy-video-viewer__notice" data-happy-desktop-ui="video-viewer-loading">
             <Spinner size={16} />
-            <span className="happy2-video-viewer__notice-title">Opening {props.name}…</span>
+            <span className="happy-video-viewer__notice-title">Opening {props.name}…</span>
         </div>
     );
 }
@@ -1281,7 +1281,7 @@ function VideoViewerNotice(props: {
 }) {
     return (
         <div
-            className="happy2-video-viewer__notice"
+            className="happy-video-viewer__notice"
             data-happy-desktop-ui={
                 props.tone === "danger" ? "video-viewer-error" : "video-viewer-unavailable"
             }
@@ -1293,10 +1293,10 @@ function VideoViewerNotice(props: {
             role={props.tone === "danger" ? "alert" : undefined}
         >
             <Icon name={props.tone === "danger" ? "close" : "play"} size={20} />
-            <span className="happy2-video-viewer__notice-title">
+            <span className="happy-video-viewer__notice-title">
                 {props.title ?? `${props.name} could not be played`}
             </span>
-            <span className="happy2-video-viewer__notice-detail">{props.detail}</span>
+            <span className="happy-video-viewer__notice-detail">{props.detail}</span>
         </div>
     );
 }

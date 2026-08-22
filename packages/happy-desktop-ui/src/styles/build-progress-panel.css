@@ -13,33 +13,33 @@
  * different material. Border-box everywhere, integer px on the 4px grid.
  */
 
-.happy2-build-progress,
-.happy2-build-progress *,
-.happy2-build-progress::before,
-.happy2-build-progress::after {
+.happy-build-progress,
+.happy-build-progress *,
+.happy-build-progress::before,
+.happy-build-progress::after {
     box-sizing: border-box;
 }
 
-.happy2-build-progress {
+.happy-build-progress {
     display: flex;
     flex-direction: column;
     gap: 16px;
     width: 100%;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* ---- Header ----------------------------------------------------------- */
 
-.happy2-build-progress__header {
+.happy-build-progress__header {
     display: flex;
     align-items: center;
     gap: 12px;
     min-width: 0;
 }
 
-.happy2-build-progress__title {
+.happy-build-progress__title {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -52,17 +52,17 @@
     white-space: nowrap;
 }
 
-.happy2-build-progress__badge {
+.happy-build-progress__badge {
     margin-left: auto;
 }
 
 /* ---- Progress bar ----------------------------------------------------- */
 
-.happy2-build-progress__track {
+.happy-build-progress__track {
     width: 100%;
     height: 6px;
     background: var(--groupped-background);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     overflow: hidden;
 }
 
@@ -70,23 +70,23 @@
  * Fill width is driven purely by the inline width; no transition keeps the
  * screenshot deterministic. The color is chosen by the panel's data-status.
  */
-.happy2-build-progress__fill {
+.happy-build-progress__fill {
     height: 100%;
     border-radius: inherit;
     background: var(--text-link);
 }
 
-.happy2-build-progress[data-status="ready"] .happy2-build-progress__fill {
+.happy-build-progress[data-status="ready"] .happy-build-progress__fill {
     background: var(--success);
 }
 
-.happy2-build-progress[data-status="failed"] .happy2-build-progress__fill {
+.happy-build-progress[data-status="failed"] .happy-build-progress__fill {
     background: var(--text-destructive);
 }
 
 /* ---- Status line ------------------------------------------------------ */
 
-.happy2-build-progress__status-line {
+.happy-build-progress__status-line {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -97,7 +97,7 @@
  * the line stays exactly one line: a long machine string is ellipsized here
  * rather than wrapping under the percent and breaking the row's alignment.
  */
-.happy2-build-progress__status-label {
+.happy-build-progress__status-label {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -109,11 +109,11 @@
     white-space: nowrap;
 }
 
-.happy2-build-progress__percent {
+.happy-build-progress__percent {
     flex: none;
     margin-left: auto;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
     font-variant-numeric: lining-nums tabular-nums;
@@ -121,24 +121,24 @@
 
 /* ---- Current log line ------------------------------------------------- */
 
-.happy2-build-progress__current {
+.happy-build-progress__current {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
 }
 
-.happy2-build-progress__current-icon {
+.happy-build-progress__current-icon {
     display: flex;
     flex: none;
     color: var(--text-secondary);
 }
 
-.happy2-build-progress__current-text {
+.happy-build-progress__current-text {
     flex: 1 1 auto;
     min-width: 0;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 16px;
     white-space: nowrap;
@@ -148,13 +148,13 @@
 
 /* ---- Retained log block ----------------------------------------------- */
 
-.happy2-build-progress__log-block {
+.happy-build-progress__log-block {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.happy2-build-progress__truncated {
+.happy-build-progress__truncated {
     color: var(--warning);
     font-size: 11px;
     font-weight: 700;
@@ -164,24 +164,24 @@
 }
 
 /* Scrollport: edge-to-edge, no padding; the inner <code> carries the inset. */
-.happy2-build-progress__log {
+.happy-build-progress__log {
     max-height: 200px;
     background: var(--diff-context-bg);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-.happy2-build-progress__log-viewport {
+.happy-build-progress__log-viewport {
     overflow: auto;
 }
 
 /* Inner content block carries the 12px inset off the scrollport. */
-.happy2-build-progress__log-inner {
+.happy-build-progress__log-inner {
     display: block;
     margin: 0;
     font: inherit;
@@ -193,20 +193,20 @@
 
 /* ---- Failure block ---------------------------------------------------- */
 
-.happy2-build-progress__error {
+.happy-build-progress__error {
     display: flex;
     flex-direction: column;
     gap: 12px;
 }
 
-.happy2-build-progress__error-text {
+.happy-build-progress__error-text {
     color: var(--text-destructive);
     font-size: 13px;
     font-weight: 400;
     line-height: 18px;
 }
 
-.happy2-build-progress__actions {
+.happy-build-progress__actions {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -218,11 +218,11 @@
  * Deliberately un-animated so the fixture and screenshots stay deterministic; a consuming app
  * may add rotation outside the measurement surface.
  */
-.happy2-build-progress__spinner {
+.happy-build-progress__spinner {
     flex: none;
     width: 20px;
     height: 20px;
     border: 2px solid var(--divider);
     border-top-color: var(--text);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
 }

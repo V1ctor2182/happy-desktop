@@ -1,5 +1,5 @@
-const FLEX_LAYOUT_RULE = "happy2-layout/use-flex-layout";
-const SCROLLPORT_SPACING_RULE = "happy2-layout/scrollport-no-spacing";
+const FLEX_LAYOUT_RULE = "happy-layout/use-flex-layout";
+const SCROLLPORT_SPACING_RULE = "happy-layout/scrollport-no-spacing";
 const MINIMUM_REASON_LENGTH = 12;
 
 const alternativeDisplayValues = new Set([
@@ -84,7 +84,7 @@ const useFlexLayout = {
         },
         messages: {
             preferFlex:
-                "{{layout}} bypasses the flexbox layout default. Use flexbox, or add an adjacent `eslint-disable-next-line happy2-layout/use-flex-layout -- <concrete reason>` exception.",
+                "{{layout}} bypasses the flexbox layout default. Use flexbox, or add an adjacent `eslint-disable-next-line happy-layout/use-flex-layout -- <concrete reason>` exception.",
         },
         schema: [],
     },
@@ -318,7 +318,7 @@ const requireLayoutExceptionReason = {
 };
 
 export default {
-    meta: { name: "eslint-plugin-happy2-layout", version: "0.1.0" },
+    meta: { name: "eslint-plugin-happy-layout", version: "0.1.0" },
     rules: {
         "require-layout-exception-reason": requireLayoutExceptionReason,
         "scrollport-no-spacing": scrollportNoSpacing,

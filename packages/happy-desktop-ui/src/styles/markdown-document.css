@@ -7,28 +7,28 @@
  * by size and space rather than by rules. Every color and radius is a token.
  */
 
-.happy2-markdown-document,
-.happy2-markdown-document * {
+.happy-markdown-document,
+.happy-markdown-document * {
     box-sizing: border-box;
 }
 
-.happy2-markdown-document {
+.happy-markdown-document {
     flex: 1 1 0%;
     min-width: 0;
     min-height: 0;
     background: var(--surface);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     color: var(--text);
 }
 
-.happy2-markdown-document__viewport {
+.happy-markdown-document__viewport {
     display: flex;
     flex-direction: column;
     overflow: auto;
 }
 
-.happy2-markdown-document__body {
+.happy-markdown-document__body {
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
@@ -42,23 +42,23 @@
 
 /* Block children stack on one rhythm rather than on their intrinsic margins,
    so a document made of paragraphs and one made of lists read the same. */
-.happy2-markdown-document__body > * {
+.happy-markdown-document__body > * {
     margin: 0;
     min-width: 0;
 }
 
-.happy2-markdown-document__body > * + * {
+.happy-markdown-document__body > * + * {
     margin-top: 16px;
 }
 
 /* ---- Headings --------------------------------------------------------- */
 
-.happy2-markdown-document__body h1,
-.happy2-markdown-document__body h2,
-.happy2-markdown-document__body h3,
-.happy2-markdown-document__body h4,
-.happy2-markdown-document__body h5,
-.happy2-markdown-document__body h6 {
+.happy-markdown-document__body h1,
+.happy-markdown-document__body h2,
+.happy-markdown-document__body h3,
+.happy-markdown-document__body h4,
+.happy-markdown-document__body h5,
+.happy-markdown-document__body h6 {
     color: var(--text);
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -67,77 +67,77 @@
 /* A heading opens a section, so it takes more air above it than the rhythm
    between siblings gives. The first block in the document is not opening
    anything and keeps the article's own top gutter. */
-.happy2-markdown-document__body > h1 + *,
-.happy2-markdown-document__body > h2 + *,
-.happy2-markdown-document__body > h3 + *,
-.happy2-markdown-document__body > h4 + *,
-.happy2-markdown-document__body > h5 + *,
-.happy2-markdown-document__body > h6 + * {
+.happy-markdown-document__body > h1 + *,
+.happy-markdown-document__body > h2 + *,
+.happy-markdown-document__body > h3 + *,
+.happy-markdown-document__body > h4 + *,
+.happy-markdown-document__body > h5 + *,
+.happy-markdown-document__body > h6 + * {
     margin-top: 8px;
 }
 
-.happy2-markdown-document__body > * + h1,
-.happy2-markdown-document__body > * + h2 {
+.happy-markdown-document__body > * + h1,
+.happy-markdown-document__body > * + h2 {
     margin-top: 32px;
 }
 
-.happy2-markdown-document__body > * + h3,
-.happy2-markdown-document__body > * + h4,
-.happy2-markdown-document__body > * + h5,
-.happy2-markdown-document__body > * + h6 {
+.happy-markdown-document__body > * + h3,
+.happy-markdown-document__body > * + h4,
+.happy-markdown-document__body > * + h5,
+.happy-markdown-document__body > * + h6 {
     margin-top: 24px;
 }
 
-.happy2-markdown-document__body h1 {
+.happy-markdown-document__body h1 {
     font-size: 28px;
     font-weight: 700;
     line-height: 36px;
 }
 
-.happy2-markdown-document__body h2 {
+.happy-markdown-document__body h2 {
     font-size: 21px;
     line-height: 28px;
 }
 
-.happy2-markdown-document__body h3 {
+.happy-markdown-document__body h3 {
     font-size: 17px;
     line-height: 24px;
 }
 
-.happy2-markdown-document__body h4,
-.happy2-markdown-document__body h5,
-.happy2-markdown-document__body h6 {
+.happy-markdown-document__body h4,
+.happy-markdown-document__body h5,
+.happy-markdown-document__body h6 {
     font-size: 15px;
     line-height: 24px;
 }
 
-.happy2-markdown-document__body h5,
-.happy2-markdown-document__body h6 {
+.happy-markdown-document__body h5,
+.happy-markdown-document__body h6 {
     color: var(--text-secondary);
 }
 
 /* ---- Inline ----------------------------------------------------------- */
 
-.happy2-markdown-document__body strong {
+.happy-markdown-document__body strong {
     font-weight: 700;
 }
 
-.happy2-markdown-document__body em {
+.happy-markdown-document__body em {
     font-style: italic;
 }
 
-.happy2-markdown-document__body del {
+.happy-markdown-document__body del {
     color: var(--text-secondary);
 }
 
-.happy2-markdown-document__link {
+.happy-markdown-document__link {
     color: var(--text-link);
     text-decoration: underline;
     text-underline-offset: 2px;
     overflow-wrap: anywhere;
 }
 
-.happy2-markdown-document__link--file {
+.happy-markdown-document__link--file {
     display: inline;
     margin: 0;
     padding: 0;
@@ -148,50 +148,50 @@
     cursor: pointer;
 }
 
-.happy2-markdown-document__link:hover {
+.happy-markdown-document__link:hover {
     opacity: 0.8;
 }
 
-.happy2-markdown-document__image {
+.happy-markdown-document__image {
     color: var(--text-secondary);
     font-style: italic;
 }
 
 /* ---- Lists ------------------------------------------------------------ */
 
-.happy2-markdown-document__body ul,
-.happy2-markdown-document__body ol {
+.happy-markdown-document__body ul,
+.happy-markdown-document__body ol {
     padding-left: 24px;
 }
 
-.happy2-markdown-document__body ul {
+.happy-markdown-document__body ul {
     list-style: disc outside;
 }
 
-.happy2-markdown-document__body ol {
+.happy-markdown-document__body ol {
     list-style: decimal outside;
 }
 
-.happy2-markdown-document__body li::marker {
+.happy-markdown-document__body li::marker {
     color: var(--text-secondary);
 }
 
-.happy2-markdown-document__body li + li {
+.happy-markdown-document__body li + li {
     margin-top: 4px;
 }
 
-.happy2-markdown-document__body li > ul,
-.happy2-markdown-document__body li > ol {
+.happy-markdown-document__body li > ul,
+.happy-markdown-document__body li > ol {
     margin-top: 4px;
 }
 
 /* A task list carries its own checkbox in place of a marker. */
-.happy2-markdown-document__body li:has(> input[type="checkbox"]) {
+.happy-markdown-document__body li:has(> input[type="checkbox"]) {
     list-style: none;
     margin-left: -20px;
 }
 
-.happy2-markdown-document__body input[type="checkbox"] {
+.happy-markdown-document__body input[type="checkbox"] {
     width: 13px;
     height: 13px;
     margin: 0 7px 0 0;
@@ -201,27 +201,27 @@
 
 /* ---- Code ------------------------------------------------------------- */
 
-.happy2-markdown-document__body code {
+.happy-markdown-document__body code {
     padding: 1px 5px;
     border-radius: 4px;
     background: var(--surface-pressed);
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 13px;
 }
 
-.happy2-markdown-document__plain-code {
+.happy-markdown-document__plain-code {
     max-width: 100%;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--surface-pressed);
 }
 
-.happy2-markdown-document__plain-code-viewport {
+.happy-markdown-document__plain-code-viewport {
     overflow-x: auto;
     overflow-y: hidden;
 }
 
-.happy2-markdown-document__body pre {
+.happy-markdown-document__body pre {
     max-width: 100%;
     margin: 0;
 }
@@ -229,9 +229,9 @@
 /* A fenced block is the shared code renderer, sunk into the page on the same
    inset material the plain <pre> fallback above uses. It scrolls itself, so a
    long line moves inside the block rather than widening the document. */
-.happy2-markdown-document__code .happy2-code-block {
+.happy-markdown-document__code .happy-code-block {
     overflow: hidden;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     --diffs-light-bg: var(--surface-pressed);
     --diffs-dark-bg: var(--surface-pressed);
     --diffs-font-size: 12.5px;
@@ -240,7 +240,7 @@
 
 /* The <pre> is the scrollport, so the inset lives on the <code> inside it and
    survives horizontal scrolling instead of being clipped at the right edge. */
-.happy2-markdown-document__body pre code {
+.happy-markdown-document__body pre code {
     display: block;
     padding: 14px 16px;
     border-radius: 0;
@@ -253,42 +253,42 @@
 
 /* ---- Tables, quotes, rules -------------------------------------------- */
 
-.happy2-markdown-document__body table {
+.happy-markdown-document__body table {
     border-collapse: collapse;
     font-size: 14px;
     line-height: 22px;
 }
 
-.happy2-markdown-document__table-scroll {
+.happy-markdown-document__table-scroll {
     max-width: 100%;
 }
 
-.happy2-markdown-document__table-scroll-viewport {
+.happy-markdown-document__table-scroll-viewport {
     overflow-x: auto;
     overflow-y: hidden;
 }
 
-.happy2-markdown-document__body th,
-.happy2-markdown-document__body td {
+.happy-markdown-document__body th,
+.happy-markdown-document__body td {
     padding: 7px 12px;
     border: 1px solid var(--divider);
     text-align: left;
     vertical-align: top;
 }
 
-.happy2-markdown-document__body th {
+.happy-markdown-document__body th {
     background: var(--input-background);
     color: var(--text);
     font-weight: 600;
 }
 
-.happy2-markdown-document__body blockquote {
+.happy-markdown-document__body blockquote {
     padding-left: 14px;
     border-left: 2px solid var(--divider);
     color: var(--text-secondary);
 }
 
-.happy2-markdown-document__body hr {
+.happy-markdown-document__body hr {
     height: 1px;
     border: 0;
     background: var(--divider);

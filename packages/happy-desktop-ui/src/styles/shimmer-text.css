@@ -29,26 +29,26 @@
  * from, and sweep decides which end of that role the letters rest at.
  */
 
-.happy2-shimmer-text {
-    --happy2-shimmer-duration: 1600ms;
-    --happy2-shimmer-offset: 0;
+.happy-shimmer-text {
+    --happy-shimmer-duration: 1600ms;
+    --happy-shimmer-offset: 0;
     /* The text role this whole effect is built from. It is always the element's
        own colour; tone is what decides that colour, and `inherit` is simply the
        tone that leaves it to the surface around it. */
-    --happy2-shimmer-color: currentColor;
+    --happy-shimmer-color: currentColor;
     /* How far the resting letters sit below the passing highlight. */
-    --happy2-shimmer-rest: color-mix(in srgb, var(--happy2-shimmer-color) 38%, var(--surface));
-    --happy2-shimmer-highlight: var(--happy2-shimmer-color);
+    --happy-shimmer-rest: color-mix(in srgb, var(--happy-shimmer-color) 38%, var(--surface));
+    --happy-shimmer-highlight: var(--happy-shimmer-color);
 
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- one text run whose own glyphs clip a painted gradient: the sweep must cross the whole run, and as a flex box each word would become an anonymous item with a background box of its own, restarting the sweep per word */
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- one text run whose own glyphs clip a painted gradient: the sweep must cross the whole run, and as a flex box each word would become an anonymous item with a background box of its own, restarting the sweep per word */
     display: inline-block;
     background-image: linear-gradient(
         90deg,
-        var(--happy2-shimmer-rest) 0%,
-        var(--happy2-shimmer-rest) 40%,
-        var(--happy2-shimmer-highlight) 50%,
-        var(--happy2-shimmer-rest) 60%,
-        var(--happy2-shimmer-rest) 100%
+        var(--happy-shimmer-rest) 0%,
+        var(--happy-shimmer-rest) 40%,
+        var(--happy-shimmer-highlight) 50%,
+        var(--happy-shimmer-rest) 60%,
+        var(--happy-shimmer-rest) 100%
     );
     background-repeat: no-repeat;
     /* Three times the run's width: the band sits in the middle third, so at
@@ -64,15 +64,15 @@
      * out of nothing.
      */
     -webkit-text-fill-color: transparent;
-    animation-name: happy2-shimmer-text-sweep;
-    animation-duration: var(--happy2-shimmer-duration);
+    animation-name: happy-shimmer-text-sweep;
+    animation-duration: var(--happy-shimmer-duration);
     animation-timing-function: linear;
     animation-iteration-count: infinite;
     /* Parks the sweep at the requested fraction of one cycle. */
-    animation-delay: calc(-1 * var(--happy2-shimmer-offset) * var(--happy2-shimmer-duration));
+    animation-delay: calc(-1 * var(--happy-shimmer-offset) * var(--happy-shimmer-duration));
 }
 
-.happy2-shimmer-text[data-paused] {
+.happy-shimmer-text[data-paused] {
     animation-play-state: paused;
 }
 
@@ -88,15 +88,15 @@
  * that is secondary at rest and full strength when unread stays exactly that,
  * and the only difference from its neighbours is the band crossing it.
  */
-.happy2-shimmer-text[data-tone="default"] {
+.happy-shimmer-text[data-tone="default"] {
     color: var(--text);
 }
 
-.happy2-shimmer-text[data-tone="muted"] {
+.happy-shimmer-text[data-tone="muted"] {
     color: var(--text-secondary);
 }
 
-.happy2-shimmer-text[data-tone="accent"] {
+.happy-shimmer-text[data-tone="accent"] {
     color: var(--text-link);
 }
 
@@ -110,12 +110,12 @@
  * its unshimmering neighbours, and `lift` where the dimmed resting state is
  * itself the message that something is not finished.
  */
-.happy2-shimmer-text[data-sweep="sheen"] {
-    --happy2-shimmer-rest: var(--happy2-shimmer-color);
+.happy-shimmer-text[data-sweep="sheen"] {
+    --happy-shimmer-rest: var(--happy-shimmer-color);
     /* Nearly the page itself. The band has to be read against text that is
        already secondary grey, and a half-strength wipe on grey is the one thing
        this must not be: it reads as a smudge rather than as light moving. */
-    --happy2-shimmer-highlight: color-mix(in srgb, var(--happy2-shimmer-color) 15%, var(--surface));
+    --happy-shimmer-highlight: color-mix(in srgb, var(--happy-shimmer-color) 15%, var(--surface));
 }
 
 /*
@@ -124,7 +124,7 @@
  * or below `0%`: that does not move the band further out, it slides the ramp off
  * the line and the text disappears.
  */
-@keyframes happy2-shimmer-text-sweep {
+@keyframes happy-shimmer-text-sweep {
     from {
         background-position: 100% 0;
     }
@@ -142,7 +142,7 @@
  * of a label for no reason.
  */
 @media (prefers-reduced-motion: reduce) {
-    .happy2-shimmer-text {
+    .happy-shimmer-text {
         background-image: none;
         /* Every tone already carries its own real `color`, so restoring the
            glyph fill is the whole of it: each one lands on exactly the colour

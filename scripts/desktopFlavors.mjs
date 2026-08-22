@@ -24,7 +24,7 @@ export const desktopFlavors = {
         output: "standard",
         productName: "Happy",
         /** Electron-updater's on-disk download cache; distinct from Nightly's. */
-        updaterCacheDirName: "happy2-desktop-updater",
+        updaterCacheDirName: "happy-desktop-updater",
     },
     "local-web": {
         appId: "com.slopus.happy.nightly",
@@ -33,7 +33,7 @@ export const desktopFlavors = {
         output: "local-web",
         productName: "Happy Nightly",
         /** Electron-updater's on-disk download cache; distinct from standard's. */
-        updaterCacheDirName: "happy2-desktop-nightly-updater",
+        updaterCacheDirName: "happy-desktop-nightly-updater",
     },
 };
 

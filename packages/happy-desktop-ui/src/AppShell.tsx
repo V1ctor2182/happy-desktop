@@ -154,7 +154,7 @@ function laneMaxWidthOf(cap: number, min: number, occupied: number): number {
 }
 const SHORTCUT_HINT_DELAY_MS = 500;
 const SIDEBAR_SHORTCUT = commandShortcut("b");
-export const APP_SHELL_RESIZE_LAYOUT_EVENT = "happy2-app-shell-resize-layout";
+export const APP_SHELL_RESIZE_LAYOUT_EVENT = "happy-app-shell-resize-layout";
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
 }
@@ -366,7 +366,7 @@ export function AppShell(props: AppShellProps) {
     const shortcutHintsEnabled = local.shortcutHints !== undefined;
     const shortcutHintsInteractive = local.shortcutHints === "interactive";
     const shortcutHintsVisible = shortcutHintsInteractive && shortcutHintsHeld;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- modifier discovery and a window-wide sidebar chord must work regardless of which descendant control owns focus
+    // eslint-disable-next-line happy-react/no-layout-effect -- modifier discovery and a window-wide sidebar chord must work regardless of which descendant control owns focus
     useLayoutEffect(() => {
         if (!shortcutHintsInteractive) return;
         let shortcutTimer: number | undefined;
@@ -451,7 +451,7 @@ export function AppShell(props: AppShellProps) {
         : panelWidthState;
     const panelWidth = panelWidthControlled ? (panelDragWidth ?? panelWidthBase) : panelWidthState;
     const panelPresent = local.panel !== undefined && local.panel !== null;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- live splitter geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
+    // eslint-disable-next-line happy-react/no-layout-effect -- live splitter geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
     useLayoutEffect(() => {
         shell.current?.dispatchEvent(new Event(APP_SHELL_RESIZE_LAYOUT_EVENT, { bubbles: true }));
     }, [panelPresent, panelWidth, sidebarCollapsed, sidebarWidth]);
@@ -523,7 +523,7 @@ export function AppShell(props: AppShellProps) {
             <Icon name="sidebar-expand" size={16} />
             {shortcutHintsEnabled ? (
                 <KeyCap
-                    className="happy2-shortcut-hint--floating"
+                    className="happy-shortcut-hint--floating"
                     decorative
                     keys={SIDEBAR_SHORTCUT.caps}
                 />
@@ -645,7 +645,7 @@ export function AppShell(props: AppShellProps) {
                                             <Icon name="sidebar-collapse" size={16} />
                                             {shortcutHintsEnabled ? (
                                                 <KeyCap
-                                                    className="happy2-shortcut-hint--floating"
+                                                    className="happy-shortcut-hint--floating"
                                                     decorative
                                                     keys={SIDEBAR_SHORTCUT.caps}
                                                 />

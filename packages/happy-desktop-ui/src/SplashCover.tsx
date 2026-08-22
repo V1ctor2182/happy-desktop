@@ -38,12 +38,12 @@ export function SplashCover(props: SplashCoverProps) {
     const [finished, setFinished] = useState(false);
     if (finished) return <>{props.children}</>;
     return (
-        <div className="happy2-splash-cover" data-happy-desktop-ui="splash-cover">
+        <div className="happy-splash-cover" data-happy-desktop-ui="splash-cover">
             {/* Mounted underneath from the first frame of the fade, so the app
                 is already laid out and painted by the time it is visible. */}
             {props.ready ? props.children : null}
             <div
-                className="happy2-splash-cover__veil"
+                className="happy-splash-cover__veil"
                 data-happy-desktop-ui="splash-cover-veil"
                 data-leaving={props.ready ? "" : undefined}
                 onAnimationEnd={() => {

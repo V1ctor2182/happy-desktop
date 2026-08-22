@@ -116,7 +116,7 @@ const DocumentLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
     if (web !== undefined)
         return (
             <a
-                className="happy2-markdown-document__link"
+                className="happy-markdown-document__link"
                 data-happy-desktop-ui="markdown-document-link"
                 href={web}
                 rel="noopener noreferrer nofollow"
@@ -129,7 +129,7 @@ const DocumentLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
     if (path === undefined || onFileOpen === undefined)
         return (
             <span
-                className="happy2-markdown-document__link"
+                className="happy-markdown-document__link"
                 data-happy-desktop-ui="markdown-document-link"
             >
                 {children}
@@ -137,7 +137,7 @@ const DocumentLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
         );
     return (
         <button
-            className="happy2-markdown-document__link happy2-markdown-document__link--file"
+            className="happy-markdown-document__link happy-markdown-document__link--file"
             data-happy-desktop-ui="markdown-document-file-link"
             data-path={path}
             onClick={() => onFileOpen(path)}
@@ -157,7 +157,7 @@ const DocumentImage = ({ alt, src }: ComponentPropsWithoutRef<"img"> & ExtraProp
     const label = alt?.trim() || (typeof src === "string" ? src : "") || "image";
     return (
         <span
-            className="happy2-markdown-document__image"
+            className="happy-markdown-document__image"
             data-happy-desktop-ui="markdown-document-image"
         >
             {label}
@@ -216,7 +216,7 @@ const DocumentPre = ({
             : `${documentCacheKey}:f${String(fence.offset)}`;
     return (
         <div
-            className="happy2-markdown-document__code"
+            className="happy-markdown-document__code"
             data-happy-desktop-ui="markdown-document-code"
         >
             {fence ? (
@@ -228,8 +228,8 @@ const DocumentPre = ({
             ) : (
                 <ScrollArea
                     axes="horizontal"
-                    className="happy2-markdown-document__plain-code"
-                    viewportClassName="happy2-markdown-document__plain-code-viewport"
+                    className="happy-markdown-document__plain-code"
+                    viewportClassName="happy-markdown-document__plain-code-viewport"
                 >
                     <pre {...props}>{children}</pre>
                 </ScrollArea>
@@ -245,8 +245,8 @@ const DocumentTable = ({
 }: ComponentPropsWithoutRef<"table"> & ExtraProps) => (
     <ScrollArea
         axes="horizontal"
-        className="happy2-markdown-document__table-scroll"
-        viewportClassName="happy2-markdown-document__table-scroll-viewport"
+        className="happy-markdown-document__table-scroll"
+        viewportClassName="happy-markdown-document__table-scroll-viewport"
     >
         <table {...props}>{children}</table>
     </ScrollArea>
@@ -302,14 +302,14 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
     return (
         <ScrollArea
             axes="both"
-            className={["happy2-markdown-document", local.className].filter(Boolean).join(" ")}
+            className={["happy-markdown-document", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="markdown-document"
             data-testid={local["data-testid"]}
             style={local.style}
-            viewportClassName="happy2-markdown-document__viewport"
+            viewportClassName="happy-markdown-document__viewport"
         >
             <article
-                className="happy2-markdown-document__body"
+                className="happy-markdown-document__body"
                 data-happy-desktop-ui="markdown-document-body"
             >
                 <MarkdownCacheKeyContext.Provider value={local.cacheKey}>

@@ -90,7 +90,7 @@ it("renders a grouped activity reading with the compact transcript row grammar",
 
     // Goal objective + status fact.
     expect(
-        view.$('[data-happy-desktop-ui="happy-agent-activity-goal"] .happy2-delegated-agent__meta')
+        view.$('[data-happy-desktop-ui="happy-agent-activity-goal"] .happy-delegated-agent__meta')
             .element.textContent,
     ).toContain("Active");
     expect(view.container.textContent).toContain("Ship the usage panel end to end.");
@@ -145,7 +145,7 @@ it("renders a grouped activity reading with the compact transcript row grammar",
             .textMetrics(),
     ).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             lineHeight: 16,
             size: 12,
             weight: "600",
@@ -179,22 +179,22 @@ it("renders a grouped activity reading with the compact transcript row grammar",
     const contentLefts = [
         view
             .$(
-                '[data-happy-desktop-ui="happy-agent-activity-goal"] .happy2-delegated-agent__content',
+                '[data-happy-desktop-ui="happy-agent-activity-goal"] .happy-delegated-agent__content',
             )
             .bounds().x,
         view
             .$(
-                '[data-happy-desktop-ui="happy-agent-activity-task"] .happy2-delegated-agent__content',
+                '[data-happy-desktop-ui="happy-agent-activity-task"] .happy-delegated-agent__content',
             )
             .bounds().x,
         view
             .$(
-                '[data-happy-desktop-ui="happy-agent-activity-subagent"] .happy2-delegated-agent__content',
+                '[data-happy-desktop-ui="happy-agent-activity-subagent"] .happy-delegated-agent__content',
             )
             .bounds().x,
         view
             .$(
-                '[data-happy-desktop-ui="happy-agent-activity-process"] .happy2-delegated-agent__content',
+                '[data-happy-desktop-ui="happy-agent-activity-process"] .happy-delegated-agent__content',
             )
             .bounds().x,
     ];
@@ -292,7 +292,7 @@ it("fits long live activity at the minimum desktop content measure", async () =>
         "activity panel must not overflow horizontally",
     ).toBeLessThanOrEqual((panel.element as HTMLElement).clientWidth);
 
-    for (const row of view.container.querySelectorAll<HTMLElement>(".happy2-delegated-agent")) {
+    for (const row of view.container.querySelectorAll<HTMLElement>(".happy-delegated-agent")) {
         const bounds = row.getBoundingClientRect();
         expect(bounds.left).toBeGreaterThanOrEqual(panelRect.left);
         expect(
@@ -303,7 +303,7 @@ it("fits long live activity at the minimum desktop content measure", async () =>
     }
 
     const processCommand = view.$(
-        '[data-happy-desktop-ui="happy-agent-activity-process"] .happy2-delegated-agent__argument',
+        '[data-happy-desktop-ui="happy-agent-activity-process"] .happy-delegated-agent__argument',
     );
     expect(processCommand.computedStyle("overflow")).toBe("hidden");
     expect(processCommand.computedStyle("text-overflow")).toBe("ellipsis");

@@ -60,23 +60,23 @@ export function BuildProgressPanel(props: BuildProgressPanelProps) {
     const badge = () => statusBadges[local.status];
     return (
         <div
-            className={["happy2-build-progress", local.className].filter(Boolean).join(" ")}
+            className={["happy-build-progress", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="build-progress"
             data-status={local.status}
             data-testid={local["data-testid"]}
         >
             <div
-                className="happy2-build-progress__header"
+                className="happy-build-progress__header"
                 data-happy-desktop-ui="build-progress-header"
             >
                 <span
-                    className="happy2-build-progress__title"
+                    className="happy-build-progress__title"
                     data-happy-desktop-ui="build-progress-title"
                 >
                     {local.title}
                 </span>
                 <Badge
-                    className="happy2-build-progress__badge"
+                    className="happy-build-progress__badge"
                     icon={badge().icon}
                     label={badge().label}
                     variant={badge().variant}
@@ -84,28 +84,28 @@ export function BuildProgressPanel(props: BuildProgressPanelProps) {
             </div>
 
             <div
-                className="happy2-build-progress__track"
+                className="happy-build-progress__track"
                 data-happy-desktop-ui="build-progress-track"
             >
                 <div
-                    className="happy2-build-progress__fill"
+                    className="happy-build-progress__fill"
                     data-happy-desktop-ui="build-progress-fill"
                     style={{ width: `${fillPct()}%` }}
                 />
             </div>
 
             <div
-                className="happy2-build-progress__status-line"
+                className="happy-build-progress__status-line"
                 data-happy-desktop-ui="build-progress-status-line"
             >
                 <span
-                    className="happy2-build-progress__status-label"
+                    className="happy-build-progress__status-label"
                     data-happy-desktop-ui="build-progress-status-label"
                 >
                     {local.statusLabel}
                 </span>
                 <span
-                    className="happy2-build-progress__percent"
+                    className="happy-build-progress__percent"
                     data-happy-desktop-ui="build-progress-percent"
                 >
                     {pct()}%
@@ -114,17 +114,17 @@ export function BuildProgressPanel(props: BuildProgressPanelProps) {
 
             {local.currentLogLine && local.status !== "ready" ? (
                 <div
-                    className="happy2-build-progress__current"
+                    className="happy-build-progress__current"
                     data-happy-desktop-ui="build-progress-current"
                 >
                     <span
-                        className="happy2-build-progress__current-icon"
+                        className="happy-build-progress__current-icon"
                         data-happy-desktop-ui="build-progress-current-icon"
                     >
                         <Icon name="terminal" size={12} />
                     </span>
                     <span
-                        className="happy2-build-progress__current-text"
+                        className="happy-build-progress__current-text"
                         data-happy-desktop-ui="build-progress-current-text"
                     >
                         {local.currentLogLine}
@@ -135,12 +135,12 @@ export function BuildProgressPanel(props: BuildProgressPanelProps) {
             {local.log
                 ? ((log) => (
                       <div
-                          className="happy2-build-progress__log-block"
+                          className="happy-build-progress__log-block"
                           data-happy-desktop-ui="build-progress-log-block"
                       >
                           {local.logTruncated ? (
                               <span
-                                  className="happy2-build-progress__truncated"
+                                  className="happy-build-progress__truncated"
                                   data-happy-desktop-ui="build-progress-truncated"
                               >
                                   Earlier log truncated
@@ -148,11 +148,11 @@ export function BuildProgressPanel(props: BuildProgressPanelProps) {
                           ) : null}
                           <ScrollArea
                               axes="both"
-                              className="happy2-build-progress__log"
+                              className="happy-build-progress__log"
                               data-happy-desktop-ui="build-progress-log"
-                              viewportClassName="happy2-build-progress__log-viewport"
+                              viewportClassName="happy-build-progress__log-viewport"
                           >
-                              <pre className="happy2-build-progress__log-inner">
+                              <pre className="happy-build-progress__log-inner">
                                   <code>{log}</code>
                               </pre>
                           </ScrollArea>
@@ -162,24 +162,24 @@ export function BuildProgressPanel(props: BuildProgressPanelProps) {
 
             {local.status === "failed" ? (
                 <div
-                    className="happy2-build-progress__error"
+                    className="happy-build-progress__error"
                     data-happy-desktop-ui="build-progress-error"
                 >
                     {local.error ? (
                         <span
-                            className="happy2-build-progress__error-text"
+                            className="happy-build-progress__error-text"
                             data-happy-desktop-ui="build-progress-error-text"
                         >
                             {local.error}
                         </span>
                     ) : null}
                     <div
-                        className="happy2-build-progress__actions"
+                        className="happy-build-progress__actions"
                         data-happy-desktop-ui="build-progress-actions"
                     >
                         {local.retrying ? (
                             <span
-                                className="happy2-build-progress__spinner"
+                                className="happy-build-progress__spinner"
                                 data-happy-desktop-ui="build-progress-spinner"
                             />
                         ) : null}

@@ -5,12 +5,12 @@
  * affect a screenshot, no entrance animation: the surface stays deterministic.
  */
 
-.happy2-setup-option,
-.happy2-setup-option * {
+.happy-setup-option,
+.happy-setup-option * {
     box-sizing: border-box;
 }
 
-.happy2-setup-option {
+.happy-setup-option {
     display: flex;
     align-items: flex-start;
     gap: 12px;
@@ -19,9 +19,9 @@
     padding: 16px;
     background: var(--surface-pressed);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
     cursor: pointer;
@@ -32,33 +32,33 @@
  * chip and the title row center on one horizontal line instead of top-aligning.
  * Driven by the explicit `data-compact` attribute, never a relational selector.
  */
-.happy2-setup-option[data-compact] {
+.happy-setup-option[data-compact] {
     align-items: center;
 }
 
-.happy2-setup-option:hover:not(:disabled) {
+.happy-setup-option:hover:not(:disabled) {
     background: var(--surface-ripple);
     border-color: var(--divider);
 }
 
-.happy2-setup-option:focus-visible {
+.happy-setup-option:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-setup-option[data-selected] {
+.happy-setup-option[data-selected] {
     background: var(--surface-selected);
     border-color: var(--text-link);
 }
 
-.happy2-setup-option:disabled {
+.happy-setup-option:disabled {
     opacity: 0.55;
     cursor: not-allowed;
 }
 
 /* ---- Leading icon chip ------------------------------------------------- */
 
-.happy2-setup-option__icon {
+.happy-setup-option__icon {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -72,7 +72,7 @@
 
 /* ---- Body -------------------------------------------------------------- */
 
-.happy2-setup-option__body {
+.happy-setup-option__body {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -80,13 +80,13 @@
     min-width: 0;
 }
 
-.happy2-setup-option__title-row {
+.happy-setup-option__title-row {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.happy2-setup-option__title {
+.happy-setup-option__title {
     color: var(--text);
     font-size: 15px;
     font-weight: 600;
@@ -96,7 +96,7 @@
 /* An aside on the title, not a state of the card: the health pill and the
    selected check are what carry colour here, and a third tinted thing on the
    same line only competed with them. */
-.happy2-setup-option__recommended {
+.happy-setup-option__recommended {
     flex: none;
     color: var(--text-secondary);
     font-size: 11px;
@@ -107,47 +107,47 @@
 }
 
 /* Status pill pinned to the trailing end of the title row. */
-.happy2-setup-option__status {
+.happy-setup-option__status {
     display: flex;
     flex: none;
     margin-left: auto;
 }
 
-.happy2-setup-option__description {
+.happy-setup-option__description {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 400;
     line-height: 18px;
 }
 
-.happy2-setup-option__meta {
+.happy-setup-option__meta {
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;
 }
 
-.happy2-setup-option__hint {
+.happy-setup-option__hint {
     font-size: 12px;
     font-weight: 400;
     line-height: 16px;
 }
 
-.happy2-setup-option__hint[data-tone="muted"] {
+.happy-setup-option__hint[data-tone="muted"] {
     color: var(--text-secondary);
 }
 
-.happy2-setup-option__hint[data-tone="warning"] {
+.happy-setup-option__hint[data-tone="warning"] {
     color: var(--warning);
 }
 
-.happy2-setup-option__hint[data-tone="danger"] {
+.happy-setup-option__hint[data-tone="danger"] {
     color: var(--text-destructive);
 }
 
 /* ---- Trailing indicator ------------------------------------------------ */
 
-.happy2-setup-option__trailing {
+.happy-setup-option__trailing {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -157,7 +157,7 @@
     height: 20px;
 }
 
-.happy2-setup-option__check {
+.happy-setup-option__check {
     display: flex;
     flex: none;
     color: var(--text-link);
@@ -169,11 +169,11 @@
  * No rotation so the fixture and screenshots stay deterministic; a consuming app
  * may add its own spin outside the measurement surface.
  */
-.happy2-setup-option__spinner {
+.happy-setup-option__spinner {
     flex: none;
     width: 20px;
     height: 20px;
     border: 2px solid var(--divider);
     border-top-color: var(--text);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
 }

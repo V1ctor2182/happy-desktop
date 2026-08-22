@@ -16,21 +16,21 @@ stopped until Settings → Dev Tools → React renderer profile is started.
     process.exit(0);
 }
 
-const debug = options.debug || process.env.HAPPY2_DESKTOP_DEBUG === "1";
+const debug = options.debug || process.env.HAPPY_DESKTOP_DEBUG === "1";
 const childEnvironment = {
     ...process.env,
     // Desktop development is loopback-only by default. Portless persists the
     // last proxy's LAN mode and TLDs, so these settings must be explicit.
     PORTLESS_LAN: options.lan ? "1" : "0",
     PORTLESS_TLD: options.lan ? "local" : "localhost",
-    ...(debug ? { HAPPY2_DESKTOP_DEBUG: "1" } : {}),
+    ...(debug ? { HAPPY_DESKTOP_DEBUG: "1" } : {}),
 };
 if (options.profile) {
-    childEnvironment.HAPPY2_DESKTOP_PROFILE = "1";
-    childEnvironment.HAPPY2_DESKTOP_PROFILE_MODE = "development";
+    childEnvironment.HAPPY_DESKTOP_PROFILE = "1";
+    childEnvironment.HAPPY_DESKTOP_PROFILE_MODE = "development";
 } else {
-    delete childEnvironment.HAPPY2_DESKTOP_PROFILE;
-    delete childEnvironment.HAPPY2_DESKTOP_PROFILE_MODE;
+    delete childEnvironment.HAPPY_DESKTOP_PROFILE;
+    delete childEnvironment.HAPPY_DESKTOP_PROFILE_MODE;
 }
 if (!options.lan) delete childEnvironment.PORTLESS_LAN_IP;
 console.log(

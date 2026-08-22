@@ -8,33 +8,33 @@
  * either half toggles.
  */
 
-.happy2-permission-checklist,
-.happy2-permission-checklist * {
+.happy-permission-checklist,
+.happy-permission-checklist * {
     box-sizing: border-box;
 }
 
-.happy2-permission-checklist {
+.happy-permission-checklist {
     display: flex;
     flex-direction: column;
     gap: 12px;
     width: 100%;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-permission-checklist__row {
+.happy-permission-checklist__row {
     display: flex;
     align-items: flex-start;
     gap: 10px;
     min-width: 0;
 }
 
-.happy2-permission-checklist__checkbox {
+.happy-permission-checklist__checkbox {
     flex: none;
 }
 
-.happy2-permission-checklist__text {
+.happy-permission-checklist__text {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -42,19 +42,19 @@
     cursor: pointer;
 }
 
-.happy2-permission-checklist__row:has(.happy2-checkbox[data-disabled])
-    .happy2-permission-checklist__text {
+.happy-permission-checklist__row:has(.happy-checkbox[data-disabled])
+    .happy-permission-checklist__text {
     cursor: default;
 }
 
-.happy2-permission-checklist__label {
+.happy-permission-checklist__label {
     font-size: 13px;
     font-weight: 500;
     line-height: 18px;
     color: var(--text);
 }
 
-.happy2-permission-checklist__description {
+.happy-permission-checklist__description {
     font-size: 12px;
     line-height: 16px;
     color: var(--text-secondary);

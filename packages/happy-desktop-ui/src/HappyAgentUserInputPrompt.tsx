@@ -106,33 +106,33 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
 
     return (
         <section
-            className={["happy2-happy-agent-input", props.className].filter(Boolean).join(" ")}
+            className={["happy-agent-input", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="happy-agent-user-input"
             data-state={resolved ? "answered" : "pending"}
             data-testid={props["data-testid"]}
             data-variant={props.variant ?? "card"}
             style={props.style}
         >
-            <div className="happy2-happy-agent-input__questions">
+            <div className="happy-agent-input__questions">
                 {request.questions.map((question) => {
                     const selected = answers[question.id] ?? [];
                     return (
                         <fieldset
-                            className="happy2-happy-agent-input__question"
+                            className="happy-agent-input__question"
                             data-happy-desktop-ui="happy-agent-user-input-question"
                             data-question-id={question.id}
                             key={question.id}
                         >
-                            <legend className="happy2-happy-agent-input__legend">
-                                <span className="happy2-happy-agent-input__eyebrow">
+                            <legend className="happy-agent-input__legend">
+                                <span className="happy-agent-input__eyebrow">
                                     <span
-                                        className="happy2-happy-agent-input__header"
+                                        className="happy-agent-input__header"
                                         data-happy-desktop-ui="happy-agent-user-input-header"
                                     >
                                         {question.header}
                                     </span>
                                     <span
-                                        className="happy2-happy-agent-input__rule"
+                                        className="happy-agent-input__rule"
                                         data-happy-desktop-ui="happy-agent-user-input-rule"
                                     >
                                         {resolved
@@ -144,13 +144,13 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                             : selectionRule(question)}
                                     </span>
                                 </span>
-                                <span className="happy2-happy-agent-input__prompt">
+                                <span className="happy-agent-input__prompt">
                                     {question.question}
                                 </span>
                             </legend>
                             {resolved ? (
                                 <div
-                                    className="happy2-happy-agent-input__answers"
+                                    className="happy-agent-input__answers"
                                     data-happy-desktop-ui="happy-agent-user-input-answers"
                                 >
                                     {(answers[question.id] ?? []).length > 0 ? (
@@ -160,14 +160,14 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                             );
                                             return (
                                                 <div
-                                                    className="happy2-happy-agent-input__answer"
+                                                    className="happy-agent-input__answer"
                                                     key={answer}
                                                 >
-                                                    <span className="happy2-happy-agent-input__answer-label">
+                                                    <span className="happy-agent-input__answer-label">
                                                         {answer}
                                                     </span>
                                                     {option?.description ? (
-                                                        <span className="happy2-happy-agent-input__answer-description">
+                                                        <span className="happy-agent-input__answer-description">
                                                             {option.description}
                                                         </span>
                                                     ) : null}
@@ -175,20 +175,20 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                             );
                                         })
                                     ) : (
-                                        <div className="happy2-happy-agent-input__answer">
-                                            <span className="happy2-happy-agent-input__answer-label">
+                                        <div className="happy-agent-input__answer">
+                                            <span className="happy-agent-input__answer-label">
                                                 {question.required ? "No answer" : "Skipped"}
                                             </span>
                                         </div>
                                     )}
                                 </div>
                             ) : (
-                                <div className="happy2-happy-agent-input__options">
+                                <div className="happy-agent-input__options">
                                     {question.options.map((option, optionIndex) => {
                                         const descriptionId = `${request.requestId}-${question.id}-${optionIndex}-description`;
                                         return (
                                             <label
-                                                className="happy2-happy-agent-input__option"
+                                                className="happy-agent-input__option"
                                                 data-disabled={props.pending ? "" : undefined}
                                                 data-happy-desktop-ui="happy-agent-user-input-option"
                                                 data-selected={
@@ -214,13 +214,13 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                                         )
                                                     }
                                                 />
-                                                <span className="happy2-happy-agent-input__option-body">
-                                                    <span className="happy2-happy-agent-input__option-label">
+                                                <span className="happy-agent-input__option-body">
+                                                    <span className="happy-agent-input__option-label">
                                                         {option.label}
                                                     </span>
                                                     {option.description ? (
                                                         <span
-                                                            className="happy2-happy-agent-input__option-description"
+                                                            className="happy-agent-input__option-description"
                                                             id={descriptionId}
                                                         >
                                                             {option.description}
@@ -254,7 +254,7 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                 </Banner>
             ) : null}
             {resolved ? null : (
-                <div className="happy2-happy-agent-input__footer">
+                <div className="happy-agent-input__footer">
                     <Button
                         data-action="submit"
                         disabled={

@@ -32,7 +32,7 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
     const root = useRef<HTMLDivElement>(null);
     const name = branchLabel(props.branch, props.label);
 
-    // eslint-disable-next-line happy2-react/no-layout-effect -- an open popover owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
+    // eslint-disable-next-line happy-react/no-layout-effect -- an open popover owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
     useLayoutEffect(() => {
         if (!open) return;
         const closeOnOutsidePointer = (event: PointerEvent) => {
@@ -53,7 +53,7 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
 
     return (
         <div
-            className={["happy2-dev-build-menu", props.className].filter(Boolean).join(" ")}
+            className={["happy-dev-build-menu", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="dev-build-menu"
             data-open={open ? "" : undefined}
             ref={root}
@@ -63,7 +63,7 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
                 aria-expanded={open}
                 aria-haspopup="menu"
                 aria-label={`Development build: ${name}`}
-                className="happy2-dev-build-menu__trigger"
+                className="happy-dev-build-menu__trigger"
                 data-happy-desktop-ui="dev-build-menu-trigger"
                 onClick={() => setOpen((current) => !current)}
                 title={props.path ?? name}
@@ -71,7 +71,7 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
             >
                 <Icon name="braces" size={16} />
                 <span
-                    className="happy2-dev-build-menu__trigger-label"
+                    className="happy-dev-build-menu__trigger-label"
                     data-happy-desktop-ui="dev-build-menu-trigger-label"
                 >
                     {name}
@@ -80,12 +80,12 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
             {open ? (
                 <div
                     aria-label="Development menu"
-                    className="happy2-dev-build-menu__menu"
+                    className="happy-dev-build-menu__menu"
                     data-happy-desktop-ui="dev-build-menu-popover"
                     role="menu"
                 >
                     <div
-                        className="happy2-dev-build-menu__eyebrow"
+                        className="happy-dev-build-menu__eyebrow"
                         data-happy-desktop-ui="dev-build-menu-eyebrow"
                     >
                         Development
@@ -93,7 +93,7 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
                     {props.onBlueprintOpen ? (
                         <>
                             <button
-                                className="happy2-dev-build-menu__item"
+                                className="happy-dev-build-menu__item"
                                 data-happy-desktop-ui="dev-build-menu-blueprint"
                                 onClick={() => {
                                     props.onBlueprintOpen?.();
@@ -103,27 +103,27 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
                                 type="button"
                             >
                                 <span
-                                    className="happy2-dev-build-menu__item-icon"
+                                    className="happy-dev-build-menu__item-icon"
                                     data-happy-desktop-ui="dev-build-menu-blueprint-icon"
                                 >
                                     <Icon name="braces" size={16} />
                                 </span>
-                                <span className="happy2-dev-build-menu__item-copy">
+                                <span className="happy-dev-build-menu__item-copy">
                                     <span>Open Blueprint</span>
-                                    <span className="happy2-dev-build-menu__item-detail">
+                                    <span className="happy-dev-build-menu__item-detail">
                                         Component workbench
                                     </span>
                                 </span>
                             </button>
                             <div
                                 aria-hidden="true"
-                                className="happy2-dev-build-menu__separator"
+                                className="happy-dev-build-menu__separator"
                                 data-happy-desktop-ui="dev-build-menu-separator"
                             />
                         </>
                     ) : null}
                     <div
-                        className="happy2-dev-build-menu__branch"
+                        className="happy-dev-build-menu__branch"
                         data-happy-desktop-ui="dev-build-menu-branch"
                         title={name}
                     >
@@ -132,7 +132,7 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
                     </div>
                     {props.onCopyPath ? (
                         <button
-                            className="happy2-dev-build-menu__item"
+                            className="happy-dev-build-menu__item"
                             data-happy-desktop-ui="dev-build-menu-copy-path"
                             onClick={() => {
                                 props.onCopyPath?.();
@@ -142,15 +142,15 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
                             type="button"
                         >
                             <span
-                                className="happy2-dev-build-menu__item-icon"
+                                className="happy-dev-build-menu__item-icon"
                                 data-happy-desktop-ui="dev-build-menu-copy-path-icon"
                             >
                                 <Icon name="copy" size={16} />
                             </span>
-                            <span className="happy2-dev-build-menu__item-copy">
+                            <span className="happy-dev-build-menu__item-copy">
                                 <span>Copy worktree path</span>
                                 {props.path ? (
-                                    <span className="happy2-dev-build-menu__item-detail">
+                                    <span className="happy-dev-build-menu__item-detail">
                                         {props.path}
                                     </span>
                                 ) : null}

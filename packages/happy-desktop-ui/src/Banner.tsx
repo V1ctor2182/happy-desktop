@@ -43,7 +43,7 @@ export function Banner(props: BannerProps) {
     const role = () => (local.tone === "danger" ? "alert" : "status");
     return (
         <div
-            className={["happy2-banner", local.className].filter(Boolean).join(" ")}
+            className={["happy-banner", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="banner"
             data-testid={local["data-testid"]}
             data-tone={local.tone}
@@ -52,27 +52,27 @@ export function Banner(props: BannerProps) {
         >
             {local.icon
                 ? ((name) => (
-                      <span className="happy2-banner__icon" data-happy-desktop-ui="banner-icon">
+                      <span className="happy-banner__icon" data-happy-desktop-ui="banner-icon">
                           <Icon name={name} size={16} />
                       </span>
                   ))(local.icon)
                 : null}
-            <div className="happy2-banner__content" data-happy-desktop-ui="banner-content">
+            <div className="happy-banner__content" data-happy-desktop-ui="banner-content">
                 {local.title ? (
-                    <span className="happy2-banner__title" data-happy-desktop-ui="banner-title">
+                    <span className="happy-banner__title" data-happy-desktop-ui="banner-title">
                         {local.title}
                     </span>
                 ) : null}
-                <span className="happy2-banner__message" data-happy-desktop-ui="banner-message">
+                <span className="happy-banner__message" data-happy-desktop-ui="banner-message">
                     {local.children}
                 </span>
             </div>
             {hasActions() ? (
-                <div className="happy2-banner__actions" data-happy-desktop-ui="banner-actions">
+                <div className="happy-banner__actions" data-happy-desktop-ui="banner-actions">
                     {local.action
                         ? ((action) => (
                               <Button
-                                  className="happy2-banner__action"
+                                  className="happy-banner__action"
                                   onClick={() => action.onClick()}
                                   size="small"
                                   variant="secondary"
@@ -84,7 +84,7 @@ export function Banner(props: BannerProps) {
                     {local.onDismiss ? (
                         <button
                             aria-label="Dismiss"
-                            className="happy2-banner__dismiss"
+                            className="happy-banner__dismiss"
                             data-happy-desktop-ui="banner-dismiss"
                             onClick={() => local.onDismiss?.()}
                             type="button"

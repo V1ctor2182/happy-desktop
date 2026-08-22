@@ -176,14 +176,14 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
     return (
         <section
             aria-label={`Changes in ${props.path}`}
-            className={["happy2-changed-file-diff", props.className].filter(Boolean).join(" ")}
+            className={["happy-changed-file-diff", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="changed-file-diff"
             data-mode={mode}
             data-testid={props["data-testid"]}
             style={props.style}
         >
             <div
-                className="happy2-changed-file-diff__bar"
+                className="happy-changed-file-diff__bar"
                 data-happy-desktop-ui="changed-file-diff-bar"
             >
                 <SegmentedControl
@@ -193,11 +193,11 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                     size="compact"
                     value={mode}
                 />
-                <span className="happy2-changed-file-diff__bar-end">
+                <span className="happy-changed-file-diff__bar-end">
                     {props.loading || props.saving ? (
                         <span
                             aria-live="polite"
-                            className="happy2-changed-file-diff__updating"
+                            className="happy-changed-file-diff__updating"
                             data-happy-desktop-ui="changed-file-diff-updating"
                         >
                             {props.saving ? "Saving…" : "Updating…"}
@@ -223,16 +223,16 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             </div>
 
             <ScrollArea
-                className="happy2-changed-file-diff__body"
+                className="happy-changed-file-diff__body"
                 data-happy-desktop-ui="changed-file-diff-body"
                 placement="overlay"
-                viewportClassName="happy2-changed-file-diff__viewport"
+                viewportClassName="happy-changed-file-diff__viewport"
             >
                 {mode === "preview" ? (
                     props.preview
                 ) : mode === "edit" ? (
                     <CodeEditor
-                        className="happy2-changed-file-diff__editor"
+                        className="happy-changed-file-diff__editor"
                         documentKey={props.documentKey}
                         name={props.path}
                         // The shortcut every editor has. Without it the only way
@@ -248,7 +248,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                     />
                 ) : diff === undefined ? null : (
                     <FileDiff
-                        className="happy2-changed-file-diff__renderer"
+                        className="happy-changed-file-diff__renderer"
                         fileDiff={diff}
                         options={diffOptions}
                     />

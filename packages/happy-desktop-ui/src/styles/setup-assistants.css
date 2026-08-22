@@ -11,13 +11,13 @@
  * column of text. Every dimension is on the 4px grid.
  */
 
-.happy2-setup-assistants,
-.happy2-setup-assistants__item,
-.happy2-setup-assistants__mark {
+.happy-setup-assistants,
+.happy-setup-assistants__item,
+.happy-setup-assistants__mark {
     box-sizing: border-box;
 }
 
-.happy2-setup-assistants {
+.happy-setup-assistants {
     display: flex;
     flex: none;
     align-items: flex-start;
@@ -25,7 +25,7 @@
     width: 100%;
 }
 
-.happy2-setup-assistants__item {
+.happy-setup-assistants__item {
     display: flex;
     /* Equal thirds from an equal basis: the lines below differ in length, and
        columns sized by their content would make "Codex" narrower than "Claude
@@ -38,7 +38,7 @@
     text-align: center;
 }
 
-.happy2-setup-assistants__mark {
+.happy-setup-assistants__mark {
     display: flex;
     flex: none;
     align-items: center;
@@ -47,14 +47,14 @@
     color: var(--text);
 }
 
-.happy2-setup-assistants__name {
+.happy-setup-assistants__name {
     color: var(--text);
     font-size: 14px;
     font-weight: 600;
     line-height: 20px;
 }
 
-.happy2-setup-assistants__detail {
+.happy-setup-assistants__detail {
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 400;
@@ -64,8 +64,8 @@
 
 /* A location rather than a sentence: the monospace face, one size down, and
    free to break at the separators the path already has. */
-.happy2-setup-assistants__detail[data-kind="path"] {
-    font-family: var(--happy2-font-mono);
+.happy-setup-assistants__detail[data-kind="path"] {
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     line-height: 15px;
     overflow-wrap: anywhere;
@@ -78,10 +78,10 @@
  * the only thing here anybody can act on, so its line is the only one at full
  * ink — read as an instruction rather than as a location.
  */
-.happy2-setup-assistants__item[data-status="missing"] {
+.happy-setup-assistants__item[data-status="missing"] {
     opacity: 0.45;
 }
 
-.happy2-setup-assistants__item[data-status="signed-out"] .happy2-setup-assistants__detail {
+.happy-setup-assistants__item[data-status="signed-out"] .happy-setup-assistants__detail {
     color: var(--text);
 }

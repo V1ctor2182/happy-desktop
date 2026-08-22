@@ -1,5 +1,5 @@
-declare const __HAPPY2_DESKTOP_FLAVOR__: "local-web" | "standard";
-declare const __HAPPY2_LOCAL_WEB_ORIGIN__: string | null;
+declare const __HAPPY_DESKTOP_FLAVOR__: "local-web" | "standard";
+declare const __HAPPY_LOCAL_WEB_ORIGIN__: string | null;
 
 export type DesktopFlavor =
     | { readonly kind: "standard" }
@@ -7,10 +7,10 @@ export type DesktopFlavor =
 
 /** Build-time desktop policy; packaged local-web builds cannot redirect it at runtime. */
 export const desktopFlavor: DesktopFlavor =
-    __HAPPY2_DESKTOP_FLAVOR__ === "local-web"
+    __HAPPY_DESKTOP_FLAVOR__ === "local-web"
         ? {
               kind: "local-web",
-              rendererOrigin: requiredLocalWebOrigin(__HAPPY2_LOCAL_WEB_ORIGIN__),
+              rendererOrigin: requiredLocalWebOrigin(__HAPPY_LOCAL_WEB_ORIGIN__),
           }
         : { kind: "standard" };
 

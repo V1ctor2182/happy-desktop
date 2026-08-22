@@ -33,7 +33,7 @@ export function useDisposableLease<Handle extends Disposable>(
     // it is memoized on no dependencies rather than left to render memoization.
     const box = useMemo(() => leaseBoxCreate<Handle>(), []);
     const handle = useSyncExternalStore(box.subscribe, box.get, box.get);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- acquiring and releasing a disposable state handle is an imperative lifetime boundary with no declarative equivalent; cleanup is complete
+    // eslint-disable-next-line happy-react/no-layout-effect -- acquiring and releasing a disposable state handle is an imperative lifetime boundary with no declarative equivalent; cleanup is complete
     useLayoutEffect(() => {
         if (key === undefined) return;
         const leased = acquire();

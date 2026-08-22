@@ -85,7 +85,7 @@ export function AgentRunCard(props: AgentRunCardProps) {
     return (
         <article
             {...rest}
-            className={["happy2-agent-run-card", local.className].filter(Boolean).join(" ")}
+            className={["happy-agent-run-card", local.className].filter(Boolean).join(" ")}
             data-expanded={local.expanded ? "" : undefined}
             data-happy-desktop-ui="agent-run-card"
             data-status={local.run.status}
@@ -96,19 +96,19 @@ export function AgentRunCard(props: AgentRunCardProps) {
                     aria-valuemax={100}
                     aria-valuemin={0}
                     aria-valuenow={clampProgress(local.run.progress)}
-                    className="happy2-agent-run-card__progress"
+                    className="happy-agent-run-card__progress"
                     data-happy-desktop-ui="agent-run-card-progress"
                     role="progressbar"
                 >
                     <div
-                        className="happy2-agent-run-card__progress-fill"
+                        className="happy-agent-run-card__progress-fill"
                         data-happy-desktop-ui="agent-run-card-progress-fill"
                         style={{ width: `${clampProgress(local.run.progress)}%` }}
                     />
                 </div>
             ) : null}
             <header
-                className="happy2-agent-run-card__header"
+                className="happy-agent-run-card__header"
                 data-happy-desktop-ui="agent-run-card-header"
             >
                 <Avatar
@@ -118,17 +118,17 @@ export function AgentRunCard(props: AgentRunCardProps) {
                     type="agent"
                 />
                 <span
-                    className="happy2-agent-run-card__name"
+                    className="happy-agent-run-card__name"
                     data-happy-desktop-ui="agent-run-card-name"
                 >
                     <span
-                        className="happy2-agent-run-card__agent"
+                        className="happy-agent-run-card__agent"
                         data-happy-desktop-ui="agent-run-card-agent"
                     >
                         {local.run.agent}
                     </span>
                     <span
-                        className="happy2-agent-run-card__kind"
+                        className="happy-agent-run-card__kind"
                         data-happy-desktop-ui="agent-run-card-kind"
                     >
                         · run
@@ -137,7 +137,7 @@ export function AgentRunCard(props: AgentRunCardProps) {
                 {local.run.status === "complete" ? (
                     <span
                         aria-hidden="true"
-                        className="happy2-agent-run-card__check"
+                        className="happy-agent-run-card__check"
                         data-happy-desktop-ui="agent-run-card-check"
                     >
                         <Icon name="check-circle" size={16} />
@@ -147,13 +147,13 @@ export function AgentRunCard(props: AgentRunCardProps) {
                 <button
                     aria-expanded={local.expanded ? "true" : "false"}
                     aria-label={local.expanded ? "Collapse run details" : "Expand run details"}
-                    className="happy2-agent-run-card__toggle"
+                    className="happy-agent-run-card__toggle"
                     data-happy-desktop-ui="agent-run-card-toggle"
                     onClick={() => local.onExpandedChange(!local.expanded)}
                     type="button"
                 >
                     <span
-                        className="happy2-agent-run-card__toggle-icon"
+                        className="happy-agent-run-card__toggle-icon"
                         data-happy-desktop-ui="agent-run-card-toggle-icon"
                     >
                         <Icon name="chevron-down" size={16} />
@@ -161,7 +161,7 @@ export function AgentRunCard(props: AgentRunCardProps) {
                 </button>
             </header>
             <h3
-                className="happy2-agent-run-card__title"
+                className="happy-agent-run-card__title"
                 data-happy-desktop-ui="agent-run-card-title"
             >
                 {local.run.title}
@@ -169,7 +169,7 @@ export function AgentRunCard(props: AgentRunCardProps) {
             {local.run.stats
                 ? ((stats) => (
                       <div
-                          className="happy2-agent-run-card__meta"
+                          className="happy-agent-run-card__meta"
                           data-happy-desktop-ui="agent-run-card-meta"
                       >
                           {/* A side that changed nothing is not news; "+0" is
@@ -178,7 +178,7 @@ export function AgentRunCard(props: AgentRunCardProps) {
                           {stats.added ? (
                               <span
                                   aria-hidden="true"
-                                  className="happy2-agent-run-card__added"
+                                  className="happy-agent-run-card__added"
                                   data-happy-desktop-ui="agent-run-card-added"
                               >
                                   +{compactCount(stats.added)}
@@ -187,20 +187,20 @@ export function AgentRunCard(props: AgentRunCardProps) {
                           {stats.removed ? (
                               <span
                                   aria-hidden="true"
-                                  className="happy2-agent-run-card__removed"
+                                  className="happy-agent-run-card__removed"
                                   data-happy-desktop-ui="agent-run-card-removed"
                               >
                                   &minus;{compactCount(stats.removed)}
                               </span>
                           ) : null}
                           {stats.added || stats.removed ? (
-                              <span className="happy2-visually-hidden">
+                              <span className="happy-visually-hidden">
                                   {changeCountLabel(stats.added ?? 0, stats.removed ?? 0)}
                               </span>
                           ) : null}
                           {detail() ? (
                               <span
-                                  className="happy2-agent-run-card__detail"
+                                  className="happy-agent-run-card__detail"
                                   data-happy-desktop-ui="agent-run-card-detail"
                               >
                                   {detail()}
@@ -212,18 +212,18 @@ export function AgentRunCard(props: AgentRunCardProps) {
             {local.run.branch
                 ? ((branch) => (
                       <div
-                          className="happy2-agent-run-card__branch"
+                          className="happy-agent-run-card__branch"
                           data-happy-desktop-ui="agent-run-card-branch"
                       >
                           <span
                               aria-hidden="true"
-                              className="happy2-agent-run-card__branch-icon"
+                              className="happy-agent-run-card__branch-icon"
                               data-happy-desktop-ui="agent-run-card-branch-icon"
                           >
                               <Icon name="branch" size={14} />
                           </span>
                           <span
-                              className="happy2-agent-run-card__branch-name"
+                              className="happy-agent-run-card__branch-name"
                               data-happy-desktop-ui="agent-run-card-branch-name"
                           >
                               {branch}
@@ -233,32 +233,32 @@ export function AgentRunCard(props: AgentRunCardProps) {
                 : null}
             {local.expanded && local.run.steps.length > 0 ? (
                 <ul
-                    className="happy2-agent-run-card__steps"
+                    className="happy-agent-run-card__steps"
                     data-happy-desktop-ui="agent-run-card-steps"
                 >
                     {local.run.steps.map((step, index) => (
                         <li
-                            className="happy2-agent-run-card__step"
+                            className="happy-agent-run-card__step"
                             key={`${step.label}-${index}`}
                             data-happy-desktop-ui="agent-run-card-step"
                             data-status={step.status}
                         >
                             <span
                                 aria-hidden="true"
-                                className="happy2-agent-run-card__step-glyph"
+                                className="happy-agent-run-card__step-glyph"
                                 data-happy-desktop-ui="agent-run-card-step-glyph"
                             >
                                 {step.status === "done" ? (
                                     <Icon name="check-circle" size={16} />
                                 ) : (
                                     <span
-                                        className="happy2-agent-run-card__step-dot"
+                                        className="happy-agent-run-card__step-dot"
                                         data-happy-desktop-ui="agent-run-card-step-dot"
                                     />
                                 )}
                             </span>
                             <span
-                                className="happy2-agent-run-card__step-label"
+                                className="happy-agent-run-card__step-label"
                                 data-happy-desktop-ui="agent-run-card-step-label"
                             >
                                 {step.label}
@@ -269,7 +269,7 @@ export function AgentRunCard(props: AgentRunCardProps) {
             ) : null}
             {local.expanded && local.children ? (
                 <div
-                    className="happy2-agent-run-card__body"
+                    className="happy-agent-run-card__body"
                     data-happy-desktop-ui="agent-run-card-body"
                 >
                     {local.children}
@@ -277,7 +277,7 @@ export function AgentRunCard(props: AgentRunCardProps) {
             ) : null}
             {local.actions?.length ? (
                 <div
-                    className="happy2-agent-run-card__actions"
+                    className="happy-agent-run-card__actions"
                     data-happy-desktop-ui="agent-run-card-actions"
                 >
                     {local.actions.map((action) => (

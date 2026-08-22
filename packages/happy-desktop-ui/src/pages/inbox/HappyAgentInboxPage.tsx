@@ -86,13 +86,13 @@ export function HappyAgentInboxPage(props: HappyAgentInboxPageProps) {
 
     return (
         <div
-            className={["happy2-happy-agent-inbox", props.className].filter(Boolean).join(" ")}
+            className={["happy-agent-inbox", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="happy-agent-inbox"
             data-testid={props["data-testid"]}
             style={props.style}
         >
             <div
-                className="happy2-happy-agent-inbox__header"
+                className="happy-agent-inbox__header"
                 data-happy-desktop-ui="happy-agent-inbox-header"
             >
                 <Toolbar
@@ -102,11 +102,11 @@ export function HappyAgentInboxPage(props: HappyAgentInboxPageProps) {
                 />
             </div>
             <ScrollArea
-                className="happy2-happy-agent-inbox__scroll"
+                className="happy-agent-inbox__scroll"
                 data-happy-desktop-ui="happy-agent-inbox-scroll"
-                viewportClassName="happy2-happy-agent-inbox__scroll-viewport"
+                viewportClassName="happy-agent-inbox__scroll-viewport"
             >
-                <div className="happy2-happy-agent-inbox__content">
+                <div className="happy-agent-inbox__content">
                     {props.error ? (
                         <Banner tone="danger" title="Questions may be out of date">
                             {props.error.message}
@@ -178,19 +178,16 @@ export function HappyAgentInboxPage(props: HappyAgentInboxPageProps) {
                         rather than a centred medallion claiming the panel. */}
                     {pendingCount === 0 && answeredCount > 0 ? (
                         <p
-                            className="happy2-happy-agent-inbox__caught-up"
+                            className="happy-agent-inbox__caught-up"
                             data-happy-desktop-ui="happy-agent-inbox-caught-up"
                         >
-                            <span
-                                aria-hidden="true"
-                                className="happy2-happy-agent-inbox__caught-up-mark"
-                            >
+                            <span aria-hidden="true" className="happy-agent-inbox__caught-up-mark">
                                 <Icon name="check-circle" size={16} />
                             </span>
-                            <strong className="happy2-happy-agent-inbox__caught-up-title">
+                            <strong className="happy-agent-inbox__caught-up-title">
                                 All caught up
                             </strong>
-                            <span className="happy2-happy-agent-inbox__caught-up-detail">
+                            <span className="happy-agent-inbox__caught-up-detail">
                                 Everything this HappyAgent asked has an answer.
                             </span>
                         </p>
@@ -206,7 +203,7 @@ export function HappyAgentInboxPage(props: HappyAgentInboxPageProps) {
 
                     {answeredCount > 0 ? (
                         <div
-                            className="happy2-happy-agent-inbox__records"
+                            className="happy-agent-inbox__records"
                             data-happy-desktop-ui="happy-agent-inbox-records"
                         >
                             {props.answered.map((item) => (
@@ -235,9 +232,9 @@ export function HappyAgentInboxPage(props: HappyAgentInboxPageProps) {
  */
 function SectionLabel(props: { count: number; label: string; testid: string }) {
     return (
-        <h2 className="happy2-happy-agent-inbox__section" data-happy-desktop-ui={props.testid}>
-            <span className="happy2-happy-agent-inbox__section-label">{props.label}</span>
-            <span className="happy2-happy-agent-inbox__section-count">{props.count}</span>
+        <h2 className="happy-agent-inbox__section" data-happy-desktop-ui={props.testid}>
+            <span className="happy-agent-inbox__section-label">{props.label}</span>
+            <span className="happy-agent-inbox__section-count">{props.count}</span>
         </h2>
     );
 }
@@ -264,33 +261,31 @@ function InboxItemHeader(props: InboxItemHeaderProps & { status?: string }) {
     const title = props.item.sessionTitle ?? "Untitled session";
     return (
         <div
-            className="happy2-happy-agent-inbox__item-header"
+            className="happy-agent-inbox__item-header"
             data-happy-desktop-ui="happy-agent-inbox-item-header"
         >
-            <span className="happy2-happy-agent-inbox__item-identity">
+            <span className="happy-agent-inbox__item-identity">
                 {/* The asking session's own mark, the same one its tab wears, so
                     a question read here and the session it came from are the
                     same thing at a glance rather than two titles to match up. */}
                 <AvatarBrutalist
                     aria-label={title}
-                    className="happy2-happy-agent-inbox__item-avatar"
+                    className="happy-agent-inbox__item-avatar"
                     id={props.item.sessionId}
                     size={20}
                 />
-                <span className="happy2-happy-agent-inbox__item-title">{title}</span>
+                <span className="happy-agent-inbox__item-title">{title}</span>
                 {props.location ? (
-                    <span className="happy2-happy-agent-inbox__item-location">
-                        {props.location}
-                    </span>
+                    <span className="happy-agent-inbox__item-location">{props.location}</span>
                 ) : null}
             </span>
-            <span className="happy2-happy-agent-inbox__item-meta">
+            <span className="happy-agent-inbox__item-meta">
                 {/* Spoken as well as shown: the answer leaves on its own after
                     the form is submitted, so someone who is not watching this
                     line still hears that the send is under way. */}
                 {props.status ? (
                     <span
-                        className="happy2-happy-agent-inbox__item-status"
+                        className="happy-agent-inbox__item-status"
                         data-happy-desktop-ui="happy-agent-inbox-item-status"
                         role="status"
                     >
@@ -298,7 +293,7 @@ function InboxItemHeader(props: InboxItemHeaderProps & { status?: string }) {
                     </span>
                 ) : null}
                 {props.time ? (
-                    <span className="happy2-happy-agent-inbox__item-time">{props.time}</span>
+                    <span className="happy-agent-inbox__item-time">{props.time}</span>
                 ) : null}
                 {props.onOpenSession ? (
                     <Button
@@ -334,7 +329,7 @@ function InboxPendingItem(props: InboxPendingItemProps) {
     const onMessageSubmit = props.onMessageSubmit;
     return (
         <article
-            className="happy2-happy-agent-inbox__item"
+            className="happy-agent-inbox__item"
             data-happy-desktop-ui="happy-agent-inbox-item"
             data-item-id={props.item.id}
             data-status="pending"
@@ -375,7 +370,7 @@ function InboxPendingItem(props: InboxPendingItemProps) {
                 say back. */}
             {onMessageChange && onMessageSubmit ? (
                 <Composer
-                    className="happy2-happy-agent-inbox__reply"
+                    className="happy-agent-inbox__reply"
                     data-testid="happy-agent-inbox-reply"
                     onSend={() => onMessageSubmit(props.item.id)}
                     onValueChange={(value) => onMessageChange(props.item.id, value)}
@@ -398,7 +393,7 @@ function InboxPendingItem(props: InboxPendingItemProps) {
 function InboxAnsweredItem(props: InboxItemHeaderProps) {
     return (
         <article
-            className="happy2-happy-agent-inbox__item"
+            className="happy-agent-inbox__item"
             data-happy-desktop-ui="happy-agent-inbox-item"
             data-item-id={props.item.id}
             data-status="answered"
@@ -410,33 +405,30 @@ function InboxAnsweredItem(props: InboxItemHeaderProps) {
                 {...(props.time === undefined ? {} : { time: props.time })}
             />
             <dl
-                className="happy2-happy-agent-inbox__answers"
+                className="happy-agent-inbox__answers"
                 data-happy-desktop-ui="happy-agent-inbox-answers"
             >
                 {props.item.questions.map((question) => {
                     const chosen = props.item.answers?.[question.id] ?? [];
                     return (
-                        <div className="happy2-happy-agent-inbox__answer" key={question.id}>
-                            <dt className="happy2-happy-agent-inbox__answer-question">
+                        <div className="happy-agent-inbox__answer" key={question.id}>
+                            <dt className="happy-agent-inbox__answer-question">
                                 {/* The mark hangs in the column the session's
                                     own avatar occupies, so the question and the
                                     decision under it keep the title's left edge
                                     whether or not anything was recorded. */}
-                                <span
-                                    aria-hidden="true"
-                                    className="happy2-happy-agent-inbox__answer-mark"
-                                >
+                                <span aria-hidden="true" className="happy-agent-inbox__answer-mark">
                                     {chosen.length > 0 ? <Icon name="check" size={12} /> : null}
                                 </span>
-                                <span className="happy2-happy-agent-inbox__answer-text">
+                                <span className="happy-agent-inbox__answer-text">
                                     {question.question}
                                 </span>
                             </dt>
-                            <dd className="happy2-happy-agent-inbox__answer-value">
+                            <dd className="happy-agent-inbox__answer-value">
                                 {chosen.length > 0 ? (
                                     chosen.join(", ")
                                 ) : (
-                                    <span className="happy2-happy-agent-inbox__answer-empty">
+                                    <span className="happy-agent-inbox__answer-empty">
                                         No answer recorded
                                     </span>
                                 )}

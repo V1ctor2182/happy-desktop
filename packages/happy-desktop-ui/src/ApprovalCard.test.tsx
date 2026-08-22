@@ -184,7 +184,7 @@ it("holds pending ApprovalCard geometry, typography, and interactions", async ()
     );
     expect(title.bounds().y - card.bounds().y).toBe(49); /* header 26 + margin 10 */
     const titleMetrics = title.textMetrics();
-    expect(titleMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(titleMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(titleMetrics.font.size).toBe(15);
     expect(titleMetrics.font.weight).toBe("700");
     expect(titleMetrics.font.lineHeight).toBe(20);
@@ -228,7 +228,7 @@ it("holds pending ApprovalCard geometry, typography, and interactions", async ()
         "padding-top": "6px",
         "white-space": "nowrap",
     });
-    expect(action.textMetrics().font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(action.textMetrics().font.family).toBe("happy Mono, ui-monospace, monospace");
     /* Mono path string: left-aligned, slash/ascender-heavy ink — vertical
      * centroid only, held to the 32px well center. */
     const actionText = view.$(
@@ -322,7 +322,7 @@ it("holds pending ApprovalCard geometry, typography, and interactions", async ()
         '[data-testid="ac-expanded"] [data-happy-desktop-ui="approval-card-detail-label"]',
     );
     const impactLabelMetrics = impactLabel.textMetrics();
-    expect(impactLabelMetrics.font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(impactLabelMetrics.font.family).toBe("happy Mono, ui-monospace, monospace");
     expect(impactLabelMetrics.font.size).toBe(10);
     expect(impactLabelMetrics.font.letterSpacing).toBeCloseTo(0.8, 3);
     expect(impactLabel.computedStyles(["color", "text-transform"])).toEqual({
@@ -447,7 +447,7 @@ it("holds resolved ApprovalCard banners, state lines, and optical centering", as
         );
         const bannerMetrics = bannerLabel.textMetrics();
         expect(bannerMetrics.text).toBe(id === "ac-approved" ? "Approved" : "Denied");
-        expect(bannerMetrics.font.family).toBe("happy2 Mono, ui-monospace, monospace");
+        expect(bannerMetrics.font.family).toBe("happy Mono, ui-monospace, monospace");
         expect(bannerMetrics.font.size).toBe(11);
         expect(bannerMetrics.font.weight).toBe("700");
         expect(layoutTop(bannerLabel, banner)).toBe(0); /* 31px line box */

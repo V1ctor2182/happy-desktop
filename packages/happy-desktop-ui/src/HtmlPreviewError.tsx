@@ -37,7 +37,7 @@ export function HtmlPreviewError(props: HtmlPreviewErrorProps) {
     const page = htmlPreviewFailureDescribe(local.failure);
     return (
         <div
-            className={["happy2-html-preview__error", local.className].filter(Boolean).join(" ")}
+            className={["happy-html-preview__error", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="html-preview-error"
             data-testid={local["data-testid"]}
             role="alert"
@@ -54,7 +54,7 @@ export function HtmlPreviewError(props: HtmlPreviewErrorProps) {
             />
             {page.detail ? (
                 <p
-                    className="happy2-html-preview__error-detail"
+                    className="happy-html-preview__error-detail"
                     data-happy-desktop-ui="html-preview-error-detail"
                 >
                     {page.detail}

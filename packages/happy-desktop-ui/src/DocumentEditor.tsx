@@ -20,7 +20,7 @@ export const documentFragmentName = "document";
 /** Shared type name of the comment-thread map inside a collaborative document Y.Doc. */
 export const documentThreadsName = "threads";
 
-const remotePresenceOrigin = "happy2-remote-presence";
+const remotePresenceOrigin = "happy-remote-presence";
 
 /**
  * Pause after a change before the Markdown projection is derived again. Shorter
@@ -145,7 +145,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     const presenceEmit = useEffectEvent((payload: DocumentEditorPresencePayload) =>
         props.onPresence?.(payload),
     );
-    // eslint-disable-next-line happy2-react/no-layout-effect -- Yjs Awareness is an imperative collaborative-editor resource whose update listener and instance must be attached after commit and completely destroyed with this document
+    // eslint-disable-next-line happy-react/no-layout-effect -- Yjs Awareness is an imperative collaborative-editor resource whose update listener and instance must be attached after commit and completely destroyed with this document
     useLayoutEffect(() => {
         const onUpdate = (
             changes: { added: number[]; updated: number[]; removed: number[] },
@@ -178,7 +178,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
     const markdownEmit = useEffectEvent((markdown: string) => props.onMarkdown?.(markdown));
     const markdownWanted = props.onMarkdown !== undefined;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the editor's change stream is an imperative resource that must be subscribed after commit and unsubscribed with this document
+    // eslint-disable-next-line happy-react/no-layout-effect -- the editor's change stream is an imperative resource that must be subscribed after commit and unsubscribed with this document
     useLayoutEffect(() => {
         if (!markdownWanted) return;
         let timer: ReturnType<typeof setTimeout> | undefined;
@@ -204,7 +204,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     }, [editor, markdownWanted]);
 
     const appliedRef = useRef(new Map<string, DocumentEditorPresence>());
-    // eslint-disable-next-line happy2-react/no-layout-effect -- remote presence payloads must be applied to the live Yjs Awareness instance after the matching document render commits
+    // eslint-disable-next-line happy-react/no-layout-effect -- remote presence payloads must be applied to the live Yjs Awareness instance after the matching document render commits
     useLayoutEffect(() => {
         const applied = appliedRef.current;
         const present = new Set<string>();
@@ -228,7 +228,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     }, [awareness, props.presence]);
 
     return (
-        <div className="happy2-document-editor" data-happy2-ui="document-editor">
+        <div className="happy-document-editor" data-happy-desktop-ui="document-editor">
             <BlockNoteView
                 data-testid={props["data-testid"]}
                 editable={props.editable ?? true}

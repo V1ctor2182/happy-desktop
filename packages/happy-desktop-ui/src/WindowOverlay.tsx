@@ -14,7 +14,7 @@ export const WindowOverlayHostContext = createContext<HTMLElement | null>(null);
  * of the product opened it.
  *
  * A modal is written where it belongs in the product — the conversation owns
- * the viewer for its own pictures — but `--happy2-z-overlay` only means "above
+ * the viewer for its own pictures — but `--happy-z-overlay` only means "above
  * the app" in the stacking context the window itself is drawn in. The chat sits
  * inside a `DeferredPane` layer, which is positioned and given a z-index of its
  * own, so an overlay left in place is sealed inside that layer: the sidebar's

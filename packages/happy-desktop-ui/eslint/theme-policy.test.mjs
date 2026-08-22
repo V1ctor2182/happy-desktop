@@ -6,9 +6,9 @@ import { Linter } from "eslint";
 import themePolicy from "../../../eslint/theme-policy.mjs";
 
 const policyRules = {
-    "happy2-theme/no-direct-color": "error",
-    "happy2-theme/theme-color-variables-only": "error",
-    "happy2-theme/theme-color-variable-references-only": "error",
+    "happy-theme/no-direct-color": "error",
+    "happy-theme/theme-color-variables-only": "error",
+    "happy-theme/theme-color-variable-references-only": "error",
 };
 
 function lintCss(code, filename = "fixture.css") {
@@ -19,7 +19,7 @@ function lintCss(code, filename = "fixture.css") {
             {
                 files: ["**/*.css"],
                 language: "css/css",
-                plugins: { css, "happy2-theme": themePolicy },
+                plugins: { css, "happy-theme": themePolicy },
                 rules: policyRules,
             },
         ],
@@ -37,14 +37,14 @@ test("accepts theme token references outside the theme", () => {
 test("rejects direct colors outside the theme", () => {
     assert.deepEqual(
         lintCss(".card { color: #fff; background: rgb(1 2 3); }").map(({ ruleId }) => ruleId),
-        ["happy2-theme/no-direct-color", "happy2-theme/no-direct-color"],
+        ["happy-theme/no-direct-color", "happy-theme/no-direct-color"],
     );
 });
 
 test("rejects color custom properties outside the theme", () => {
     assert.deepEqual(
         lintCss(":root { --card-color: #fff; }").map(({ ruleId }) => ruleId),
-        ["happy2-theme/theme-color-variables-only"],
+        ["happy-theme/theme-color-variables-only"],
     );
 });
 
@@ -54,7 +54,7 @@ test("rejects color references to custom properties missing from the theme", () 
             ruleId,
             messageId,
         ]),
-        [["happy2-theme/theme-color-variable-references-only", "missingThemeVariable"]],
+        [["happy-theme/theme-color-variable-references-only", "missingThemeVariable"]],
     );
 });
 

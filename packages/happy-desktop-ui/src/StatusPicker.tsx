@@ -60,30 +60,30 @@ export function StatusPicker(props: StatusPickerProps) {
         (local.statusEmoji !== undefined && local.statusEmoji !== "");
     return (
         <div
-            className={["happy2-status-picker", local.className].filter(Boolean).join(" ")}
+            className={["happy-status-picker", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="status-picker"
             data-testid={local["data-testid"]}
             style={local.style}
         >
             <div
-                className="happy2-status-picker__section"
+                className="happy-status-picker__section"
                 data-happy-desktop-ui="status-picker-availability"
             >
                 <span
-                    className="happy2-status-picker__section-label"
+                    className="happy-status-picker__section-label"
                     data-happy-desktop-ui="status-picker-availability-label"
                 >
                     Availability
                 </span>
                 <div
-                    className="happy2-status-picker__segmented"
+                    className="happy-status-picker__segmented"
                     data-happy-desktop-ui="status-picker-segmented"
                     role="group"
-                    style={{ "--happy2-sp-index": String(selectedIndex()) } as CSSProperties}
+                    style={{ "--happy-sp-index": String(selectedIndex()) } as CSSProperties}
                 >
                     <span
                         aria-hidden="true"
-                        className="happy2-status-picker__pill"
+                        className="happy-status-picker__pill"
                         data-happy-desktop-ui="status-picker-pill"
                     />
                     {AVAILABILITY.map((option) => {
@@ -92,7 +92,7 @@ export function StatusPicker(props: StatusPickerProps) {
                             <button
                                 aria-pressed={active()}
                                 key={option.value}
-                                className="happy2-status-picker__segment"
+                                className="happy-status-picker__segment"
                                 data-active={active() ? "" : undefined}
                                 data-availability={option.value}
                                 data-happy-desktop-ui="status-picker-segment"
@@ -101,12 +101,12 @@ export function StatusPicker(props: StatusPickerProps) {
                             >
                                 <span
                                     aria-hidden="true"
-                                    className="happy2-status-picker__dot"
+                                    className="happy-status-picker__dot"
                                     data-availability={option.value}
                                     data-happy-desktop-ui="status-picker-dot"
                                 />
                                 <span
-                                    className="happy2-status-picker__segment-label"
+                                    className="happy-status-picker__segment-label"
                                     data-happy-desktop-ui="status-picker-segment-label"
                                 >
                                     {option.label}
@@ -118,22 +118,22 @@ export function StatusPicker(props: StatusPickerProps) {
             </div>
 
             <div
-                className="happy2-status-picker__section"
+                className="happy-status-picker__section"
                 data-happy-desktop-ui="status-picker-status"
             >
                 <span
-                    className="happy2-status-picker__section-label"
+                    className="happy-status-picker__section-label"
                     data-happy-desktop-ui="status-picker-status-label"
                 >
                     Status
                 </span>
                 <div
-                    className="happy2-status-picker__field"
+                    className="happy-status-picker__field"
                     data-happy-desktop-ui="status-picker-field"
                 >
                     <span
                         aria-hidden="true"
-                        className="happy2-status-picker__emoji"
+                        className="happy-status-picker__emoji"
                         data-happy-desktop-ui="status-picker-emoji"
                     >
                         {local.statusEmoji ? (
@@ -143,7 +143,7 @@ export function StatusPicker(props: StatusPickerProps) {
                         )}
                     </span>
                     <input
-                        className="happy2-status-picker__input"
+                        className="happy-status-picker__input"
                         data-happy-desktop-ui="status-picker-input"
                         onInput={(event) => local.onStatusTextChange?.(event.currentTarget.value)}
                         placeholder="What's your status?"
@@ -153,7 +153,7 @@ export function StatusPicker(props: StatusPickerProps) {
                     {hasStatus() && local.onClearStatus ? (
                         <Button
                             aria-label="Clear status"
-                            className="happy2-status-picker__clear"
+                            className="happy-status-picker__clear"
                             icon="close"
                             iconOnly
                             onClick={() => local.onClearStatus?.()}
@@ -165,17 +165,17 @@ export function StatusPicker(props: StatusPickerProps) {
                 {local.expiresLabel
                     ? ((label) => (
                           <div
-                              className="happy2-status-picker__meta"
+                              className="happy-status-picker__meta"
                               data-happy-desktop-ui="status-picker-meta"
                           >
                               <span
                                   aria-hidden="true"
-                                  className="happy2-status-picker__meta-icon"
+                                  className="happy-status-picker__meta-icon"
                                   data-happy-desktop-ui="status-picker-meta-icon"
                               >
                                   <Icon name="clock" size={14} />
                               </span>
-                              <span className="happy2-status-picker__meta-label">{label}</span>
+                              <span className="happy-status-picker__meta-label">{label}</span>
                           </div>
                       ))(local.expiresLabel)
                     : null}

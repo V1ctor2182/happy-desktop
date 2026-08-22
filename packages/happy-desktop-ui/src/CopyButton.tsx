@@ -43,7 +43,7 @@ export function CopyButton(props: CopyButtonProps) {
     return (
         <button
             aria-label={copied ? "Copied" : props.label}
-            className={["happy2-copy-button", props.className].filter(Boolean).join(" ")}
+            className={["happy-copy-button", props.className].filter(Boolean).join(" ")}
             data-copied={copied ? "" : undefined}
             data-happy-desktop-ui={props["data-happy-desktop-ui"] ?? "copy-button"}
             data-testid={props["data-testid"]}

@@ -8,12 +8,12 @@
  * the gutter. Header and reading are one uninterrupted surface.
  */
 
-.happy2-composer-panel,
-.happy2-composer-panel * {
+.happy-composer-panel,
+.happy-composer-panel * {
     box-sizing: border-box;
 }
 
-.happy2-composer-panel {
+.happy-composer-panel {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -23,14 +23,14 @@
        720x480 Electron minimum, where 320px would be most of the window. */
     max-height: min(320px, 45vh);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface-high);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-composer-panel__header {
+.happy-composer-panel__header {
     display: flex;
     flex: none;
     align-items: center;
@@ -42,7 +42,7 @@
     border-bottom: 0;
 }
 
-.happy2-composer-panel__heading {
+.happy-composer-panel__heading {
     display: flex;
     flex: 1 1 auto;
     align-items: baseline;
@@ -53,18 +53,18 @@
 /* The close control sits 7px inside the card's top/right curve (1px border +
    6px header inset), so its 3px corner remains parallel to the card's 10px
    corner instead of drawing a second, unrelated curve. */
-.happy2-composer-panel__header > .happy2-button {
+.happy-composer-panel__header > .happy-button {
     border-radius: 3px;
 }
 
-.happy2-composer-panel__title {
+.happy-composer-panel__title {
     flex: none;
     font-size: 13px;
     font-weight: 700;
     line-height: 18px;
 }
 
-.happy2-composer-panel__status {
+.happy-composer-panel__status {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -75,19 +75,19 @@
     white-space: nowrap;
 }
 
-.happy2-composer-panel__body {
+.happy-composer-panel__body {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
 }
 
-.happy2-composer-panel__body-viewport {
+.happy-composer-panel__body-viewport {
     display: flex;
     flex-direction: column;
     overflow: auto;
 }
 
-.happy2-composer-panel__content {
+.happy-composer-panel__content {
     display: flex;
     flex: none;
     flex-direction: column;

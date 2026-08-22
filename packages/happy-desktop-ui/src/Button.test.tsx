@@ -168,8 +168,8 @@ it("holds Button dimensions, typography, and optical label centering for every s
 
     const fontFamily =
         server.browser === "webkit"
-            ? "happy2 Figtree, system-ui, sans-serif"
-            : '"happy2 Figtree", system-ui, sans-serif';
+            ? "happy Figtree, system-ui, sans-serif"
+            : '"happy Figtree", system-ui, sans-serif';
 
     for (const size of sizes) {
         for (const variant of variants) {
@@ -220,12 +220,12 @@ it("holds Button dimensions, typography, and optical label centering for every s
             });
 
             const label = view.$(`[data-testid="${id}"] [data-happy-desktop-ui="button-label"]`);
-            expect(label.computedStyle("--happy2-button-label-y"), id).toBe(
+            expect(label.computedStyle("--happy-button-label-y"), id).toBe(
                 labelOffsets[engine()][size],
             );
             expect(label.textMetrics(), id).toMatchObject({
                 font: {
-                    family: "happy2 Figtree, system-ui, sans-serif",
+                    family: "happy Figtree, system-ui, sans-serif",
                     letterSpacing: spec.fontSize / 100,
                     lineHeight: spec.lineHeight,
                     size: spec.fontSize,

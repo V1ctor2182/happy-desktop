@@ -12,7 +12,7 @@
  * It must not collapse to `display: none` or `visibility: hidden`, which take
  * the text out of the accessibility tree along with the layout.
  */
-.happy2-visually-hidden {
+.happy-visually-hidden {
     position: absolute;
     width: 1px;
     height: 1px;

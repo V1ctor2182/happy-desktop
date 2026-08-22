@@ -8,12 +8,12 @@
  * carries a control.
  */
 
-.happy2-sidebar-spaces,
-.happy2-sidebar-spaces * {
+.happy-sidebar-spaces,
+.happy-sidebar-spaces * {
     box-sizing: border-box;
 }
 
-.happy2-sidebar-spaces {
+.happy-sidebar-spaces {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -21,7 +21,7 @@
     min-height: 0;
     height: 100%;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     -webkit-user-select: none;
     user-select: none;
@@ -42,7 +42,7 @@
  * It spans the whole region the column allocates and carries no spacing of its
  * own; a space's own padding belongs inside that space.
  */
-.happy2-sidebar-spaces__viewport {
+.happy-sidebar-spaces__viewport {
     display: flex;
     flex: 1 1 auto;
     width: 100%;
@@ -58,11 +58,11 @@
 
 /* The strip below already says which space is showing, so the scrollbar would
    only be a second, less legible answer sitting on top of a space's content. */
-.happy2-sidebar-spaces__viewport::-webkit-scrollbar {
+.happy-sidebar-spaces__viewport::-webkit-scrollbar {
     display: none;
 }
 
-.happy2-sidebar-spaces__pane {
+.happy-sidebar-spaces__pane {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -77,7 +77,7 @@
 
 /* ---- Switcher --------------------------------------------------------- */
 
-.happy2-sidebar-spaces__bar {
+.happy-sidebar-spaces__bar {
     display: flex;
     flex: none;
     align-items: center;
@@ -91,7 +91,7 @@
  * The two edge lanes. They are equal and both always present, so the marks sit
  * on the column's centre whether one lane, both, or neither carries a control.
  */
-.happy2-sidebar-spaces__lane {
+.happy-sidebar-spaces__lane {
     display: flex;
     flex: 1 1 0;
     align-items: center;
@@ -99,18 +99,18 @@
     min-width: 0;
 }
 
-.happy2-sidebar-spaces__lane--trailing {
+.happy-sidebar-spaces__lane--trailing {
     justify-content: flex-end;
 }
 
-.happy2-sidebar-spaces__dots {
+.happy-sidebar-spaces__dots {
     display: flex;
     flex: none;
     align-items: center;
     gap: 2px;
 }
 
-.happy2-sidebar-spaces__dot {
+.happy-sidebar-spaces__dot {
     display: flex;
     flex: none;
     align-items: center;
@@ -120,7 +120,7 @@
     margin: 0;
     padding: 0;
     border: none;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text-secondary);
     opacity: 0.5;
@@ -132,17 +132,17 @@
         opacity 120ms ease;
 }
 
-.happy2-sidebar-spaces__dot:hover {
+.happy-sidebar-spaces__dot:hover {
     background: var(--surface-ripple);
     opacity: 1;
 }
 
-.happy2-sidebar-spaces__dot:focus-visible {
+.happy-sidebar-spaces__dot:focus-visible {
     outline: 2px solid var(--surface-selected);
     outline-offset: -2px;
 }
 
-.happy2-sidebar-spaces__dot[data-active] {
+.happy-sidebar-spaces__dot[data-active] {
     background: var(--surface-selected);
     color: var(--text);
     opacity: 1;
@@ -150,7 +150,7 @@
 
 /* A square the size of the glyph lane, so a wide or tall emoji never resizes
    its control or shifts the marks beside it. */
-.happy2-sidebar-spaces__emoji {
+.happy-sidebar-spaces__emoji {
     display: flex;
     flex: none;
     align-items: center;
@@ -162,7 +162,7 @@
     line-height: 16px;
 }
 
-.happy2-sidebar-spaces__add {
+.happy-sidebar-spaces__add {
     display: flex;
     flex: none;
     align-items: center;
@@ -172,7 +172,7 @@
     margin: 0;
     padding: 0;
     border: none;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text-secondary);
     appearance: none;
@@ -182,12 +182,12 @@
         color 120ms ease;
 }
 
-.happy2-sidebar-spaces__add:hover {
+.happy-sidebar-spaces__add:hover {
     background: var(--surface-ripple);
     color: var(--text);
 }
 
-.happy2-sidebar-spaces__add:focus-visible {
+.happy-sidebar-spaces__add:focus-visible {
     outline: 2px solid var(--surface-selected);
     outline-offset: -2px;
 }

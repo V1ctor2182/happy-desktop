@@ -71,7 +71,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
                     size="sm"
                     tone="brand"
                 />
-                <span className="happy2-sidebar__profile-name">{name}</span>
+                <span className="happy-sidebar__profile-name">{name}</span>
             </>
         );
     return (
@@ -91,7 +91,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
                 props.onProfileOpen ? (
                     <button
                         aria-label="Open profile"
-                        className="happy2-sidebar__profile"
+                        className="happy-sidebar__profile"
                         data-happy-desktop-ui="sidebar-profile"
                         onClick={props.onProfileOpen}
                         type="button"
@@ -100,7 +100,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
                     </button>
                 ) : (
                     <span
-                        className="happy2-sidebar__profile happy2-sidebar__profile--static"
+                        className="happy-sidebar__profile happy-sidebar__profile--static"
                         data-happy-desktop-ui="sidebar-profile"
                     >
                         {identity}
@@ -113,7 +113,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
             ) : null}
             {props.devMenu !== undefined ? (
                 <span
-                    className="happy2-sidebar__dev-build"
+                    className="happy-sidebar__dev-build"
                     data-happy-desktop-ui="sidebar-dev-build"
                 >
                     {props.devMenu}

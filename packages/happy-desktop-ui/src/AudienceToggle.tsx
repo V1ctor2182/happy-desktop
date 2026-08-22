@@ -21,7 +21,7 @@ export function AudienceToggle(props: AudienceToggleProps) {
                 props.value === "people" ? "Switch to talk to agents" : "Switch to talk to people"
             }
             aria-pressed={props.value === "people"}
-            className={["happy2-audience-toggle", props.className].filter(Boolean).join(" ")}
+            className={["happy-audience-toggle", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="audience-toggle"
             data-testid={props["data-testid"]}
             data-value={props.value}

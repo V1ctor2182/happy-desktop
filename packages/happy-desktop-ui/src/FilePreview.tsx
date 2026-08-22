@@ -246,37 +246,37 @@ export function FilePreview(props: FilePreviewProps) {
     const meta = [dimensions, local.size].filter(Boolean).join(" · ");
     return (
         <section
-            className={["happy2-file-preview", local.className].filter(Boolean).join(" ")}
+            className={["happy-file-preview", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-preview"
             data-kind={kind}
             data-testid={local["data-testid"]}
             style={local.style}
         >
             <header
-                className="happy2-file-preview__header"
+                className="happy-file-preview__header"
                 data-happy-desktop-ui="file-preview-header"
             >
                 <span
-                    className="happy2-file-family-glyph happy2-file-preview__glyph"
+                    className="happy-file-family-glyph happy-file-preview__glyph"
                     data-family={family}
                     data-happy-desktop-ui="file-preview-glyph"
                 >
                     <FileTreeFamilyIcon family={family} size={16} />
                 </span>
-                <FilePathLabel className="happy2-file-preview__path" path={local.path} />
+                <FilePathLabel className="happy-file-preview__path" path={local.path} />
                 {meta ? (
                     <span
-                        className="happy2-file-preview__meta"
+                        className="happy-file-preview__meta"
                         data-happy-desktop-ui="file-preview-meta"
                     >
                         {meta}
                     </span>
                 ) : null}
-                <span className="happy2-file-preview__actions">
+                <span className="happy-file-preview__actions">
                     {local.updating ? (
                         <span
                             aria-live="polite"
-                            className="happy2-file-preview__updating"
+                            className="happy-file-preview__updating"
                             data-happy-desktop-ui="file-preview-updating"
                         >
                             <Spinner size={12} tone="muted" />
@@ -306,7 +306,7 @@ export function FilePreview(props: FilePreviewProps) {
                     ) : null}
                 </span>
             </header>
-            <div className="happy2-file-preview__body" data-happy-desktop-ui="file-preview-body">
+            <div className="happy-file-preview__body" data-happy-desktop-ui="file-preview-body">
                 <FilePreviewBody
                     content={local.content}
                     cacheKey={local.cacheKey}
@@ -361,7 +361,7 @@ function FilePreviewBody(props: {
                             >
                                 <Ionicon name="open-outline" size={14} />
                             </Button>
-                            <span className="happy2-image-viewer__divider" />
+                            <span className="happy-image-viewer__divider" />
                         </>
                     ) : undefined
                 }
@@ -396,25 +396,25 @@ function FilePreviewBody(props: {
     if (props.content.type === "loading")
         return (
             <div
-                className="happy2-file-preview__notice"
+                className="happy-file-preview__notice"
                 data-happy-desktop-ui="file-preview-loading"
             >
                 <Spinner size={16} />
-                <span className="happy2-file-preview__notice-title">Opening {props.name}…</span>
+                <span className="happy-file-preview__notice-title">Opening {props.name}…</span>
             </div>
         );
     if (props.content.type === "error")
         return (
             <div
-                className="happy2-file-preview__notice"
+                className="happy-file-preview__notice"
                 data-happy-desktop-ui="file-preview-error"
                 data-tone="danger"
             >
                 <Icon name="close" size={20} />
-                <span className="happy2-file-preview__notice-title">
+                <span className="happy-file-preview__notice-title">
                     {props.name} could not be opened
                 </span>
-                <span className="happy2-file-preview__notice-detail">{props.content.message}</span>
+                <span className="happy-file-preview__notice-detail">{props.content.message}</span>
             </div>
         );
     if (props.content.type === "url" && URL_KINDS.has(props.kind)) {
@@ -422,12 +422,12 @@ function FilePreviewBody(props: {
         if (props.kind === "audio")
             return (
                 <div
-                    className="happy2-file-preview__stage"
+                    className="happy-file-preview__stage"
                     data-happy-desktop-ui="file-preview-stage"
                 >
                     {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a workspace file has no caption track to offer */}
                     <audio
-                        className="happy2-file-preview__audio"
+                        className="happy-file-preview__audio"
                         controls
                         data-happy-desktop-ui="file-preview-audio"
                         src={url}
@@ -436,7 +436,7 @@ function FilePreviewBody(props: {
             );
         return (
             <iframe
-                className="happy2-file-preview__document"
+                className="happy-file-preview__document"
                 data-happy-desktop-ui="file-preview-document"
                 src={url}
                 title={props.name}
@@ -461,13 +461,13 @@ function FilePreviewBody(props: {
         return (
             <ScrollArea
                 axes="both"
-                className="happy2-file-preview__source"
+                className="happy-file-preview__source"
                 data-happy-desktop-ui="file-preview-code"
                 placement="overlay"
-                viewportClassName="happy2-file-preview__source-viewport"
+                viewportClassName="happy-file-preview__source-viewport"
             >
                 <CodeBlock
-                    className="happy2-file-preview__source-renderer"
+                    className="happy-file-preview__source-renderer"
                     {...(props.cacheKey ? { cacheKey: props.cacheKey } : {})}
                     lineNumbers
                     name={props.name}
@@ -477,12 +477,12 @@ function FilePreviewBody(props: {
         );
     return (
         <div
-            className="happy2-file-preview__notice"
+            className="happy-file-preview__notice"
             data-happy-desktop-ui="file-preview-unavailable"
         >
             <Icon name={KIND_ICON[props.kind]} size={20} />
-            <span className="happy2-file-preview__notice-title">{props.name} has no preview</span>
-            <span className="happy2-file-preview__notice-detail">
+            <span className="happy-file-preview__notice-title">{props.name} has no preview</span>
+            <span className="happy-file-preview__notice-detail">
                 This file is not a format Happy can show.
             </span>
         </div>

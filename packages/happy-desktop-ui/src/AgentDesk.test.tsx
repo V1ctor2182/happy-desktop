@@ -15,8 +15,8 @@ const engine = () => server.browser as Engine;
 
 const uiFamily = () =>
     engine() === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 /*
  * Optical tolerance, measured at 2x with alpha-weighted visible-pixel
@@ -139,7 +139,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     });
 
     // Spark icon: secondary ink, 16px glyph box that paints in the 47px lane.
-    const spark = view.$(".happy2-agent-desk__spark");
+    const spark = view.$(".happy-agent-desk__spark");
     expect(spark.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(spark.bounds()).toMatchObject({ width: 16, height: 16 });
     expect((await spark.visibleMetrics()).pixelCount, "spark ink").toBeGreaterThan(0);
@@ -152,7 +152,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     expect(titleMetrics.text).toBe("Agent desk");
     expect(titleMetrics.bounds.x).toBe(38);
     expect(titleMetrics.font).toEqual({
-        family: "happy2 Figtree, system-ui, sans-serif",
+        family: "happy Figtree, system-ui, sans-serif",
         letterSpacing: 0,
         lineHeight: 16,
         size: 13,
@@ -163,7 +163,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
 
     // Count badge: accent pill flush to the right padding edge, pill ink
     // centered in the header lane.
-    const count = view.$(".happy2-agent-desk__count");
+    const count = view.$(".happy-agent-desk__count");
     expect(count.element.textContent).toBe("2 RUNNING");
     expect(count.height()).toBe(18);
     // Badge width can be fractional (its own letter-spacing compensation).
@@ -172,7 +172,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         "background-color": "rgb(234, 234, 234)",
         color: "rgb(43, 172, 204)",
     });
-    const badgeInk = await ink(view, ".happy2-agent-desk__count", 23.5);
+    const badgeInk = await ink(view, ".happy-agent-desk__count", 23.5);
     expect(Math.abs(badgeInk.dy)).toBeLessThanOrEqual(TEXT_TOLERANCE);
 
     // Body: scroll container below the header.
@@ -206,8 +206,8 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     });
 
     // Running tiles: raised surface, radius 10, padding 12.
-    const tileOne = view.$(".happy2-agent-desk__run:nth-of-type(1)");
-    const tileTwo = view.$(".happy2-agent-desk__run:nth-of-type(2)");
+    const tileOne = view.$(".happy-agent-desk__run:nth-of-type(1)");
+    const tileTwo = view.$(".happy-agent-desk__run:nth-of-type(2)");
     expect(tileOne.bounds()).toEqual({ x: 14, y: 60, width: 312, height: 79 });
     expect(tileTwo.bounds()).toEqual({ x: 14, y: 147, width: 312, height: 55 });
     expect(tileOne.computedStyles(["background-color", "border-radius", "padding-top"])).toEqual({
@@ -218,27 +218,27 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
 
     // Tile head: xs agent avatar, 13/700 title, mono eta at the right edge.
     expect(
-        view.$('.happy2-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="avatar"]').bounds(),
+        view.$('.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="avatar"]').bounds(),
     ).toEqual({ x: 26, y: 72, width: 20, height: 20 });
     const runTitle = view.$(
-        '.happy2-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-title"]',
+        '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-title"]',
     );
     expect(runTitle.textMetrics().text).toBe("Device farm run");
     expect(runTitle.textMetrics().font).toEqual({
-        family: "happy2 Figtree, system-ui, sans-serif",
+        family: "happy Figtree, system-ui, sans-serif",
         letterSpacing: 0,
         lineHeight: 16,
         size: 13,
         weight: "700",
     });
     const eta = view.$(
-        '.happy2-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-eta"]',
+        '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-eta"]',
     );
     const etaBounds = eta.bounds();
     expect(etaBounds.x + etaBounds.width).toBe(314);
     expect(eta.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(eta.textMetrics().font).toEqual({
-        family: "happy2 Mono, ui-monospace, monospace",
+        family: "happy Mono, ui-monospace, monospace",
         letterSpacing: 0,
         lineHeight: 14,
         size: 11,
@@ -246,7 +246,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     });
 
     // Title and eta ink centroids sit on the 20px head lane center.
-    const headSelector = '.happy2-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="%"]';
+    const headSelector = '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="%"]';
     const runTitleInk = await ink(view, headSelector.replace("%", "agent-desk-run-title"), 10);
     expect(Math.abs(runTitleInk.dy)).toBeLessThanOrEqual(TEXT_TOLERANCE);
     const etaInk = await ink(view, headSelector.replace("%", "agent-desk-run-eta"), 10);
@@ -272,7 +272,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
 
     // Progress: 3px inset track with a brand-gradient fill at progress%.
     const track = view.$(
-        '.happy2-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-track"]',
+        '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-track"]',
     );
     expect(track.bounds()).toEqual({ x: 26, y: 124, width: 288, height: 3 });
     expect(track.computedStyles(["background-color", "border-radius", "overflow-y"])).toEqual({
@@ -282,7 +282,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     });
     expect(track.element.getAttribute("aria-valuenow")).toBe("62");
     const fill = view.$(
-        '.happy2-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-fill"]',
+        '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-fill"]',
     );
     expect(fill.height()).toBe(3);
     expect(Math.abs(fill.width() - 288 * 0.62)).toBeLessThanOrEqual(0.1);
@@ -349,8 +349,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         "border-top-width": "1px",
         cursor: "pointer",
     });
-    const clockSelector =
-        '[data-happy-desktop-ui="agent-desk-queued"] .happy2-agent-desk__row-icon';
+    const clockSelector = '[data-happy-desktop-ui="agent-desk-queued"] .happy-agent-desk__row-icon';
     expect(view.$(clockSelector).computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect((await view.$(clockSelector).visibleMetrics()).pixelCount, "clock ink").toBeGreaterThan(
         0,
@@ -360,7 +359,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     );
     expect(queuedTitle.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(queuedTitle.textMetrics().font).toEqual({
-        family: "happy2 Figtree, system-ui, sans-serif",
+        family: "happy Figtree, system-ui, sans-serif",
         letterSpacing: 0,
         lineHeight: 16,
         size: 12,
@@ -377,7 +376,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     );
     expect(queuedMeta.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(queuedMeta.textMetrics().font).toEqual({
-        family: "happy2 Mono, ui-monospace, monospace",
+        family: "happy Mono, ui-monospace, monospace",
         letterSpacing: 0,
         lineHeight: 14,
         size: 11,
@@ -400,7 +399,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         "border-radius": "8px",
         "border-top-width": "0px",
     });
-    const checkSelector = '[data-happy-desktop-ui="agent-desk-done"] .happy2-agent-desk__row-icon';
+    const checkSelector = '[data-happy-desktop-ui="agent-desk-done"] .happy-agent-desk__row-icon';
     expect(view.$(checkSelector).computedStyle("color")).toBe("rgb(52, 199, 89)");
     expect((await view.$(checkSelector).visibleMetrics()).pixelCount, "check ink").toBeGreaterThan(
         0,
@@ -494,14 +493,14 @@ async function expectDeskCentered(view: View, testId: string) {
     const p = `[data-testid="${testId}"]`;
 
     expect(
-        (await view.$(`${p} .happy2-agent-desk__spark`).visibleMetrics()).pixelCount,
+        (await view.$(`${p} .happy-agent-desk__spark`).visibleMetrics()).pixelCount,
         `${testId} spark ink`,
     ).toBeGreaterThan(0);
     const headerTitle = await ink(view, `${p} [data-happy-desktop-ui="agent-desk-title"]`, 23.5);
     expect(Math.abs(headerTitle.dy), `${testId} header title dy`).toBeLessThanOrEqual(
         TEXT_TOLERANCE,
     );
-    const badge = await ink(view, `${p} .happy2-agent-desk__count`, 23.5);
+    const badge = await ink(view, `${p} .happy-agent-desk__count`, 23.5);
     expect(Math.abs(badge.dy), `${testId} badge dy`).toBeLessThanOrEqual(TEXT_TOLERANCE);
 
     const runTitle = await ink(view, `${p} [data-happy-desktop-ui="agent-desk-run-title"]`, 10);
@@ -512,7 +511,7 @@ async function expectDeskCentered(view: View, testId: string) {
     expect(
         (
             await view
-                .$(`${p} [data-happy-desktop-ui="agent-desk-queued"] .happy2-agent-desk__row-icon`)
+                .$(`${p} [data-happy-desktop-ui="agent-desk-queued"] .happy-agent-desk__row-icon`)
                 .visibleMetrics()
         ).pixelCount,
         `${testId} clock ink`,
@@ -535,7 +534,7 @@ async function expectDeskCentered(view: View, testId: string) {
     expect(
         (
             await view
-                .$(`${p} [data-happy-desktop-ui="agent-desk-done"] .happy2-agent-desk__row-icon`)
+                .$(`${p} [data-happy-desktop-ui="agent-desk-done"] .happy-agent-desk__row-icon`)
                 .visibleMetrics()
         ).pixelCount,
         `${testId} check ink`,
@@ -632,7 +631,7 @@ it("keeps ink optically centered at 280 and 400 widths and in a scrolling desk",
     expect(body.element.scrollHeight).toBeGreaterThan(body.element.clientHeight);
     const s = `[data-testid="short"]`;
     expect(
-        (await view.$(`${s} .happy2-agent-desk__spark`).visibleMetrics()).pixelCount,
+        (await view.$(`${s} .happy-agent-desk__spark`).visibleMetrics()).pixelCount,
         "short spark ink",
     ).toBeGreaterThan(0);
     const runTitle = await ink(view, `${s} [data-happy-desktop-ui="agent-desk-run-title"]`, 10);
@@ -647,7 +646,7 @@ it("keeps ink optically centered at 280 and 400 widths and in a scrolling desk",
     expect(
         (
             await view
-                .$(`${s} [data-happy-desktop-ui="agent-desk-done"] .happy2-agent-desk__row-icon`)
+                .$(`${s} [data-happy-desktop-ui="agent-desk-done"] .happy-agent-desk__row-icon`)
                 .visibleMetrics()
         ).pixelCount,
         "short check ink",
@@ -700,13 +699,13 @@ it("handles custom icons, 1-char initials, and truncating labels", async () => {
 
     // Custom queued icon (branch) replaces the clock and paints in its slot.
     const branch = view.$(
-        '[data-happy-desktop-ui="agent-desk-queued"] .happy2-agent-desk__row-icon',
+        '[data-happy-desktop-ui="agent-desk-queued"] .happy-agent-desk__row-icon',
     );
     expect(branch.element.getAttribute("data-name")).toBe("branch");
     expect((await branch.visibleMetrics()).pixelCount, "branch ink").toBeGreaterThan(0);
 
     // Custom done icon (doc) replaces the check but keeps the success color.
-    const doc = view.$('[data-happy-desktop-ui="agent-desk-done"] .happy2-agent-desk__row-icon');
+    const doc = view.$('[data-happy-desktop-ui="agent-desk-done"] .happy-agent-desk__row-icon');
     expect(doc.element.getAttribute("data-name")).toBe("doc");
     expect(doc.computedStyle("color")).toBe("rgb(52, 199, 89)");
     expect((await doc.visibleMetrics()).pixelCount, "doc ink").toBeGreaterThan(0);
@@ -829,9 +828,9 @@ it("stays fluid, clamps progress, and scrolls overflowing content", async () => 
         view.$('[data-testid="desk-narrow"] [data-happy-desktop-ui="agent-desk-title"]').element
             .textContent,
     ).toBe("Codex desk");
-    expect(
-        view.$('[data-testid="desk-narrow"] .happy2-agent-desk__count').element.textContent,
-    ).toBe("PAUSED");
+    expect(view.$('[data-testid="desk-narrow"] .happy-agent-desk__count').element.textContent).toBe(
+        "PAUSED",
+    );
     const narrowTile = view.$(
         '[data-testid="desk-narrow"] [data-happy-desktop-ui="agent-desk-run"]',
     );
@@ -858,12 +857,12 @@ it("stays fluid, clamps progress, and scrolls overflowing content", async () => 
     const fillWidths = [348, 0, 87, 215.76];
     for (const [index, expected] of fillWidths.entries()) {
         const track = view.$(
-            `[data-testid="desk-wide"] .happy2-agent-desk__run:nth-of-type(${index + 1}) [data-happy-desktop-ui="agent-desk-run-track"]`,
+            `[data-testid="desk-wide"] .happy-agent-desk__run:nth-of-type(${index + 1}) [data-happy-desktop-ui="agent-desk-run-track"]`,
         );
         expect(track.bounds().width, `track ${index}`).toBe(348);
         expect(track.height(), `track ${index}`).toBe(3);
         const fill = view.$(
-            `[data-testid="desk-wide"] .happy2-agent-desk__run:nth-of-type(${index + 1}) [data-happy-desktop-ui="agent-desk-run-fill"]`,
+            `[data-testid="desk-wide"] .happy-agent-desk__run:nth-of-type(${index + 1}) [data-happy-desktop-ui="agent-desk-run-fill"]`,
         );
         expect(Math.abs(fill.width() - expected), `fill ${index}`).toBeLessThanOrEqual(0.1);
         if (expected > 0) {

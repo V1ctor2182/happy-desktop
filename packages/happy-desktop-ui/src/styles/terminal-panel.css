@@ -1,4 +1,4 @@
-.happy2-chat-conversation {
+.happy-chat-conversation {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -11,13 +11,13 @@
  * wrapper caps its width and centers, so message rows, dividers, and the intro
  * share one centered column while the scrollbar runs edge to edge.
  */
-.happy2-chat-conversation .happy2-message-list__content {
+.happy-chat-conversation .happy-message-list__content {
     width: 100%;
-    max-width: var(--happy2-chat-measure);
+    max-width: var(--happy-chat-measure);
     margin-inline: auto;
 }
 
-.happy2-terminal-panel {
+.happy-terminal-panel {
     box-sizing: border-box;
     display: flex;
     flex: none;
@@ -36,7 +36,7 @@
 }
 
 /* A collapsed (dead, frameless) panel is exactly its notice line. */
-.happy2-terminal-panel[data-collapsed] {
+.happy-terminal-panel[data-collapsed] {
     min-height: 0;
     height: auto;
 }
@@ -47,14 +47,14 @@
  * from crowding out the conversation above it, and here there is nothing above.
  * The top border goes with them — the column's own edge already divides it.
  */
-.happy2-terminal-panel[data-fill] {
+.happy-terminal-panel[data-fill] {
     flex: 1 1 0%;
     min-height: 0;
     max-height: none;
     border-top: none;
 }
 
-.happy2-terminal-panel__resize {
+.happy-terminal-panel__resize {
     flex: none;
     height: 5px;
     cursor: ns-resize;
@@ -66,7 +66,7 @@
    filling with a colour. Drawn in secondary ink because this handle has no
    hairline of its own at rest, so the hover state is the only thing a person
    has to see. */
-.happy2-terminal-panel__resize:hover {
+.happy-terminal-panel__resize:hover {
     box-shadow: inset 0 2px 0 0 var(--text-secondary);
 }
 
@@ -77,7 +77,7 @@
  * degraded — the one thing the grid cannot say for itself — carrying the
  * Reconnect control with it.
  */
-.happy2-terminal-panel__notice {
+.happy-terminal-panel__notice {
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -88,7 +88,7 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-terminal-panel__notice-text {
+.happy-terminal-panel__notice-text {
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
@@ -104,7 +104,7 @@
  * background has to land on the background its program was told about. In the
  * ordinary case the two tokens resolve to the same colour and nothing changes.
  */
-.happy2-terminal-panel__screen {
+.happy-terminal-panel__screen {
     position: relative;
     box-sizing: border-box;
     flex: 1 1 0%;
@@ -112,12 +112,12 @@
     width: 100%;
     background: var(--surface);
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 14px;
     line-height: 18px;
 }
 
-.happy2-terminal-panel__screen-viewport {
+.happy-terminal-panel__screen-viewport {
     position: relative;
     overflow: auto;
     padding: 0;
@@ -125,7 +125,7 @@
     font: inherit;
 }
 
-.happy2-terminal-panel__rows {
+.happy-terminal-panel__rows {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -133,16 +133,16 @@
     padding: 8px 12px;
 }
 
-.happy2-terminal-panel__row {
+.happy-terminal-panel__row {
     display: flex;
     flex: none;
-    height: var(--happy2-terminal-cell-height, 18px);
+    height: var(--happy-terminal-cell-height, 18px);
     white-space: pre;
 }
 
 /* Each cell reserves exactly its declared column width so sparse and wide cells
  * land on the right columns; glyph ink may exceed the box without shifting flow. */
-.happy2-terminal-panel__cell {
+.happy-terminal-panel__cell {
     flex: none;
     white-space: pre;
 }
@@ -156,12 +156,12 @@
  * every selected column identically. Ink is left alone so ANSI colours survive
  * being selected, as they do in a native terminal.
  */
-.happy2-terminal-panel__screen::selection,
-.happy2-terminal-panel__screen ::selection {
+.happy-terminal-panel__screen::selection,
+.happy-terminal-panel__screen ::selection {
     background-color: var(--terminal-selection);
 }
 
-.happy2-terminal-panel__cell[data-terminal-link] {
+.happy-terminal-panel__cell[data-terminal-link] {
     cursor: pointer;
     text-decoration-line: underline;
     text-decoration-color: var(--text-link);
@@ -174,16 +174,16 @@
  * remove live ANSI emphasis without opacity/filter tricks, so selection, copy,
  * history, and links stay fully usable in either appearance.
  */
-.happy2-terminal-panel[data-happy-agent-availability] .happy2-terminal-panel__rows {
+.happy-terminal-panel[data-happy-agent-availability] .happy-terminal-panel__rows {
     color: var(--text-secondary);
 }
 
-.happy2-terminal-panel[data-happy-agent-availability] .happy2-terminal-panel__cell {
+.happy-terminal-panel[data-happy-agent-availability] .happy-terminal-panel__cell {
     color: inherit !important;
     background: var(--surface) !important;
 }
 
-.happy2-terminal-panel[data-happy-agent-availability] .happy2-terminal-panel__cursor {
+.happy-terminal-panel[data-happy-agent-availability] .happy-terminal-panel__cursor {
     background: transparent;
     box-shadow: inset 0 0 0 1px var(--text-secondary);
     opacity: 1;
@@ -200,14 +200,14 @@
  * is sized in exact cell geometry; anything that occupies layout would push the
  * caret off the column it is marking.
  */
-.happy2-terminal-panel__cursor {
+.happy-terminal-panel__cursor {
     position: absolute;
     box-shadow: inset 0 0 0 1px var(--text);
     opacity: 0.55;
     pointer-events: none;
 }
 
-.happy2-terminal-panel__screen[data-focused] .happy2-terminal-panel__cursor {
+.happy-terminal-panel__screen[data-focused] .happy-terminal-panel__cursor {
     background: var(--text);
     box-shadow: none;
     opacity: 1;
@@ -220,12 +220,12 @@
  * moment it appears.
  */
 @media (prefers-reduced-motion: no-preference) {
-    .happy2-terminal-panel__screen[data-focused] .happy2-terminal-panel__cursor {
-        animation: happy2-terminal-cursor-blink 1s linear infinite;
+    .happy-terminal-panel__screen[data-focused] .happy-terminal-panel__cursor {
+        animation: happy-terminal-cursor-blink 1s linear infinite;
     }
 }
 
-@keyframes happy2-terminal-cursor-blink {
+@keyframes happy-terminal-cursor-blink {
     0%,
     49.99% {
         opacity: 1;
@@ -236,7 +236,7 @@
     }
 }
 
-.happy2-terminal-panel__input {
+.happy-terminal-panel__input {
     position: absolute;
     top: 0;
     left: -9999px;

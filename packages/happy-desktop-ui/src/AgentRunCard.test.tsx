@@ -184,7 +184,7 @@ it("holds the review hero card geometry, mint treatment, and interactions at 680
     expect(agentMetrics.text).toBe("Codex");
     expect(agentMetrics.bounds.x).toBe(65);
     expect(agentMetrics.font).toEqual({
-        family: "happy2 Figtree, system-ui, sans-serif",
+        family: "happy Figtree, system-ui, sans-serif",
         letterSpacing: 0,
         lineHeight: 18,
         size: 13,
@@ -234,7 +234,7 @@ it("holds the review hero card geometry, mint treatment, and interactions at 680
      * (agent-run-card.css) shifts the client rect without moving layout. */
     expect(Math.abs(titleMetrics.bounds.y - 65)).toBeLessThanOrEqual(0.5);
     expect(titleMetrics.font).toEqual({
-        family: "happy2 Figtree, system-ui, sans-serif",
+        family: "happy Figtree, system-ui, sans-serif",
         letterSpacing: -0.15,
         lineHeight: 20,
         size: 15,
@@ -260,7 +260,7 @@ it("holds the review hero card geometry, mint treatment, and interactions at 680
     expect(removed.computedStyle("color")).toBe("rgb(220, 53, 69)");
     const detailMetrics = detail.textMetrics();
     expect(detailMetrics.font).toEqual({
-        family: "happy2 Mono, ui-monospace, monospace",
+        family: "happy Mono, ui-monospace, monospace",
         letterSpacing: 0,
         lineHeight: 16,
         size: 12,

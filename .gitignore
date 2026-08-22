@@ -2,7 +2,7 @@ node_modules
 # pnpm falls back to a store inside the repo when the home one is unwritable.
 .pnpm-store
 .context
-.happy2
+.happy
 # throwaway HOME for scripts/dev-desktop-sandbox.mjs
 .happy-sandbox
 .worktrees/

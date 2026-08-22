@@ -7,21 +7,21 @@
  * surrounding stacking contexts.
  */
 
-.happy2-fade {
+.happy-fade {
     position: relative;
     width: 100%;
     height: 100%;
     isolation: isolate;
 }
 
-.happy2-fade__layer {
+.happy-fade__layer {
     position: absolute;
     inset: 0;
     box-sizing: border-box;
-    animation: happy2-fade-in var(--happy2-fade-duration, 360ms) ease both;
+    animation: happy-fade-in var(--happy-fade-duration, 360ms) ease both;
 }
 
-@keyframes happy2-fade-in {
+@keyframes happy-fade-in {
     from {
         opacity: 0;
     }
@@ -32,7 +32,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy2-fade__layer {
+    .happy-fade__layer {
         animation-duration: 1ms;
     }
 }

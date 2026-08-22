@@ -36,7 +36,7 @@ pnpm --dir packages/happy-desktop-gym gym:electron run --root .context/happy-des
 `build:profile:optimized` enables the checked-in React DevTools profiling bridge
 with the production-shaped renderer. The `gym:electron:run` script rebuilds this
 optimized flavor, then launches the built `dist/main.js` through host Electron
-with `HAPPY2_DESKTOP_PROFILE_MODE=optimized`; it never launches `pnpm dev`,
+with `HAPPY_DESKTOP_PROFILE_MODE=optimized`; it never launches `pnpm dev`,
 `dev:electron`, or a Vite server. Runs invoke the app's native profiler bridge
 at each workload boundary and record the returned app-owned artifact manifest,
 alongside workload timing/context and Playwright action traces under the owned

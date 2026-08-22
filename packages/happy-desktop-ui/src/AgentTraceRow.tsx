@@ -114,7 +114,7 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
                       ? linkLabel()
                       : "Agent activity")
             }
-            className={["happy2-agent-trace-row", local.className].filter(Boolean).join(" ")}
+            className={["happy-agent-trace-row", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="agent-trace-row"
             data-status={local.status}
             data-variant={meta() ? "meta" : "row"}
@@ -125,14 +125,14 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
         >
             <span
                 aria-hidden="true"
-                className="happy2-agent-trace-row__dot"
+                className="happy-agent-trace-row__dot"
                 data-happy-desktop-ui="agent-trace-row-dot"
             />
             {!meta() && running() && local.kind !== undefined
                 ? ((kind) => (
                       <span
                           aria-hidden="true"
-                          className="happy2-agent-trace-row__icon"
+                          className="happy-agent-trace-row__icon"
                           data-happy-desktop-ui="agent-trace-row-icon"
                       >
                           <Icon name={agentTraceKindIcon(kind)} size={14} />
@@ -140,7 +140,7 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
                   ))(local.kind)
                 : null}
             <span
-                className="happy2-agent-trace-row__title"
+                className="happy-agent-trace-row__title"
                 data-happy-desktop-ui="agent-trace-row-title"
             >
                 <span data-happy-desktop-ui="agent-trace-row-title-label">
@@ -151,11 +151,11 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
                 <>
                     <span
                         aria-hidden="true"
-                        className="happy2-agent-trace-row__meta-separator"
+                        className="happy-agent-trace-row__meta-separator"
                         data-happy-desktop-ui="agent-trace-row-meta-separator"
                     />
                     <span
-                        className="happy2-agent-trace-row__meta-stats"
+                        className="happy-agent-trace-row__meta-stats"
                         data-happy-desktop-ui="agent-trace-row-meta-stats"
                     >
                         <span data-happy-desktop-ui="agent-trace-row-meta-stats-label">
@@ -166,7 +166,7 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
             ) : null}
             {!meta() && running() && local.detail !== undefined ? (
                 <span
-                    className="happy2-agent-trace-row__detail"
+                    className="happy-agent-trace-row__detail"
                     data-happy-desktop-ui="agent-trace-row-detail"
                 >
                     {local.detail}
@@ -174,7 +174,7 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
             ) : null}
             {!meta() && !running() ? (
                 <span
-                    className="happy2-agent-trace-row__count"
+                    className="happy-agent-trace-row__count"
                     data-happy-desktop-ui="agent-trace-row-count"
                 >
                     {`${local.entryCount} steps`}

@@ -8,29 +8,29 @@
  * name + size footer. Colours are tokens only.
  */
 
-.happy2-media-gallery,
-.happy2-media-gallery * {
+.happy-media-gallery,
+.happy-media-gallery * {
     box-sizing: border-box;
 }
 
-.happy2-media-gallery {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- true 2-D media grid: thumbnails tile into a 4-column, multi-row matrix with full-row spans (__empty uses grid-column 1 / -1) */
+.happy-media-gallery {
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- true 2-D media grid: thumbnails tile into a 4-column, multi-row matrix with full-row spans (__empty uses grid-column 1 / -1) */
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-media-gallery__empty {
+.happy-media-gallery__empty {
     grid-column: 1 / -1;
     min-width: 0;
 }
 
 /* ---- Tile ------------------------------------------------------------ */
 
-.happy2-media-gallery__tile {
+.happy-media-gallery__tile {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -46,15 +46,15 @@
     appearance: none;
 }
 
-.happy2-media-gallery__tile:focus-visible {
+.happy-media-gallery__tile:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
 }
 
 /* ---- Thumbnail ------------------------------------------------------- */
 
-.happy2-media-gallery__thumb {
+.happy-media-gallery__thumb {
     position: relative;
     display: flex;
     align-items: center;
@@ -67,10 +67,10 @@
      * from the aspect box and land the 100%-height thumbnail on a half pixel.
      * The shadow keeps the thumb a clean integer 4:3 border box. */
     box-shadow: inset 0 0 0 1px var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
 }
 
-.happy2-media-gallery__image {
+.happy-media-gallery__image {
     display: block;
     width: 100%;
     height: 100%;
@@ -79,7 +79,7 @@
 
 /* File-glyph medallion: reuses the 48px chip / 20px Icon proportions the rest
  * of the system uses, so the composed glyph stays optically centered. */
-.happy2-media-gallery__glyph {
+.happy-media-gallery__glyph {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -87,20 +87,20 @@
     height: 48px;
     background: var(--groupped-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text-secondary);
 }
 
 /* ---- Overlays -------------------------------------------------------- */
 
-.happy2-media-gallery__kind {
+.happy-media-gallery__kind {
     position: absolute;
     top: 8px;
     left: 8px;
     z-index: 1;
 }
 
-.happy2-media-gallery__duration {
+.happy-media-gallery__duration {
     position: absolute;
     right: 8px;
     bottom: 8px;
@@ -111,7 +111,7 @@
     background: var(--header-background);
     border-radius: 2px;
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 600;
     /* Height equals line-height so the single mono line is vertically centred
@@ -123,14 +123,14 @@
 
 /* ---- Footer: name + size -------------------------------------------- */
 
-.happy2-media-gallery__footer {
+.happy-media-gallery__footer {
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
 }
 
-.happy2-media-gallery__name {
+.happy-media-gallery__name {
     display: block;
     min-width: 0;
     overflow: hidden;
@@ -142,7 +142,7 @@
     text-overflow: ellipsis;
 }
 
-.happy2-media-gallery__size {
+.happy-media-gallery__size {
     display: block;
     min-width: 0;
     overflow: hidden;

@@ -65,7 +65,7 @@ function highlight(text: string, query?: string): ReactNode {
             parts.push(<Fragment key={`text-${cursor}`}>{text.slice(cursor, from)}</Fragment>);
         parts.push(
             <mark
-                className="happy2-search-results__mark"
+                className="happy-search-results__mark"
                 data-happy-desktop-ui="search-results-mark"
                 key={`match-${from}`}
             >
@@ -84,7 +84,7 @@ function renderSegment(segment: MessageSegment, query?: string): ReactNode {
         case "mention":
             return (
                 <span
-                    className="happy2-search-results__mention"
+                    className="happy-search-results__mention"
                     data-happy-desktop-ui="search-results-mention"
                 >
                     @{segment.text}
@@ -93,7 +93,7 @@ function renderSegment(segment: MessageSegment, query?: string): ReactNode {
         case "code":
             return (
                 <code
-                    className="happy2-search-results__code"
+                    className="happy-search-results__code"
                     data-happy-desktop-ui="search-results-code"
                 >
                     {segment.text}
@@ -102,7 +102,7 @@ function renderSegment(segment: MessageSegment, query?: string): ReactNode {
         case "link":
             return (
                 <span
-                    className="happy2-search-results__link"
+                    className="happy-search-results__link"
                     data-happy-desktop-ui="search-results-link"
                 >
                     {segment.text}
@@ -125,7 +125,7 @@ function SearchResultRow(props: {
     const item = () => props.item;
     return (
         <button
-            className="happy2-search-results__row"
+            className="happy-search-results__row"
             data-item-id={item().id}
             data-happy-desktop-ui="search-results-row"
             data-type={props.type}
@@ -133,7 +133,7 @@ function SearchResultRow(props: {
             type="button"
         >
             <span
-                className="happy2-search-results__row-leading"
+                className="happy-search-results__row-leading"
                 data-happy-desktop-ui="search-results-row-leading"
             >
                 {item().avatar ? (
@@ -147,7 +147,7 @@ function SearchResultRow(props: {
                     ))(item().avatar!)
                 ) : (
                     <span
-                        className="happy2-search-results__row-glyph"
+                        className="happy-search-results__row-glyph"
                         data-happy-desktop-ui="search-results-row-glyph"
                     >
                         <Icon name={item().icon ?? defaultIcons[props.type]} size={16} />
@@ -155,18 +155,18 @@ function SearchResultRow(props: {
                 )}
             </span>
             <span
-                className="happy2-search-results__row-body"
+                className="happy-search-results__row-body"
                 data-happy-desktop-ui="search-results-row-body"
             >
                 <span
-                    className="happy2-search-results__row-title"
+                    className="happy-search-results__row-title"
                     data-happy-desktop-ui="search-results-row-title"
                 >
                     {renderTitle(item().title, props.query)}
                 </span>
                 {item().meta ? (
                     <span
-                        className="happy2-search-results__row-meta"
+                        className="happy-search-results__row-meta"
                         data-happy-desktop-ui="search-results-row-meta"
                     >
                         {item().meta}
@@ -187,7 +187,7 @@ export function SearchResults(props: SearchResultsProps) {
     const total = () => props.groups.reduce((sum, group) => sum + group.results.length, 0);
     return (
         <div
-            className={["happy2-search-results", props.className].filter(Boolean).join(" ")}
+            className={["happy-search-results", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="search-results"
             data-testid={props["data-testid"]}
             data-variant={props.variant ?? "card"}
@@ -197,23 +197,23 @@ export function SearchResults(props: SearchResultsProps) {
                 props.groups.map((group) =>
                     group.results.length > 0 ? (
                         <section
-                            className="happy2-search-results__group"
+                            className="happy-search-results__group"
                             key={group.type}
                             data-happy-desktop-ui="search-results-group"
                             data-type={group.type}
                         >
                             <div
-                                className="happy2-search-results__group-head"
+                                className="happy-search-results__group-head"
                                 data-happy-desktop-ui="search-results-group-head"
                             >
                                 <span
-                                    className="happy2-search-results__group-label"
+                                    className="happy-search-results__group-label"
                                     data-happy-desktop-ui="search-results-group-label"
                                 >
                                     {groupLabels[group.type]}
                                 </span>
                                 <span
-                                    className="happy2-search-results__group-count"
+                                    className="happy-search-results__group-count"
                                     data-happy-desktop-ui="search-results-group-count"
                                 >
                                     {group.results.length}
@@ -233,18 +233,18 @@ export function SearchResults(props: SearchResultsProps) {
                 )
             ) : (
                 <div
-                    className="happy2-search-results__empty"
+                    className="happy-search-results__empty"
                     data-happy-desktop-ui="search-results-empty"
                 >
                     <span
                         aria-hidden="true"
-                        className="happy2-search-results__empty-icon"
+                        className="happy-search-results__empty-icon"
                         data-happy-desktop-ui="search-results-empty-icon"
                     >
                         <Icon name="search" size={20} />
                     </span>
                     <span
-                        className="happy2-search-results__empty-label"
+                        className="happy-search-results__empty-label"
                         data-happy-desktop-ui="search-results-empty-label"
                     >
                         {props.emptyLabel ?? "No results"}

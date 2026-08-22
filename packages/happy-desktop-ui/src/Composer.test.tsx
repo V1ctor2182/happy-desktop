@@ -37,8 +37,8 @@ const growsDraft = () => CSS.supports("field-sizing", "content");
 const draftHeight = (lines: number) => (growsDraft() ? 22 * lines : 22);
 const uiFont = () =>
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 /* The Gecko textarea correction (translateY(-0.5px)) moves the painted box. */
 const textareaY = () => (server.browser === "firefox" ? 40.5 : 41);
 const mentions: Mentionable[] = [
@@ -330,7 +330,7 @@ it("holds Composer geometry, colors, and typography", async () => {
         '[data-testid="composer-default"] [data-happy-desktop-ui="composer-textarea"]',
     );
     const textareaScroll = view.$(
-        '[data-testid="composer-default"] .happy2-composer__textarea-scroll',
+        '[data-testid="composer-default"] .happy-composer__textarea-scroll',
     );
     expect(textareaScroll.bounds()).toEqual({ x: 40, y: 41, width: 520, height: 22 });
     expect(textarea.bounds()).toEqual({ x: 40, y: textareaY(), width: 512, height: 22 });
@@ -406,7 +406,7 @@ it("holds Composer geometry, colors, and typography", async () => {
     expect(audience.element.textContent).toBe("Talk to people");
     // Send: primary 32px circle, inset 16px from the composer's bottom-right
     // edge, disabled while empty.
-    const send = view.$('[data-testid="composer-default"] .happy2-composer__send');
+    const send = view.$('[data-testid="composer-default"] .happy-composer__send');
     expect(send.bounds()).toEqual({ x: 532, y: 87, width: 32, height: 32 });
     expect(
         send.computedStyles([
@@ -451,14 +451,14 @@ it("holds Composer geometry, colors, and typography", async () => {
     });
     // Send glyph: the upward arrow's 16px icon box sits centered in the 32px
     // circle. The directional glyph's own optical metrics belong to Icon.
-    const sendFilled = view.$('[data-testid="composer-filled"] .happy2-composer__send');
+    const sendFilled = view.$('[data-testid="composer-filled"] .happy-composer__send');
     expect((sendFilled.element as HTMLButtonElement).disabled).toBe(false);
     expect(sendFilled.computedStyle("opacity")).toBe("1");
     expect(sendFilled.computedStyles(["background-color", "color"])).toEqual({
         "background-color": "rgb(192, 192, 192)",
         color: "rgb(0, 0, 0)",
     });
-    const sendSelector = '[data-testid="composer-filled"] .happy2-composer__send';
+    const sendSelector = '[data-testid="composer-filled"] .happy-composer__send';
     expect(
         view.$(`${sendSelector} [data-happy-desktop-ui="icon"]`).element.getAttribute("data-name"),
     ).toBe("arrow-up");
@@ -522,7 +522,7 @@ it("holds Composer geometry, colors, and typography", async () => {
     expect((await disabledArea.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     expect(
         (
-            view.$('[data-testid="composer-disabled"] .happy2-composer__send')
+            view.$('[data-testid="composer-disabled"] .happy-composer__send')
                 .element as HTMLButtonElement
         ).disabled,
     ).toBe(true);
@@ -664,7 +664,7 @@ it.skipIf(!growsDraft())(
         const scrollbarHost = textarea.closest<HTMLElement>("[data-scrollbar-host]")!;
         await expect.poll(() => scrollbarHost.hasAttribute("data-scrollbar-overflow-y")).toBe(true);
         expect(
-            getComputedStyle(scrollbarHost.querySelector<HTMLElement>(".happy2-scrollbar__thumb")!)
+            getComputedStyle(scrollbarHost.querySelector<HTMLElement>(".happy-scrollbar__thumb")!)
                 .display,
         ).not.toBe("none");
         while (textarea.value.length > beforeCap.value.length) {
@@ -722,7 +722,7 @@ it("focuses the draft from every unoccupied composer surface", async () => {
 it("keeps the ready send control light in an explicit dark theme", async () => {
     const view = createRenderer().render(
         () => (
-            <div className="happy2-theme-dark">
+            <div className="happy-theme-dark">
                 <Composer
                     data-testid="composer-dark-ready"
                     onSend={() => {}}
@@ -736,7 +736,7 @@ it("keeps the ready send control light in an explicit dark theme", async () => {
     await view.ready();
     expect(
         view
-            .$('[data-testid="composer-dark-ready"] .happy2-composer__send')
+            .$('[data-testid="composer-dark-ready"] .happy-composer__send')
             .computedStyles(["background-color", "color", "opacity"]),
     ).toEqual({
         "background-color": "rgb(192, 192, 192)",
@@ -1021,7 +1021,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     const chipText = view.$('[data-testid="chips"] [data-happy-desktop-ui="context-chips-text"]');
     expect(chipText.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             lineHeight: 22,
             size: 12,
             weight: "600",
@@ -1048,7 +1048,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         "font-weight": "700",
         "text-transform": "uppercase",
     });
-    expect(chipsLabel.computedStyle("font-family")).toContain("happy2 Mono");
+    expect(chipsLabel.computedStyle("font-family")).toContain("happy Mono");
     // Chip text lanes: word ink is asymmetric (ascender-topped, dot-bottomed
     // label; slash-descended detail), so vertical centroids are pinned to the
     // engine-consensus placements (+0.5px label, +0.9px detail below chip
@@ -1204,7 +1204,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     const name = view.$('[data-testid="picker"] [data-happy-desktop-ui="mention-picker-name"]');
     expect(name.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             lineHeight: 16,
             size: 13,
             weight: "500",
@@ -1403,7 +1403,7 @@ it("handles typing, sending, and mention picking", async () => {
             ?.getAttribute("data-mention-id");
     // Typing updates the value and enables send; Enter sends without newline.
     const typing = textareaOf("composer-typing");
-    const typingSend = view.$('[data-testid="composer-typing"] .happy2-composer__send')
+    const typingSend = view.$('[data-testid="composer-typing"] .happy-composer__send')
         .element as HTMLButtonElement;
     await userEvent.click(typing);
     await userEvent.keyboard("Ship it");

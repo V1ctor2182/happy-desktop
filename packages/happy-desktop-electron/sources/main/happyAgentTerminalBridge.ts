@@ -12,7 +12,7 @@ import {
  * addresses either stack.
  */
 export const HAPPY_AGENT_TERMINAL_PROTOCOL = "happy2-terminal.v1";
-export const HAPPY_AGENT_TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy2-capability.";
+export const HAPPY_AGENT_TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy-capability.";
 
 /** The subset of the daemon client a terminal attachment needs. */
 export type HappyAgentTerminalClient = Pick<HappyAgentDaemonClient, "attachTerminal">;
@@ -27,7 +27,7 @@ export interface HappyAgentTerminalBridgeOptions {
     /**
      * Path prefix the renderer addresses this bridge under, matching the prefix
      * its HTTP routes are served at (`""` for the packaged app's own loopback
-     * port, `/__happy2_local_happy_agent` for the Vite development bridge).
+     * port, `/__happy_local_happy_agent` for the Vite development bridge).
      */
     readonly prefix?: string;
     /**

@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe("local Happy Agent connection", () => {
     it("connects to an exact daemon named by HAPPY_AGENT_SERVER_SOCKET_PATH and HAPPY_AGENT_SERVER_TOKEN_PATH, never discovering or starting Happy Agent", async () => {
-        const root = await mkdtemp(join(tmpdir(), "happy2-local-happy-agent-"));
+        const root = await mkdtemp(join(tmpdir(), "happy-local-happy-agent-"));
         directories.push(root);
         const tokenPath = join(root, "token");
         const socketPath = join(root, "server.sock");

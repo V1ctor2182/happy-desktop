@@ -130,7 +130,7 @@ it("holds TerminalPanel geometry, full-bleed screen, and lifecycle controls", as
     expect(rows.computedStyles(["font-family"])["font-family"]).toContain("Mono");
 
     /* ---- Cells actually paint their glyphs ----------------------------- */
-    const firstCell = view.$('[data-testid="connected"] .happy2-terminal-panel__cell');
+    const firstCell = view.$('[data-testid="connected"] .happy-terminal-panel__cell');
     const ink = await firstCell.visibleMetrics();
     expect(ink.pixelCount, "terminal cell paints no pixels").toBeGreaterThan(0);
 
@@ -181,7 +181,7 @@ it("lays sparse and wide cells on their declared columns and swaps inverse color
 
     /* ---- Sparse: a gap after the first cell is preserved, not collapsed - */
     const sparseCells = view.container.querySelectorAll(
-        '[data-testid="sparse"] .happy2-terminal-panel__cell',
+        '[data-testid="sparse"] .happy-terminal-panel__cell',
     );
     const cellA = sparseCells[0]!.getBoundingClientRect();
     const cellB = sparseCells[1]!.getBoundingClientRect();
@@ -190,7 +190,7 @@ it("lays sparse and wide cells on their declared columns and swaps inverse color
 
     /* ---- Wide: a width-2 cell reserves two columns and shifts the next --- */
     const wideCells = view.container.querySelectorAll(
-        '[data-testid="wide"] .happy2-terminal-panel__cell',
+        '[data-testid="wide"] .happy-terminal-panel__cell',
     );
     const wideCell = wideCells[0]!.getBoundingClientRect();
     const afterWide = wideCells[1]!.getBoundingClientRect();
@@ -200,7 +200,7 @@ it("lays sparse and wide cells on their declared columns and swaps inverse color
     expect(afterWide.x - wideCell.x).toBeCloseTo(3 * sparseColumn, 1);
 
     /* ---- Inverse: explicit colors are swapped, not applied straight ----- */
-    const inverseCell = view.$('[data-testid="inverse"] .happy2-terminal-panel__cell');
+    const inverseCell = view.$('[data-testid="inverse"] .happy-terminal-panel__cell');
     expect(inverseCell.computedStyles(["color", "background-color"])).toEqual({
         color: "rgb(238, 238, 238)",
         "background-color": "rgb(17, 17, 17)",

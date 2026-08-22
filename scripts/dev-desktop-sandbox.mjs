@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
  *
  *   HOME  moves ~/.happy/agent (the daemon's own state and its socket),
  *         ~/.happy/dist (the agent Happy installs), ~/.happy/desktop (the
- *         desktop's config), and ~/.happy2/notes. Because the socket is derived
+ *         desktop's config), and ~/.happy/notes. Because the socket is derived
  *         from HOME rather than from TMPDIR, moving HOME is what makes this a
  *         different daemon rather than the global one wearing a new hat.
  *

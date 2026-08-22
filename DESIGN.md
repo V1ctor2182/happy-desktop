@@ -67,13 +67,13 @@ Core values (see `theme.css` for the full set):
 | Interactive/link | teal `#2baccc` in both schemes; original system-blue controls use `#007aff` / `#0a84ff`                                                                                 |
 | Primary action   | black with white text in both schemes                                                                                                                                   |
 | Semantics        | green `#34c759` / `#32d74b`, orange `#ff9500` / `#ff9f0a`, red `#ff3b30` / `#ff453a`                                                                                    |
-| Type             | UI "happy2 Figtree" (Figtree variable), code "happy2 Mono" (JetBrains Mono variable)                                                                                    |
+| Type             | UI "happy Figtree" (Figtree variable), code "happy Mono" (JetBrains Mono variable)                                                                                    |
 | Radii            | controls 6 px, content 8 px, cards 10 px, large shells 14 px, pills 999                                                                                                 |
 
 Text colors are solid (not alpha) so rendering tests can assert exact `rgb()`
 values in every engine. The `prefers-color-scheme` media query is the default
-runtime selector. `ThemeScope` applies `.happy2-theme-light` or
-`.happy2-theme-dark` to a single stable product tree when the user selects an
+runtime selector. `ThemeScope` applies `.happy-theme-light` or
+`.happy-theme-dark` to a single stable product tree when the user selects an
 explicit appearance; the same classes remain available for deterministic
 blueprint and test fixtures. Avatar tone names resolve to solid, direct Happy
 roles; product code never passes raw CSS colors or utility classes for identity.
@@ -136,7 +136,7 @@ placements. The `Modal` card is `small` (360), `medium` (480), or `large` (640):
 confirmations and pickers are `small`, forms are `medium`, and content-heavy
 detail is `large`. It never sets its own position, scrim, or stacking — it is
 hosted by `ModalOverlay`, the single backdrop that fixes to the app window,
-dims with `--happy2-scrim` at `--happy2-z-overlay`, and keeps a 24 px minimum
+dims with `--happy-scrim` at `--happy-z-overlay`, and keeps a 24 px minimum
 safe-area gutter. The default `center` placement is for dialogs and forms. The
 `top` placement is only for transient type-ahead surfaces, never forms; it uses
 an adaptive top gutter of
@@ -180,16 +180,16 @@ or control do not need a comment because they are not arranging a component's
 children.
 
 ESLint enforces this contract in production CSS and inline JSX through
-`happy2-layout/use-flex-layout`. An exception must target exactly one
+`happy-layout/use-flex-layout`. An exception must target exactly one
 declaration and carry a concrete explanation of the geometry, for example:
 
 ```css
-/* eslint-disable-next-line happy2-layout/use-flex-layout -- Two-dimensional media matrix with equal row and column tracks. */
+/* eslint-disable-next-line happy-layout/use-flex-layout -- Two-dimensional media matrix with equal row and column tracks. */
 display: grid;
 ```
 
 File-wide and block-wide disables are forbidden. The companion
-`happy2-layout/require-layout-exception-reason` rule rejects non-local or
+`happy-layout/require-layout-exception-reason` rule rejects non-local or
 unexplained suppressions.
 
 ### Spacing between siblings
@@ -229,7 +229,7 @@ width and center the content while the scrollport still spans the full parent.
 Keep at least the complete painted extent of an external focus ring inside the
 content wrapper's safe gutter so scrolling cannot clip it.
 
-`happy2-layout/scrollport-no-spacing` enforces zero scrollport margin and
+`happy-layout/scrollport-no-spacing` enforces zero scrollport margin and
 padding in production CSS and inline JSX. Do not suppress it: introduce an
 inner flex wrapper and put the spacing there.
 
@@ -417,7 +417,7 @@ For every supported text class, tests must independently assert:
 Numbers-only controls need extra care. A digit such as `7` is top-heavy, so forcing every possible
 number's alpha centroid to the box center would move its baseline and make the numeral set look
 unstable. Use lining numerals so `0` through `9` occupy a common vertical figure band, and use
-tabular numerals when counts must keep equal digit advances. Prefer the bundled `happy2 Mono`
+tabular numerals when counts must keep equal digit advances. Prefer the bundled `happy Mono`
 (JetBrains Mono) for small counters because its lining, tabular digits rasterize consistently in
 all supported engines. Counter tests must cover every digit `0`–`9`, repeated and mixed multi-digit
 values, and a balanced reference such as `1234`; assert a shared baseline and centered full numeral

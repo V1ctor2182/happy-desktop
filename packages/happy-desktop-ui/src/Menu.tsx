@@ -48,7 +48,7 @@ export function Menu(props: MenuProps) {
     return (
         <div
             {...rest}
-            className={["happy2-menu", className].filter(Boolean).join(" ")}
+            className={["happy-menu", className].filter(Boolean).join(" ")}
             data-has-icons={hasIcons ? "" : undefined}
             data-happy-desktop-ui="menu"
             role="menu"
@@ -57,13 +57,13 @@ export function Menu(props: MenuProps) {
                 ...(width === undefined ? {} : { width: `${width}px` }),
             }}
         >
-            <div className="happy2-menu__list" data-happy-desktop-ui="menu-list">
+            <div className="happy-menu__list" data-happy-desktop-ui="menu-list">
                 {items.map((item, index) => {
                     if (item.kind === "separator") {
                         return (
                             <div
                                 aria-hidden="true"
-                                className="happy2-menu__separator"
+                                className="happy-menu__separator"
                                 data-happy-desktop-ui="menu-separator"
                                 key={`separator-${index}`}
                                 role="separator"
@@ -73,7 +73,7 @@ export function Menu(props: MenuProps) {
                     if (item.kind === "label") {
                         return (
                             <div
-                                className="happy2-menu__label"
+                                className="happy-menu__label"
                                 data-happy-desktop-ui="menu-label"
                                 key={`label-${item.label}-${index}`}
                             >
@@ -84,7 +84,7 @@ export function Menu(props: MenuProps) {
                     return (
                         <button
                             aria-disabled={item.disabled ? "true" : undefined}
-                            className="happy2-menu__item"
+                            className="happy-menu__item"
                             data-danger={item.danger ? "" : undefined}
                             data-item-id={item.id}
                             data-happy-desktop-ui="menu-item"
@@ -98,13 +98,13 @@ export function Menu(props: MenuProps) {
                         >
                             {hasIcons ? (
                                 <span
-                                    className="happy2-menu__item-icon"
+                                    className="happy-menu__item-icon"
                                     data-happy-desktop-ui="menu-item-icon"
                                 >
                                     {item.iconUrl ? (
                                         <img
                                             alt=""
-                                            className="happy2-menu__item-image"
+                                            className="happy-menu__item-image"
                                             data-happy-desktop-ui="menu-item-image"
                                             src={item.iconUrl}
                                         />
@@ -114,14 +114,14 @@ export function Menu(props: MenuProps) {
                                 </span>
                             ) : null}
                             <span
-                                className="happy2-menu__item-label"
+                                className="happy-menu__item-label"
                                 data-happy-desktop-ui="menu-item-label"
                             >
                                 {item.label}
                             </span>
                             {item.shortcut ? (
                                 <KeyCap
-                                    className="happy2-menu__item-shortcut"
+                                    className="happy-menu__item-shortcut"
                                     keys={item.shortcut}
                                 />
                             ) : null}

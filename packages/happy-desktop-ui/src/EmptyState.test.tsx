@@ -141,7 +141,7 @@ it("holds panel EmptyState geometry, medallion centering, and typography", async
     );
     expect(title.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: -0.15,
             lineHeight: 20,
             size: 15,

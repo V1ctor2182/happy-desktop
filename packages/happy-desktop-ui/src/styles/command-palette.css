@@ -8,15 +8,15 @@
  * a host composes it inside ModalOverlay for its dim and placement.
  */
 
-.happy2-command-palette,
-.happy2-command-palette *,
-.happy2-command-palette *::before,
-.happy2-command-palette *::after {
+.happy-command-palette,
+.happy-command-palette *,
+.happy-command-palette *::before,
+.happy-command-palette *::after {
     box-sizing: border-box;
 }
 
-.happy2-command-palette {
-    --happy2-search-results-last-radius: 5px;
+.happy-command-palette {
+    --happy-search-results-last-radius: 5px;
 
     display: flex;
     flex: none;
@@ -27,16 +27,16 @@
     overflow: hidden;
     background: var(--surface-high);
     border: 1px solid var(--modal-border);
-    border-radius: var(--happy2-radius-shell);
+    border-radius: var(--happy-radius-shell);
     box-shadow: 0 24px 64px var(--shadow-elevated);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* ---- Input row -------------------------------------------------------- */
 
-.happy2-command-palette__header {
+.happy-command-palette__header {
     display: flex;
     flex: none;
     align-items: center;
@@ -46,13 +46,13 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-command-palette__icon {
+.happy-command-palette__icon {
     display: flex;
     flex: none;
     color: var(--text-secondary);
 }
 
-.happy2-command-palette__input {
+.happy-command-palette__input {
     flex: 1 1 auto;
     min-width: 0;
     height: 40px;
@@ -62,7 +62,7 @@
     border: none;
     outline: none;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 16px;
     font-weight: 500;
     line-height: 40px;
@@ -71,28 +71,28 @@
     caret-color: var(--radio-active);
 }
 
-.happy2-command-palette__input::placeholder {
+.happy-command-palette__input::placeholder {
     color: var(--text-secondary);
     opacity: 1;
 }
 
-.happy2-command-palette__hint {
+.happy-command-palette__hint {
     flex: none;
 }
 
-.happy2-command-palette__close {
+.happy-command-palette__close {
     flex: none;
 }
 
 /* ---- Body ------------------------------------------------------------- */
 
 /* Scrollport: edge-to-edge, no padding of its own. */
-.happy2-command-palette__body {
+.happy-command-palette__body {
     flex: 1 1 auto;
     min-height: 0;
 }
 
-.happy2-command-palette__body-viewport {
+.happy-command-palette__body-viewport {
     display: flex;
     flex-direction: column;
     overflow-x: hidden;
@@ -108,12 +108,12 @@
 }
 
 /* Inner content wrapper carries the 8px inset around the command groups. It is
-   a card's own inset, not the panel one: --happy2-search-results-last-radius
+   a card's own inset, not the panel one: --happy-search-results-last-radius
    above is derived from it (14px shell − 1px border − 8px inset = 5px), so
-   retuning it — or pointing it at --happy2-panel-inset because the numbers look
+   retuning it — or pointing it at --happy-panel-inset because the numbers look
    alike — bends that inner corner out of parallel with the card's. See
    DESIGN.md, "Nested rounded corners". */
-.happy2-command-palette__body-content {
+.happy-command-palette__body-content {
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;

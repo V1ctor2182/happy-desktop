@@ -11,7 +11,6 @@ import {
     type DesktopDaemonSnapshot,
     type DesktopGuestKeyEvent,
     type DesktopMediaPreview,
-    type DesktopNoteApplyRequest,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
     type DesktopWindowState,
@@ -154,18 +153,6 @@ const bridge: HappyDesktopBridge = {
         return () => ipcRenderer.removeListener(desktopIpc.profilerReactCommand, receive);
     },
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
-    noteApply: (request: DesktopNoteApplyRequest) =>
-        ipcRenderer.invoke(desktopIpc.noteApply, request),
-    noteCreate: (title) => ipcRenderer.invoke(desktopIpc.noteCreate, title),
-    noteRead: (id) => ipcRenderer.invoke(desktopIpc.noteRead, id),
-    noteRemove: (id) => ipcRenderer.invoke(desktopIpc.noteRemove, id),
-    noteRename: (id, title) => ipcRenderer.invoke(desktopIpc.noteRename, id, title),
-    notesList: () => ipcRenderer.invoke(desktopIpc.notesList),
-    notesSubscribe(listener: () => void) {
-        const receive = () => listener();
-        ipcRenderer.on(desktopIpc.notesChanged, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.notesChanged, receive);
-    },
     onboardingGet: () => ipcRenderer.invoke(desktopIpc.onboardingGet),
     onboardingSubscribe(listener: (snapshot: LocalOnboardingSnapshot) => void) {
         const receive = (_event: Electron.IpcRendererEvent, snapshot: LocalOnboardingSnapshot) =>

@@ -23,7 +23,7 @@ export function WindowShortcuts(props: { readonly actions: readonly WindowShortc
         event.preventDefault();
         action.run();
     });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a window command must work regardless of which descendant owns focus
+    // eslint-disable-next-line happy-react/no-layout-effect -- a window command must work regardless of which descendant owns focus
     useLayoutEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => shortcutRun(event);
         window.addEventListener("keydown", onKeyDown);

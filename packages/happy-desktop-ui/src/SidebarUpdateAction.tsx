@@ -41,7 +41,7 @@ export function SidebarUpdateAction(props: SidebarUpdateActionProps) {
         return (
             <Button
                 aria-label={`${actionLabel} ${subject}`}
-                className="happy2-sidebar-update-action happy2-sidebar-update-action--ready"
+                className="happy-sidebar-update-action happy-sidebar-update-action--ready"
                 icon="arrow-up"
                 onClick={props.onAction}
                 size="small"
@@ -61,16 +61,16 @@ export function SidebarUpdateAction(props: SidebarUpdateActionProps) {
     return (
         <span
             aria-live="polite"
-            className="happy2-sidebar-update-action happy2-sidebar-update-action--status"
+            className="happy-sidebar-update-action happy-sidebar-update-action--status"
             data-happy-desktop-ui="sidebar-update-action"
             data-status={props.status}
             role="status"
             title={label}
         >
-            <span className="happy2-sidebar-update-action__icon" aria-hidden="true">
+            <span className="happy-sidebar-update-action__icon" aria-hidden="true">
                 <Icon name="arrow-up" size={14} />
             </span>
-            <span className="happy2-sidebar-update-action__label">{label}</span>
+            <span className="happy-sidebar-update-action__label">{label}</span>
         </span>
     );
 }

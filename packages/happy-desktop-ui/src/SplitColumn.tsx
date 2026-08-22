@@ -60,17 +60,17 @@ export function SplitColumn(props: SplitColumnProps) {
     }
     return (
         <div
-            className="happy2-split-column"
+            className="happy-split-column"
             data-happy-desktop-ui="split-column"
             ref={root}
             style={
                 {
-                    "--happy2-split-column-min-top": `${minTop}px`,
-                    "--happy2-split-column-min-bottom": `${minBottom}px`,
+                    "--happy-split-column-min-top": `${minTop}px`,
+                    "--happy-split-column-min-bottom": `${minBottom}px`,
                 } as CSSProperties
             }
         >
-            <div className="happy2-split-column__top" data-happy-desktop-ui="split-column-top">
+            <div className="happy-split-column__top" data-happy-desktop-ui="split-column-top">
                 {props.top}
             </div>
             <div
@@ -78,7 +78,7 @@ export function SplitColumn(props: SplitColumnProps) {
                 aria-orientation="horizontal"
                 aria-valuemin={minBottom}
                 aria-valuenow={Math.round(bottomHeight)}
-                className="happy2-split-column__handle"
+                className="happy-split-column__handle"
                 data-happy-desktop-ui="split-column-handle"
                 onKeyDown={(event) => {
                     const delta =
@@ -136,12 +136,12 @@ export function SplitColumn(props: SplitColumnProps) {
                 tabIndex={0}
             >
                 <span
-                    className="happy2-split-column__line"
+                    className="happy-split-column__line"
                     data-happy-desktop-ui="split-column-line"
                 />
             </div>
             <div
-                className="happy2-split-column__bottom"
+                className="happy-split-column__bottom"
                 data-happy-desktop-ui="split-column-bottom"
                 ref={bottom}
                 style={{ height: `${bottomHeight}px` } as CSSProperties}

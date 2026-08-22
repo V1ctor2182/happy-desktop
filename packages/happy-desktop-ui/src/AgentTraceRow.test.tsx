@@ -13,13 +13,13 @@ const engine = () => server.browser as Engine;
 
 const uiFamily = () =>
     engine() === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 const monoFamily = () =>
     engine() === "webkit"
-        ? "happy2 Mono, ui-monospace, monospace"
-        : '"happy2 Mono", ui-monospace, monospace';
+        ? "happy Mono, ui-monospace, monospace"
+        : '"happy Mono", ui-monospace, monospace';
 
 /* Alpha-weighted dot ink drift from the 28px row lane center. */
 async function dotDrift(view: View, rowSelector: string) {

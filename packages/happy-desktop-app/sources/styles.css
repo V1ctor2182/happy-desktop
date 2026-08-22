@@ -11,7 +11,7 @@ body,
     margin: 0;
     background: var(--header-background);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 

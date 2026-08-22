@@ -6,18 +6,18 @@
  * generic JSON in the same restrained inspector vocabulary.
  */
 
-.happy2-tool-call-preview {
+.happy-tool-call-preview {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-tool-call-preview__heading {
+.happy-tool-call-preview__heading {
     box-sizing: border-box;
     display: flex;
     flex: none;
@@ -29,39 +29,39 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-tool-call-preview__icon {
+.happy-tool-call-preview__icon {
     display: flex;
     flex: none;
     color: var(--text-secondary);
 }
 
-.happy2-tool-call-preview__heading-copy {
+.happy-tool-call-preview__heading-copy {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     min-width: 0;
 }
 
-.happy2-tool-call-preview__heading-copy strong,
-.happy2-tool-call-preview__heading-copy span {
+.happy-tool-call-preview__heading-copy strong,
+.happy-tool-call-preview__heading-copy span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy2-tool-call-preview__heading-copy strong {
+.happy-tool-call-preview__heading-copy strong {
     font-size: 13px;
     font-weight: 700;
     line-height: 16px;
 }
 
-.happy2-tool-call-preview__heading-copy span {
+.happy-tool-call-preview__heading-copy span {
     color: var(--text-secondary);
     font-size: 11px;
     line-height: 14px;
 }
 
-.happy2-tool-call-preview__status {
+.happy-tool-call-preview__status {
     flex: none;
     color: var(--text-secondary);
     font-size: 11px;
@@ -69,23 +69,23 @@
     line-height: 16px;
 }
 
-.happy2-tool-call-preview__status[data-failed] {
+.happy-tool-call-preview__status[data-failed] {
     color: var(--status-error);
 }
 
 /* Full-bleed scrollport; the child owns the readable inset. */
-.happy2-tool-call-preview__scroll {
+.happy-tool-call-preview__scroll {
     flex: 1 1 0%;
     min-width: 0;
     min-height: 0;
 }
 
-.happy2-tool-call-preview__scroll-viewport {
+.happy-tool-call-preview__scroll-viewport {
     display: flex;
     overflow: auto;
 }
 
-.happy2-tool-call-preview__content {
+.happy-tool-call-preview__content {
     box-sizing: border-box;
     display: flex;
     flex: 1 0 auto;
@@ -101,9 +101,9 @@
  * scrollport. Other preview kinds remain content-sized and use the outer
  * full-bleed scrollport for the whole document.
  */
-.happy2-tool-call-preview[data-kind="execCommand"] .happy2-tool-call-preview__content,
-.happy2-tool-call-preview[data-kind="backgroundTerminalInteraction"]
-    .happy2-tool-call-preview__content {
+.happy-tool-call-preview[data-kind="execCommand"] .happy-tool-call-preview__content,
+.happy-tool-call-preview[data-kind="backgroundTerminalInteraction"]
+    .happy-tool-call-preview__content {
     flex: 1 1 0%;
     min-height: 100%;
 }
@@ -113,19 +113,19 @@
  * to fit the panel instead of overflowing it, so a long diff was silently cut
  * off and the column that should have scrolled had nothing to scroll.
  */
-.happy2-tool-call-preview__content > * {
+.happy-tool-call-preview__content > * {
     flex: none;
 }
 
-.happy2-tool-call-preview__section,
-.happy2-tool-call-preview__operations {
+.happy-tool-call-preview__section,
+.happy-tool-call-preview__operations {
     display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 0;
 }
 
-.happy2-tool-call-preview__label {
+.happy-tool-call-preview__label {
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 700;
@@ -133,38 +133,38 @@
     text-transform: uppercase;
 }
 
-.happy2-tool-call-preview__command,
-.happy2-tool-call-preview__terminal-content,
-.happy2-tool-call-preview__arguments,
-.happy2-tool-call-preview__result {
+.happy-tool-call-preview__command,
+.happy-tool-call-preview__terminal-content,
+.happy-tool-call-preview__arguments,
+.happy-tool-call-preview__result {
     box-sizing: border-box;
     min-width: 0;
     margin: 0;
     padding: 10px 12px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--diff-context-bg);
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
-.happy2-tool-call-preview__terminal {
+.happy-tool-call-preview__terminal {
     flex: 1 1 0%;
     min-width: 0;
     min-height: 160px;
 }
 
-.happy2-tool-call-preview__terminal-viewport {
+.happy-tool-call-preview__terminal-viewport {
     display: flex;
     overflow-x: hidden;
     overflow-y: auto;
 }
 
-.happy2-tool-call-preview__terminal-content {
+.happy-tool-call-preview__terminal-content {
     flex: 1 1 auto;
     width: 100%;
     background: var(--surface);
@@ -172,11 +172,11 @@
     overflow-wrap: anywhere;
 }
 
-.happy2-tool-call-preview__result[data-failed] {
+.happy-tool-call-preview__result[data-failed] {
     color: var(--status-error);
 }
 
-.happy2-tool-call-preview__operation {
+.happy-tool-call-preview__operation {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -185,16 +185,16 @@
     border-left: 2px solid var(--divider);
 }
 
-.happy2-tool-call-preview__operation span {
+.happy-tool-call-preview__operation span {
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 600;
     line-height: 14px;
 }
 
-.happy2-tool-call-preview__operation code {
+.happy-tool-call-preview__operation code {
     overflow-wrap: anywhere;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
 }

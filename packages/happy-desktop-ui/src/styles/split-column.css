@@ -1,4 +1,4 @@
-.happy2-split-column {
+.happy-split-column {
     box-sizing: border-box;
     display: flex;
     flex: 1 1 auto;
@@ -9,7 +9,7 @@
     height: 100%;
 }
 
-.happy2-split-column__top {
+.happy-split-column__top {
     box-sizing: border-box;
     display: flex;
     flex: 1 1 auto;
@@ -20,7 +20,7 @@
 
 /* Horizontal drag divider: an 8px hit lane carrying the hairline that the two
    regions meet on, matching the shell's vertical splitters. */
-.happy2-split-column__handle {
+.happy-split-column__handle {
     box-sizing: border-box;
     display: flex;
     flex: none;
@@ -34,19 +34,19 @@
     touch-action: none;
 }
 
-.happy2-split-column__handle:focus-visible {
+.happy-split-column__handle:focus-visible {
     outline: none;
 }
 
-.happy2-split-column__line {
+.happy-split-column__line {
     display: block;
     flex: 1 1 auto;
     height: 1px;
     background: var(--divider);
 }
 
-.happy2-split-column__handle:hover .happy2-split-column__line,
-.happy2-split-column__handle:focus-visible .happy2-split-column__line {
+.happy-split-column__handle:hover .happy-split-column__line,
+.happy-split-column__handle:focus-visible .happy-split-column__line {
     height: 2px;
     background: var(--surface-selected);
 }
@@ -55,12 +55,12 @@
    keeps both regions usable without measuring on every render: `min-height` wins
    over `max-height` in CSS, so a column too short for both minimums shrinks the
    upper region first. */
-.happy2-split-column__bottom {
+.happy-split-column__bottom {
     box-sizing: border-box;
     display: flex;
     flex: none;
     flex-direction: column;
-    min-height: var(--happy2-split-column-min-bottom);
-    max-height: calc(100% - var(--happy2-split-column-min-top) - 8px);
+    min-height: var(--happy-split-column-min-bottom);
+    max-height: calc(100% - var(--happy-split-column-min-top) - 8px);
     overflow: hidden;
 }

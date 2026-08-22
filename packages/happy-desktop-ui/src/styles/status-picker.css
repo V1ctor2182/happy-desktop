@@ -15,7 +15,7 @@
  * dot colors are selected by the segment/dot `data-availability` attribute.
  */
 
-.happy2-status-picker {
+.happy-status-picker {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -23,28 +23,28 @@
     width: 380px;
     padding: 16px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface-high);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-status-picker *,
-.happy2-status-picker *::before,
-.happy2-status-picker *::after {
+.happy-status-picker *,
+.happy-status-picker *::before,
+.happy-status-picker *::after {
     box-sizing: border-box;
 }
 
 /* ---- Sections ---------------------------------------------------------- */
 
-.happy2-status-picker__section {
+.happy-status-picker__section {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.happy2-status-picker__section-label {
+.happy-status-picker__section-label {
     display: block;
     color: var(--text-secondary);
     font-size: 11px;
@@ -56,11 +56,11 @@
 
 /* ---- Availability segmented control ------------------------------------ */
 
-.happy2-status-picker__segmented {
-    --happy2-sp-pad: 4px;
-    --happy2-sp-inner-radius: calc(var(--happy2-radius-sm) - var(--happy2-sp-pad) - 1px);
-    --happy2-sp-count: 4;
-    --happy2-sp-index: 0;
+.happy-status-picker__segmented {
+    --happy-sp-pad: 4px;
+    --happy-sp-inner-radius: calc(var(--happy-radius-sm) - var(--happy-sp-pad) - 1px);
+    --happy-sp-count: 4;
+    --happy-sp-index: 0;
 
     position: relative;
     box-sizing: border-box;
@@ -68,9 +68,9 @@
     align-items: stretch;
     width: 100%;
     height: 36px;
-    padding: var(--happy2-sp-pad);
+    padding: var(--happy-sp-pad);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--input-background);
 }
 
@@ -80,21 +80,21 @@
  * exactly one segment because the segments are contiguous (no column gap).
  * The transition only fires on selection change, never on first paint.
  */
-.happy2-status-picker__pill {
+.happy-status-picker__pill {
     position: absolute;
-    top: var(--happy2-sp-pad);
-    bottom: var(--happy2-sp-pad);
-    left: var(--happy2-sp-pad);
+    top: var(--happy-sp-pad);
+    bottom: var(--happy-sp-pad);
+    left: var(--happy-sp-pad);
     box-sizing: border-box;
-    width: calc((100% - 2 * var(--happy2-sp-pad)) / var(--happy2-sp-count));
+    width: calc((100% - 2 * var(--happy-sp-pad)) / var(--happy-sp-count));
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-sp-inner-radius);
+    border-radius: var(--happy-sp-inner-radius);
     background: var(--surface-high);
-    transform: translateX(calc(var(--happy2-sp-index) * 100%));
+    transform: translateX(calc(var(--happy-sp-index) * 100%));
     transition: transform 160ms ease;
 }
 
-.happy2-status-picker__segment {
+.happy-status-picker__segment {
     position: relative;
     z-index: 1;
     box-sizing: border-box;
@@ -110,10 +110,10 @@
     margin: 0;
     padding: 0 8px;
     border: 0;
-    border-radius: var(--happy2-sp-inner-radius);
+    border-radius: var(--happy-sp-inner-radius);
     background: transparent;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     font-size: 13px;
     font-weight: 600;
@@ -124,15 +124,15 @@
     transition: color 120ms ease;
 }
 
-.happy2-status-picker__segment[data-active] {
+.happy-status-picker__segment[data-active] {
     color: var(--text);
 }
 
-.happy2-status-picker__segment:not([data-active]):hover {
+.happy-status-picker__segment:not([data-active]):hover {
     color: var(--text);
 }
 
-.happy2-status-picker__segment:focus-visible {
+.happy-status-picker__segment:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -1px;
 }
@@ -142,23 +142,23 @@
  * opaque token fill, so its alpha-weighted centroid is measurable directly and
  * its color is asserted by attribute in StatusPicker.test.tsx.
  */
-.happy2-status-picker__dot {
+.happy-status-picker__dot {
     flex: none;
     width: 8px;
     height: 8px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--status-default);
 }
 
-.happy2-status-picker__dot[data-availability="online"] {
+.happy-status-picker__dot[data-availability="online"] {
     background: var(--status-connected);
 }
 
-.happy2-status-picker__dot[data-availability="away"] {
+.happy-status-picker__dot[data-availability="away"] {
     background: var(--warning-critical);
 }
 
-.happy2-status-picker__dot[data-availability="dnd"] {
+.happy-status-picker__dot[data-availability="dnd"] {
     background: var(--status-error);
 }
 
@@ -169,7 +169,7 @@
  * alpha-centroid past the tuned 0.4px (the subpixel-placement trap). Text is
  * centered inside the box, so segments still read as optically balanced.
  */
-.happy2-status-picker__segment-label {
+.happy-status-picker__segment-label {
     display: block;
     flex: none;
     width: 48px;
@@ -178,7 +178,7 @@
 
 /* ---- Custom status editor ---------------------------------------------- */
 
-.happy2-status-picker__field {
+.happy-status-picker__field {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -186,16 +186,16 @@
     height: 40px;
     padding: 0 8px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--input-background);
 }
 
-.happy2-status-picker__field:focus-within {
+.happy-status-picker__field:focus-within {
     border-color: var(--divider);
 }
 
 /* Fixed, explicitly sized emoji slot (label and glyph stay decoupled). */
-.happy2-status-picker__emoji {
+.happy-status-picker__emoji {
     display: flex;
     flex: none;
     align-items: center;
@@ -203,12 +203,12 @@
     width: 24px;
     height: 24px;
     color: var(--input-placeholder);
-    font-family: var(--happy2-font-emoji);
+    font-family: var(--happy-font-emoji);
     font-size: 18px;
     line-height: 24px;
 }
 
-.happy2-status-picker__input {
+.happy-status-picker__input {
     flex: 1 1 auto;
     min-width: 0;
     height: 38px;
@@ -220,7 +220,7 @@
     -webkit-appearance: none;
     background: transparent;
     color: var(--input-text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     font-size: 13px;
     font-weight: 500;
@@ -229,18 +229,18 @@
     caret-color: var(--radio-active);
 }
 
-.happy2-status-picker__input::placeholder {
+.happy-status-picker__input::placeholder {
     color: var(--input-placeholder);
     opacity: 1;
 }
 
-.happy2-status-picker__clear {
+.happy-status-picker__clear {
     flex: none;
 }
 
 /* ---- Expiry meta ------------------------------------------------------- */
 
-.happy2-status-picker__meta {
+.happy-status-picker__meta {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -250,7 +250,7 @@
     line-height: 16px;
 }
 
-.happy2-status-picker__meta-icon {
+.happy-status-picker__meta-icon {
     display: flex;
     flex: none;
 }

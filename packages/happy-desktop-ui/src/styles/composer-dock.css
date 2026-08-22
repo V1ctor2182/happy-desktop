@@ -7,19 +7,19 @@
  * nothing stacks above the Composer here.
  */
 
-.happy2-composer-dock {
+.happy-composer-dock {
     display: flex;
     flex: none;
     flex-direction: column;
     background: var(--surface);
 }
 
-.happy2-composer-dock__compose {
+.happy-composer-dock__compose {
     display: flex;
     flex-direction: column;
     gap: 8px;
     width: 100%;
-    max-width: var(--happy2-chat-measure);
+    max-width: var(--happy-chat-measure);
     margin: 0 auto;
     padding: 0 20px 24px 12px;
 }

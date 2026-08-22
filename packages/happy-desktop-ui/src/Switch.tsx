@@ -25,7 +25,7 @@ export function Switch(props: SwitchProps) {
         <button
             aria-checked={props.checked}
             aria-label={props["aria-label"]}
-            className={["happy2-switch", props.className].filter(Boolean).join(" ")}
+            className={["happy-switch", props.className].filter(Boolean).join(" ")}
             data-checked={props.checked ? "" : undefined}
             data-disabled={props.disabled ? "" : undefined}
             data-happy-desktop-ui="switch"
@@ -38,14 +38,14 @@ export function Switch(props: SwitchProps) {
             style={props.style}
             type="button"
         >
-            <span className="happy2-switch__track" data-happy-desktop-ui="switch-track">
-                <span className="happy2-switch__thumb" data-happy-desktop-ui="switch-thumb" />
+            <span className="happy-switch__track" data-happy-desktop-ui="switch-track">
+                <span className="happy-switch__thumb" data-happy-desktop-ui="switch-thumb" />
             </span>
             {props.label
                 ? ((label) => (
-                      <span className="happy2-switch__text" data-happy-desktop-ui="switch-text">
+                      <span className="happy-switch__text" data-happy-desktop-ui="switch-text">
                           <span
-                              className="happy2-switch__label"
+                              className="happy-switch__label"
                               data-happy-desktop-ui="switch-label"
                           >
                               {label}
@@ -53,7 +53,7 @@ export function Switch(props: SwitchProps) {
                           {props.description
                               ? ((description) => (
                                     <span
-                                        className="happy2-switch__description"
+                                        className="happy-switch__description"
                                         data-happy-desktop-ui="switch-description"
                                     >
                                         {description}

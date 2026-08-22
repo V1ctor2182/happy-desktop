@@ -36,15 +36,15 @@ export function FormRow(props: FormRowProps) {
     return (
         <div
             {...rest}
-            className={["happy2-form-row", local.className].filter(Boolean).join(" ")}
+            className={["happy-form-row", local.className].filter(Boolean).join(" ")}
             data-align={align()}
             data-layout={layout()}
             data-happy-desktop-ui="form-row"
             style={local.style}
         >
-            <div className="happy2-form-row__text" data-happy-desktop-ui="form-row-text">
+            <div className="happy-form-row__text" data-happy-desktop-ui="form-row-text">
                 <label
-                    className="happy2-form-row__label"
+                    className="happy-form-row__label"
                     data-happy-desktop-ui="form-row-label"
                     htmlFor={local.htmlFor}
                 >
@@ -52,14 +52,14 @@ export function FormRow(props: FormRowProps) {
                 </label>
                 {local.description ? (
                     <span
-                        className="happy2-form-row__description"
+                        className="happy-form-row__description"
                         data-happy-desktop-ui="form-row-description"
                     >
                         {local.description}
                     </span>
                 ) : null}
             </div>
-            <div className="happy2-form-row__control" data-happy-desktop-ui="form-row-control">
+            <div className="happy-form-row__control" data-happy-desktop-ui="form-row-control">
                 {local.control}
             </div>
         </div>

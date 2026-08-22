@@ -9,14 +9,14 @@
  * them, which a column too narrow to scroll one block at a time does.
  */
 
-.happy2-diff-snippet {
+.happy-diff-snippet {
     display: block;
     box-sizing: border-box;
     overflow: hidden;
     background: var(--diff-context-bg);
     border: 1px solid var(--diff-outline);
     border-radius: 8px;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     /*
      * Measured optical corrections (see DiffSnippet.test.tsx; alpha-weighted
@@ -28,11 +28,11 @@
      * and Gecko/WebKit need the opposite half-pixel lift. Half-pixel values
      * are exactly one device pixel at the required 2x DPR.
      */
-    --happy2-diff-text-optical-y: 0.5px;
-    --happy2-diff-gutter-optical-y: 0px;
+    --happy-diff-text-optical-y: 0.5px;
+    --happy-diff-gutter-optical-y: 0px;
 }
 
-.happy2-diff-snippet__header {
+.happy-diff-snippet__header {
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -47,13 +47,13 @@
     padding: 0 12px 1px;
     background: var(--groupped-background);
     border-bottom: 1px solid var(--diff-outline);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 600;
     line-height: 16px;
 }
 
-.happy2-diff-snippet__file {
+.happy-diff-snippet__file {
     box-sizing: border-box;
     min-width: 0;
     overflow: hidden;
@@ -62,7 +62,7 @@
     color: var(--text-secondary);
 }
 
-.happy2-diff-snippet__stats {
+.happy-diff-snippet__stats {
     box-sizing: border-box;
     display: flex;
     flex: none;
@@ -70,37 +70,37 @@
     margin-left: auto;
 }
 
-.happy2-diff-snippet__added {
+.happy-diff-snippet__added {
     box-sizing: border-box;
     color: var(--diff-success);
 }
 
-.happy2-diff-snippet__removed {
+.happy-diff-snippet__removed {
     box-sizing: border-box;
     color: var(--diff-error);
 }
 
-.happy2-diff-snippet__scroll {
+.happy-diff-snippet__scroll {
     box-sizing: border-box;
 }
 
-.happy2-diff-snippet__scroll-viewport {
+.happy-diff-snippet__scroll-viewport {
     overflow-x: auto;
     overflow-y: hidden;
 }
 
-.happy2-diff-snippet__code {
+.happy-diff-snippet__code {
     box-sizing: border-box;
     min-width: 100%;
     width: max-content;
     padding: 8px 0;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     font-weight: 400;
     line-height: 20px;
 }
 
-.happy2-diff-snippet__line {
+.happy-diff-snippet__line {
     box-sizing: border-box;
     display: flex;
     height: 20px;
@@ -108,50 +108,50 @@
     white-space: pre;
 }
 
-.happy2-diff-snippet__line[data-kind="add"] {
+.happy-diff-snippet__line[data-kind="add"] {
     background: var(--diff-added-bg);
     color: var(--diff-added-text);
 }
 
-.happy2-diff-snippet__line[data-kind="del"] {
+.happy-diff-snippet__line[data-kind="del"] {
     background: var(--diff-removed-bg);
     color: var(--diff-removed-text);
 }
 
-.happy2-diff-snippet__line[data-kind="context"] {
+.happy-diff-snippet__line[data-kind="context"] {
     color: var(--text-secondary);
 }
 
-.happy2-diff-snippet__line[data-kind="meta"] {
+.happy-diff-snippet__line[data-kind="meta"] {
     color: var(--diff-context-text);
 }
 
-.happy2-diff-snippet__number {
+.happy-diff-snippet__number {
     box-sizing: border-box;
     flex: none;
     width: 32px;
     padding-right: 6px;
     text-align: right;
     color: var(--diff-line-number-text);
-    transform: translateY(var(--happy2-diff-text-optical-y));
+    transform: translateY(var(--happy-diff-text-optical-y));
 }
 
-.happy2-diff-snippet__gutter {
+.happy-diff-snippet__gutter {
     box-sizing: border-box;
     flex: none;
     width: 24px;
     text-align: center;
-    transform: translateY(var(--happy2-diff-gutter-optical-y));
+    transform: translateY(var(--happy-diff-gutter-optical-y));
 }
 
-.happy2-diff-snippet__line[data-kind="context"] .happy2-diff-snippet__gutter {
+.happy-diff-snippet__line[data-kind="context"] .happy-diff-snippet__gutter {
     color: var(--diff-context-text);
 }
 
-.happy2-diff-snippet__text {
+.happy-diff-snippet__text {
     box-sizing: border-box;
     flex: none;
-    transform: translateY(var(--happy2-diff-text-optical-y));
+    transform: translateY(var(--happy-diff-text-optical-y));
 }
 
 /*
@@ -160,21 +160,21 @@
  * height and keeps it as a minimum; the gutters stay on the first row of the
  * line they mark, which is where the reader looks for them.
  */
-.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__scroll-viewport {
+.happy-diff-snippet[data-wrap] .happy-diff-snippet__scroll-viewport {
     overflow-x: hidden;
 }
 
-.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__code {
+.happy-diff-snippet[data-wrap] .happy-diff-snippet__code {
     width: auto;
 }
 
-.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__line {
+.happy-diff-snippet[data-wrap] .happy-diff-snippet__line {
     height: auto;
     min-height: 20px;
     align-items: flex-start;
 }
 
-.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__text {
+.happy-diff-snippet[data-wrap] .happy-diff-snippet__text {
     flex: 1 1 auto;
     min-width: 0;
     white-space: pre-wrap;
@@ -188,16 +188,16 @@
  * scopes cannot be used here.)
  */
 @supports (-moz-appearance: none) {
-    .happy2-diff-snippet {
-        --happy2-diff-text-optical-y: 0px;
-        --happy2-diff-gutter-optical-y: -0.5px;
+    .happy-diff-snippet {
+        --happy-diff-text-optical-y: 0px;
+        --happy-diff-gutter-optical-y: -0.5px;
     }
 }
 
 /* WebKit — only WebKit parses -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
-    .happy2-diff-snippet {
-        --happy2-diff-text-optical-y: 0px;
-        --happy2-diff-gutter-optical-y: -0.5px;
+    .happy-diff-snippet {
+        --happy-diff-text-optical-y: 0px;
+        --happy-diff-gutter-optical-y: -0.5px;
     }
 }

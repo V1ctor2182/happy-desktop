@@ -58,7 +58,7 @@ export function CommandPalette(props: CommandPaletteProps) {
     const invokerRef = useRef<HTMLElement | null>(null);
     const composingRef = useRef(false);
     const label = () => local.placeholder ?? "Search";
-    // eslint-disable-next-line happy2-react/no-layout-effect -- opening the palette must capture the live invoking element and move browser focus into the committed input before paint
+    // eslint-disable-next-line happy-react/no-layout-effect -- opening the palette must capture the live invoking element and move browser focus into the committed input before paint
     useLayoutEffect(() => {
         // Capture the invoking control before autofocus moves focus into the
         // input, so closing the palette can hand focus back to it.
@@ -68,7 +68,7 @@ export function CommandPalette(props: CommandPaletteProps) {
             inputRef.current.select();
         }
     }, [local.autoFocus]);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- closing the palette restores focus to the exact still-connected DOM control that invoked it, which is an imperative unmount handoff
+    // eslint-disable-next-line happy-react/no-layout-effect -- closing the palette restores focus to the exact still-connected DOM control that invoked it, which is an imperative unmount handoff
     useLayoutEffect(
         () => () => {
             const invoker = invokerRef.current;
@@ -85,7 +85,7 @@ export function CommandPalette(props: CommandPaletteProps) {
             {...rest}
             aria-label={label()}
             aria-modal="true"
-            className={["happy2-command-palette", local.className].filter(Boolean).join(" ")}
+            className={["happy-command-palette", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="command-palette"
             onKeyDown={(event) => {
                 if (event.key === "Escape" && !isComposing(event)) {
@@ -98,19 +98,19 @@ export function CommandPalette(props: CommandPaletteProps) {
             style={local.style}
         >
             <div
-                className="happy2-command-palette__header"
+                className="happy-command-palette__header"
                 data-happy-desktop-ui="command-palette-header"
             >
                 <span
                     aria-hidden="true"
-                    className="happy2-command-palette__icon"
+                    className="happy-command-palette__icon"
                     data-happy-desktop-ui="command-palette-icon"
                 >
                     <Icon name="search" size={18} />
                 </span>
                 <input
                     aria-label={label()}
-                    className="happy2-command-palette__input"
+                    className="happy-command-palette__input"
                     data-happy-desktop-ui="command-palette-input"
                     onCompositionEnd={() => {
                         composingRef.current = false;
@@ -134,10 +134,10 @@ export function CommandPalette(props: CommandPaletteProps) {
                     type="text"
                     value={local.query}
                 />
-                <KeyCap className="happy2-command-palette__hint" keys="ESC" />
+                <KeyCap className="happy-command-palette__hint" keys="ESC" />
                 <Button
                     aria-label={local.closeLabel ?? "Close"}
-                    className="happy2-command-palette__close"
+                    className="happy-command-palette__close"
                     icon="close"
                     iconOnly
                     onClick={() => local.onClose()}
@@ -146,13 +146,13 @@ export function CommandPalette(props: CommandPaletteProps) {
                 />
             </div>
             <ScrollArea
-                className="happy2-command-palette__body"
+                className="happy-command-palette__body"
                 data-happy-desktop-ui="command-palette-body"
                 data-scrollbar-rows=""
-                viewportClassName="happy2-command-palette__body-viewport"
+                viewportClassName="happy-command-palette__body-viewport"
             >
                 <div
-                    className="happy2-command-palette__body-content"
+                    className="happy-command-palette__body-content"
                     data-happy-desktop-ui="command-palette-body-content"
                 >
                     {local.children}

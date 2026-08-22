@@ -13,18 +13,18 @@
  * It sits above the overlay layer: zoom is what the window is doing, and the
  * answer has to be legible over whatever the window happens to be showing.
  */
-.happy2-zoom-indicator {
+.happy-zoom-indicator {
     position: fixed;
-    z-index: var(--happy2-z-window-chrome);
+    z-index: var(--happy-z-window-chrome);
     top: 10px;
     left: 50%;
     display: flex;
     align-items: center;
     height: 22px;
     padding: 0 10px;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--input-background);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 10.8px;
     font-weight: 500;
     line-height: 22px;
@@ -35,10 +35,10 @@
     transform: translateX(-50%);
     /* The fade is the component's own clock: a caller restarts it by changing
        the element's key rather than by holding a timer. */
-    animation: happy2-zoom-indicator-fade 360ms ease 1100ms forwards;
+    animation: happy-zoom-indicator-fade 360ms ease 1100ms forwards;
 }
 
-@keyframes happy2-zoom-indicator-fade {
+@keyframes happy-zoom-indicator-fade {
     to {
         opacity: 0;
         visibility: hidden;

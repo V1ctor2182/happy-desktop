@@ -64,13 +64,6 @@ import {
 } from "./mediaPreviewWindow";
 import { localHappyAgentConnectorCreate, localRuntimeProbe } from "./localHappyAgent";
 import { LocalOnboarding } from "./localOnboarding";
-import { NotesStore } from "./notesStore";
-import {
-    noteApplyRequestValidate,
-    noteIdValidate,
-    noteTitleOptionalValidate,
-    noteTitleValidate,
-} from "./notesIpcValidation";
 import { desktopBrowserProxyTargetValidate } from "./happyAgentIpcValidation";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import {
@@ -92,13 +85,13 @@ if (process.platform !== "darwin") {
 const buildIdentity = desktopBuildIdentityRead(app.isPackaged, app.getAppPath());
 const desktopGymActive = process.env.HAPPY_DESKTOP_GYM_PROFILE !== undefined;
 const desktopProfilerLaunchMode =
-    process.env.HAPPY2_DESKTOP_PROFILE_MODE === "optimized" || desktopGymActive
+    process.env.HAPPY_DESKTOP_PROFILE_MODE === "optimized" || desktopGymActive
         ? "optimized"
-        : process.env.HAPPY2_DESKTOP_PROFILE_MODE === "development"
+        : process.env.HAPPY_DESKTOP_PROFILE_MODE === "development"
           ? "development"
           : undefined;
 const desktopProfilerNamePreserving =
-    desktopProfilerLaunchMode === "optimized" && process.env.HAPPY2_DESKTOP_PROFILE === "1";
+    desktopProfilerLaunchMode === "optimized" && process.env.HAPPY_DESKTOP_PROFILE === "1";
 
 function desktopProfilerBuildLabel(): string | undefined {
     const checkout = buildIdentity?.label;
@@ -161,7 +154,7 @@ const windowTitle =
         : applicationName;
 const desktopDebugEnabled =
     !app.isPackaged &&
-    (process.env.HAPPY2_DESKTOP_DEBUG === "1" || process.argv.includes("--debug"));
+    (process.env.HAPPY_DESKTOP_DEBUG === "1" || process.argv.includes("--debug"));
 
 function desktopDebugRendererDefaultPort(): number {
     if (!buildIdentity || buildIdentity.label === "dev") return 9222;
@@ -175,11 +168,11 @@ function desktopDebugRendererDefaultPort(): number {
 
 function desktopDebugRendererPortRead(): number {
     const fallback = desktopDebugRendererDefaultPort();
-    const raw = process.env.HAPPY2_DEBUG_RENDERER_PORT?.trim();
+    const raw = process.env.HAPPY_DEBUG_RENDERER_PORT?.trim();
     if (raw === undefined || raw.length === 0) return fallback;
     const port = Number(raw);
     if (Number.isInteger(port) && port >= 1024 && port <= 65_535) return port;
-    console.warn(`[happy debug] Invalid HAPPY2_DEBUG_RENDERER_PORT=${raw}; using ${fallback}.`);
+    console.warn(`[happy debug] Invalid HAPPY_DEBUG_RENDERER_PORT=${raw}; using ${fallback}.`);
     return fallback;
 }
 
@@ -249,7 +242,6 @@ let desktopDebugDaemonAttemptedConnectionId: number | undefined;
 let desktopProfilerController: DesktopProfilerController;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let onboarding: LocalOnboarding;
-let notesStore: NotesStore;
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: HappyAgentBrowserProxyHandle | undefined;
@@ -1363,15 +1355,6 @@ void app
                 return window && !window.isDestroyed() ? window.webContents : undefined;
             },
         });
-        // Notes live in the user's home rather than in this app's private data
-        // directory: the Markdown beside each note is meant to be found by an
-        // agent working on this machine, and an application-support path is not
-        // somewhere anyone would look.
-        notesStore = new NotesStore();
-        notesStore.subscribe(() => {
-            const window = windowLifecycle.get();
-            if (window && !window.isDestroyed()) window.webContents.send(desktopIpc.notesChanged);
-        });
         // First-run setup follows the runtime rather than owning a connection of
         // its own: the daemon is started, connected, and left running by the
         // runtime alone, and setup only reads its state and asks it to try again.
@@ -1534,24 +1517,6 @@ void app
             if (mediaPreviewWindow && !mediaPreviewWindow.isDestroyed())
                 mediaPreviewWindow.setBackgroundColor(background);
         });
-        ipcMain.handle(desktopIpc.notesList, () => notesStore.list());
-        ipcMain.handle(desktopIpc.noteCreate, (_event, title: unknown) => {
-            const validated = noteTitleOptionalValidate(title);
-            return notesStore.create(validated === undefined ? {} : { title: validated });
-        });
-        ipcMain.handle(desktopIpc.noteRead, (_event, id: unknown) =>
-            notesStore.read(noteIdValidate(id)),
-        );
-        ipcMain.handle(desktopIpc.noteApply, (_event, request: unknown) => {
-            const validated = noteApplyRequestValidate(request);
-            return notesStore.applyUpdates(validated.id, validated);
-        });
-        ipcMain.handle(desktopIpc.noteRename, (_event, id: unknown, title: unknown) =>
-            notesStore.rename(noteIdValidate(id), noteTitleValidate(title)),
-        );
-        ipcMain.handle(desktopIpc.noteRemove, (_event, id: unknown) =>
-            notesStore.remove(noteIdValidate(id)),
-        );
         // One-way: the window states what is waiting and the shell marks the
         // icon. Only the window this shell is currently presenting may do so, so
         // a superseded renderer still shutting down cannot repaint over the one

@@ -4,17 +4,17 @@
  * keeps the banners, field, and clarification on one 12px rhythm.
  */
 
-.happy2-happy-agent-project-clone-dialog {
+.happy-agent-project-clone-dialog {
     display: flex;
     flex-direction: column;
     gap: 12px;
     min-width: 0;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-happy-agent-project-clone-dialog__hint {
+.happy-agent-project-clone-dialog__hint {
     margin: 0;
     color: var(--text-secondary);
     font-size: 13px;

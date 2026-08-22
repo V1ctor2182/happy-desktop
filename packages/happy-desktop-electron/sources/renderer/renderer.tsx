@@ -762,13 +762,13 @@ function DesktopRuntimeContent(
     // can be reported against: the band is its outermost row and moves every
     // surface in it down rather than covering any of them.
     return (
-        <div className="happy2-connection-frame">
+        <div className="happy-connection-frame">
             <DesktopConnectionHeader
                 platform={props.platform}
                 happyAgents={props.happyAgents}
                 windowState={props.windowState}
             />
-            <div className="happy2-connection-frame__body">
+            <div className="happy-connection-frame__body">
                 <HappyAgentBoundary
                     appearance={props.appearance}
                     bridge={props.bridge}
@@ -797,7 +797,7 @@ function DesktopRuntimeContent(
 // Browser-local dev mode is signalled by a CSP-safe meta tag the dev server
 // injects (an inline script would be blocked by the page's script-src policy).
 const browserLocal =
-    document.querySelector('meta[name="happy2-browser-local"]')?.getAttribute("content") === "1";
+    document.querySelector('meta[name="happy-browser-local"]')?.getAttribute("content") === "1";
 const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
 const root = createRoot(document.getElementById("root")!);
 

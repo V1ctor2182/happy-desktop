@@ -64,7 +64,7 @@ function TopCard(): ReactNode {
                 width: "640px",
                 background: "var(--surface-high)",
                 border: "1px solid var(--divider)",
-                borderRadius: "var(--happy2-radius-shell)",
+                borderRadius: "var(--happy-radius-shell)",
             }}
         />
     );

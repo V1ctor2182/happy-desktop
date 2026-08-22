@@ -4,12 +4,12 @@
  * how a single monochrome PNG becomes a two-color mark at any size.
  */
 
-.happy2-avatar-brutalist,
-.happy2-avatar-brutalist__ink {
+.happy-avatar-brutalist,
+.happy-avatar-brutalist__ink {
     box-sizing: border-box;
 }
 
-.happy2-avatar-brutalist {
+.happy-avatar-brutalist {
     position: relative;
     display: flex;
     flex: none;
@@ -20,7 +20,7 @@
     user-select: none;
 }
 
-.happy2-avatar-brutalist__ink {
+.happy-avatar-brutalist__ink {
     display: block;
     mask-repeat: no-repeat;
     mask-position: center;

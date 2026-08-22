@@ -84,15 +84,15 @@ function subagentPriority(subagent: SubagentSummary): number {
 
 function SectionHeading(props: { count?: number; label: string }) {
     return (
-        <h3 className="happy2-happy-agent-activity__heading">
+        <h3 className="happy-agent-activity__heading">
             <span
-                className="happy2-happy-agent-activity__heading-label"
+                className="happy-agent-activity__heading-label"
                 data-happy-desktop-ui="happy-agent-activity-heading-label"
             >
                 {props.label}
             </span>
             {props.count === undefined ? null : (
-                <span className="happy2-happy-agent-activity__count">{props.count}</span>
+                <span className="happy-agent-activity__count">{props.count}</span>
             )}
         </h3>
     );
@@ -102,12 +102,12 @@ function GoalSection(props: { goal: HappyAgentGoal }) {
     const { goal } = props;
     return (
         <section
-            className="happy2-happy-agent-activity__section"
+            className="happy-agent-activity__section"
             data-happy-desktop-ui="happy-agent-activity-goal"
         >
             <SectionHeading label="Goal" />
             <div
-                className="happy2-happy-agent-activity__list"
+                className="happy-agent-activity__list"
                 data-happy-desktop-ui="happy-agent-activity-list"
             >
                 <CompactActivityRow
@@ -128,7 +128,7 @@ function TaskRow(props: { task: HappyAgentTask }) {
     const label = task.status === "in_progress" && task.activeForm ? task.activeForm : task.subject;
     return (
         <li
-            className="happy2-happy-agent-activity__task"
+            className="happy-agent-activity__task"
             data-happy-desktop-ui="happy-agent-activity-task"
         >
             <CompactActivityRow
@@ -151,7 +151,7 @@ function SubagentRow(props: {
     const { subagent, now } = props;
     return (
         <li
-            className="happy2-happy-agent-activity__subagent"
+            className="happy-agent-activity__subagent"
             data-happy-desktop-ui="happy-agent-activity-subagent"
         >
             <DelegatedAgentActivity
@@ -185,7 +185,7 @@ function BackgroundProcessRow(props: {
     const { process } = props;
     return (
         <li
-            className="happy2-happy-agent-activity__process"
+            className="happy-agent-activity__process"
             data-happy-desktop-ui="happy-agent-activity-process"
         >
             <CompactActivityRow
@@ -224,12 +224,12 @@ function AgentSection(props: {
     if (props.agents.length === 0) return null;
     return (
         <section
-            className="happy2-happy-agent-activity__section"
+            className="happy-agent-activity__section"
             data-happy-desktop-ui="happy-agent-activity-subagents"
         >
             <SectionHeading count={props.agents.length} label="Agents" />
             <ul
-                className="happy2-happy-agent-activity__list"
+                className="happy-agent-activity__list"
                 data-happy-desktop-ui="happy-agent-activity-list"
             >
                 {props.agents.map((subagent) => (
@@ -252,12 +252,12 @@ function TerminalSection(props: {
     if (props.processes.length === 0) return null;
     return (
         <section
-            className="happy2-happy-agent-activity__section"
+            className="happy-agent-activity__section"
             data-happy-desktop-ui="happy-agent-activity-processes"
         >
             <SectionHeading count={props.processes.length} label="Terminals" />
             <ul
-                className="happy2-happy-agent-activity__list"
+                className="happy-agent-activity__list"
                 data-happy-desktop-ui="happy-agent-activity-list"
             >
                 {props.processes.map((process) => (
@@ -307,7 +307,7 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
         backgroundProcesses.length === 0;
     const content = (
         <section
-            className={["happy2-happy-agent-activity", props.className].filter(Boolean).join(" ")}
+            className={["happy-agent-activity", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="happy-agent-activity-panel"
             data-placement={props.placement === "panel" ? "panel" : undefined}
             data-testid={props["data-testid"]}
@@ -315,7 +315,7 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
         >
             {empty ? (
                 <p
-                    className="happy2-happy-agent-activity__empty"
+                    className="happy-agent-activity__empty"
                     data-happy-desktop-ui="happy-agent-activity-empty"
                 >
                     No goal, tasks, agents, or background terminals for this session yet.
@@ -324,11 +324,11 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
                 <>
                     {hasRunning ? (
                         <section
-                            className="happy2-happy-agent-activity__group"
+                            className="happy-agent-activity__group"
                             data-happy-desktop-ui="happy-agent-activity-running"
                         >
-                            <h2 className="happy2-happy-agent-activity__group-heading">Running</h2>
-                            <div className="happy2-happy-agent-activity__group-content">
+                            <h2 className="happy-agent-activity__group-heading">Running</h2>
+                            <div className="happy-agent-activity__group-content">
                                 <AgentSection
                                     agents={runningSubagents}
                                     now={props.now}
@@ -346,12 +346,12 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
 
                     {tasks.length > 0 ? (
                         <section
-                            className="happy2-happy-agent-activity__section"
+                            className="happy-agent-activity__section"
                             data-happy-desktop-ui="happy-agent-activity-tasks"
                         >
                             <SectionHeading count={tasks.length} label="Tasks" />
                             <ul
-                                className="happy2-happy-agent-activity__list"
+                                className="happy-agent-activity__list"
                                 data-happy-desktop-ui="happy-agent-activity-list"
                             >
                                 {orderedTasks.map((task) => (
@@ -363,24 +363,24 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
 
                     {completedSubagents.length > 0 ? (
                         <details
-                            className="happy2-happy-agent-activity__completed"
+                            className="happy-agent-activity__completed"
                             data-happy-desktop-ui="happy-agent-activity-completed"
                             open={props.completedInitiallyOpen || undefined}
                         >
-                            <summary className="happy2-happy-agent-activity__completed-summary">
+                            <summary className="happy-agent-activity__completed-summary">
                                 <Icon
-                                    className="happy2-happy-agent-activity__completed-chevron"
+                                    className="happy-agent-activity__completed-chevron"
                                     name="chevron-right"
                                     size={12}
                                 />
-                                <h2 className="happy2-happy-agent-activity__completed-heading">
+                                <h2 className="happy-agent-activity__completed-heading">
                                     Completed
                                 </h2>
-                                <span className="happy2-happy-agent-activity__count">
+                                <span className="happy-agent-activity__count">
                                     {completedSubagents.length}
                                 </span>
                             </summary>
-                            <div className="happy2-happy-agent-activity__completed-content">
+                            <div className="happy-agent-activity__completed-content">
                                 <AgentSection
                                     agents={completedSubagents}
                                     now={props.now}
@@ -396,11 +396,11 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
     return props.placement === "panel" ? (
         <ScrollArea
             axes="both"
-            className="happy2-happy-agent-activity-panel-scroll"
+            className="happy-agent-activity-panel-scroll"
             data-happy-desktop-ui="happy-agent-activity-panel-scroll"
-            viewportClassName="happy2-happy-agent-activity-panel-scroll__viewport"
+            viewportClassName="happy-agent-activity-panel-scroll__viewport"
         >
-            <div className="happy2-happy-agent-activity-panel-scroll__content">{content}</div>
+            <div className="happy-agent-activity-panel-scroll__content">{content}</div>
         </ScrollArea>
     ) : (
         content

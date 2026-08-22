@@ -115,7 +115,7 @@ it("holds FileAttachment geometry, typography, truncation, and interactivity", a
     });
     const size = view.$('[data-testid="fa"] [data-happy-desktop-ui="file-attachment-size"]');
     expect(size.element.textContent).toBe("283 KB");
-    expect(size.textMetrics().font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(size.textMetrics().font.family).toBe("happy Mono, ui-monospace, monospace");
     expect(size.computedStyle("color")).toBe("rgb(73, 69, 79)");
     /* The doc glyph is optically centered in the 36px pill's vertical lane. */
     const iconInk = await icon.visibleMetrics();
@@ -180,11 +180,11 @@ it("holds FileAttachment geometry, typography, truncation, and interactivity", a
     expect(action.computedStyle("opacity")).toBe("1");
     expect(
         view
-            .$('[data-testid="chat"] .happy2-file-attachment__meta-default')
+            .$('[data-testid="chat"] .happy-file-attachment__meta-default')
             .computedStyle("display"),
     ).toBe("none");
     expect(
-        view.$('[data-testid="chat"] .happy2-file-attachment__meta-hover').computedStyle("display"),
+        view.$('[data-testid="chat"] .happy-file-attachment__meta-hover').computedStyle("display"),
     ).toBe("inline");
     await view.screenshot("FileAttachment.test");
 });

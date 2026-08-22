@@ -44,7 +44,7 @@ export type LightboxProps = LightboxSharedProps &
  * a new browser tab). It is not a card on a dim: hosted on `ModalOverlay`'s
  * `fill` placement it takes the whole app window and paints one flat dark over
  * it, so looking at media is a mode the window enters rather than a panel that
- * floats above a half-legible copy of the app. The root `.happy2-lightbox`
+ * floats above a half-legible copy of the app. The root `.happy-lightbox`
  * still declares no scrim and no fixed position of its own, so it renders as a
  * screenshot-safe specimen in whatever box it is given; the measured surface
  * is the inner `data-happy-desktop-ui="lightbox-dialog"`: an optional
@@ -115,7 +115,7 @@ export function Lightbox(props: LightboxProps) {
     return (
         <div
             {...rest}
-            className={["happy2-lightbox", local.className].filter(Boolean).join(" ")}
+            className={["happy-lightbox", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="lightbox"
             style={local.style}
         >
@@ -123,7 +123,7 @@ export function Lightbox(props: LightboxProps) {
                 <div
                     aria-label={local.caption ?? local.alt ?? `${mediaName} preview`}
                     aria-modal="true"
-                    className="happy2-lightbox__dialog"
+                    className="happy-lightbox__dialog"
                     data-happy-desktop-ui="lightbox-dialog"
                     onClick={click}
                     onKeyDown={keyDown}
@@ -131,16 +131,16 @@ export function Lightbox(props: LightboxProps) {
                 >
                     {hasHeader() ? (
                         <header
-                            className="happy2-lightbox__header"
+                            className="happy-lightbox__header"
                             data-happy-desktop-ui="lightbox-header"
                         >
                             <div
-                                className="happy2-lightbox__caption"
+                                className="happy-lightbox__caption"
                                 data-happy-desktop-ui="lightbox-caption"
                             >
                                 {local.caption ? (
                                     <span
-                                        className="happy2-lightbox__caption-title"
+                                        className="happy-lightbox__caption-title"
                                         data-happy-desktop-ui="lightbox-caption-title"
                                     >
                                         {local.caption}
@@ -148,7 +148,7 @@ export function Lightbox(props: LightboxProps) {
                                 ) : null}
                                 {local.detail ? (
                                     <span
-                                        className="happy2-lightbox__caption-detail"
+                                        className="happy-lightbox__caption-detail"
                                         data-happy-desktop-ui="lightbox-caption-detail"
                                     >
                                         {local.detail}
@@ -156,7 +156,7 @@ export function Lightbox(props: LightboxProps) {
                                 ) : null}
                             </div>
                             <div
-                                className="happy2-lightbox__tools"
+                                className="happy-lightbox__tools"
                                 data-happy-desktop-ui="lightbox-tools"
                             >
                                 {stepping ? (
@@ -172,7 +172,7 @@ export function Lightbox(props: LightboxProps) {
                                 ) : null}
                                 {stepping && local.position ? (
                                     <span
-                                        className="happy2-lightbox__position"
+                                        className="happy-lightbox__position"
                                         data-happy-desktop-ui="lightbox-position"
                                     >
                                         {`${String(local.position.index + 1)} of ${String(local.position.total)}`}
@@ -203,7 +203,7 @@ export function Lightbox(props: LightboxProps) {
                             </div>
                         </header>
                     ) : null}
-                    <div className="happy2-lightbox__frame" data-happy-desktop-ui="lightbox-frame">
+                    <div className="happy-lightbox__frame" data-happy-desktop-ui="lightbox-frame">
                         {local.videoUrl ? (
                             <VideoViewer
                                 content={{ type: "url", url: local.videoUrl }}

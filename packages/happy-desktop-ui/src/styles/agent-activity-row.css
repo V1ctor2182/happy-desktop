@@ -4,23 +4,23 @@
  * come only from theme roles.
  */
 
-.happy2-agent-activity-row {
+.happy-agent-activity-row {
     display: flex;
     flex-direction: column;
     width: 100%;
 }
 
-.happy2-agent-activity {
+.happy-agent-activity {
     display: flex;
     flex-direction: column;
     gap: 4px;
     width: 100%;
     min-width: 0;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
 }
 
 /* The header and its copy action share one row; only the header stretches. */
-.happy2-agent-activity__line {
+.happy-agent-activity__line {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -29,19 +29,19 @@
     min-width: 0;
 }
 
-.happy2-agent-activity__line .happy2-agent-activity__header {
+.happy-agent-activity__line .happy-agent-activity__header {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-.happy2-agent-activity-row:hover .happy2-copy-button,
-.happy2-agent-activity-row:focus-within .happy2-copy-button {
+.happy-agent-activity-row:hover .happy-copy-button,
+.happy-agent-activity-row:focus-within .happy-copy-button {
     opacity: 1;
 }
 
 /* Opening the file the tool worked on: the same quiet, hover-revealed action
    as the copy beside it, so the row keeps one trailing control group. */
-.happy2-agent-activity__open {
+.happy-agent-activity__open {
     display: flex;
     flex: none;
     align-items: center;
@@ -51,7 +51,7 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text-secondary);
     appearance: none;
@@ -60,23 +60,23 @@
     transition: opacity 100ms ease;
 }
 
-.happy2-agent-activity__open:hover {
+.happy-agent-activity__open:hover {
     background: var(--surface-pressed);
     color: var(--text);
 }
 
-.happy2-agent-activity__open:focus-visible {
+.happy-agent-activity__open:focus-visible {
     opacity: 1;
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
 
-.happy2-agent-activity-row:hover .happy2-agent-activity__open,
-.happy2-agent-activity-row:focus-within .happy2-agent-activity__open {
+.happy-agent-activity-row:hover .happy-agent-activity__open,
+.happy-agent-activity-row:focus-within .happy-agent-activity__open {
     opacity: 1;
 }
 
-.happy2-agent-activity__header {
+.happy-agent-activity__header {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -93,42 +93,42 @@
        out in Arial while every label beside it was the house face. The inner
        label spans each set a font of their own, so this was invisible until a
        row rendered a word without one. */
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 14px;
     line-height: 20px;
 }
 
-.happy2-agent-activity__header:disabled {
+.happy-agent-activity__header:disabled {
     cursor: default;
 }
 
-.happy2-agent-activity__dot {
+.happy-agent-activity__dot {
     flex: none;
     width: 8px;
     height: 8px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
 }
 
-.happy2-agent-activity__dot[data-tone="success"] {
+.happy-agent-activity__dot[data-tone="success"] {
     background: var(--success);
 }
 
-.happy2-agent-activity__dot[data-tone="warning"] {
+.happy-agent-activity__dot[data-tone="warning"] {
     background: var(--box-warning-text);
 }
 
-.happy2-agent-activity__dot[data-tone="error"] {
+.happy-agent-activity__dot[data-tone="error"] {
     background: var(--status-error);
 }
 
-.happy2-agent-activity__dot[data-tone="neutral"] {
+.happy-agent-activity__dot[data-tone="neutral"] {
     background: var(--text-secondary);
 }
 
 /* Grey, and quieter than the verb it sits beside: the glyph is a scanning aid
    down the left of a long transcript, not a second thing competing to be read
    first. Fixed square so every row's verb starts on the same column. */
-.happy2-agent-activity__glyph {
+.happy-agent-activity__glyph {
     flex: none;
     display: flex;
     align-items: center;
@@ -141,7 +141,7 @@
 /* The name of what the agent did. It is a label, not a link, and it is the
    first word of the row: weight carries it, so it reads at full contrast
    instead of in the interactive colour it never responded to. */
-.happy2-agent-activity__verb {
+.happy-agent-activity__verb {
     flex: none;
     font-weight: 600;
     color: var(--text);
@@ -149,16 +149,16 @@
 
 /* A command or path longer than the row scrolls sideways (see ScrollingText)
    rather than losing its tail, so nothing an agent did is unreadable. */
-.happy2-agent-activity__text {
+.happy-agent-activity__text {
     min-width: 0;
     flex: 1 1 auto;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 13px;
     line-height: 20px;
     color: var(--text);
 }
 
-.happy2-agent-activity__file-summary {
+.happy-agent-activity__file-summary {
     min-width: 0;
     flex: 1 1 auto;
     display: flex;
@@ -167,37 +167,37 @@
     gap: 8px;
 }
 
-.happy2-agent-activity__file-summary .happy2-agent-activity__text {
+.happy-agent-activity__file-summary .happy-agent-activity__text {
     flex: 0 1 auto;
     font-weight: 600;
 }
 
-.happy2-agent-activity__stats {
+.happy-agent-activity__stats {
     flex: none;
     display: flex;
     flex-direction: row;
     gap: 6px;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
 }
 
-.happy2-agent-activity__added {
+.happy-agent-activity__added {
     color: var(--git-added-text);
 }
 
-.happy2-agent-activity__deleted {
+.happy-agent-activity__deleted {
     color: var(--git-removed-text);
 }
 
-.happy2-agent-activity__chevron {
+.happy-agent-activity__chevron {
     flex: none;
     display: inline-flex;
     color: var(--text-secondary);
 }
 
-.happy2-agent-activity__time {
+.happy-agent-activity__time {
     flex: none;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 16px;
@@ -207,13 +207,13 @@
     transition: opacity 100ms ease;
 }
 
-.happy2-agent-activity-row:hover .happy2-agent-activity__time,
-.happy2-agent-activity-row:focus-within .happy2-agent-activity__time {
+.happy-agent-activity-row:hover .happy-agent-activity__time,
+.happy-agent-activity-row:focus-within .happy-agent-activity__time {
     opacity: 1;
 }
 
-.happy2-agent-activity__child,
-.happy2-agent-activity__review {
+.happy-agent-activity__child,
+.happy-agent-activity__review {
     display: flex;
     flex-direction: row;
     gap: 6px;
@@ -223,66 +223,66 @@
     color: var(--text-secondary);
 }
 
-.happy2-agent-activity__child-marker {
+.happy-agent-activity__child-marker {
     flex: none;
     color: var(--divider);
 }
 
-.happy2-agent-activity__child-text {
+.happy-agent-activity__child-text {
     min-width: 0;
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-.happy2-agent-activity__child[data-tone="error"] {
+.happy-agent-activity__child[data-tone="error"] {
     color: var(--status-error);
 }
 
-.happy2-agent-activity__source {
+.happy-agent-activity__source {
     color: var(--text-link);
     text-decoration: none;
 }
 
-.happy2-agent-activity__source:hover,
-.happy2-agent-activity__source:focus-visible {
+.happy-agent-activity__source:hover,
+.happy-agent-activity__source:focus-visible {
     text-decoration: underline;
 }
 
-.happy2-agent-activity__review-body {
+.happy-agent-activity__review-body {
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
 }
 
-.happy2-agent-activity__review-title {
+.happy-agent-activity__review-title {
     font-weight: 600;
     color: var(--review-accent);
 }
 
-.happy2-agent-activity__review-risk[data-risk="high"] {
+.happy-agent-activity__review-risk[data-risk="high"] {
     color: var(--status-error);
 }
 
-.happy2-agent-activity__body {
+.happy-agent-activity__body {
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding-left: 16px;
 }
 
-.happy2-agent-activity__diff {
+.happy-agent-activity__diff {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.happy2-agent-activity__output {
+.happy-agent-activity__output {
     margin: 0;
     padding: 8px 10px;
     background: var(--diff-context-bg);
-    border-radius: var(--happy2-radius-sm);
-    font-family: var(--happy2-font-mono);
+    border-radius: var(--happy-radius-sm);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
     color: var(--text-secondary);
@@ -290,17 +290,17 @@
     word-break: break-word;
 }
 
-.happy2-agent-activity__output-elide {
+.happy-agent-activity__output-elide {
     color: var(--text-secondary);
     opacity: 0.7;
 }
 
-.happy2-agent-activity__args {
+.happy-agent-activity__args {
     margin: 0;
     padding: 8px 10px;
     background: var(--diff-context-bg);
-    border-radius: var(--happy2-radius-sm);
-    font-family: var(--happy2-font-mono);
+    border-radius: var(--happy-radius-sm);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
     color: var(--text-secondary);
@@ -308,24 +308,24 @@
     word-break: break-word;
 }
 
-.happy2-agent-activity__terminal {
+.happy-agent-activity__terminal {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
-.happy2-agent-activity__status {
+.happy-agent-activity__status {
     flex: 0 0 auto;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     color: var(--text-secondary);
 }
 
-.happy2-agent-activity__status[data-failed="true"] {
+.happy-agent-activity__status[data-failed="true"] {
     color: var(--text-destructive);
 }
 
-.happy2-agent-activity__reasoning {
+.happy-agent-activity__reasoning {
     font-size: 12px;
     line-height: 18px;
     color: var(--text-secondary);
@@ -337,7 +337,7 @@
  * spacing, so thinking reads as one more block of the reply rather than
  * something pinned to the pane edge. The contract lives with the component.
  */
-.happy2-agent-activity-row {
+.happy-agent-activity-row {
     flex: none;
     /* The subject ellipsizes, so it is the one line that always reaches its
        boundary: it stops short of where prose wraps, or a truncated command
@@ -347,8 +347,8 @@
 
 /* Tool calls remain compact single lines, but each owns 6px above and below so
  * a run scans as distinct actions rather than one dense paragraph. */
-.happy2-agent-activity-row[data-kind="tool"],
-.happy2-agent-activity-row[data-kind="labeled"] {
+.happy-agent-activity-row[data-kind="tool"],
+.happy-agent-activity-row[data-kind="labeled"] {
     padding-top: 6px;
     padding-bottom: 6px;
 }
@@ -356,46 +356,46 @@
 /* A tool-first turn puts its first row inside the Message that owns the agent
  * identity line. Message already supplies the transcript inset, so applying
  * the activity inset again would double-indent the tool. */
-.happy2-message--activity-lead .happy2-agent-activity-row {
+.happy-message--activity-lead .happy-agent-activity-row {
     padding-right: 0;
     padding-left: 0;
 }
 
-.happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity,
-.happy2-agent-activity-row[data-kind="labeled"] .happy2-agent-activity {
+.happy-agent-activity-row[data-kind="tool"] .happy-agent-activity,
+.happy-agent-activity-row[data-kind="labeled"] .happy-agent-activity {
     gap: 0;
 }
 
-.happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity__header,
-.happy2-agent-activity-row[data-kind="labeled"] .happy2-agent-activity__header {
+.happy-agent-activity-row[data-kind="tool"] .happy-agent-activity__header,
+.happy-agent-activity-row[data-kind="labeled"] .happy-agent-activity__header {
     flex-wrap: nowrap;
     gap: 6px;
     padding: 0;
     cursor: default;
 }
 
-.happy2-agent-activity[data-single-line] .happy2-agent-activity__verb {
+.happy-agent-activity[data-single-line] .happy-agent-activity__verb {
     flex: none;
     font-weight: 500;
     color: var(--text-secondary);
 }
 
-.happy2-agent-activity[data-single-line] .happy2-agent-activity__text {
+.happy-agent-activity[data-single-line] .happy-agent-activity__text {
     flex: 1 1 auto;
     min-width: 0;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 14px;
     font-weight: 400;
     color: var(--warning);
 }
 
-.happy2-agent-activity[data-single-line][data-presentation="execCommand"]
-    .happy2-agent-activity__text,
-.happy2-agent-activity[data-single-line][data-presentation="backgroundTerminalInteraction"]
-    .happy2-agent-activity__text,
-.happy2-agent-activity[data-single-line][data-presentation="fileDiff"] .happy2-agent-activity__text,
-.happy2-agent-activity[data-single-line][data-mono] .happy2-agent-activity__text {
-    font-family: var(--happy2-font-mono);
+.happy-agent-activity[data-single-line][data-presentation="execCommand"]
+    .happy-agent-activity__text,
+.happy-agent-activity[data-single-line][data-presentation="backgroundTerminalInteraction"]
+    .happy-agent-activity__text,
+.happy-agent-activity[data-single-line][data-presentation="fileDiff"] .happy-agent-activity__text,
+.happy-agent-activity[data-single-line][data-mono] .happy-agent-activity__text {
+    font-family: var(--happy-font-mono);
     font-size: 13px;
 }
 
@@ -403,9 +403,9 @@
    monospace, same weight — so the row's only bold word stays the verb. It
    shrinks to fit rather than flexing wide, keeping the diff stats beside the
    name instead of pushed to the row's far edge. */
-.happy2-agent-activity[data-single-line][data-presentation="fileDiff"]
-    .happy2-agent-activity__file-summary
-    .happy2-agent-activity__text {
+.happy-agent-activity[data-single-line][data-presentation="fileDiff"]
+    .happy-agent-activity__file-summary
+    .happy-agent-activity__text {
     flex: 0 1 auto;
 }
 
@@ -418,8 +418,8 @@
    — worth spotting in a scan down the transcript, and no further, because the
    subject is the command itself and a long amber command reads as a warning
    about its content rather than a fact about its approval. */
-.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__glyph,
-.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__verb {
+.happy-agent-activity[data-review]:not([data-failed]) .happy-agent-activity__glyph,
+.happy-agent-activity[data-review]:not([data-failed]) .happy-agent-activity__verb {
     color: var(--review-accent);
 }
 
@@ -428,9 +428,9 @@
    the whole line turns, glyph through subject — and because a whole line is
    far louder than a two-word mark, it turns a shade off the text ink instead
    of the accent above. */
-.happy2-agent-activity[data-elevated]:not([data-failed]) .happy2-agent-activity__glyph,
-.happy2-agent-activity[data-elevated]:not([data-failed]) .happy2-agent-activity__verb,
-.happy2-agent-activity[data-elevated]:not([data-failed]) .happy2-agent-activity__text {
+.happy-agent-activity[data-elevated]:not([data-failed]) .happy-agent-activity__glyph,
+.happy-agent-activity[data-elevated]:not([data-failed]) .happy-agent-activity__verb,
+.happy-agent-activity[data-elevated]:not([data-failed]) .happy-agent-activity__text {
     color: var(--activity-elevated-line);
 }
 
@@ -438,12 +438,12 @@
    failed — the verb and its subject together. It outranks both marks above,
    and like elevation it stays near the text ink: the row's dot is already
    full-strength red, so the line only has to say which row is the failed one. */
-.happy2-agent-activity[data-failed] .happy2-agent-activity__glyph,
-.happy2-agent-activity[data-failed] .happy2-agent-activity__verb,
-.happy2-agent-activity[data-failed] .happy2-agent-activity__text,
-.happy2-agent-activity[data-presentation="shell"][data-tone="error"] .happy2-agent-activity__glyph,
-.happy2-agent-activity[data-presentation="shell"][data-tone="error"] .happy2-agent-activity__verb,
-.happy2-agent-activity[data-presentation="shell"][data-tone="error"] .happy2-agent-activity__text {
+.happy-agent-activity[data-failed] .happy-agent-activity__glyph,
+.happy-agent-activity[data-failed] .happy-agent-activity__verb,
+.happy-agent-activity[data-failed] .happy-agent-activity__text,
+.happy-agent-activity[data-presentation="shell"][data-tone="error"] .happy-agent-activity__glyph,
+.happy-agent-activity[data-presentation="shell"][data-tone="error"] .happy-agent-activity__verb,
+.happy-agent-activity[data-presentation="shell"][data-tone="error"] .happy-agent-activity__text {
     color: var(--activity-failed-line);
 }
 
@@ -452,12 +452,12 @@
    from the subject before or after it appears — and because it rides that
    edge, the row's trailing inset is also the time's, so it matches the 30px
    leading inset and the line reads as evenly framed. */
-.happy2-agent-activity-row[data-treatment="focused"] {
+.happy-agent-activity-row[data-treatment="focused"] {
     padding-right: 30px;
 }
 
-.happy2-agent-activity-row[data-treatment="focused"][data-kind="tool"]
-    .happy2-agent-activity__header {
+.happy-agent-activity-row[data-treatment="focused"][data-kind="tool"]
+    .happy-agent-activity__header {
     position: relative;
 }
 
@@ -466,8 +466,7 @@
  * the row, not another column. Its surface veil turns the would-be "|" into a
  * soft fade while the subject and every sibling keep exactly the same box.
  */
-.happy2-agent-activity-row[data-treatment="focused"][data-kind="tool"]
-    .happy2-agent-activity__time {
+.happy-agent-activity-row[data-treatment="focused"][data-kind="tool"] .happy-agent-activity__time {
     position: absolute;
     top: 0;
     right: 0;
@@ -489,11 +488,11 @@
    aligned to the line's bottom takes the line box's full height and puts its
    baseline where the row's other labels put theirs. Everything here but the
    width animation therefore comes from typed-text.css. */
-.happy2-agent-activity__still-text {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- matches TypedText exactly: one inline text run occupying the same inline box as the label it stands in for, which a flex box would not */
+.happy-agent-activity__still-text {
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- matches TypedText exactly: one inline text run occupying the same inline box as the label it stands in for, which a flex box would not */
     display: inline-block;
     overflow: hidden;
     vertical-align: bottom;
     white-space: nowrap;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
 }

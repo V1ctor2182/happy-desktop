@@ -37,7 +37,7 @@ export function CommandPicker(props: CommandPickerProps) {
     return (
         <div
             aria-label={props.label ?? "Commands"}
-            className={["happy2-command-picker", props.className].filter(Boolean).join(" ")}
+            className={["happy-command-picker", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="command-picker"
             data-testid={props["data-testid"]}
             role="listbox"
@@ -46,16 +46,16 @@ export function CommandPicker(props: CommandPickerProps) {
             {/* The card holds the frame; this scrollport owns scrolling with no
                 spacing of its own, and the list inside it owns the padding. */}
             <ScrollArea
-                className="happy2-command-picker__scroll"
+                className="happy-command-picker__scroll"
                 data-happy-desktop-ui="command-picker-scroll"
-                viewportClassName="happy2-command-picker__scroll-viewport"
+                viewportClassName="happy-command-picker__scroll-viewport"
             >
                 <div
-                    className="happy2-command-picker__list"
+                    className="happy-command-picker__list"
                     data-happy-desktop-ui="command-picker-list"
                 >
                     <div
-                        className="happy2-command-picker__header"
+                        className="happy-command-picker__header"
                         data-happy-desktop-ui="command-picker-header"
                     >
                         {props.label ?? "Commands"}
@@ -63,7 +63,7 @@ export function CommandPicker(props: CommandPickerProps) {
                     {props.items.map((item) => (
                         <button
                             aria-selected={item.id === props.activeId ? "true" : "false"}
-                            className="happy2-command-picker__row"
+                            className="happy-command-picker__row"
                             data-active={item.id === props.activeId ? "" : undefined}
                             data-command-id={item.id}
                             data-happy-desktop-ui="command-picker-row"
@@ -74,19 +74,19 @@ export function CommandPicker(props: CommandPickerProps) {
                         >
                             <span
                                 aria-hidden="true"
-                                className="happy2-command-picker__icon"
+                                className="happy-command-picker__icon"
                                 data-happy-desktop-ui="command-picker-icon"
                             >
                                 <Icon name={item.icon} size={16} />
                             </span>
                             <span
-                                className="happy2-command-picker__slash"
+                                className="happy-command-picker__slash"
                                 data-happy-desktop-ui="command-picker-slash"
                             >
                                 {item.slash}
                             </span>
                             <span
-                                className="happy2-command-picker__description"
+                                className="happy-command-picker__description"
                                 data-happy-desktop-ui="command-picker-description"
                             >
                                 {item.description}

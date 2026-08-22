@@ -8,12 +8,12 @@
  * blends of --success so no raw color values appear here.
  */
 
-.happy2-agent-run-card,
-.happy2-agent-run-card * {
+.happy-agent-run-card,
+.happy-agent-run-card * {
     box-sizing: border-box;
 }
 
-.happy2-agent-run-card {
+.happy-agent-run-card {
     position: relative;
     display: block;
     max-width: 680px;
@@ -22,26 +22,26 @@
     padding: 16px;
     background-color: var(--surface);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-agent-run-card[data-status="review"] {
+.happy-agent-run-card[data-status="review"] {
     border-color: color-mix(in srgb, var(--success) 35%, transparent);
     background-color: color-mix(in srgb, var(--success) 5%, var(--surface));
     box-shadow: 0 0 24px var(--surface-high);
 }
 
-.happy2-agent-run-card[data-status="queued"] {
+.happy-agent-run-card[data-status="queued"] {
     border-style: dashed;
     border-color: var(--divider);
 }
 
 /* ---- Working progress strip ------------------------------------------ */
 
-.happy2-agent-run-card__progress {
+.happy-agent-run-card__progress {
     position: absolute;
     top: 0;
     right: 0;
@@ -53,21 +53,21 @@
 /* A colour is not an image: as `background-image` this declaration was dropped
    and the strip painted nothing at all. It fills the way every other progress
    bar in the app does. */
-.happy2-agent-run-card__progress-fill {
+.happy-agent-run-card__progress-fill {
     height: 3px;
     background-color: var(--text-link);
 }
 
 /* ---- Header ----------------------------------------------------------- */
 
-.happy2-agent-run-card__header {
+.happy-agent-run-card__header {
     display: flex;
     align-items: center;
     gap: 8px;
     height: 28px;
 }
 
-.happy2-agent-run-card__name {
+.happy-agent-run-card__name {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -75,7 +75,7 @@
     white-space: nowrap;
 }
 
-.happy2-agent-run-card__agent {
+.happy-agent-run-card__agent {
     display: block;
     overflow: hidden;
     color: var(--text);
@@ -85,7 +85,7 @@
     text-overflow: ellipsis;
 }
 
-.happy2-agent-run-card__kind {
+.happy-agent-run-card__kind {
     display: block;
     color: var(--text-secondary);
     font-size: 13px;
@@ -93,13 +93,13 @@
     line-height: 18px;
 }
 
-.happy2-agent-run-card__check {
+.happy-agent-run-card__check {
     display: flex;
     flex: none;
     color: var(--success);
 }
 
-.happy2-agent-run-card__toggle {
+.happy-agent-run-card__toggle {
     display: flex;
     flex: none;
     align-items: center;
@@ -110,7 +110,7 @@
     padding: 0;
     background: transparent;
     border: 0;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text-secondary);
     cursor: pointer;
     appearance: none;
@@ -119,28 +119,28 @@
         color 120ms ease;
 }
 
-.happy2-agent-run-card__toggle:hover {
+.happy-agent-run-card__toggle:hover {
     background-color: var(--surface-ripple);
     color: var(--text-secondary);
 }
 
-.happy2-agent-run-card__toggle:focus-visible {
+.happy-agent-run-card__toggle:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-agent-run-card__toggle-icon {
+.happy-agent-run-card__toggle-icon {
     display: flex;
     transition: transform 120ms ease;
 }
 
-.happy2-agent-run-card[data-expanded] .happy2-agent-run-card__toggle-icon {
+.happy-agent-run-card[data-expanded] .happy-agent-run-card__toggle-icon {
     transform: rotate(180deg);
 }
 
 /* ---- Title, diffstat meta, branch ------------------------------------- */
 
-.happy2-agent-run-card__title {
+.happy-agent-run-card__title {
     margin: 8px 0 0;
     color: var(--text);
     font-size: 15px;
@@ -149,56 +149,56 @@
     letter-spacing: -0.01em;
 }
 
-.happy2-agent-run-card__meta {
+.happy-agent-run-card__meta {
     display: flex;
     align-items: center;
     gap: 12px;
     margin-top: 8px;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;
     white-space: nowrap;
 }
 
-.happy2-agent-run-card__added {
+.happy-agent-run-card__added {
     display: block;
     flex: none;
     color: var(--diff-success);
 }
 
-.happy2-agent-run-card__removed {
+.happy-agent-run-card__removed {
     display: block;
     flex: none;
     color: var(--diff-error);
 }
 
-.happy2-agent-run-card__detail {
+.happy-agent-run-card__detail {
     display: block;
     overflow: hidden;
     color: var(--text-secondary);
     text-overflow: ellipsis;
 }
 
-.happy2-agent-run-card__branch {
+.happy-agent-run-card__branch {
     display: flex;
     align-items: center;
     gap: 6px;
     margin-top: 8px;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;
     white-space: nowrap;
 }
 
-.happy2-agent-run-card__branch-icon {
+.happy-agent-run-card__branch-icon {
     display: flex;
     flex: none;
     color: var(--text-secondary);
 }
 
-.happy2-agent-run-card__branch-name {
+.happy-agent-run-card__branch-name {
     display: block;
     overflow: hidden;
     color: var(--text-secondary);
@@ -207,21 +207,21 @@
 
 /* ---- Step checklist (expanded) ---------------------------------------- */
 
-.happy2-agent-run-card__steps {
+.happy-agent-run-card__steps {
     display: block;
     margin: 8px 0 0;
     padding: 0;
     list-style: none;
 }
 
-.happy2-agent-run-card__step {
+.happy-agent-run-card__step {
     display: flex;
     align-items: center;
     gap: 8px;
     height: 28px;
 }
 
-.happy2-agent-run-card__step-glyph {
+.happy-agent-run-card__step-glyph {
     display: flex;
     flex: none;
     align-items: center;
@@ -230,28 +230,28 @@
     height: 16px;
 }
 
-.happy2-agent-run-card__step[data-status="done"] .happy2-agent-run-card__step-glyph {
+.happy-agent-run-card__step[data-status="done"] .happy-agent-run-card__step-glyph {
     color: var(--success);
 }
 
-.happy2-agent-run-card__step-dot {
+.happy-agent-run-card__step-dot {
     display: block;
     width: 8px;
     height: 8px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
 }
 
-.happy2-agent-run-card__step[data-status="working"] .happy2-agent-run-card__step-dot {
+.happy-agent-run-card__step[data-status="working"] .happy-agent-run-card__step-dot {
     background-color: var(--text-link);
     box-shadow: 0 0 0 3px var(--surface-selected);
 }
 
-.happy2-agent-run-card__step[data-status="pending"] .happy2-agent-run-card__step-dot {
+.happy-agent-run-card__step[data-status="pending"] .happy-agent-run-card__step-dot {
     border: 1px solid var(--text-secondary);
     background-color: transparent;
 }
 
-.happy2-agent-run-card__step-label {
+.happy-agent-run-card__step-label {
     display: block;
     overflow: hidden;
     font-size: 13px;
@@ -261,26 +261,26 @@
     white-space: nowrap;
 }
 
-.happy2-agent-run-card__step[data-status="done"] .happy2-agent-run-card__step-label {
+.happy-agent-run-card__step[data-status="done"] .happy-agent-run-card__step-label {
     color: var(--text-secondary);
 }
 
-.happy2-agent-run-card__step[data-status="working"] .happy2-agent-run-card__step-label {
+.happy-agent-run-card__step[data-status="working"] .happy-agent-run-card__step-label {
     color: var(--text);
     font-weight: 600;
 }
 
-.happy2-agent-run-card__step[data-status="pending"] .happy2-agent-run-card__step-label {
+.happy-agent-run-card__step[data-status="pending"] .happy-agent-run-card__step-label {
     color: var(--text-secondary);
 }
 
 /* ---- Expanded children slot + actions --------------------------------- */
 
-.happy2-agent-run-card__body {
+.happy-agent-run-card__body {
     margin-top: 12px;
 }
 
-.happy2-agent-run-card__actions {
+.happy-agent-run-card__actions {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -300,18 +300,18 @@
  * never move layout boxes. Icons, the toggle chevron, and step dots measured
  * true-centered raw (|d| <= 0.11px in every engine), so they carry none.
  */
-.happy2-agent-run-card__agent,
-.happy2-agent-run-card__kind,
-.happy2-agent-run-card__added,
-.happy2-agent-run-card__removed,
-.happy2-agent-run-card__detail,
-.happy2-agent-run-card__branch-name,
-.happy2-agent-run-card__step-label {
-    translate: 0 var(--happy2-run-card-text-y, 0px);
+.happy-agent-run-card__agent,
+.happy-agent-run-card__kind,
+.happy-agent-run-card__added,
+.happy-agent-run-card__removed,
+.happy-agent-run-card__detail,
+.happy-agent-run-card__branch-name,
+.happy-agent-run-card__step-label {
+    translate: 0 var(--happy-run-card-text-y, 0px);
 }
 
-.happy2-agent-run-card__title {
-    translate: 0 var(--happy2-run-card-title-y, 0px);
+.happy-agent-run-card__title {
+    translate: 0 var(--happy-run-card-title-y, 0px);
 }
 
 /*
@@ -320,16 +320,16 @@
  * Blink on macOS, so neither is a usable engine scope.)
  */
 @supports (-moz-appearance: none) {
-    .happy2-agent-run-card {
-        --happy2-run-card-text-y: -0.5px;
-        --happy2-run-card-title-y: -0.5px;
+    .happy-agent-run-card {
+        --happy-run-card-text-y: -0.5px;
+        --happy-run-card-title-y: -0.5px;
     }
 }
 
 /* WebKit — Blink and Gecko do not parse -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
-    .happy2-agent-run-card {
-        --happy2-run-card-text-y: -0.5px;
-        --happy2-run-card-title-y: 0px;
+    .happy-agent-run-card {
+        --happy-run-card-text-y: -0.5px;
+        --happy-run-card-title-y: 0px;
     }
 }

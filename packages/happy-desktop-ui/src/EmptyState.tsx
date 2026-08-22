@@ -75,7 +75,7 @@ export function EmptyState(props: EmptyStateProps) {
     const size = () => local.size ?? "panel";
     return (
         <div
-            className={["happy2-empty-state", local.className].filter(Boolean).join(" ")}
+            className={["happy-empty-state", local.className].filter(Boolean).join(" ")}
             data-animated={local.animation === undefined ? undefined : ""}
             data-happy-desktop-ui="empty-state"
             data-size={size()}
@@ -84,19 +84,19 @@ export function EmptyState(props: EmptyStateProps) {
         >
             {local.animation === undefined ? (
                 <span
-                    className="happy2-empty-state__media"
+                    className="happy-empty-state__media"
                     data-happy-desktop-ui="empty-state-media"
                 >
                     <Icon name={local.icon} size={mediaIconSize[size()]} />
                 </span>
             ) : (
                 <span
-                    className="happy2-empty-state__scene"
+                    className="happy-empty-state__scene"
                     data-happy-desktop-ui="empty-state-scene"
                 >
                     <Icon name={local.icon} size={mediaIconSize[size()]} />
                     <LottieScene
-                        className="happy2-empty-state__art"
+                        className="happy-empty-state__art"
                         name={local.animation}
                         {...(local.animationPlay ? { play: local.animationPlay } : {})}
                         replayLabel="Play the illustration again"
@@ -104,12 +104,12 @@ export function EmptyState(props: EmptyStateProps) {
                     />
                 </span>
             )}
-            <h2 className="happy2-empty-state__title" data-happy-desktop-ui="empty-state-title">
+            <h2 className="happy-empty-state__title" data-happy-desktop-ui="empty-state-title">
                 {local.title}
             </h2>
             {local.description ? (
                 <p
-                    className="happy2-empty-state__description"
+                    className="happy-empty-state__description"
                     data-happy-desktop-ui="empty-state-description"
                 >
                     {local.description}
@@ -118,7 +118,7 @@ export function EmptyState(props: EmptyStateProps) {
             {local.action
                 ? ((action) => (
                       <span
-                          className="happy2-empty-state__actions"
+                          className="happy-empty-state__actions"
                           data-happy-desktop-ui="empty-state-actions"
                       >
                           <Button

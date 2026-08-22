@@ -46,7 +46,7 @@ function GlyphCell(props: { name: IconName }) {
             </div>
             <span
                 style={{
-                    fontFamily: "var(--happy2-font-mono)",
+                    fontFamily: "var(--happy-font-mono)",
                     fontSize: "9px",
                     lineHeight: "12px",
                     letterSpacing: "0.04em",
@@ -123,7 +123,7 @@ export function IconPage() {
                                 <Icon name="inbox" size={size} />
                                 <span
                                     style={{
-                                        fontFamily: "var(--happy2-font-mono)",
+                                        fontFamily: "var(--happy-font-mono)",
                                         fontSize: "9px",
                                         color: "var(--text-secondary)",
                                     }}
@@ -170,7 +170,7 @@ export function IconPage() {
                     surfaces whichever appearance the workbench is showing. */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div
-                        className="happy2-theme-dark"
+                        className="happy-theme-dark"
                         style={{
                             display: "flex",
                             gap: "12px",
@@ -186,7 +186,7 @@ export function IconPage() {
                         ))}
                     </div>
                     <div
-                        className="happy2-theme-light"
+                        className="happy-theme-light"
                         style={{
                             display: "flex",
                             gap: "12px",

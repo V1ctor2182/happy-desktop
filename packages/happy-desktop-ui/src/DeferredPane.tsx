@@ -152,12 +152,12 @@ function DeferredPaneLayer(props: DeferredPaneLayerProps) {
     );
     return (
         <div
-            className="happy2-deferred-pane__layer"
+            className="happy-deferred-pane__layer"
             data-state={isPending ? (slow ? "slow" : "pending") : "current"}
         >
             <div
                 aria-hidden={isPending ? "true" : undefined}
-                className="happy2-deferred-pane__content"
+                className="happy-deferred-pane__content"
                 ref={contentRef}
             >
                 {pending ? pending.render(gate.ready) : props.content}
@@ -165,7 +165,7 @@ function DeferredPaneLayer(props: DeferredPaneLayerProps) {
             {isPending && slow ? (
                 <div
                     aria-live="polite"
-                    className="happy2-deferred-pane__fallback"
+                    className="happy-deferred-pane__fallback"
                     data-happy-desktop-ui="deferred-pane-fallback"
                 >
                     {props.fallback}
@@ -195,7 +195,7 @@ export function DeferredPane(props: DeferredPaneProps) {
         layers.push({ id: props.pending.id, pending: props.pending });
     return (
         <div
-            className={["happy2-deferred-pane", props.className].filter(Boolean).join(" ")}
+            className={["happy-deferred-pane", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="deferred-pane"
             data-pending={props.pending === undefined ? undefined : ""}
             data-testid={props["data-testid"]}

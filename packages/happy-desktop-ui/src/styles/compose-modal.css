@@ -3,14 +3,14 @@
  * Hosted by ModalOverlay; matches command-palette / modal elevation tokens.
  */
 
-.happy2-compose-modal,
-.happy2-compose-modal *,
-.happy2-compose-modal *::before,
-.happy2-compose-modal *::after {
+.happy-compose-modal,
+.happy-compose-modal *,
+.happy-compose-modal *::before,
+.happy-compose-modal *::after {
     box-sizing: border-box;
 }
 
-.happy2-compose-modal {
+.happy-compose-modal {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -18,11 +18,11 @@
     max-height: 100%;
     overflow: hidden;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-compose-modal__dialog {
+.happy-compose-modal__dialog {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -32,11 +32,11 @@
     overflow: hidden;
     background: var(--surface-high);
     border: 1px solid var(--modal-border);
-    border-radius: var(--happy2-radius-shell);
+    border-radius: var(--happy-radius-shell);
     box-shadow: 0 24px 64px var(--shadow-elevated);
 }
 
-.happy2-compose-modal__header {
+.happy-compose-modal__header {
     display: flex;
     flex: none;
     align-items: center;
@@ -47,14 +47,14 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-compose-modal__brand {
+.happy-compose-modal__brand {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
     min-width: 0;
 }
 
-.happy2-compose-modal__title {
+.happy-compose-modal__title {
     overflow: hidden;
     color: var(--text);
     font-size: 15px;
@@ -65,12 +65,12 @@
     white-space: nowrap;
 }
 
-.happy2-compose-modal__title-suffix {
+.happy-compose-modal__title-suffix {
     color: var(--text-secondary);
     font-weight: 800;
 }
 
-.happy2-compose-modal__input {
+.happy-compose-modal__input {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -78,7 +78,7 @@
     padding: 16px 20px 8px;
 }
 
-.happy2-compose-modal__textarea {
+.happy-compose-modal__textarea {
     flex: 1 1 auto;
     width: 100%;
     min-height: 160px;
@@ -97,15 +97,15 @@
     resize: none;
 }
 
-.happy2-compose-modal__textarea::placeholder {
+.happy-compose-modal__textarea::placeholder {
     color: var(--text-secondary);
 }
 
-.happy2-compose-modal__textarea:disabled {
+.happy-compose-modal__textarea:disabled {
     opacity: 0.6;
 }
 
-.happy2-compose-modal__footer {
+.happy-compose-modal__footer {
     display: flex;
     flex: none;
     align-items: center;
@@ -114,7 +114,7 @@
     padding: 12px 16px 16px 20px;
 }
 
-.happy2-compose-modal__controls {
+.happy-compose-modal__controls {
     display: flex;
     flex: 1 1 auto;
     flex-wrap: wrap;
@@ -123,17 +123,17 @@
     min-width: 0;
 }
 
-.happy2-compose-modal__controls .happy2-select {
+.happy-compose-modal__controls .happy-select {
     flex: none;
     min-width: 160px;
 }
 
-.happy2-compose-modal__controls .happy2-segmented-control {
+.happy-compose-modal__controls .happy-segmented-control {
     flex: 1 1 auto;
     min-width: 220px;
     max-width: 360px;
 }
 
-.happy2-compose-modal__create {
+.happy-compose-modal__create {
     flex: none;
 }

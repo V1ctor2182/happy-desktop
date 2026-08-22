@@ -49,7 +49,7 @@ function labelFor(choices: readonly ComposerModelChoice[], value: string) {
 export function ComposerModelControl(props: ComposerModelControlProps) {
     const [panel, setPanel] = useState<Panel | null>(null);
     const root = useRef<HTMLDivElement>(null);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- an open model panel owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
+    // eslint-disable-next-line happy-react/no-layout-effect -- an open model panel owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
     useLayoutEffect(() => {
         if (panel === null) return;
         const outsidePointerDown = (event: PointerEvent) => {
@@ -71,28 +71,28 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
     };
     const row = (label: string, value: string, next: "effort" | "model") => (
         <button
-            className="happy2-composer-model-control__row"
+            className="happy-composer-model-control__row"
             data-happy-desktop-ui="composer-model-control-row"
             onClick={() => setPanel(next)}
             type="button"
         >
             <span>{label}</span>
-            <span className="happy2-composer-model-control__row-value">{value}</span>
+            <span className="happy-composer-model-control__row-value">{value}</span>
             <Icon name="chevron-right" size={20} />
         </button>
     );
     const choicePanel = (next: "effort" | "model") => (
         <div
             aria-label={`Select ${next}`}
-            className="happy2-composer-model-control__choices"
+            className="happy-composer-model-control__choices"
             data-happy-desktop-ui="composer-model-control-choices"
             ref={fitToViewport}
             role="dialog"
         >
             <ScrollArea
-                className="happy2-composer-model-control__list"
+                className="happy-composer-model-control__list"
                 data-happy-desktop-ui="composer-model-control-list"
-                viewportClassName="happy2-composer-model-control__list-viewport"
+                viewportClassName="happy-composer-model-control__list-viewport"
             >
                 {choicesFor(next).map((choice, index) => {
                     const group = choice.group;
@@ -102,7 +102,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                         <Fragment key={choice.id}>
                             {startsGroup ? (
                                 <div
-                                    className="happy2-composer-model-control__group"
+                                    className="happy-composer-model-control__group"
                                     data-happy-desktop-ui="composer-model-control-group"
                                 >
                                     {group}
@@ -110,7 +110,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                             ) : null}
                             <button
                                 aria-pressed={choice.id === valueFor(next)}
-                                className="happy2-composer-model-control__choice"
+                                className="happy-composer-model-control__choice"
                                 data-happy-desktop-ui="composer-model-control-choice"
                                 onClick={() => change(next, choice.id)}
                                 type="button"
@@ -128,7 +128,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
     );
     return (
         <div
-            className={["happy2-composer-model-control", props.className].filter(Boolean).join(" ")}
+            className={["happy-composer-model-control", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="composer-model-control"
             data-open={panel === null ? undefined : ""}
             data-testid={props["data-testid"]}
@@ -142,13 +142,13 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                 aria-expanded={panel !== null}
                 aria-haspopup="dialog"
                 aria-label={`Model: ${modelLabel}. Effort: ${effortLabel}.`}
-                className="happy2-composer-model-control__trigger"
+                className="happy-composer-model-control__trigger"
                 data-happy-desktop-ui="composer-model-control-trigger"
                 disabled={props.disabled}
                 onClick={() => setPanel((current) => (current === null ? "main" : null))}
                 type="button"
             >
-                <span className="happy2-composer-model-control__summary">
+                <span className="happy-composer-model-control__summary">
                     <span>{modelLabel}</span>
                     <span>{effortLabel}</span>
                 </span>
@@ -157,7 +157,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
             {panel === "main" || panel === "model" || panel === "effort" ? (
                 <div
                     aria-label="Model configuration"
-                    className="happy2-composer-model-control__menu"
+                    className="happy-composer-model-control__menu"
                     data-happy-desktop-ui="composer-model-control-menu"
                     role="dialog"
                 >

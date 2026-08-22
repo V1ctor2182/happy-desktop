@@ -14,31 +14,31 @@
  * asserts they share that row within tolerance with no translate applied.
  */
 
-.happy2-automated-tag,
-.happy2-automated-tag * {
+.happy-automated-tag,
+.happy-automated-tag * {
     box-sizing: border-box;
 }
 
-.happy2-automated-tag {
+.happy-automated-tag {
     display: inline-flex;
     align-items: center;
     flex: none;
     gap: 4px;
     height: 16px;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-synthesis: none;
     white-space: nowrap;
 }
 
-.happy2-automated-tag__icon {
+.happy-automated-tag__icon {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
 }
 
-.happy2-automated-tag__label {
+.happy-automated-tag__label {
     display: block;
     font-size: 10px;
     font-weight: 700;

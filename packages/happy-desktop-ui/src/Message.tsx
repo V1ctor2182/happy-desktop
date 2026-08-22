@@ -74,7 +74,7 @@ function MessageMediaItem(props: {
     const content = props.image.url ? (
         <img
             alt={props.image.alt ?? ""}
-            className="happy2-message__media-image"
+            className="happy-message__media-image"
             data-happy-desktop-ui="message-media-image"
             draggable={false}
             height={props.image.height}
@@ -85,7 +85,7 @@ function MessageMediaItem(props: {
     ) : (
         <span
             aria-label={`Loading ${props.image.alt ?? "image"}`}
-            className="happy2-message__media-loading"
+            className="happy-message__media-loading"
             data-happy-desktop-ui="message-media-loading"
             role="status"
             style={
@@ -96,7 +96,7 @@ function MessageMediaItem(props: {
         />
     );
     const shared = {
-        className: "happy2-message__media-item",
+        className: "happy-message__media-item",
         "data-fixed": "",
         "data-media-id": props.image.id,
         "data-happy-desktop-ui": "message-media-item",
@@ -227,19 +227,19 @@ function renderSegment(segment: MessageSegment): ReactNode {
     switch (segment.kind) {
         case "mention":
             return (
-                <span className="happy2-message__mention" data-happy-desktop-ui="message-mention">
+                <span className="happy-message__mention" data-happy-desktop-ui="message-mention">
                     @{segment.text}
                 </span>
             );
         case "code":
             return (
-                <code className="happy2-message__code" data-happy-desktop-ui="message-code">
+                <code className="happy-message__code" data-happy-desktop-ui="message-code">
                     {segment.text}
                 </code>
             );
         case "link":
             return (
-                <span className="happy2-message__link" data-happy-desktop-ui="message-link">
+                <span className="happy-message__link" data-happy-desktop-ui="message-link">
                     {segment.text}
                 </span>
             );
@@ -259,7 +259,7 @@ function hasRenderableChild(value: ReactNode): boolean {
  */
 /**
  * Edge of the mark in the identity gutter. An `Avatar` is shrunk to this by
- * `.happy2-message__avatar-dangling` in `message.css`; a generated mark carries
+ * `.happy-message__avatar-dangling` in `message.css`; a generated mark carries
  * its size inline, where a stylesheet cannot reach it, so it is stated here and
  * the two must stay equal or the gutter's marks will not match.
  */
@@ -327,7 +327,7 @@ export function Message(props: MessageProps) {
         local.onAuthorSelect ? (
             <button
                 aria-label={authorActionLabel()}
-                className="happy2-message__identity happy2-message__avatar-dangling"
+                className="happy-message__identity happy-message__avatar-dangling"
                 data-happy-desktop-ui="message-identity"
                 onClick={() => local.onAuthorSelect?.()}
                 type="button"
@@ -335,13 +335,13 @@ export function Message(props: MessageProps) {
                 {renderAvatar("xs")}
             </button>
         ) : (
-            <span className="happy2-message__avatar-dangling">{renderAvatar("xs")}</span>
+            <span className="happy-message__avatar-dangling">{renderAvatar("xs")}</span>
         );
     const deliveryState = () => local.deliveryState ?? "sent";
     /* A failed-generation marker is painted at the end of the final rendered
        text run. It stays absolutely positioned so settling cannot alter the
        message's flow geometry. Streaming itself has no typing marker. */
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the failure marker must measure the committed final text range and write its absolute DOM position without changing message flow
+    // eslint-disable-next-line happy-react/no-layout-effect -- the failure marker must measure the committed final text range and write its absolute DOM position without changing message flow
     useLayoutEffect(() => {
         const bodyElement = body.current;
         const marker = generationMarker.current;
@@ -382,7 +382,7 @@ export function Message(props: MessageProps) {
     const ownAutomatedLine =
         local.own && local.automated ? (
             <span
-                className="happy2-message__automated happy2-message__automated--own"
+                className="happy-message__automated happy-message__automated--own"
                 data-happy-desktop-ui="message-automated"
             >
                 <AutomatedTag />
@@ -391,7 +391,7 @@ export function Message(props: MessageProps) {
     const renderIncomingHoverMeta = (placement: "header" | "inline", leadingSeparator = false) =>
         !local.own && (local.metaAccessory || local.time) ? (
             <span
-                className="happy2-message__hover-meta"
+                className="happy-message__hover-meta"
                 data-happy-desktop-ui="message-hover-meta"
                 data-has-accessory={local.metaAccessory ? "" : undefined}
                 data-placement={placement}
@@ -399,13 +399,13 @@ export function Message(props: MessageProps) {
                 {leadingSeparator ? (
                     <span
                         aria-hidden="true"
-                        className="happy2-message__meta-separator"
+                        className="happy-message__meta-separator"
                         data-happy-desktop-ui="message-meta-separator"
                     />
                 ) : null}
                 {local.metaAccessory ? (
                     <span
-                        className="happy2-message__meta-accessory"
+                        className="happy-message__meta-accessory"
                         data-happy-desktop-ui="message-meta-accessory"
                     >
                         {local.metaAccessory}
@@ -414,12 +414,12 @@ export function Message(props: MessageProps) {
                 {local.metaAccessory && local.time ? (
                     <span
                         aria-hidden="true"
-                        className="happy2-message__meta-separator"
+                        className="happy-message__meta-separator"
                         data-happy-desktop-ui="message-meta-separator"
                     />
                 ) : null}
                 {local.time ? (
-                    <span className="happy2-message__time" data-happy-desktop-ui="message-time">
+                    <span className="happy-message__time" data-happy-desktop-ui="message-time">
                         <span data-happy-desktop-ui="message-time-label">{local.time}</span>
                     </span>
                 ) : null}
@@ -433,7 +433,7 @@ export function Message(props: MessageProps) {
         local.emptyText === undefined &&
         local.generationStatus === undefined ? null : isMarkdownBody() ? (
             <div
-                className="happy2-message__body happy2-message__body--markdown"
+                className="happy-message__body happy-message__body--markdown"
                 data-markdown=""
                 data-happy-desktop-ui="message-body"
                 ref={body}
@@ -450,20 +450,20 @@ export function Message(props: MessageProps) {
                     so generation-state changes cannot collapse the message row. */}
                 {!local.body && local.emptyText !== undefined ? (
                     <p
-                        className="happy2-message__empty-text"
+                        className="happy-message__empty-text"
                         data-happy-desktop-ui="message-empty-text"
                     >
                         {local.emptyText}
                     </p>
                 ) : !local.body && local.generationStatus !== undefined ? (
-                    <p aria-hidden="true" className="happy2-message__generation-anchor">
+                    <p aria-hidden="true" className="happy-message__generation-anchor">
                         {"\u00a0"}
                     </p>
                 ) : null}
                 {local.generationStatus === "failed" ? (
                     <span
                         aria-label="Generation failed"
-                        className="happy2-message__generation-marker"
+                        className="happy-message__generation-marker"
                         data-empty={!local.body ? "" : undefined}
                         data-generation-marker="failed"
                         data-happy-desktop-ui="message-generation-failed"
@@ -473,7 +473,7 @@ export function Message(props: MessageProps) {
                 ) : null}
             </div>
         ) : (
-            <div className="happy2-message__body" data-happy-desktop-ui="message-body">
+            <div className="happy-message__body" data-happy-desktop-ui="message-body">
                 {ownAutomatedLine}
                 {segments().map((segment, index) => (
                     <span key={`${segment.kind}-${index}`}>{renderSegment(segment)}</span>
@@ -496,18 +496,18 @@ export function Message(props: MessageProps) {
     const groupedIncomingLine =
         !local.own && grouped() && bodyNode !== null ? (
             <div
-                className="happy2-message__incoming-line"
+                className="happy-message__incoming-line"
                 data-happy-desktop-ui="message-incoming-line"
             >
                 {bodyNode}
             </div>
         ) : null;
     const incomingMeta = showIncomingMeta() ? (
-        <div className="happy2-message__meta" data-happy-desktop-ui="message-meta">
+        <div className="happy-message__meta" data-happy-desktop-ui="message-meta">
             {!showIncomingIdentity() ? null : local.onAuthorSelect ? (
                 <button
                     aria-label={authorActionLabel()}
-                    className="happy2-message__author happy2-message__author--button"
+                    className="happy-message__author happy-message__author--button"
                     data-happy-desktop-ui="message-author"
                     onClick={() => local.onAuthorSelect?.()}
                     type="button"
@@ -515,7 +515,7 @@ export function Message(props: MessageProps) {
                     <span data-happy-desktop-ui="message-author-label">{local.author}</span>
                 </button>
             ) : (
-                <span className="happy2-message__author" data-happy-desktop-ui="message-author">
+                <span className="happy-message__author" data-happy-desktop-ui="message-author">
                     <span data-happy-desktop-ui="message-author-label">{local.author}</span>
                 </span>
             )}
@@ -523,11 +523,11 @@ export function Message(props: MessageProps) {
                 <>
                     <span
                         aria-hidden="true"
-                        className="happy2-message__meta-separator"
+                        className="happy-message__meta-separator"
                         data-happy-desktop-ui="message-meta-separator"
                     />
                     <span
-                        className="happy2-message__automated"
+                        className="happy-message__automated"
                         data-happy-desktop-ui="message-automated"
                     >
                         <AutomatedTag />
@@ -542,7 +542,7 @@ export function Message(props: MessageProps) {
     return (
         <div
             {...rest}
-            className={["happy2-message", local.className].filter(Boolean).join(" ")}
+            className={["happy-message", local.className].filter(Boolean).join(" ")}
             data-agent={local.agent ? "" : undefined}
             data-own={local.own ? "" : undefined}
             data-compact={grouped() ? "" : undefined}
@@ -563,10 +563,10 @@ export function Message(props: MessageProps) {
             }
             style={local.style}
         >
-            <div className="happy2-message__gutter" data-happy-desktop-ui="message-gutter">
+            <div className="happy-message__gutter" data-happy-desktop-ui="message-gutter">
                 {showIncomingIdentity() ? renderDanglingAvatar() : null}
             </div>
-            <div className="happy2-message__content" data-happy-desktop-ui="message-content">
+            <div className="happy-message__content" data-happy-desktop-ui="message-content">
                 {/* Own messages carry no meta row — the accent bubble on the
                     right is identity enough; no author, time, or audience pill. */}
                 {incomingMeta}
@@ -576,7 +576,7 @@ export function Message(props: MessageProps) {
                     with the pointer. */}
                 {showIncomingIdentity() && local.contextNote ? (
                     <span
-                        className="happy2-message__context-note"
+                        className="happy-message__context-note"
                         data-happy-desktop-ui="message-context-note"
                     >
                         {local.contextNote}
@@ -584,7 +584,7 @@ export function Message(props: MessageProps) {
                 ) : null}
                 {ownBubbleLine ? (
                     <div
-                        className="happy2-message__bubble-line"
+                        className="happy-message__bubble-line"
                         data-happy-desktop-ui="message-bubble-line"
                     >
                         {/* A media-only automated message has no bubble to open, so
@@ -592,14 +592,14 @@ export function Message(props: MessageProps) {
                             instead. It stays visible either way. */}
                         {local.automated && bodyNode === null ? (
                             <span
-                                className="happy2-message__automated happy2-message__automated--own"
+                                className="happy-message__automated happy-message__automated--own"
                                 data-happy-desktop-ui="message-automated"
                             >
                                 <AutomatedTag />
                             </span>
                         ) : null}
                         <span
-                            className="happy2-message__aside-time"
+                            className="happy-message__aside-time"
                             data-happy-desktop-ui="message-aside-time"
                         >
                             {local.gutterTime ?? local.time ?? ""}
@@ -611,7 +611,7 @@ export function Message(props: MessageProps) {
                 )}
                 {local.images && local.images.length > 0 ? (
                     <div
-                        className="happy2-message__media"
+                        className="happy-message__media"
                         data-count={Math.min(local.images!.length, 4)}
                         data-happy-desktop-ui="message-media"
                     >
@@ -627,7 +627,7 @@ export function Message(props: MessageProps) {
                 ) : null}
                 {hasAttachments() ? (
                     <div
-                        className="happy2-message__attachments"
+                        className="happy-message__attachments"
                         data-happy-desktop-ui="message-attachments"
                     >
                         {attachments}
@@ -635,7 +635,7 @@ export function Message(props: MessageProps) {
                 ) : null}
                 {local.reactions && local.reactions.length > 0 ? (
                     <div
-                        className="happy2-message__reactions"
+                        className="happy-message__reactions"
                         data-happy-desktop-ui="message-reactions"
                     >
                         {local.reactions.map((reaction, index) => (
@@ -729,7 +729,7 @@ const MESSAGE_LIST_PADDING_END_DEFAULT = 8;
 /** Row height assumed before anything has ever been measured. */
 const ROW_SIZE_FALLBACK = 72;
 /** Reserved stable entity key for the optional final footer row. */
-const MESSAGE_LIST_FOOTER_KEY = "__happy2_message_list_footer__";
+const MESSAGE_LIST_FOOTER_KEY = "__happy_message_list_footer__";
 /**
  * Mean height of the rows a previous lifetime actually measured. Every mounted
  * row is measured for real, so this estimate only ever sizes rows the reader has
@@ -816,7 +816,7 @@ export function MessageList(props: MessageListProps) {
             : [
                   ...entryItems,
                   <div
-                      className="happy2-message-list__footer"
+                      className="happy-message-list__footer"
                       data-happy-desktop-ui="message-list-footer"
                       data-item-id="working-status"
                       key={MESSAGE_LIST_FOOTER_KEY}
@@ -843,9 +843,7 @@ export function MessageList(props: MessageListProps) {
                 position.offsetNode instanceof Element
                     ? position.offsetNode
                     : position.offsetNode.parentElement;
-            const row = owner?.closest<HTMLElement>(
-                ".happy2-message-list__virtual-row[data-index]",
-            );
+            const row = owner?.closest<HTMLElement>(".happy-message-list__virtual-row[data-index]");
             const index = Number.parseInt(row?.dataset.index ?? "", 10);
             if (!row || !Number.isFinite(index)) continue;
             const range = document.createRange();
@@ -1042,7 +1040,7 @@ export function MessageList(props: MessageListProps) {
         },
         useFlushSync: false,
     });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- streaming React commits change scrollHeight before the virtual row ResizeObserver; a follower must pin in this same pre-paint commit
+    // eslint-disable-next-line happy-react/no-layout-effect -- streaming React commits change scrollHeight before the virtual row ResizeObserver; a follower must pin in this same pre-paint commit
     useLayoutEffect(() => {
         const element = list.current;
         if (!element) return;
@@ -1059,7 +1057,7 @@ export function MessageList(props: MessageListProps) {
         )
             startReachedReport(element);
     });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
+    // eslint-disable-next-line happy-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {
         const element = list.current;
         if (!element) return;
@@ -1379,7 +1377,7 @@ export function MessageList(props: MessageListProps) {
             element.removeEventListener("wheel", onWheel);
         };
     }, [estimateRowWidth, virtualized, virtualizer]); // eslint-disable-line react-hooks/exhaustive-deps -- anchor helpers intentionally share this one imperative scrollport lifetime
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a new font generation changes offscreen row estimates without changing DOM geometry, so the virtualizer must discard its size cache after that generation commits
+    // eslint-disable-next-line happy-react/no-layout-effect -- a new font generation changes offscreen row estimates without changing DOM geometry, so the virtualizer must discard its size cache after that generation commits
     useLayoutEffect(() => {
         if (estimateVersion.current === props.estimateVersion) return;
         estimateVersion.current = props.estimateVersion;
@@ -1387,31 +1385,31 @@ export function MessageList(props: MessageListProps) {
     }, [props.estimateVersion, virtualized, virtualizer]);
     return (
         <ScrollArea
-            className={["happy2-message-list", props.className].filter(Boolean).join(" ")}
+            className={["happy-message-list", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="message-list"
             style={props.style}
-            viewportClassName="happy2-message-list__viewport"
+            viewportClassName="happy-message-list__viewport"
             viewportRef={list}
         >
             <div
-                className="happy2-message-list__content"
+                className="happy-message-list__content"
                 data-happy-desktop-ui="message-list-content"
                 data-virtualized={virtualized ? "" : undefined}
             >
                 <div
                     aria-hidden="true"
-                    className="happy2-message-list__spacer"
+                    className="happy-message-list__spacer"
                     data-happy-desktop-ui="message-list-spacer"
                 />
                 {virtualized ? (
                     <div
-                        className="happy2-message-list__virtual"
+                        className="happy-message-list__virtual"
                         data-happy-desktop-ui="message-list-virtual"
                         ref={virtualizer.containerRef}
                     >
                         {virtualizer.getVirtualItems().map((virtualItem) => (
                             <div
-                                className="happy2-message-list__virtual-row"
+                                className="happy-message-list__virtual-row"
                                 data-index={virtualItem.index}
                                 data-item-id={
                                     virtualItem.index === footerIndex ? "working-status" : undefined
@@ -1435,11 +1433,11 @@ export function DayDivider(props: { className?: string; label: string }) {
     return (
         <div
             aria-label={props.label}
-            className={["happy2-day-divider", props.className].filter(Boolean).join(" ")}
+            className={["happy-day-divider", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="day-divider"
             role="separator"
         >
-            <span className="happy2-day-divider__label" data-happy-desktop-ui="day-divider-label">
+            <span className="happy-day-divider__label" data-happy-desktop-ui="day-divider-label">
                 {props.label}
             </span>
         </div>
@@ -1491,7 +1489,7 @@ export function SystemNotice(props: {
     return (
         <div
             aria-label={props.text}
-            className={["happy2-system-notice", props.className].filter(Boolean).join(" ")}
+            className={["happy-system-notice", props.className].filter(Boolean).join(" ")}
             data-align={props.align ?? "center"}
             data-happy-desktop-ui="system-notice"
             role="note"
@@ -1499,16 +1497,16 @@ export function SystemNotice(props: {
         >
             <span
                 aria-hidden="true"
-                className="happy2-system-notice__icon"
+                className="happy-system-notice__icon"
                 data-happy-desktop-ui="system-notice-icon"
             >
                 <Icon name={props.icon ?? "users"} size={14} />
             </span>
-            <span className="happy2-system-notice__text" data-happy-desktop-ui="system-notice-text">
+            <span className="happy-system-notice__text" data-happy-desktop-ui="system-notice-text">
                 {segments.map((segment, index) =>
                     segment.kind === "ref" ? (
                         <span
-                            className="happy2-system-notice__ref"
+                            className="happy-system-notice__ref"
                             data-happy-desktop-ui="system-notice-ref"
                             key={`${segment.text}-${index}`}
                         >
@@ -1537,18 +1535,18 @@ export function SteeringNotice(props: {
     return (
         <div
             aria-label={`${props.text}: ${props.quote}`}
-            className={["happy2-steering-notice", props.className].filter(Boolean).join(" ")}
+            className={["happy-steering-notice", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="steering-notice"
             role="note"
             style={props.style}
         >
             <SystemNotice
-                className="happy2-steering-notice__line"
+                className="happy-steering-notice__line"
                 icon="arrow-right"
                 text={props.text}
             />
             <blockquote
-                className="happy2-steering-notice__quote"
+                className="happy-steering-notice__quote"
                 data-happy-desktop-ui="steering-notice-quote"
             >
                 {props.quote}

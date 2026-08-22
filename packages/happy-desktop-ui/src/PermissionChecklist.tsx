@@ -39,13 +39,13 @@ export function PermissionChecklist(props: PermissionChecklistProps) {
     return (
         <div
             {...rest}
-            className={["happy2-permission-checklist", local.className].filter(Boolean).join(" ")}
+            className={["happy-permission-checklist", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="permission-checklist"
             style={local.style}
         >
             {local.options.map((option) => (
                 <div
-                    className="happy2-permission-checklist__row"
+                    className="happy-permission-checklist__row"
                     data-checked={checked(option.id) ? "" : undefined}
                     data-happy-desktop-ui="permission-row"
                     data-permission-id={option.id}
@@ -54,25 +54,25 @@ export function PermissionChecklist(props: PermissionChecklistProps) {
                     <Checkbox
                         aria-label={option.label}
                         checked={checked(option.id)}
-                        className="happy2-permission-checklist__checkbox"
+                        className="happy-permission-checklist__checkbox"
                         disabled={local.disabled}
                         id={`${prefix}-${option.id}`}
                         onChange={(value) => local.onToggle?.(option.id, value)}
                     />
                     <label
-                        className="happy2-permission-checklist__text"
+                        className="happy-permission-checklist__text"
                         data-happy-desktop-ui="permission-text"
                         htmlFor={`${prefix}-${option.id}`}
                     >
                         <span
-                            className="happy2-permission-checklist__label"
+                            className="happy-permission-checklist__label"
                             data-happy-desktop-ui="permission-label"
                         >
                             {option.label}
                         </span>
                         {option.description ? (
                             <span
-                                className="happy2-permission-checklist__description"
+                                className="happy-permission-checklist__description"
                                 data-happy-desktop-ui="permission-description"
                             >
                                 {option.description}

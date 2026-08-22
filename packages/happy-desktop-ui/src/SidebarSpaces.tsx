@@ -65,7 +65,7 @@ function SpaceMark(props: { space: SidebarSpace }) {
                shifts around it. */
             <span
                 aria-hidden="true"
-                className="happy2-sidebar-spaces__emoji"
+                className="happy-sidebar-spaces__emoji"
                 data-happy-desktop-ui="sidebar-space-emoji"
             >
                 {props.space.emoji}
@@ -140,7 +140,7 @@ export function SidebarSpaces(props: SidebarSpacesProps) {
      */
     const activeSpaceId = local.activeSpaceId;
     const spaceIds = local.spaces.map((space) => space.id).join("\u0000");
-    // eslint-disable-next-line happy2-react/no-layout-effect -- scroll offset is DOM state, so a controlled active space can only be applied imperatively; the guard above keeps it from interrupting a live gesture
+    // eslint-disable-next-line happy-react/no-layout-effect -- scroll offset is DOM state, so a controlled active space can only be applied imperatively; the guard above keeps it from interrupting a live gesture
     useLayoutEffect(() => {
         const node = viewport.current;
         if (node === null || node.clientWidth === 0) return;
@@ -156,13 +156,13 @@ export function SidebarSpaces(props: SidebarSpacesProps) {
     return (
         <div
             {...rest}
-            className={["happy2-sidebar-spaces", local.className].filter(Boolean).join(" ")}
+            className={["happy-sidebar-spaces", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="sidebar-spaces"
             style={local.style}
         >
             {hasBodies() ? (
                 <div
-                    className="happy2-sidebar-spaces__viewport"
+                    className="happy-sidebar-spaces__viewport"
                     data-happy-desktop-ui="sidebar-spaces-viewport"
                     /* The space being crossed into is reported as it is crossed,
                        rather than once the scrolling stops, so the marks below
@@ -181,7 +181,7 @@ export function SidebarSpaces(props: SidebarSpacesProps) {
                 >
                     {local.spaces.map((space) => (
                         <div
-                            className="happy2-sidebar-spaces__pane"
+                            className="happy-sidebar-spaces__pane"
                             data-active={space.id === local.activeSpaceId ? "" : undefined}
                             data-happy-desktop-ui="sidebar-spaces-pane"
                             data-space-id={space.id}
@@ -192,11 +192,11 @@ export function SidebarSpaces(props: SidebarSpacesProps) {
                     ))}
                 </div>
             ) : null}
-            <div className="happy2-sidebar-spaces__bar" data-happy-desktop-ui="sidebar-spaces-bar">
-                <div className="happy2-sidebar-spaces__lane">{local.leading}</div>
+            <div className="happy-sidebar-spaces__bar" data-happy-desktop-ui="sidebar-spaces-bar">
+                <div className="happy-sidebar-spaces__lane">{local.leading}</div>
                 <div
                     aria-label="Spaces"
-                    className="happy2-sidebar-spaces__dots"
+                    className="happy-sidebar-spaces__dots"
                     data-happy-desktop-ui="sidebar-spaces-dots"
                     role="tablist"
                 >
@@ -204,7 +204,7 @@ export function SidebarSpaces(props: SidebarSpacesProps) {
                         <button
                             aria-label={space.label}
                             aria-selected={space.id === local.activeSpaceId}
-                            className="happy2-sidebar-spaces__dot"
+                            className="happy-sidebar-spaces__dot"
                             data-active={space.id === local.activeSpaceId ? "" : undefined}
                             data-happy-desktop-ui="sidebar-space-dot"
                             data-space-id={space.id}
@@ -236,11 +236,11 @@ export function SidebarSpaces(props: SidebarSpacesProps) {
                         </button>
                     ))}
                 </div>
-                <div className="happy2-sidebar-spaces__lane happy2-sidebar-spaces__lane--trailing">
+                <div className="happy-sidebar-spaces__lane happy-sidebar-spaces__lane--trailing">
                     {local.onSpaceCreate ? (
                         <button
                             aria-label="New space"
-                            className="happy2-sidebar-spaces__add"
+                            className="happy-sidebar-spaces__add"
                             data-happy-desktop-ui="sidebar-spaces-add"
                             onClick={local.onSpaceCreate}
                             type="button"

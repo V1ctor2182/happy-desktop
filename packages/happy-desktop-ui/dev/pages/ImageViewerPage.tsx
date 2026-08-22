@@ -116,7 +116,7 @@ export function ImageViewerPage() {
                                 >
                                     <Ionicon name="open-outline" size={14} />
                                 </Button>
-                                <span className="happy2-image-viewer__divider" />
+                                <span className="happy-image-viewer__divider" />
                             </>
                         }
                         content={{ type: "url", url: wide }}
@@ -132,7 +132,7 @@ export function ImageViewerPage() {
                 number="05"
                 stage="surface"
             >
-                <div className="happy2-theme-dark" style={{ display: "flex" }}>
+                <div className="happy-theme-dark" style={{ display: "flex" }}>
                     <div
                         style={{
                             background: "var(--surface-high)",

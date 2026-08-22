@@ -1,6 +1,6 @@
 .git
 .context
-.happy2
+.happy
 **/node_modules
 **/dist
 **/coverage

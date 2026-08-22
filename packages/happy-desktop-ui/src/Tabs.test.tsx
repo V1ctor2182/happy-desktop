@@ -45,8 +45,8 @@ const inboxTabs: TabItem[] = [
 
 const uiFont = () =>
     engine() === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 it("holds Tabs dimensions, typography, colors, and the active underline for every size", async () => {
     const view = createRenderer();
@@ -67,7 +67,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
     // WebKit's sub-pixel baseline. All ink work is deferred to pass B.
     for (const size of sizes) {
         const spec = sizeSpec[size];
-        const bar = view.$(`.happy2-tabs[data-size="${size}"]`);
+        const bar = view.$(`.happy-tabs[data-size="${size}"]`);
 
         // Root: block-level flex bar that fills the surface and owns the
         // bottom hairline; its height is the tab height plus that 1px rule.
@@ -97,7 +97,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         let sharedBaseline: number | undefined;
         for (const tab of inboxTabs) {
             const active = tab.id === "unread";
-            const el = view.$(`.happy2-tabs[data-size="${size}"] [data-tab-id="${tab.id}"]`);
+            const el = view.$(`.happy-tabs[data-size="${size}"] [data-tab-id="${tab.id}"]`);
             expect(el.height(), `${size}/${tab.id} height`).toBe(spec.height);
             expect(el.element.getAttribute("role"), `${size}/${tab.id} role`).toBe("tab");
             expect(el.element.getAttribute("aria-selected"), `${size}/${tab.id} selected`).toBe(
@@ -140,12 +140,12 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
             // browser-laid-out baseline (proves "baseline shared across tabs"),
             // independent of whether the tab carries an icon or a count badge.
             const label = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${tab.id}"] [data-happy-desktop-ui="tab-label"]`,
+                `.happy-tabs[data-size="${size}"] [data-tab-id="${tab.id}"] [data-happy-desktop-ui="tab-label"]`,
             );
             const metrics = label.textMetrics();
             expect(metrics, `${size}/${tab.id} label metrics`).toMatchObject({
                 font: {
-                    family: "happy2 Figtree, system-ui, sans-serif",
+                    family: "happy Figtree, system-ui, sans-serif",
                     lineHeight: spec.lineHeight,
                     size: spec.fontSize,
                     weight: "600",
@@ -174,7 +174,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         // Label-only tab: word ink is horizontally asymmetric, so centering is
         // proven as line-box symmetry (equal left/right inset), not a centroid.
         const plain = view.$(
-            `.happy2-tabs[data-size="${size}"] [data-tab-id="reactions"] [data-happy-desktop-ui="tab-label"]`,
+            `.happy-tabs[data-size="${size}"] [data-tab-id="reactions"] [data-happy-desktop-ui="tab-label"]`,
         );
         const plainOffsets = plain.offsets();
         expect(
@@ -184,9 +184,9 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
 
         // Active underline: 2px accent bar spanning the full active tab, dropped
         // 1px below the tab box to overlap the container hairline.
-        const activeTab = view.$(`.happy2-tabs[data-size="${size}"] [data-tab-id="unread"]`);
+        const activeTab = view.$(`.happy-tabs[data-size="${size}"] [data-tab-id="unread"]`);
         const underline = view.$(
-            `.happy2-tabs[data-size="${size}"] [data-tab-id="unread"] [data-happy-desktop-ui="tab-underline"]`,
+            `.happy-tabs[data-size="${size}"] [data-tab-id="unread"] [data-happy-desktop-ui="tab-underline"]`,
         );
         const tb = activeTab.bounds();
         const ub = underline.bounds();
@@ -206,7 +206,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         for (const id of ["all", "mentions", "channels", "reactions"]) {
             expect(
                 view
-                    .$(`.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"]`)
+                    .$(`.happy-tabs[data-size="${size}"] [data-tab-id="${id}"]`)
                     .element.querySelector('[data-happy-desktop-ui="tab-underline"]'),
                 `${size}/${id} no underline`,
             ).toBeNull();
@@ -214,7 +214,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
 
         // Exactly one active tab per bar.
         expect(
-            view.$(`.happy2-tabs[data-size="${size}"]`).element.querySelectorAll("[data-active]")
+            view.$(`.happy-tabs[data-size="${size}"]`).element.querySelectorAll("[data-active]")
                 .length,
             `${size} single active`,
         ).toBe(1);
@@ -222,9 +222,9 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         // Leading icon box + trailing CountBadge geometry (DOM only).
         for (const id of ["all", "mentions"]) {
             const iconBox = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="tab-icon"] [data-happy-desktop-ui="icon"]`,
+                `.happy-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="tab-icon"] [data-happy-desktop-ui="icon"]`,
             );
-            const tab = view.$(`.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"]`);
+            const tab = view.$(`.happy-tabs[data-size="${size}"] [data-tab-id="${id}"]`);
             expect(iconBox.bounds().width, `${size}/${id} icon box w`).toBe(spec.icon);
             expect(iconBox.bounds().height, `${size}/${id} icon box h`).toBe(spec.icon);
             expect(
@@ -238,12 +238,12 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
             { id: "mentions", tone: "neutral" },
         ] as const;
         for (const { id, tone } of badgeCases) {
-            const tab = view.$(`.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"]`);
+            const tab = view.$(`.happy-tabs[data-size="${size}"] [data-tab-id="${id}"]`);
             const label = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="tab-label"]`,
+                `.happy-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="tab-label"]`,
             );
             const badge = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="count-badge"]`,
+                `.happy-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="count-badge"]`,
             );
             expect(badge.element.getAttribute("data-tone"), `${size}/${id} badge tone`).toBe(tone);
             expect(badge.height(), `${size}/${id} badge height`).toBe(18);
@@ -268,7 +268,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
             (
                 await view
                     .$(
-                        `.happy2-tabs[data-size="${size}"] [data-tab-id="unread"] [data-happy-desktop-ui="tab-underline"]`,
+                        `.happy-tabs[data-size="${size}"] [data-tab-id="unread"] [data-happy-desktop-ui="tab-underline"]`,
                     )
                     .visibleMetrics()
             ).pixelCount,
@@ -278,7 +278,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         // Label ink present and unclipped inside its own line box.
         for (const tab of inboxTabs) {
             const label = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${tab.id}"] [data-happy-desktop-ui="tab-label"]`,
+                `.happy-tabs[data-size="${size}"] [data-tab-id="${tab.id}"] [data-happy-desktop-ui="tab-label"]`,
             );
             const ink = await label.visibleMetrics();
             const box = label.bounds();
@@ -294,7 +294,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         // box-centered glyph, so only ink presence is asserted here.
         for (const id of ["all", "mentions"]) {
             const icon = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="tab-icon"] [data-happy-desktop-ui="icon"]`,
+                `.happy-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="tab-icon"] [data-happy-desktop-ui="icon"]`,
             );
             expect(
                 (await icon.visibleMetrics()).pixelCount,
@@ -305,7 +305,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         // Trailing badge digits paint (guards a blank count pill).
         for (const id of ["unread", "mentions"]) {
             const badgeInk = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="count-badge-label"]`,
+                `.happy-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy-desktop-ui="count-badge-label"]`,
             );
             expect(
                 (await badgeInk.visibleMetrics()).pixelCount,
@@ -353,10 +353,10 @@ it("holds Tabs arity, active sweep, and count badges", async () => {
 
     // Arity: each bar renders exactly its tab count and one active underline.
     for (const [selector, count, activeId] of [
-        ['.happy2-tabs [data-tab-id="a"]', 2, "a"],
-        ['.happy2-tabs [data-tab-id="members"]', 4, "members"],
+        ['.happy-tabs [data-tab-id="a"]', 2, "a"],
+        ['.happy-tabs [data-tab-id="members"]', 4, "members"],
     ] as const) {
-        const bar = view.$(selector).element.closest(".happy2-tabs")!;
+        const bar = view.$(selector).element.closest(".happy-tabs")!;
         expect(
             bar.querySelectorAll('[data-happy-desktop-ui="tab"]').length,
             `${activeId} arity`,
@@ -376,10 +376,10 @@ it("holds Tabs arity, active sweep, and count badges", async () => {
     }
 
     // Count badge grows with digit count (CountBadge stepped width 18/25/32).
-    const twoBar = view.$('[data-tab-id="a"]').element.closest(".happy2-tabs")!;
+    const twoBar = view.$('[data-tab-id="a"]').element.closest(".happy-tabs")!;
     const b9 = twoBar.querySelector('[data-tab-id="b"] [data-happy-desktop-ui="count-badge"]');
     expect((b9 as HTMLElement).getBoundingClientRect().width, "single-digit badge").toBe(18);
-    const adminBar = view.$('[data-tab-id="members"]').element.closest(".happy2-tabs")!;
+    const adminBar = view.$('[data-tab-id="members"]').element.closest(".happy-tabs")!;
     const b128 = adminBar.querySelector(
         '[data-tab-id="members"] [data-happy-desktop-ui="count-badge"]',
     );

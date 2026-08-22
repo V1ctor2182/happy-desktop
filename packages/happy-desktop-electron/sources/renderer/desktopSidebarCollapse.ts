@@ -3,7 +3,7 @@ import type {
     HappyAgentSidebarCollapsePersistence,
 } from "happy-desktop-state";
 
-const SIDEBAR_COLLAPSE_KEY = "happy2.sidebar-collapse.v1";
+const SIDEBAR_COLLAPSE_KEY = "happy.sidebar-collapse.v1";
 
 /**
  * Where the sidebar rows the reader folded shut are kept on this machine. It is

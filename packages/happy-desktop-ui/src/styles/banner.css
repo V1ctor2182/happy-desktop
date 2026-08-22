@@ -14,12 +14,12 @@
  * optically centered, and that centering lives in the Icon path data itself.
  */
 
-.happy2-banner,
-.happy2-banner * {
+.happy-banner,
+.happy-banner * {
     box-sizing: border-box;
 }
 
-.happy2-banner {
+.happy-banner {
     display: flex;
     flex: none;
     align-items: center;
@@ -28,64 +28,64 @@
     margin: 0;
     padding: 12px 14px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background-color: var(--surface-high);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
 }
 
 /* ---- Tone identity: soft fill, hairline border, leading-icon color -------- */
 
-.happy2-banner[data-tone="info"] {
+.happy-banner[data-tone="info"] {
     border-color: var(--radio-active);
     background-color: var(--surface-high);
 }
 
-.happy2-banner[data-tone="info"] .happy2-banner__icon {
+.happy-banner[data-tone="info"] .happy-banner__icon {
     color: var(--radio-active);
 }
 
-.happy2-banner[data-tone="success"] {
+.happy-banner[data-tone="success"] {
     border-color: var(--success);
     background-color: var(--surface-high);
 }
 
-.happy2-banner[data-tone="success"] .happy2-banner__icon {
+.happy-banner[data-tone="success"] .happy-banner__icon {
     color: var(--success);
 }
 
-.happy2-banner[data-tone="warning"] {
+.happy-banner[data-tone="warning"] {
     border-color: var(--box-warning-border);
     background-color: var(--box-warning-background);
 }
 
-.happy2-banner[data-tone="warning"] .happy2-banner__icon {
+.happy-banner[data-tone="warning"] .happy-banner__icon {
     color: var(--box-warning-text);
 }
 
-.happy2-banner[data-tone="danger"] {
+.happy-banner[data-tone="danger"] {
     border-color: var(--box-error-border);
     background-color: var(--box-error-background);
 }
 
-.happy2-banner[data-tone="danger"] .happy2-banner__icon {
+.happy-banner[data-tone="danger"] .happy-banner__icon {
     color: var(--box-error-text);
 }
 
-.happy2-banner[data-tone="neutral"] {
+.happy-banner[data-tone="neutral"] {
     border-color: var(--divider);
     background-color: var(--surface-high);
 }
 
-.happy2-banner[data-tone="neutral"] .happy2-banner__icon {
+.happy-banner[data-tone="neutral"] .happy-banner__icon {
     color: var(--text-secondary);
 }
 
 /* ---- Leading icon slot ---------------------------------------------------- */
 
-.happy2-banner__icon {
+.happy-banner__icon {
     display: flex;
     flex: none;
     align-items: center;
@@ -96,7 +96,7 @@
 
 /* ---- Text block ----------------------------------------------------------- */
 
-.happy2-banner__content {
+.happy-banner__content {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -104,7 +104,7 @@
     min-width: 0;
 }
 
-.happy2-banner__title {
+.happy-banner__title {
     display: block;
     color: var(--text);
     font-size: 13px;
@@ -112,7 +112,7 @@
     line-height: 18px;
 }
 
-.happy2-banner__message {
+.happy-banner__message {
     display: block;
     color: var(--text-secondary);
     font-size: 13px;
@@ -122,7 +122,7 @@
 
 /* ---- Trailing actions ----------------------------------------------------- */
 
-.happy2-banner__actions {
+.happy-banner__actions {
     display: flex;
     flex: none;
     align-items: center;
@@ -130,7 +130,7 @@
     margin-left: auto;
 }
 
-.happy2-banner__dismiss {
+.happy-banner__dismiss {
     display: flex;
     flex: none;
     align-items: center;
@@ -140,7 +140,7 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
@@ -149,12 +149,12 @@
         color 120ms ease;
 }
 
-.happy2-banner__dismiss:hover {
+.happy-banner__dismiss:hover {
     background: var(--surface-ripple);
     color: var(--text);
 }
 
-.happy2-banner__dismiss:focus-visible {
+.happy-banner__dismiss:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }

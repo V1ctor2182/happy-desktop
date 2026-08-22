@@ -100,7 +100,7 @@ export type SpinnerProps = {
 function cells(count: number, part: string) {
     return Array.from({ length: count }, (_, index) => (
         <span
-            className={`happy2-spinner__${part}`}
+            className={`happy-spinner__${part}`}
             data-happy-desktop-ui={`spinner-${part}`}
             key={index}
         />
@@ -111,13 +111,13 @@ function bracketed(track: ReactNode) {
     return (
         <>
             <span
-                className="happy2-spinner__bracket"
+                className="happy-spinner__bracket"
                 data-happy-desktop-ui="spinner-bracket"
                 data-side="left"
             />
             {track}
             <span
-                className="happy2-spinner__bracket"
+                className="happy-spinner__bracket"
                 data-happy-desktop-ui="spinner-bracket"
                 data-side="right"
             />
@@ -133,10 +133,10 @@ function variantParts(variant: SpinnerVariant) {
          * the cell's resting opacity. */
         return (
             <>
-                <span className="happy2-spinner__column" data-happy-desktop-ui="spinner-column">
+                <span className="happy-spinner__column" data-happy-desktop-ui="spinner-column">
                     {cells(4, "dot")}
                 </span>
-                <span className="happy2-spinner__column" data-happy-desktop-ui="spinner-column">
+                <span className="happy-spinner__column" data-happy-desktop-ui="spinner-column">
                     {cells(4, "dot")}
                 </span>
             </>
@@ -151,18 +151,18 @@ function variantParts(variant: SpinnerVariant) {
             return cells(3, "dot");
         case "bar":
             return bracketed(
-                <span className="happy2-spinner__track" data-happy-desktop-ui="spinner-track">
-                    <span className="happy2-spinner__fill" data-happy-desktop-ui="spinner-fill" />
+                <span className="happy-spinner__track" data-happy-desktop-ui="spinner-track">
+                    <span className="happy-spinner__fill" data-happy-desktop-ui="spinner-fill" />
                 </span>,
             );
         case "bounce":
             return bracketed(
-                <span className="happy2-spinner__track" data-happy-desktop-ui="spinner-track">
-                    <span className="happy2-spinner__block" data-happy-desktop-ui="spinner-block" />
+                <span className="happy-spinner__track" data-happy-desktop-ui="spinner-track">
+                    <span className="happy-spinner__block" data-happy-desktop-ui="spinner-block" />
                 </span>,
             );
         default:
-            return <span className="happy2-spinner__glyph" data-happy-desktop-ui="spinner-glyph" />;
+            return <span className="happy-spinner__glyph" data-happy-desktop-ui="spinner-glyph" />;
     }
 }
 
@@ -188,7 +188,7 @@ export function Spinner(props: SpinnerProps) {
     return (
         <span
             aria-label={props.label ?? "Loading"}
-            className={["happy2-spinner", props.className].filter(Boolean).join(" ")}
+            className={["happy-spinner", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="spinner"
             data-paused={paused ? "" : undefined}
             data-tone={props.tone ?? "default"}
@@ -196,8 +196,8 @@ export function Spinner(props: SpinnerProps) {
             role="status"
             style={
                 {
-                    "--happy2-spinner-size": `${props.size ?? 16}px`,
-                    "--happy2-spinner-offset": `${offset}`,
+                    "--happy-spinner-size": `${props.size ?? 16}px`,
+                    "--happy-spinner-offset": `${offset}`,
                 } as CSSProperties
             }
         >

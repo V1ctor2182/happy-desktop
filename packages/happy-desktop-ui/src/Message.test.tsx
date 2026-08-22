@@ -669,9 +669,9 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
         "padding-top": "16px",
     });
     /* The identity gutter is an absolutely positioned 16x16 slot
-       (`:not([data-own]) .happy2-message__gutter`, top:18px/left:12px when not
+       (`:not([data-own]) .happy-message__gutter`, top:18px/left:12px when not
        grouped); the `Avatar` inside it is centered down to 12x12
-       (`.happy2-message__avatar-dangling .happy2-avatar`), so its origin sits
+       (`.happy-message__avatar-dangling .happy-avatar`), so its origin sits
        (16-12)/2 = 2px inside the slot on each axis. */
     const gutter = view.$('[data-testid="m1"] [data-happy-desktop-ui="message-gutter"]');
     expect(gutter.bounds()).toEqual({ x: 12, y: 18, width: 16, height: 16 });
@@ -726,7 +726,7 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
     const author = view.$('[data-testid="m1"] [data-happy-desktop-ui="message-author"]');
     const authorMetrics = author.textMetrics();
     expect(authorMetrics.text).toBe("Maya Johnson");
-    expect(authorMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(authorMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(authorMetrics.font.size).toBe(14);
     expect(authorMetrics.font.weight).toBe("600");
     expect(authorMetrics.font.lineHeight).toBe(20);
@@ -737,7 +737,7 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
         "font-size": "11px",
         "font-weight": "500",
     });
-    expect(time.textMetrics().font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(time.textMetrics().font.family).toBe("happy Mono, ui-monospace, monospace");
     /* Messages do not carry an AGENT label; the compact identity avatar is the
        only agent marker. */
     expect(
@@ -803,7 +803,7 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
         "border-radius": "4px",
         "font-size": "13px",
     });
-    expect(code.textMetrics().font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(code.textMetrics().font.family).toBe("happy Mono, ui-monospace, monospace");
     expect((await code.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     const link = view.$('[data-testid="m1"] [data-happy-desktop-ui="message-link"]');
     expect(link.computedStyles(["color", "text-decoration-line"])).toEqual({
@@ -971,7 +971,7 @@ it("makes the avatar and author name a profile affordance without shifting geome
     expect(author.element.getAttribute("aria-label")).toBe("View Maya Johnson’s profile");
     const authorMetrics = author.textMetrics();
     expect(authorMetrics.text).toBe("Maya Johnson");
-    expect(authorMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(authorMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(authorMetrics.font.size).toBe(14);
     expect(authorMetrics.font.weight).toBe("600");
     expect(authorMetrics.font.lineHeight).toBe(20);
@@ -994,7 +994,7 @@ it("makes the avatar and author name a profile affordance without shifting geome
         ),
     ).toBeNull();
     /* Non-own rows always get the same absolutely positioned 16x16 gutter slot
-       (`.happy2-message:not([data-own]) .happy2-message__gutter`), agent or
+       (`.happy-message:not([data-own]) .happy-message__gutter`), agent or
        not; only the row's own padding-left differs (30px for agent vs 18px for
        a human bubble), which sets where the content column starts. */
     const agentIdentity = view.$(
@@ -1042,7 +1042,7 @@ it("uses the Happy star as Happy’s compact inline agent avatar", async () => {
     expect((image.element as HTMLImageElement).src).toBe(happyLogoUrl);
     /* Agent rows carry no meta margin-left, so the author name starts at the
        row's own 30px agent padding-left (see message.css's
-       `:not([data-agent]):not([data-own]) .happy2-message__meta` comment). */
+       `:not([data-agent]):not([data-own]) .happy-message__meta` comment). */
     expect(
         view.$('[data-testid="happy-agent"] [data-happy-desktop-ui="message-author"]').bounds().x,
     ).toBe(30);
@@ -1334,7 +1334,7 @@ it("anchors MessageList to the bottom and lays out sparse histories", async () =
         "font-weight": "700",
         "text-transform": "uppercase",
     });
-    expect(label.textMetrics().font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(label.textMetrics().font.family).toBe("happy Mono, ui-monospace, monospace");
     expect(
         view.container.querySelectorAll(
             '[data-testid="sparse"] [data-happy-desktop-ui="day-divider-line"]',
@@ -1419,7 +1419,7 @@ it("follows the newest content in MessageList unless the reader scrolled up", as
         view.$('[data-testid="feed"] [data-happy-desktop-ui="message-list-spacer"]').bounds()
             .height,
     ).toBe(0);
-    /* The Slack-style scrollbar chrome (`.happy2-message-list` scrollbar-width /
+    /* The Slack-style scrollbar chrome (`.happy-message-list` scrollbar-width /
        scrollbar-color and the ::-webkit-scrollbar thumb) is intentionally not
        asserted here: native scrollbar rendering is not measurable cross-engine
        — WebKit omits the standard properties, Chromium hides them behind
@@ -1427,7 +1427,7 @@ it("follows the newest content in MessageList unless the reader scrolled up", as
        normalizes the value. It is a token-only, progressive-enhancement layer
        verified visually against the running app. */
     /* On mount the list shows the newest message: scrolled to the bottom, with
-       the last message resting on `.happy2-message-list__content`'s
+       the last message resting on `.happy-message-list__content`'s
        intentionally compact 8px bottom clearance before the composer (the top
        keeps a roomier 12px above the history — see its message.css comment). */
     expect(atBottom(), "mounted at bottom").toBe(true);
@@ -1824,15 +1824,15 @@ it("renders string bodies as safe streaming Markdown", async () => {
     const mdBlocks = [...mdBody.element.children].filter(
         (node): node is HTMLElement =>
             node instanceof HTMLElement &&
-            !node.classList.contains("happy2-message__generation-marker"),
+            !node.classList.contains("happy-message__generation-marker"),
     );
     expect(mdBlocks.length, "markdown compiled to direct block children").toBeGreaterThanOrEqual(4);
     for (let index = 1; index < mdBlocks.length; index += 1) {
         const previous = mdBlocks[index - 1]!.getBoundingClientRect();
         const current = mdBlocks[index]!.getBoundingClientRect();
         const expectedGap =
-            mdBlocks[index - 1]!.classList.contains("happy2-message__code-block") ||
-            mdBlocks[index]!.classList.contains("happy2-message__code-block")
+            mdBlocks[index - 1]!.classList.contains("happy-message__code-block") ||
+            mdBlocks[index]!.classList.contains("happy-message__code-block")
                 ? 12
                 : 8;
         expect(
@@ -1929,7 +1929,7 @@ it("renders string bodies as safe streaming Markdown", async () => {
     expect(failed.element.getAttribute("aria-label")).toBe("Generation failed");
     /* Same `::after`-painted marker as the streaming caret above — the failed
        dot's color and size live on the pseudo-element, not the marker itself
-       (`.happy2-message__generation-marker[data-generation-marker="failed"]::after`). */
+       (`.happy-message__generation-marker[data-generation-marker="failed"]::after`). */
     expect(getComputedStyle(failed.element, "::after").backgroundColor).toBe("rgb(244, 67, 54)");
     const failedParagraph = view.$(
         '[data-testid="md-failed"] [data-happy-desktop-ui="message-body"] p',

@@ -63,18 +63,18 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
             }
         >
             <PanelHeader>
-                <Box className="happy2-happy-agent-settings__heading">
+                <Box className="happy-agent-settings__heading">
                     <Icon name={categoryIcon(props)} size={16} />
                     <span
-                        className="happy2-happy-agent-settings__heading-title"
-                        data-happy2-ui="happy-agent-settings-heading-title"
+                        className="happy-agent-settings__heading-title"
+                        data-happy-desktop-ui="happy-agent-settings-heading-title"
                     >
                         {props.title}
                     </span>
                     {props.description ? (
                         <span
-                            className="happy2-happy-agent-settings__heading-description"
-                            data-happy2-ui="happy-agent-settings-heading-description"
+                            className="happy-agent-settings__heading-description"
+                            data-happy-desktop-ui="happy-agent-settings-heading-description"
                         >
                             {props.description}
                         </span>
@@ -82,11 +82,11 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
                 </Box>
             </PanelHeader>
             <ScrollArea
-                className="happy2-happy-agent-settings__body"
-                data-happy2-ui="happy-agent-settings-body"
-                viewportClassName="happy2-happy-agent-settings__body-viewport"
+                className="happy-agent-settings__body"
+                data-happy-desktop-ui="happy-agent-settings-body"
+                viewportClassName="happy-agent-settings__body-viewport"
             >
-                <Box className="happy2-happy-agent-settings__content">{props.children}</Box>
+                <Box className="happy-agent-settings__content">{props.children}</Box>
             </ScrollArea>
         </AppShell>
     );
@@ -114,29 +114,26 @@ export interface HappyAgentSettingsSectionProps {
 export function HappyAgentSettingsSection(props: HappyAgentSettingsSectionProps) {
     return (
         <section
-            className="happy2-happy-agent-settings__section"
-            data-happy2-ui="happy-agent-settings-section"
+            className="happy-agent-settings__section"
+            data-happy-desktop-ui="happy-agent-settings-section"
         >
-            <Box className="happy2-happy-agent-settings__section-heading">
+            <Box className="happy-agent-settings__section-heading">
                 <h2
-                    className="happy2-happy-agent-settings__section-title"
-                    data-happy2-ui="happy-agent-settings-section-title"
+                    className="happy-agent-settings__section-title"
+                    data-happy-desktop-ui="happy-agent-settings-section-title"
                 >
                     {props.title}
                 </h2>
                 {props.description ? (
                     <p
-                        className="happy2-happy-agent-settings__section-description"
-                        data-happy2-ui="happy-agent-settings-section-description"
+                        className="happy-agent-settings__section-description"
+                        data-happy-desktop-ui="happy-agent-settings-section-description"
                     >
                         {props.description}
                     </p>
                 ) : null}
             </Box>
-            <Box
-                className="happy2-happy-agent-settings__section-rows"
-                data-rows={props.rows ?? "form"}
-            >
+            <Box className="happy-agent-settings__section-rows" data-rows={props.rows ?? "form"}>
                 {props.children}
             </Box>
         </section>

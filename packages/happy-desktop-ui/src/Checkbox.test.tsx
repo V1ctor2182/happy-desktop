@@ -211,7 +211,7 @@ it("holds Checkbox geometry, colors, glyph centering, and typography across stat
     expect(label.computedStyle("color")).toBe("rgb(0, 0, 0)");
     expect(label.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0,
             lineHeight: 20,
             size: 13,

@@ -10,7 +10,7 @@ it("renders HEAD and working-tree text through Pierre Diffs in the active appear
     const view = createRenderer();
     view.render(
         () => (
-            <div className="happy2-theme-dark" style={{ height: "360px", width: "640px" }}>
+            <div className="happy-theme-dark" style={{ height: "360px", width: "640px" }}>
                 <ChangedFileDiff
                     appearance="dark"
                     data-testid="diff"
@@ -63,7 +63,7 @@ it("overlays the vertical diff thumb without taking width from its rows", async 
     view.render(
         () => (
             <div
-                className="happy2-theme-dark"
+                className="happy-theme-dark"
                 data-scrollbar-visibility="always"
                 style={{ height: "300px", width: "480px" }}
             >
@@ -87,7 +87,7 @@ it("overlays the vertical diff thumb without taking width from its rows", async 
 
     const viewport = root.element.querySelector("[data-scrollbar-viewport]") as HTMLElement;
     const track = view.$('[data-testid="long-diff"] [data-scrollbar-track][data-axis="vertical"]');
-    const thumb = view.$('[data-testid="long-diff"] .happy2-scrollbar__thumb');
+    const thumb = view.$('[data-testid="long-diff"] .happy-scrollbar__thumb');
     expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
     expect(viewport.offsetWidth - viewport.clientWidth).toBe(0);
     expect(track.bounds().width).toBe(8);

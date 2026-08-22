@@ -7,25 +7,25 @@
  * 36px with a dashed strong hairline; done rows 32px with a quiet wash.
  */
 
-.happy2-agent-desk,
-.happy2-agent-desk * {
+.happy-agent-desk,
+.happy-agent-desk * {
     box-sizing: border-box;
 }
 
-.happy2-agent-desk {
+.happy-agent-desk {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
     overflow: hidden;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* ---- Header ----------------------------------------------------------- */
 
-.happy2-agent-desk__header {
+.happy-agent-desk__header {
     display: flex;
     flex: none;
     align-items: center;
@@ -37,47 +37,47 @@
 
 /* The header's leading glyph. It is decoration on a title, and the desk below
    it spends its colour on run state, which is the part worth looking at. */
-.happy2-agent-desk__spark {
+.happy-agent-desk__spark {
     color: var(--text-secondary);
-    translate: 0 var(--happy2-agent-desk-spark-ty, 0px);
+    translate: 0 var(--happy-agent-desk-spark-ty, 0px);
 }
 
-.happy2-agent-desk__title {
+.happy-agent-desk__title {
     display: block;
     flex: 1 1 auto;
     min-width: 0;
-    margin-top: var(--happy2-agent-desk-header-title-y, 0px);
-    margin-bottom: calc(-1 * var(--happy2-agent-desk-header-title-y, 0px));
+    margin-top: var(--happy-agent-desk-header-title-y, 0px);
+    margin-bottom: calc(-1 * var(--happy-agent-desk-header-title-y, 0px));
     overflow: hidden;
     color: var(--text);
     font-size: 13px;
     font-weight: 800;
-    translate: 0 var(--happy2-agent-desk-header-title-ty, 0px);
+    translate: 0 var(--happy-agent-desk-header-title-ty, 0px);
     line-height: 16px;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
-.happy2-agent-desk__count {
+.happy-agent-desk__count {
     flex: none;
 }
 
 /* ---- Scrolling body --------------------------------------------------- */
 
 /* Scrollport: edge-to-edge, no padding/gap of its own. */
-.happy2-agent-desk__body {
+.happy-agent-desk__body {
     flex: 1 1 auto;
     min-height: 0;
 }
 
-.happy2-agent-desk__body-viewport {
+.happy-agent-desk__body-viewport {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
 }
 
 /* Inner content wrapper owns the 8px row gap and the 12/14/16px inset. */
-.happy2-agent-desk__body-content {
+.happy-agent-desk__body-content {
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
@@ -87,28 +87,28 @@
 
 /* ---- Running tiles ----------------------------------------------------- */
 
-.happy2-agent-desk__run {
+.happy-agent-desk__run {
     display: flex;
     flex: none;
     flex-direction: column;
     gap: 8px;
     padding: 12px;
     background: var(--surface-pressed);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
 }
 
-.happy2-agent-desk__run-head {
+.happy-agent-desk__run-head {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.happy2-agent-desk__run-title {
+.happy-agent-desk__run-title {
     display: block;
     flex: 1 1 auto;
     min-width: 0;
-    margin-top: var(--happy2-agent-desk-run-title-y, 0px);
-    margin-bottom: calc(-1 * var(--happy2-agent-desk-run-title-y, 0px));
+    margin-top: var(--happy-agent-desk-run-title-y, 0px);
+    margin-bottom: calc(-1 * var(--happy-agent-desk-run-title-y, 0px));
     overflow: hidden;
     color: var(--text);
     font-size: 13px;
@@ -116,24 +116,24 @@
     line-height: 16px;
     white-space: nowrap;
     text-overflow: ellipsis;
-    translate: 0 var(--happy2-agent-desk-run-title-ty, 0px);
+    translate: 0 var(--happy-agent-desk-run-title-ty, 0px);
 }
 
-.happy2-agent-desk__run-eta {
+.happy-agent-desk__run-eta {
     display: block;
     flex: none;
-    margin-top: var(--happy2-agent-desk-run-eta-y, 0px);
-    margin-bottom: calc(-1 * var(--happy2-agent-desk-run-eta-y, 0px));
+    margin-top: var(--happy-agent-desk-run-eta-y, 0px);
+    margin-bottom: calc(-1 * var(--happy-agent-desk-run-eta-y, 0px));
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 14px;
     white-space: nowrap;
-    translate: 0 var(--happy2-agent-desk-run-eta-ty, 0px);
+    translate: 0 var(--happy-agent-desk-run-eta-ty, 0px);
 }
 
-.happy2-agent-desk__run-detail {
+.happy-agent-desk__run-detail {
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 12px;
@@ -142,23 +142,23 @@
     text-overflow: ellipsis;
 }
 
-.happy2-agent-desk__run-track {
+.happy-agent-desk__run-track {
     flex: none;
     height: 3px;
     overflow: hidden;
     background: var(--groupped-background);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
 }
 
-.happy2-agent-desk__run-fill {
+.happy-agent-desk__run-fill {
     height: 100%;
     background: var(--text-link);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
 }
 
 /* ---- Section labels ---------------------------------------------------- */
 
-.happy2-agent-desk__section-label {
+.happy-agent-desk__section-label {
     display: flex;
     flex: none;
     align-items: flex-end;
@@ -166,7 +166,7 @@
     margin-top: 4px;
     padding: 0 2px;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -176,8 +176,8 @@
 
 /* ---- Queued and done rows ---------------------------------------------- */
 
-.happy2-agent-desk__queued,
-.happy2-agent-desk__done {
+.happy-agent-desk__queued,
+.happy-agent-desk__done {
     display: flex;
     flex: none;
     align-items: center;
@@ -188,7 +188,7 @@
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
     appearance: none;
@@ -198,46 +198,46 @@
         border-color 120ms ease;
 }
 
-.happy2-agent-desk__queued:focus-visible,
-.happy2-agent-desk__done:focus-visible {
+.happy-agent-desk__queued:focus-visible,
+.happy-agent-desk__done:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
-.happy2-agent-desk__queued {
+.happy-agent-desk__queued {
     height: 36px;
     border: 1px dashed var(--divider);
     border-radius: 8px;
 }
 
-.happy2-agent-desk__queued:hover {
+.happy-agent-desk__queued:hover {
     background: var(--surface-ripple);
 }
 
-.happy2-agent-desk__done {
+.happy-agent-desk__done {
     height: 32px;
     background: var(--surface-ripple);
     border-radius: 8px;
 }
 
-.happy2-agent-desk__done:hover {
+.happy-agent-desk__done:hover {
     background: var(--groupped-background);
 }
 
-.happy2-agent-desk__row-icon {
+.happy-agent-desk__row-icon {
     color: var(--text-secondary);
 }
 
-.happy2-agent-desk__done .happy2-agent-desk__row-icon {
+.happy-agent-desk__done .happy-agent-desk__row-icon {
     color: var(--success);
 }
 
-.happy2-agent-desk__row-title {
+.happy-agent-desk__row-title {
     display: block;
     flex: 1 1 auto;
     min-width: 0;
-    margin-top: var(--happy2-agent-desk-row-title-y, 0px);
-    margin-bottom: calc(-1 * var(--happy2-agent-desk-row-title-y, 0px));
+    margin-top: var(--happy-agent-desk-row-title-y, 0px);
+    margin-bottom: calc(-1 * var(--happy-agent-desk-row-title-y, 0px));
     overflow: hidden;
     font-size: 12px;
     font-weight: 500;
@@ -245,21 +245,21 @@
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
-    translate: 0 var(--happy2-agent-desk-row-title-ty, 0px);
+    translate: 0 var(--happy-agent-desk-row-title-ty, 0px);
 }
 
-.happy2-agent-desk__row-meta {
+.happy-agent-desk__row-meta {
     display: block;
     flex: none;
-    margin-top: var(--happy2-agent-desk-row-meta-y, 0px);
-    margin-bottom: calc(-1 * var(--happy2-agent-desk-row-meta-y, 0px));
+    margin-top: var(--happy-agent-desk-row-meta-y, 0px);
+    margin-bottom: calc(-1 * var(--happy-agent-desk-row-meta-y, 0px));
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 14px;
     white-space: nowrap;
-    translate: 0 var(--happy2-agent-desk-row-meta-ty, 0px);
+    translate: 0 var(--happy-agent-desk-row-meta-ty, 0px);
 }
 
 /* ---- Optical corrections ------------------------------------------------ */
@@ -280,13 +280,13 @@
  * rows, the header badge, and the bottom-anchored section labels measured
  * centered raw and carry no correction.
  */
-.happy2-agent-desk {
-    --happy2-agent-desk-spark-ty: -0.5px;
-    --happy2-agent-desk-header-title-ty: -1px;
-    --happy2-agent-desk-run-title-ty: -0.5px;
-    --happy2-agent-desk-run-eta-ty: -0.6px;
-    --happy2-agent-desk-row-title-ty: -0.5px;
-    --happy2-agent-desk-row-meta-ty: -0.4px;
+.happy-agent-desk {
+    --happy-agent-desk-spark-ty: -0.5px;
+    --happy-agent-desk-header-title-ty: -1px;
+    --happy-agent-desk-run-title-ty: -0.5px;
+    --happy-agent-desk-run-eta-ty: -0.6px;
+    --happy-agent-desk-row-title-ty: -0.5px;
+    --happy-agent-desk-row-meta-ty: -0.4px;
 }
 
 /*
@@ -295,12 +295,12 @@
  * Blink on macOS, so neither is a usable engine scope.)
  */
 @supports (-moz-appearance: none) {
-    .happy2-agent-desk {
-        --happy2-agent-desk-header-title-y: -1px;
-        --happy2-agent-desk-run-title-y: -1px;
-        --happy2-agent-desk-run-eta-y: -0.6px;
-        --happy2-agent-desk-row-title-y: -1px;
-        --happy2-agent-desk-row-meta-y: -0.4px;
+    .happy-agent-desk {
+        --happy-agent-desk-header-title-y: -1px;
+        --happy-agent-desk-run-title-y: -1px;
+        --happy-agent-desk-run-eta-y: -0.6px;
+        --happy-agent-desk-row-title-y: -1px;
+        --happy-agent-desk-row-meta-y: -0.4px;
     }
 
     /*
@@ -309,28 +309,28 @@
      * snapping off and moves fractional-margin text by half a device pixel.
      * The spark (an SVG, not snapped text) keeps its translate correction.
      */
-    .happy2-agent-desk__title,
-    .happy2-agent-desk__run-title,
-    .happy2-agent-desk__run-eta,
-    .happy2-agent-desk__row-title,
-    .happy2-agent-desk__row-meta {
+    .happy-agent-desk__title,
+    .happy-agent-desk__run-title,
+    .happy-agent-desk__run-eta,
+    .happy-agent-desk__row-title,
+    .happy-agent-desk__row-meta {
         translate: none;
     }
 }
 
 /* WebKit — Blink and Gecko do not parse -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
-    .happy2-agent-desk {
-        --happy2-agent-desk-spark-ty: 0px;
-        --happy2-agent-desk-header-title-ty: 0px;
-        --happy2-agent-desk-run-title-ty: 0px;
-        --happy2-agent-desk-run-eta-ty: 0px;
-        --happy2-agent-desk-row-title-ty: 0px;
-        --happy2-agent-desk-row-meta-ty: 0px;
-        --happy2-agent-desk-header-title-y: -1px;
-        --happy2-agent-desk-run-title-y: -1px;
-        --happy2-agent-desk-run-eta-y: -0.6px;
-        --happy2-agent-desk-row-title-y: -0.5px;
-        --happy2-agent-desk-row-meta-y: -0.4px;
+    .happy-agent-desk {
+        --happy-agent-desk-spark-ty: 0px;
+        --happy-agent-desk-header-title-ty: 0px;
+        --happy-agent-desk-run-title-ty: 0px;
+        --happy-agent-desk-run-eta-ty: 0px;
+        --happy-agent-desk-row-title-ty: 0px;
+        --happy-agent-desk-row-meta-ty: 0px;
+        --happy-agent-desk-header-title-y: -1px;
+        --happy-agent-desk-run-title-y: -1px;
+        --happy-agent-desk-run-eta-y: -0.6px;
+        --happy-agent-desk-row-title-y: -0.5px;
+        --happy-agent-desk-row-meta-y: -0.4px;
     }
 }

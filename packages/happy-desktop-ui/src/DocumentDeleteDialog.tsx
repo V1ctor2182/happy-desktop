@@ -42,11 +42,11 @@ export function DocumentDeleteDialog(props: DocumentDeleteDialogProps) {
         <ModalOverlay onDismiss={local.pending ? undefined : local.onCancel}>
             <Modal
                 {...rest}
-                className={["happy2-document-delete-dialog", local.className]
+                className={["happy-document-delete-dialog", local.className]
                     .filter(Boolean)
                     .join(" ")}
                 footer={
-                    <Box className="happy2-document-delete-dialog__actions">
+                    <Box className="happy-document-delete-dialog__actions">
                         <Button
                             disabled={local.pending}
                             onClick={() => local.onCancel?.()}
@@ -70,7 +70,7 @@ export function DocumentDeleteDialog(props: DocumentDeleteDialogProps) {
                 title={`Delete “${title()}”?`}
                 tone="danger"
             >
-                <Box className="happy2-document-delete-dialog__body">
+                <Box className="happy-document-delete-dialog__body">
                     {local.error ? (
                         <Banner
                             data-testid="document-delete-error"
@@ -81,8 +81,8 @@ export function DocumentDeleteDialog(props: DocumentDeleteDialogProps) {
                         </Banner>
                     ) : null}
                     <span
-                        className="happy2-document-delete-dialog__message"
-                        data-happy2-ui="document-delete-message"
+                        className="happy-document-delete-dialog__message"
+                        data-happy-desktop-ui="document-delete-message"
                     >
                         This permanently deletes {title()} for everyone: its content, complete edit
                         history, and every channel it is attached to. This cannot be undone.

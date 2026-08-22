@@ -2,19 +2,19 @@
  * C-058 ModalOverlay — the single backdrop for every modal-class surface.
  *
  * Fixed to the app window with one dim at one stacking level
- * (--happy2-z-overlay, above all app chrome and in-panel popovers). A flex box
+ * (--happy-z-overlay, above all app chrome and in-panel popovers). A flex box
  * holds one card (Modal / Lightbox / editor panel / transient type-ahead)
  * inside a 24px safe-area gutter. Dialogs center by default; transient
  * type-ahead surfaces may use the adaptive top placement. The dim outside the
  * card is the click target that dismisses the surface.
  */
 
-.happy2-modal-overlay {
+.happy-modal-overlay {
     /* Programmatic fallback focus target; the scrim itself never shows a ring. */
     outline: none;
     position: fixed;
     inset: 0;
-    z-index: var(--happy2-z-overlay);
+    z-index: var(--happy-z-overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -23,7 +23,7 @@
     background: var(--overlay-backdrop);
 }
 
-.happy2-modal-overlay[data-placement="top"] {
+.happy-modal-overlay[data-placement="top"] {
     container-type: size;
     align-items: flex-start;
     padding: 0;
@@ -32,7 +32,7 @@
 /* One immersive surface instead of a card: no gutter, and the hosted surface
    stretches to every edge of the window. It paints its own dark over the dim,
    so the app is the thing being covered rather than a card's neighbour. */
-.happy2-modal-overlay[data-placement="fill"] {
+.happy-modal-overlay[data-placement="fill"] {
     align-items: stretch;
     justify-content: stretch;
     padding: 0;
@@ -41,7 +41,7 @@
 /* A container cannot resolve cqh units against itself. This top-only child
    fills the overlay's size container and owns its flex-safe gutters, keeping
    the default centered DOM and CSS path unchanged. */
-.happy2-modal-overlay__top-layout {
+.happy-modal-overlay__top-layout {
     display: flex;
     flex: none;
     align-items: flex-start;
@@ -73,10 +73,10 @@
  * keeps every resolved height on whole CSS pixels for integer window sizes,
  * so the card's 1px hairlines land on physical pixels at 2×.
  */
-.happy2-modal-overlay > .happy2-modal {
+.happy-modal-overlay > .happy-modal {
     display: contents;
 }
 
-.happy2-modal-overlay > .happy2-modal > .happy2-modal__dialog {
+.happy-modal-overlay > .happy-modal > .happy-modal__dialog {
     max-height: min(calc(100% - 80px), 760px);
 }

@@ -12,7 +12,7 @@ export type FadeProps = {
      * its own live bindings while the crossfade runs. */
     render: (key: string | number) => ReactNode;
     /** Fade-in duration in ms. Defaults to the design-system fade duration
-     * (also the CSS `--happy2-fade-duration` fallback). */
+     * (also the CSS `--happy-fade-duration` fallback). */
     durationMs?: number;
 };
 /**
@@ -24,16 +24,16 @@ export function Fade(props: FadeProps) {
     const layerStyle = (): CSSProperties | undefined =>
         props.durationMs === undefined
             ? undefined
-            : ({ "--happy2-fade-duration": `${props.durationMs}ms` } as CSSProperties);
+            : ({ "--happy-fade-duration": `${props.durationMs}ms` } as CSSProperties);
     return (
         <div
-            className={["happy2-fade", props.className].filter(Boolean).join(" ")}
+            className={["happy-fade", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="fade"
             data-testid={props["data-testid"]}
         >
             <div
                 key={props.active}
-                className="happy2-fade__layer"
+                className="happy-fade__layer"
                 data-happy-desktop-ui="fade-layer"
                 style={layerStyle()}
             >

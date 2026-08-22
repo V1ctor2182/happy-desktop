@@ -52,7 +52,7 @@ function TableCheckbox(props: {
         <button
             aria-checked={props.indeterminate ? "mixed" : props.checked ? "true" : "false"}
             aria-label={props.label}
-            className="happy2-data-table__check"
+            className="happy-data-table__check"
             data-checked={props.checked ? "" : undefined}
             data-indeterminate={props.indeterminate ? "" : undefined}
             data-happy-desktop-ui={props.testid}
@@ -64,11 +64,11 @@ function TableCheckbox(props: {
             type="button"
         >
             <span
-                className="happy2-data-table__check-box"
+                className="happy-data-table__check-box"
                 data-happy-desktop-ui="data-table-check-box"
             >
                 {props.indeterminate ? (
-                    <span className="happy2-data-table__check-bar" aria-hidden="true" />
+                    <span className="happy-data-table__check-bar" aria-hidden="true" />
                 ) : props.checked ? (
                     <Icon name="check" size={14} />
                 ) : null}
@@ -104,13 +104,13 @@ export function DataTable(props: DataTableProps) {
     const someSelected = () => local.rows.some((row) => row.selected);
     return (
         <div
-            className={["happy2-data-table", local.className].filter(Boolean).join(" ")}
+            className={["happy-data-table", local.className].filter(Boolean).join(" ")}
             data-dense={local.dense ? "" : undefined}
             data-happy-desktop-ui="data-table"
             data-testid={local["data-testid"]}
             style={local.style}
         >
-            <table className="happy2-data-table__table" data-happy-desktop-ui="data-table-table">
+            <table className="happy-data-table__table" data-happy-desktop-ui="data-table-table">
                 <colgroup>
                     {local.selectable ? <col style={{ width: "44px" }} /> : null}
                     {local.columns.map((column) => {
@@ -126,14 +126,14 @@ export function DataTable(props: DataTableProps) {
                         <col style={{ width: `${local.actionsWidth ?? 96}px` }} />
                     ) : null}
                 </colgroup>
-                <thead className="happy2-data-table__head" data-happy-desktop-ui="data-table-head">
+                <thead className="happy-data-table__head" data-happy-desktop-ui="data-table-head">
                     <tr
-                        className="happy2-data-table__head-row"
+                        className="happy-data-table__head-row"
                         data-happy-desktop-ui="data-table-head-row"
                     >
                         {local.selectable ? (
                             <th
-                                className="happy2-data-table__th happy2-data-table__th--select"
+                                className="happy-data-table__th happy-data-table__th--select"
                                 data-align="center"
                                 scope="col"
                             >
@@ -148,14 +148,14 @@ export function DataTable(props: DataTableProps) {
                         ) : null}
                         {local.columns.map((column) => (
                             <th
-                                className="happy2-data-table__th"
+                                className="happy-data-table__th"
                                 key={column.id}
                                 data-align={column.align ?? "start"}
                                 data-column-id={column.id}
                                 scope="col"
                             >
                                 <span
-                                    className="happy2-data-table__head-label"
+                                    className="happy-data-table__head-label"
                                     data-happy-desktop-ui="data-table-header"
                                 >
                                     {column.header}
@@ -164,12 +164,12 @@ export function DataTable(props: DataTableProps) {
                         ))}
                         {local.rowActions ? (
                             <th
-                                className="happy2-data-table__th happy2-data-table__th--actions"
+                                className="happy-data-table__th happy-data-table__th--actions"
                                 data-align="end"
                                 scope="col"
                             >
                                 <span
-                                    className="happy2-data-table__sr"
+                                    className="happy-data-table__sr"
                                     data-happy-desktop-ui="data-table-actions-header"
                                 >
                                     Actions
@@ -178,11 +178,11 @@ export function DataTable(props: DataTableProps) {
                         ) : null}
                     </tr>
                 </thead>
-                <tbody className="happy2-data-table__body" data-happy-desktop-ui="data-table-body">
+                <tbody className="happy-data-table__body" data-happy-desktop-ui="data-table-body">
                     {local.rows.length > 0 ? (
                         local.rows.map((row) => (
                             <tr
-                                className="happy2-data-table__row"
+                                className="happy-data-table__row"
                                 key={row.id}
                                 data-clickable={row.onClick ? "" : undefined}
                                 data-happy-desktop-ui="data-table-row"
@@ -192,7 +192,7 @@ export function DataTable(props: DataTableProps) {
                             >
                                 {local.selectable ? (
                                     <td
-                                        className="happy2-data-table__td happy2-data-table__td--select"
+                                        className="happy-data-table__td happy-data-table__td--select"
                                         data-align="center"
                                     >
                                         <TableCheckbox
@@ -207,13 +207,13 @@ export function DataTable(props: DataTableProps) {
                                 ) : null}
                                 {local.columns.map((column) => (
                                     <td
-                                        className="happy2-data-table__td"
+                                        className="happy-data-table__td"
                                         key={column.id}
                                         data-align={column.align ?? "start"}
                                         data-column-id={column.id}
                                     >
                                         <span
-                                            className="happy2-data-table__cell"
+                                            className="happy-data-table__cell"
                                             data-happy-desktop-ui="data-table-cell"
                                         >
                                             {row.cells[column.id]}
@@ -222,11 +222,11 @@ export function DataTable(props: DataTableProps) {
                                 ))}
                                 {local.rowActions ? (
                                     <td
-                                        className="happy2-data-table__td happy2-data-table__td--actions"
+                                        className="happy-data-table__td happy-data-table__td--actions"
                                         data-align="end"
                                     >
                                         <span
-                                            className="happy2-data-table__actions"
+                                            className="happy-data-table__actions"
                                             data-happy-desktop-ui="data-table-actions"
                                         >
                                             {local.rowActions!(row)}
@@ -236,9 +236,9 @@ export function DataTable(props: DataTableProps) {
                             </tr>
                         ))
                     ) : (
-                        <tr className="happy2-data-table__empty-row">
+                        <tr className="happy-data-table__empty-row">
                             <td
-                                className="happy2-data-table__empty-cell"
+                                className="happy-data-table__empty-cell"
                                 colSpan={columnCount()}
                                 data-happy-desktop-ui="data-table-empty"
                             >

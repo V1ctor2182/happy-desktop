@@ -1,7 +1,7 @@
 import type { HappyDesktopBridge, HappyMediaPreviewBridge } from "../shared/desktopContract";
 
 declare global {
-    const __HAPPY2_DESKTOP_PROFILE__: boolean;
+    const __HAPPY_DESKTOP_PROFILE__: boolean;
 
     interface Window {
         happyDesktop?: HappyDesktopBridge;

@@ -4,22 +4,22 @@
  * outline or status dot: the Blueprint glyph and branch name are enough.
  */
 
-.happy2-dev-build-menu,
-.happy2-dev-build-menu * {
+.happy-dev-build-menu,
+.happy-dev-build-menu * {
     box-sizing: border-box;
 }
 
-.happy2-dev-build-menu {
+.happy-dev-build-menu {
     position: relative;
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-synthesis: none;
 }
 
-.happy2-dev-build-menu__trigger {
+.happy-dev-build-menu__trigger {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
@@ -29,7 +29,7 @@
     margin: 0;
     padding: 0 4px;
     border: 0;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: inherit;
     font-family: inherit;
@@ -41,31 +41,31 @@
     appearance: none;
 }
 
-.happy2-dev-build-menu__trigger:hover,
-.happy2-dev-build-menu[data-open] .happy2-dev-build-menu__trigger {
+.happy-dev-build-menu__trigger:hover,
+.happy-dev-build-menu[data-open] .happy-dev-build-menu__trigger {
     background: var(--surface-ripple);
     color: var(--text);
 }
 
-.happy2-dev-build-menu__trigger:focus-visible,
-.happy2-dev-build-menu__item:focus-visible {
+.happy-dev-build-menu__trigger:focus-visible,
+.happy-dev-build-menu__item:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-dev-build-menu__trigger > .happy2-icon {
+.happy-dev-build-menu__trigger > .happy-icon {
     flex: none;
     color: currentColor;
 }
 
-.happy2-dev-build-menu__trigger-label {
+.happy-dev-build-menu__trigger-label {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy2-dev-build-menu__menu {
+.happy-dev-build-menu__menu {
     position: absolute;
     z-index: 30;
     bottom: calc(100% + 8px);
@@ -77,22 +77,22 @@
     max-width: calc(100vw - 24px);
     padding: 6px;
     border: 1px solid var(--modal-border);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface);
     box-shadow: 0 2px 8px var(--shadow-color);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     user-select: none;
 }
 
-.happy2-dev-build-menu__eyebrow {
+.happy-dev-build-menu__eyebrow {
     display: block;
     flex: none;
     height: 24px;
     padding: 0 10px;
     overflow: hidden;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -102,7 +102,7 @@
     white-space: nowrap;
 }
 
-.happy2-dev-build-menu__item {
+.happy-dev-build-menu__item {
     display: flex;
     flex: none;
     align-items: center;
@@ -112,10 +112,10 @@
     margin: 0;
     padding: 0 10px;
     border: 0;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 14px;
     font-weight: 550;
     line-height: 18px;
@@ -124,18 +124,18 @@
     appearance: none;
 }
 
-.happy2-dev-build-menu__item:hover {
+.happy-dev-build-menu__item:hover {
     background: var(--surface-ripple);
 }
 
-.happy2-dev-build-menu__separator {
+.happy-dev-build-menu__separator {
     flex: none;
     height: 1px;
     margin: 4px 4px;
     background: var(--divider);
 }
 
-.happy2-dev-build-menu__item-icon {
+.happy-dev-build-menu__item-icon {
     display: flex;
     flex: none;
     align-items: center;
@@ -145,7 +145,7 @@
     color: var(--text-secondary);
 }
 
-.happy2-dev-build-menu__item-copy {
+.happy-dev-build-menu__item-copy {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -153,11 +153,11 @@
     gap: 1px;
 }
 
-.happy2-dev-build-menu__item-detail {
+.happy-dev-build-menu__item-detail {
     display: block;
     overflow: hidden;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 10px;
     font-weight: 500;
     line-height: 13px;
@@ -165,7 +165,7 @@
     white-space: nowrap;
 }
 
-.happy2-dev-build-menu__branch {
+.happy-dev-build-menu__branch {
     display: flex;
     flex: none;
     align-items: center;
@@ -174,17 +174,17 @@
     min-height: 32px;
     padding: 0 10px;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 10px;
     font-weight: 500;
     line-height: 14px;
 }
 
-.happy2-dev-build-menu__branch > .happy2-vector-icon {
+.happy-dev-build-menu__branch > .happy-vector-icon {
     flex: none;
 }
 
-.happy2-dev-build-menu__branch > span:last-child {
+.happy-dev-build-menu__branch > span:last-child {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

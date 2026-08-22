@@ -314,7 +314,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 scene="sparkles"
                 title="Create your profile"
             >
-                <div className="happy2-local-onboarding__profile-form">
+                <div className="happy-local-onboarding__profile-form">
                     <TextField
                         autoFocus
                         fullWidth

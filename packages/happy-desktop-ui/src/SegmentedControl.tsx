@@ -52,7 +52,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
     return (
         <div
             aria-label={local["aria-label"]}
-            className={["happy2-segmented-control", local.className].filter(Boolean).join(" ")}
+            className={["happy-segmented-control", local.className].filter(Boolean).join(" ")}
             data-disabled={local.disabled ? "" : undefined}
             data-full-width={local.fullWidth ? "" : undefined}
             data-happy-desktop-ui="segmented-control"
@@ -72,7 +72,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
                     <button
                         aria-pressed={active()}
                         key={segment.value}
-                        className="happy2-segmented-control__segment"
+                        className="happy-segmented-control__segment"
                         data-active={active() ? "" : undefined}
                         data-happy-desktop-ui="segmented-control-segment"
                         data-value={segment.value}
@@ -84,7 +84,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
                         {segment.icon
                             ? ((name) => (
                                   <span
-                                      className="happy2-segmented-control__icon"
+                                      className="happy-segmented-control__icon"
                                       data-happy-desktop-ui="segmented-control-icon"
                                   >
                                       <Icon name={name} size={iconSizes[size()]} />
@@ -92,7 +92,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
                               ))(segment.icon)
                             : null}
                         <span
-                            className="happy2-segmented-control__label"
+                            className="happy-segmented-control__label"
                             data-happy-desktop-ui="segmented-control-label"
                         >
                             {segment.label}

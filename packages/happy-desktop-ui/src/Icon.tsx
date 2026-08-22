@@ -229,7 +229,7 @@ export function Icon(props: IconProps) {
         <span
             aria-hidden={local["aria-label"] ? undefined : "true"}
             aria-label={local["aria-label"]}
-            className={["happy2-icon", local.className].filter(Boolean).join(" ")}
+            className={["happy-icon", local.className].filter(Boolean).join(" ")}
             data-glyph={glyph.name}
             data-happy-desktop-ui="icon"
             data-mirrored={glyph.mirrored ? "" : undefined}

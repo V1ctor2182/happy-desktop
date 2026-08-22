@@ -254,7 +254,7 @@ export class DesktopRuntime implements AsyncDisposable {
             this.happyAgentClient = {
                 client: new HappyAgentClient({
                     endpoint,
-                    token: "happy2-local-capability",
+                    token: "happy-local-capability",
                 }),
                 generation,
             };

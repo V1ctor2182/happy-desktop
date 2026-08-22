@@ -8,7 +8,7 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 export const componentNumber = "C-179";
 
 const label: CSSProperties = {
-    fontFamily: "var(--happy2-font-ui)",
+    fontFamily: "var(--happy-font-ui)",
     fontSize: "13px",
     color: "var(--text)",
 };

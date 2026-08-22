@@ -73,19 +73,19 @@ export function AvatarBrutalist(props: AvatarBrutalistProps) {
         <span
             {...rest}
             aria-hidden={props["aria-label"] ? undefined : "true"}
-            className={["happy2-avatar-brutalist", local.className].filter(Boolean).join(" ")}
+            className={["happy-avatar-brutalist", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="avatar-brutalist"
             role={props["aria-label"] ? "img" : undefined}
             style={{
                 width: `${size()}px`,
                 height: `${size()}px`,
-                borderRadius: "var(--happy2-radius-pill)",
+                borderRadius: "var(--happy-radius-pill)",
                 background: background(),
                 ...local.style,
             }}
         >
             <span
-                className="happy2-avatar-brutalist__ink"
+                className="happy-avatar-brutalist__ink"
                 data-happy-desktop-ui="avatar-brutalist-ink"
                 style={{
                     width: `${size() * 0.8}px`,

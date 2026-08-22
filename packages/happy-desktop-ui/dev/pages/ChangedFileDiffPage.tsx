@@ -61,7 +61,7 @@ function preview(path: string, text: string) {
 function frame(children: ReactNode, height = 420, appearance: "dark" | "light" = "light") {
     return (
         <div
-            className={appearance === "dark" ? "happy2-theme-dark" : "happy2-theme-light"}
+            className={appearance === "dark" ? "happy-theme-dark" : "happy-theme-light"}
             style={{
                 background: "var(--surface)",
                 border: "1px solid var(--divider)",

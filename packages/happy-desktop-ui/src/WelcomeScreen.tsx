@@ -173,7 +173,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
      * is the `useSyncExternalStore` above, which React unsubscribes with the
      * component.
      */
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the auto-advance timeout is an imperative browser resource with no declarative or event-driven equivalent
+    // eslint-disable-next-line happy-react/no-layout-effect -- the auto-advance timeout is an imperative browser resource with no declarative or event-driven equivalent
     useLayoutEffect(() => {
         // Nothing to advance to, or a reader who asked for less movement.
         if (reducedMotion || count < 2) return;
@@ -210,7 +210,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
 
     return (
         <div
-            className={["happy2-welcome-screen", local.className].filter(Boolean).join(" ")}
+            className={["happy-welcome-screen", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="welcome-screen"
             data-motion={reducedMotion ? "reduced" : "full"}
             data-testid={local["data-testid"]}
@@ -222,24 +222,24 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                 root is what establishes its positioning context. */}
             <WindowDragRegion />
             <ScrollArea
-                className="happy2-welcome-screen__view"
+                className="happy-welcome-screen__view"
                 data-happy-desktop-ui="welcome-view"
-                viewportClassName="happy2-welcome-screen__view-viewport"
+                viewportClassName="happy-welcome-screen__view-viewport"
             >
-                <div className="happy2-welcome-screen__body" data-happy-desktop-ui="welcome-body">
+                <div className="happy-welcome-screen__body" data-happy-desktop-ui="welcome-body">
                     <div
-                        className="happy2-welcome-screen__slideshow"
+                        className="happy-welcome-screen__slideshow"
                         data-happy-desktop-ui="welcome-slideshow"
                     >
                         <div
-                            className="happy2-welcome-screen__stage"
+                            className="happy-welcome-screen__stage"
                             data-happy-desktop-ui="welcome-stage"
                         >
                             {active ? welcomeArt(active) : null}
                         </div>
 
                         <div
-                            className="happy2-welcome-screen__panels"
+                            className="happy-welcome-screen__panels"
                             data-happy-desktop-ui="welcome-panels"
                         >
                             {local.slides.map((slide, position) => {
@@ -252,7 +252,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                                         // slide on screen is readable.
                                         aria-hidden={current ? undefined : "true"}
                                         aria-labelledby={`${prefix}-tab-${slide.id}`}
-                                        className="happy2-welcome-screen__panel"
+                                        className="happy-welcome-screen__panel"
                                         data-active={current ? "" : undefined}
                                         data-happy-desktop-ui="welcome-panel"
                                         id={`${prefix}-panel-${slide.id}`}
@@ -263,13 +263,13 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                                         tabIndex={current ? 0 : undefined}
                                     >
                                         <h1
-                                            className="happy2-welcome-screen__title"
+                                            className="happy-welcome-screen__title"
                                             data-happy-desktop-ui="welcome-title"
                                         >
                                             {slide.title}
                                         </h1>
                                         <p
-                                            className="happy2-welcome-screen__copy"
+                                            className="happy-welcome-screen__copy"
                                             data-happy-desktop-ui="welcome-copy"
                                         >
                                             {slide.copy}
@@ -284,7 +284,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                                 // The deck has no visible heading, so the row says
                                 // what it steps through.
                                 aria-label="Welcome slides"
-                                className="happy2-welcome-screen__dots"
+                                className="happy-welcome-screen__dots"
                                 data-happy-desktop-ui="welcome-dots"
                                 role="tablist"
                             >
@@ -299,7 +299,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                                             // is called.
                                             aria-label={slide.title}
                                             aria-selected={current ? "true" : "false"}
-                                            className="happy2-welcome-screen__dot"
+                                            className="happy-welcome-screen__dot"
                                             data-active={current ? "" : undefined}
                                             data-happy-desktop-ui="welcome-dot"
                                             id={`${prefix}-tab-${slide.id}`}
@@ -310,7 +310,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                                             type="button"
                                         >
                                             <span
-                                                className="happy2-welcome-screen__dot-mark"
+                                                className="happy-welcome-screen__dot-mark"
                                                 data-happy-desktop-ui="welcome-dot-mark"
                                             />
                                         </button>
@@ -321,7 +321,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                     </div>
 
                     <Button
-                        className="happy2-welcome-screen__action"
+                        className="happy-welcome-screen__action"
                         onClick={local.onAction}
                         size="large"
                     >
@@ -335,7 +335,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                 it has to stay in that corner while a short window scrolls. */}
             <Button
                 aria-label={APPEARANCE_CYCLE[local.appearance].label}
-                className="happy2-welcome-screen__appearance"
+                className="happy-welcome-screen__appearance"
                 data-appearance={local.appearance}
                 iconOnly
                 onClick={() => local.onAppearanceChange(APPEARANCE_CYCLE[local.appearance].next)}
@@ -379,7 +379,7 @@ function welcomeArt(slide: WelcomeSlide) {
             <img
                 alt=""
                 aria-hidden="true"
-                className="happy2-welcome-screen__mark"
+                className="happy-welcome-screen__mark"
                 data-happy-desktop-ui="welcome-mark"
                 src={happyLogoUrl}
             />

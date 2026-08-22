@@ -143,7 +143,7 @@ async function iconRead(bundlePath: string): Promise<string | undefined> {
     if (icns === undefined) return undefined;
     const output = join(
         tmpdir(),
-        `happy2-open-in-${createHash("sha1").update(icns).digest("hex")}.png`,
+        `happy-open-in-${createHash("sha1").update(icns).digest("hex")}.png`,
     );
     try {
         await execFileAsync(

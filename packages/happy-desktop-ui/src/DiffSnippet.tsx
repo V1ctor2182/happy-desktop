@@ -43,7 +43,7 @@ export function DiffSnippet(props: DiffSnippetProps) {
     return (
         <div
             {...rest}
-            className={["happy2-diff-snippet", local.className].filter(Boolean).join(" ")}
+            className={["happy-diff-snippet", local.className].filter(Boolean).join(" ")}
             data-numbered={numbered() ? "" : undefined}
             data-happy-desktop-ui="diff-snippet"
             data-wrap={local.wrap ? "" : undefined}
@@ -51,12 +51,12 @@ export function DiffSnippet(props: DiffSnippetProps) {
         >
             {local.file !== undefined || local.stats !== undefined ? (
                 <div
-                    className="happy2-diff-snippet__header"
+                    className="happy-diff-snippet__header"
                     data-happy-desktop-ui="diff-snippet-header"
                 >
                     {local.file !== undefined ? (
                         <span
-                            className="happy2-diff-snippet__file"
+                            className="happy-diff-snippet__file"
                             data-happy-desktop-ui="diff-snippet-file"
                         >
                             {local.file}
@@ -69,13 +69,13 @@ export function DiffSnippet(props: DiffSnippetProps) {
                     {local.stats && (local.stats.added || local.stats.removed)
                         ? ((stats) => (
                               <span
-                                  className="happy2-diff-snippet__stats"
+                                  className="happy-diff-snippet__stats"
                                   data-happy-desktop-ui="diff-snippet-stats"
                               >
                                   {stats.added ? (
                                       <span
                                           aria-hidden="true"
-                                          className="happy2-diff-snippet__added"
+                                          className="happy-diff-snippet__added"
                                           data-happy-desktop-ui="diff-snippet-added"
                                       >
                                           +{compactCount(stats.added)}
@@ -84,13 +84,13 @@ export function DiffSnippet(props: DiffSnippetProps) {
                                   {stats.removed ? (
                                       <span
                                           aria-hidden="true"
-                                          className="happy2-diff-snippet__removed"
+                                          className="happy-diff-snippet__removed"
                                           data-happy-desktop-ui="diff-snippet-removed"
                                       >
                                           &minus;{compactCount(stats.removed)}
                                       </span>
                                   ) : null}
-                                  <span className="happy2-visually-hidden">
+                                  <span className="happy-visually-hidden">
                                       {changeCountLabel(stats.added ?? 0, stats.removed ?? 0)}
                                   </span>
                               </span>
@@ -100,37 +100,34 @@ export function DiffSnippet(props: DiffSnippetProps) {
             ) : null}
             <ScrollArea
                 axes="horizontal"
-                className="happy2-diff-snippet__scroll"
+                className="happy-diff-snippet__scroll"
                 data-happy-desktop-ui="diff-snippet-scroll"
-                viewportClassName="happy2-diff-snippet__scroll-viewport"
+                viewportClassName="happy-diff-snippet__scroll-viewport"
             >
-                <div
-                    className="happy2-diff-snippet__code"
-                    data-happy-desktop-ui="diff-snippet-code"
-                >
+                <div className="happy-diff-snippet__code" data-happy-desktop-ui="diff-snippet-code">
                     {local.lines.map((line, index) => (
                         <div
-                            className="happy2-diff-snippet__line"
+                            className="happy-diff-snippet__line"
                             key={`${line.kind}-${line.number ?? ""}-${index}`}
                             data-kind={line.kind}
                             data-happy-desktop-ui="diff-snippet-line"
                         >
                             {numbered() ? (
                                 <span
-                                    className="happy2-diff-snippet__number"
+                                    className="happy-diff-snippet__number"
                                     data-happy-desktop-ui="diff-snippet-number"
                                 >
                                     {line.number}
                                 </span>
                             ) : null}
                             <span
-                                className="happy2-diff-snippet__gutter"
+                                className="happy-diff-snippet__gutter"
                                 data-happy-desktop-ui="diff-snippet-gutter"
                             >
                                 {gutterGlyph(line.kind)}
                             </span>
                             <span
-                                className="happy2-diff-snippet__text"
+                                className="happy-diff-snippet__text"
                                 data-happy-desktop-ui="diff-snippet-text"
                             >
                                 {line.text}

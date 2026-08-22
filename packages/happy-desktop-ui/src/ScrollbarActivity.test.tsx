@@ -30,7 +30,7 @@ it("keeps fixed geometry and three restrained strengths without programmatic rev
     const viewport = view.$('[data-testid="scroller"] [data-scrollbar-viewport]');
     const track = view.$('[data-testid="scroller"] > [data-scrollbar-track][data-axis="vertical"]');
     const thumb = view.$(
-        '[data-testid="scroller"] > [data-scrollbar-track][data-axis="vertical"] > .happy2-scrollbar__thumb',
+        '[data-testid="scroller"] > [data-scrollbar-track][data-axis="vertical"] > .happy-scrollbar__thumb',
     );
     await expect.poll(() => host.element.hasAttribute("data-scrollbar-overflow-y")).toBe(true);
 
@@ -121,7 +121,7 @@ it("supports overflow, overlay, and stable gutters with a draggable real track",
     const stableTrack = view.$(
         '[data-testid="stable"] > [data-scrollbar-track][data-axis="vertical"]',
     );
-    const stableThumb = view.$('[data-testid="stable"] .happy2-scrollbar__thumb');
+    const stableThumb = view.$('[data-testid="stable"] .happy-scrollbar__thumb');
     await expect.poll(() => overlay.element.hasAttribute("data-scrollbar-overflow-y")).toBe(true);
 
     expect(gutterViewport.bounds().width).toBe(gutter.bounds().width - 8);

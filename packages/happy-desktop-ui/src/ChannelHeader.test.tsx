@@ -174,7 +174,7 @@ it("holds ChannelHeader geometry, colors, and optical alignment", { timeout: 900
     expect(title.element.textContent).toBe("launch-week");
     expect(title.bounds().height).toBe(20);
     const titleMetrics = title.textMetrics();
-    expect(titleMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(titleMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(titleMetrics.font.size).toBe(15);
     expect(titleMetrics.font.weight).toBe("700");
     expect(titleMetrics.font.lineHeight).toBe(20);
@@ -284,7 +284,7 @@ it("holds ChannelHeader geometry, colors, and optical alignment", { timeout: 900
     const hNarrow = header("s-narrow");
     expect(hNarrow.bounds().height).toBe(56);
     const narrowTopic = part("s-narrow", "topic");
-    const narrowTopicText = narrowTopic.element.querySelector(".happy2-channel-header__topic-ink")!;
+    const narrowTopicText = narrowTopic.element.querySelector(".happy-channel-header__topic-ink")!;
     expect(narrowTopicText.scrollWidth, "narrow topic truncates with an ellipsis").toBeGreaterThan(
         narrowTopicText.clientWidth,
     );

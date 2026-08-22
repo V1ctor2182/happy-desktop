@@ -155,7 +155,7 @@ export function LottieScene(props: LottieSceneProps) {
      * loaded; they outlive the callback that asked for them; and every one of
      * them has to be released together. The teardown below is that one path.
      */
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the asynchronous worker/canvas/observer lifetime described above
+    // eslint-disable-next-line happy-react/no-layout-effect -- the asynchronous worker/canvas/observer lifetime described above
     useLayoutEffect(() => {
         const element = canvas.current;
         if (element === null) return;
@@ -396,7 +396,7 @@ export function LottieScene(props: LottieSceneProps) {
             // control — and under reduced motion it never does.
             aria-hidden={interactive ? undefined : "true"}
             aria-label={interactive ? props.replayLabel : undefined}
-            className={["happy2-lottie-scene", props.className].filter(Boolean).join(" ")}
+            className={["happy-lottie-scene", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="lottie-scene"
             data-motion={reducedMotion ? "reduced" : "full"}
             data-name={props.name}

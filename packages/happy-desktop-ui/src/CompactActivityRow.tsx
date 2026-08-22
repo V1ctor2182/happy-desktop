@@ -25,12 +25,12 @@ export type CompactActivityRowProps = {
  * monitor. Product-specific rows provide only their verb, arguments, and facts.
  */
 export function CompactActivityRow(props: CompactActivityRowProps) {
-    const className = ["happy2-delegated-agent", props.className].filter(Boolean).join(" ");
+    const className = ["happy-delegated-agent", props.className].filter(Boolean).join(" ");
     const rowContent = (
         <>
             <span
                 aria-hidden="true"
-                className="happy2-delegated-agent__glyph"
+                className="happy-delegated-agent__glyph"
                 data-happy-desktop-ui="compact-activity-glyph"
             >
                 {props.preparing ? (
@@ -45,19 +45,19 @@ export function CompactActivityRow(props: CompactActivityRowProps) {
                     <Icon name={props.icon} size={12} />
                 )}
             </span>
-            <span className="happy2-delegated-agent__content">
-                <span className="happy2-delegated-agent__primary">
-                    <span className="happy2-delegated-agent__verb">{props.verb}</span>
-                    <span className="happy2-delegated-agent__arguments">
+            <span className="happy-delegated-agent__content">
+                <span className="happy-delegated-agent__primary">
+                    <span className="happy-delegated-agent__verb">{props.verb}</span>
+                    <span className="happy-delegated-agent__arguments">
                         {props.arguments.map((argument, index) => (
                             <Fragment key={index}>
                                 {index > 0 ? <span aria-hidden="true">·</span> : null}
-                                <span className="happy2-delegated-agent__argument">{argument}</span>
+                                <span className="happy-delegated-agent__argument">{argument}</span>
                             </Fragment>
                         ))}
                     </span>
                 </span>
-                <span className="happy2-delegated-agent__meta">
+                <span className="happy-delegated-agent__meta">
                     {props.meta.map((fact, index) => (
                         <Fragment key={index}>
                             {index > 0 ? <span aria-hidden="true">·</span> : null}
@@ -79,7 +79,7 @@ export function CompactActivityRow(props: CompactActivityRowProps) {
             {props.onClick ? (
                 <button
                     aria-label={props.accessibleLabel}
-                    className="happy2-delegated-agent__row"
+                    className="happy-delegated-agent__row"
                     data-interactive=""
                     onClick={props.onClick}
                     type="button"
@@ -89,14 +89,14 @@ export function CompactActivityRow(props: CompactActivityRowProps) {
             ) : (
                 <div
                     aria-label={props.accessibleLabel}
-                    className="happy2-delegated-agent__row"
+                    className="happy-delegated-agent__row"
                     role="group"
                 >
                     {rowContent}
                 </div>
             )}
             {props.trailing ? (
-                <span className="happy2-delegated-agent__trailing">{props.trailing}</span>
+                <span className="happy-delegated-agent__trailing">{props.trailing}</span>
             ) : null}
         </div>
     );

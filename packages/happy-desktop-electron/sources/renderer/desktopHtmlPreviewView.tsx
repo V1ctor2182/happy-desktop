@@ -191,7 +191,7 @@ export class DesktopHtmlPreviewView extends Component<HtmlPreviewProps> {
 
     render() {
         return createElement("webview", {
-            "data-happy2-html-preview-guest": "",
+            "data-happy-html-preview-guest": "",
             key: this.props.source,
             partition: happyHtmlPreviewPartition,
             ref: this.elementApply,

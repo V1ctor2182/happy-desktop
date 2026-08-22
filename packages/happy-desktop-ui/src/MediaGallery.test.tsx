@@ -70,7 +70,7 @@ it("holds MediaGallery grid geometry, tile anatomy, overlays, and footer typogra
     );
     await view.ready();
 
-    const uiFont = "happy2 Figtree, system-ui, sans-serif";
+    const uiFont = "happy Figtree, system-ui, sans-serif";
 
     /* ---- Root grid: equal integer tracks, 12px gutters ------------------- */
 
@@ -237,7 +237,7 @@ it("holds MediaGallery grid geometry, tile anatomy, overlays, and footer typogra
         "font-weight": "600",
     });
     expect(duration.textMetrics().font.family, "duration mono").toBe(
-        "happy2 Mono, ui-monospace, monospace",
+        "happy Mono, ui-monospace, monospace",
     );
     expect(duration.computedStyle("font-variant-numeric"), "duration tabular").toContain(
         "tabular-nums",

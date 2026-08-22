@@ -5,7 +5,7 @@ import { browserLocalHappyAgentPlugin } from "./browserDevServer";
 import type { LocalHappyAgentConnection } from "./localHappyAgent";
 import { HappyAgentDaemonHttpError, type HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 
-const endpoint = "/__happy2_local_happy_agent";
+const endpoint = "/__happy_local_happy_agent";
 
 type Middleware = (
     request: IncomingMessage,

@@ -4,7 +4,7 @@
  * Layout is flexbox throughout; colors and type come only from theme roles.
  */
 
-.happy2-conversation {
+.happy-conversation {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -13,7 +13,7 @@
     background: var(--surface);
 }
 
-.happy2-conversation__status {
+.happy-conversation__status {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -21,23 +21,23 @@
     color: var(--text-secondary);
 }
 
-.happy2-conversation__status-dot {
+.happy-conversation__status-dot {
     width: 6px;
     height: 6px;
     border-radius: 999px;
     background: var(--text-secondary);
 }
 
-.happy2-conversation__status[data-running] {
+.happy-conversation__status[data-running] {
     color: var(--box-warning-text);
 }
 
-.happy2-conversation__status[data-running] .happy2-conversation__status-dot {
+.happy-conversation__status[data-running] .happy-conversation__status-dot {
     background: var(--box-warning-text);
 }
 
-.happy2-conversation__status-elapsed {
-    font-family: var(--happy2-font-mono);
+.happy-conversation__status-elapsed {
+    font-family: var(--happy-font-mono);
     font-size: 11px;
 }
 
@@ -47,19 +47,19 @@
  * content wrapper caps its width and centers, so entries and the composer below
  * share one column while the scrollbar still runs edge to edge.
  */
-.happy2-conversation .happy2-message-list__content {
+.happy-conversation .happy-message-list__content {
     width: 100%;
-    max-width: var(--happy2-chat-measure);
+    max-width: var(--happy-chat-measure);
     margin-inline: auto;
 }
 
-.happy2-conversation .happy2-message-list__content:not([data-virtualized]) {
+.happy-conversation .happy-message-list__content:not([data-virtualized]) {
     /* The dock is seamless with the transcript, so the clearance beneath the
        newest message is what keeps it from reading as part of the composer. */
     padding-bottom: 24px;
 }
 
-.happy2-conversation .happy2-message[data-agent][data-grouped] {
+.happy-conversation .happy-message[data-agent][data-grouped] {
     padding-top: 2px;
     padding-bottom: 2px;
 }
@@ -69,11 +69,11 @@
    text it followed. Both edges of that boundary are 8px: a fresh author's 16px
    on the way in and a grouped row's 2px on the way out would make one run sit
    closer to the text below it than to the text that introduced it. */
-.happy2-conversation .happy2-message[data-agent].happy2-conversation__resumed {
+.happy-conversation .happy-message[data-agent].happy-conversation__resumed {
     padding-top: 8px;
 }
 
-.happy2-conversation .happy2-message[data-agent].happy2-conversation__continues {
+.happy-conversation .happy-message[data-agent].happy-conversation__continues {
     padding-bottom: 8px;
 }
 
@@ -82,7 +82,7 @@
    trailing padding, and the 4px of leading the status row carries. Padding for
    a new author would put the turn's last line and its own footer further apart
    than the paragraphs above them. */
-.happy2-conversation .happy2-message[data-agent].happy2-conversation__closing {
+.happy-conversation .happy-message[data-agent].happy-conversation__closing {
     padding-bottom: 4px;
 }
 
@@ -90,7 +90,7 @@
    whatever room it needs and grows into the rest, which carries the activity
    summary to the far end; when the two stop fitting, the summary wraps whole
    onto the next line and starts at the left. Nothing measures text. */
-.happy2-conversation__status-line {
+.happy-conversation__status-line {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -98,7 +98,7 @@
     min-width: 0;
 }
 
-.happy2-conversation__status-line > .happy2-agent-working-status {
+.happy-conversation__status-line > .happy-agent-working-status {
     flex: 1 1 auto;
     width: auto;
     min-width: 0;
@@ -106,7 +106,7 @@
 
 /* A settled turn leaves the whole line to the summary, which then reads as an
    ordinary transcript row rather than something pushed to the right. */
-.happy2-conversation__status-line > .happy2-agent-working-status:not([data-active]) {
+.happy-conversation__status-line > .happy-agent-working-status:not([data-active]) {
     flex: 0 0 0;
     width: 0;
     padding: 0;
@@ -115,11 +115,11 @@
 /* When the live status opens the agent turn, Message supplies identity rather
    than prose. Drop its prose-only right reserve so the trailing activity keeps
    the same 20px gutter it owns on every other live status line. */
-.happy2-message[data-agent].happy2-message--working-lead {
+.happy-message[data-agent].happy-message--working-lead {
     padding-right: 0;
 }
 
-.happy2-conversation__activity-entry {
+.happy-conversation__activity-entry {
     display: flex;
     flex: 0 0 auto;
     min-width: 0;
@@ -132,9 +132,9 @@
     padding-left: 49px;
 }
 
-.happy2-conversation
-    .happy2-message[data-agent].happy2-conversation__resumed:not([data-own])
-    .happy2-message__gutter {
+.happy-conversation
+    .happy-message[data-agent].happy-conversation__resumed:not([data-own])
+    .happy-message__gutter {
     top: 10px;
 }
 
@@ -143,13 +143,13 @@
    keeps the base 16px padding, so its author line spans 16px..36px and the 16px
    avatar hangs at 18px to centre on it. Grouped and resumed rows halve or
    quarter that padding and take their own offsets. */
-.happy2-conversation .happy2-message[data-agent]:not([data-own]) .happy2-message__gutter {
+.happy-conversation .happy-message[data-agent]:not([data-own]) .happy-message__gutter {
     top: 18px;
 }
 
-.happy2-conversation
-    .happy2-message[data-agent][data-grouped]:not([data-own])
-    .happy2-message__gutter {
+.happy-conversation
+    .happy-message[data-agent][data-grouped]:not([data-own])
+    .happy-message__gutter {
     top: 4px;
 }
 
@@ -159,7 +159,7 @@
  * fact about the place the conversation is happening in, so it has to stay
  * readable however far the transcript beneath it has been scrolled.
  */
-.happy2-conversation__notice {
+.happy-conversation__notice {
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
@@ -176,7 +176,7 @@
  * their own colour, just short of full presence — and it comes forward as it is
  * applied, at which point it becomes an ordinary row in the transcript above.
  */
-.happy2-conversation__queued {
+.happy-conversation__queued {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -185,28 +185,28 @@
     transition: opacity 160ms ease;
 }
 
-.happy2-conversation__panel,
-.happy2-conversation__empty {
+.happy-conversation__panel,
+.happy-conversation__empty {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
 }
 
-.happy2-conversation__panel-viewport,
-.happy2-conversation__empty-viewport {
+.happy-conversation__panel-viewport,
+.happy-conversation__empty-viewport {
     display: flex;
     flex-direction: column;
     overflow: auto;
 }
 
-.happy2-conversation__loading {
+.happy-conversation__loading {
     align-items: center;
     justify-content: center;
 }
 
-.happy2-conversation__activity-fallback {
+.happy-conversation__activity-fallback {
     width: 100%;
-    max-width: var(--happy2-chat-measure);
+    max-width: var(--happy-chat-measure);
     margin-right: auto;
     margin-left: auto;
     margin-top: 12px;
@@ -220,37 +220,37 @@
  * while the sidebar keeps its own 56px footer bar. Its contents center on the
  * entry column's measure, so the input starts flush with the transcript.
  */
-.happy2-conversation__dock {
-    --happy2-composer-footer-height: 28px;
-    --happy2-composer-footer-gap: 4px;
-    --happy2-composer-dock-bottom: 8px;
-    --happy2-composer-card-bottom-offset: calc(
-        var(--happy2-composer-dock-bottom) + var(--happy2-composer-footer-height) +
-            var(--happy2-composer-footer-gap)
+.happy-conversation__dock {
+    --happy-composer-footer-height: 28px;
+    --happy-composer-footer-gap: 4px;
+    --happy-composer-dock-bottom: 8px;
+    --happy-composer-card-bottom-offset: calc(
+        var(--happy-composer-dock-bottom) + var(--happy-composer-footer-height) +
+            var(--happy-composer-footer-gap)
     );
     display: flex;
     flex: none;
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    padding-bottom: var(--happy2-composer-card-bottom-offset);
+    padding-bottom: var(--happy-composer-card-bottom-offset);
     background: var(--surface);
 }
 
 /* The footer row is already part of the 40px card-to-window offset, so only
  * its terminal 8px remains outside the complete composer stack. */
-.happy2-conversation__dock:has(.happy2-composer__footer) {
-    padding-bottom: var(--happy2-composer-dock-bottom);
+.happy-conversation__dock:has(.happy-composer__footer) {
+    padding-bottom: var(--happy-composer-dock-bottom);
 }
 
-.happy2-conversation__dock > * {
+.happy-conversation__dock > * {
     width: 100%;
-    max-width: var(--happy2-chat-measure);
+    max-width: var(--happy-chat-measure);
     padding-right: 20px;
     padding-left: 12px;
 }
 
-.happy2-conversation__dock-inner {
+.happy-conversation__dock-inner {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -265,7 +265,7 @@
  * dock appears. Only the dock takes pointer input; the faded band above it
  * belongs to the surface it is floating over.
  */
-.happy2-floating-dock {
+.happy-floating-dock {
     position: absolute;
     right: 0;
     bottom: 0;
@@ -280,7 +280,7 @@
 /* In a panel footer the composer itself occupies its real height in the flex
    column. Only the fade below is overlaid, so the input covers no content and
    no matching spacer or padding is introduced. */
-.happy2-floating-dock[data-placement="footer"] {
+.happy-floating-dock[data-placement="footer"] {
     position: relative;
     right: auto;
     bottom: auto;
@@ -294,7 +294,7 @@
    engine interpolates a colour gradient towards transparent *black*, which
    would tint the fade grey in light mode. In a mask only the alpha channel is
    read, so the two stops here are opacity, not colour. */
-.happy2-floating-dock__scrim {
+.happy-floating-dock__scrim {
     flex: none;
     height: 72px;
     background: var(--surface);
@@ -304,7 +304,7 @@
 
 /* Footer placement removes the fade from flex flow and hangs it over the final
    72px of the panel body; the measure below remains the footer's sole height. */
-.happy2-floating-dock[data-placement="footer"] .happy2-floating-dock__scrim {
+.happy-floating-dock[data-placement="footer"] .happy-floating-dock__scrim {
     position: absolute;
     right: 0;
     bottom: 100%;
@@ -313,7 +313,7 @@
 
 /* Stretches its child: the dock centres its own contents at the chat measure,
    exactly as it does in the conversation flow. */
-.happy2-floating-dock__measure {
+.happy-floating-dock__measure {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -328,7 +328,7 @@
  * Composer footer accessory row: message controls lead, the target picker
  * trails. It fills the footer so the two groups can sit at opposite edges.
  */
-.happy2-composer-footer-bar {
+.happy-composer-footer-bar {
     display: flex;
     align-items: center;
     flex: 1 1 0%;
@@ -337,7 +337,7 @@
     min-width: 0;
 }
 
-.happy2-composer-footer-bar__group {
+.happy-composer-footer-bar__group {
     display: flex;
     align-items: center;
     gap: 8px;

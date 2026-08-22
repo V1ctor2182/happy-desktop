@@ -7,28 +7,28 @@
  * labeled member roster. Colors and type are theme tokens only.
  */
 
-.happy2-info-panel,
-.happy2-info-panel *,
-.happy2-info-panel__body {
+.happy-info-panel,
+.happy-info-panel *,
+.happy-info-panel__body {
     box-sizing: border-box;
 }
 
-.happy2-info-panel {
+.happy-info-panel {
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     color: var(--text);
 }
 
-.happy2-info-panel__header {
+.happy-info-panel__header {
     flex: none;
 }
 
 /* Scrollport: edge-to-edge, no padding/gap of its own. */
-.happy2-info-panel__body {
+.happy-info-panel__body {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -37,7 +37,7 @@
 }
 
 /* Inner content wrapper owns the 16px inset and the 16px section gap. */
-.happy2-info-panel__body-content {
+.happy-info-panel__body-content {
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
@@ -47,24 +47,24 @@
 
 /* ---- Read-only channel About ----------------------------------------- */
 
-.happy2-info-panel__about {
+.happy-info-panel__about {
     display: flex;
     flex-direction: column;
     gap: 4px;
     padding: 12px;
     background: var(--groupped-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
 }
 
-.happy2-info-panel__about-label {
+.happy-info-panel__about-label {
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 600;
     line-height: 16px;
 }
 
-.happy2-info-panel__about-text {
+.happy-info-panel__about-text {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 400;
@@ -73,16 +73,16 @@
 
 /* ---- Member roster --------------------------------------------------- */
 
-.happy2-info-panel__members {
+.happy-info-panel__members {
     display: flex;
     flex-direction: column;
     gap: 4px;
     min-width: 0;
 }
 
-.happy2-info-panel__section-label {
+.happy-info-panel__section-label {
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.06em;

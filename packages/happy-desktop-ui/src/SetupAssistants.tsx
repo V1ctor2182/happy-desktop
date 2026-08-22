@@ -72,31 +72,31 @@ function pathBreakable(path: string): string {
 export function SetupAssistants(props: SetupAssistantsProps) {
     return (
         <div
-            className="happy2-setup-assistants"
+            className="happy-setup-assistants"
             data-happy-desktop-ui="setup-assistants"
             data-testid={props["data-testid"]}
         >
             {props.assistants.map((assistant) => (
                 <article
-                    className="happy2-setup-assistants__item"
+                    className="happy-setup-assistants__item"
                     data-happy-desktop-ui="setup-assistants-item"
                     data-status={assistant.status}
                     key={assistant.id}
                 >
                     <span
-                        className="happy2-setup-assistants__mark"
+                        className="happy-setup-assistants__mark"
                         data-happy-desktop-ui="setup-assistants-mark"
                     >
                         <AssistantMark name={assistant.mark} size={22} />
                     </span>
                     <span
-                        className="happy2-setup-assistants__name"
+                        className="happy-setup-assistants__name"
                         data-happy-desktop-ui="setup-assistants-name"
                     >
                         {assistant.name}
                     </span>
                     <span
-                        className="happy2-setup-assistants__detail"
+                        className="happy-setup-assistants__detail"
                         data-happy-desktop-ui="setup-assistants-detail"
                         data-kind={assistant.detailKind ?? "sentence"}
                     >

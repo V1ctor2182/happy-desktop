@@ -87,7 +87,7 @@ it("styles the caption as a muted mono uppercase label", { timeout: 90000 }, asy
     expect(styles["font-size"]).toBe("10px");
     expect(styles["font-weight"]).toBe("700");
     expect(styles["text-transform"]).toBe("uppercase");
-    expect(label.computedStyle("font-family")).toContain("happy2 Mono");
+    expect(label.computedStyle("font-family")).toContain("happy Mono");
     /* Muted: the caption reads at the same weight as secondary metadata, not
        the primary author face. */
     expect(label.computedStyle("color")).toBe(

@@ -92,7 +92,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
         <div
             aria-hidden={local.active === false ? "true" : undefined}
             aria-live={local.active === false ? undefined : "polite"}
-            className={["happy2-agent-working-status", local.className].filter(Boolean).join(" ")}
+            className={["happy-agent-working-status", local.className].filter(Boolean).join(" ")}
             data-active={local.active === false ? undefined : ""}
             data-awaiting-input={local.awaitingInput ? "" : undefined}
             data-happy-desktop-ui="agent-working-status"
@@ -100,12 +100,12 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
             style={local.style}
         >
             <span
-                className="happy2-agent-working-status__state"
+                className="happy-agent-working-status__state"
                 data-happy-desktop-ui="agent-working-status-state"
             >
                 {local.awaitingInput ? (
                     <span
-                        className="happy2-agent-working-status__phase"
+                        className="happy-agent-working-status__phase"
                         data-happy-desktop-ui="agent-working-status-phase"
                     >
                         Waiting for answer
@@ -117,7 +117,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                             of the same glyph. */}
                         {local.wait ? (
                             <WaitRing
-                                className="happy2-agent-working-status__ring"
+                                className="happy-agent-working-status__ring"
                                 finishAt={local.wait.dueAt}
                                 now={local.wait.now}
                                 size={14}
@@ -125,7 +125,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                             />
                         ) : (
                             <Spinner
-                                className="happy2-agent-working-status__spinner"
+                                className="happy-agent-working-status__spinner"
                                 label={label}
                                 size={14}
                                 tone="muted"
@@ -135,14 +135,14 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                         {local.elapsedMs === undefined ? null : (
                             <>
                                 <span
-                                    className="happy2-agent-working-status__timer"
+                                    className="happy-agent-working-status__timer"
                                     data-happy-desktop-ui="agent-working-status-timer"
                                 >
                                     {elapsedTimeFormat(local.elapsedMs)}
                                 </span>
                                 <span
                                     aria-hidden="true"
-                                    className="happy2-agent-working-status__separator"
+                                    className="happy-agent-working-status__separator"
                                 >
                                     ·
                                 </span>
@@ -150,7 +150,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                         )}
                         {local.wait ? (
                             <span
-                                className="happy2-agent-working-status__phase"
+                                className="happy-agent-working-status__phase"
                                 data-happy-desktop-ui="agent-working-status-phase"
                                 title={`Until ${waitFinishDateLabel(local.wait.dueAt)}`}
                             >
@@ -158,7 +158,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                             </span>
                         ) : (
                             <span
-                                className="happy2-agent-working-status__phase"
+                                className="happy-agent-working-status__phase"
                                 data-happy-desktop-ui="agent-working-status-phase-slot"
                             >
                                 {local.motion === "calm" ? (

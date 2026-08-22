@@ -61,7 +61,7 @@ export function HtmlPreviewFrame(props: HtmlPreviewFrameProps) {
     ]);
     return (
         <div
-            className={["happy2-html-preview", local.className].filter(Boolean).join(" ")}
+            className={["happy-html-preview", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="html-preview"
             data-testid={local["data-testid"]}
             style={local.style}

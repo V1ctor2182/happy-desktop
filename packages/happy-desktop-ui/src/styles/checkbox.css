@@ -5,7 +5,7 @@
  * is driven by :focus-within so it survives keyboard and programmatic focus.
  */
 
-.happy2-checkbox {
+.happy-checkbox {
     position: relative;
     display: inline-flex;
     flex: none;
@@ -14,12 +14,12 @@
     gap: 8px;
     margin: 0;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     cursor: pointer;
 }
 
-.happy2-checkbox[data-disabled] {
+.happy-checkbox[data-disabled] {
     cursor: not-allowed;
     opacity: 0.48;
 }
@@ -29,7 +29,7 @@
  * hits the input, but painted away. It stays in the focus order (opacity, not
  * display/visibility) so :focus-within lights the ring.
  */
-.happy2-checkbox__control {
+.happy-checkbox__control {
     position: absolute;
     top: 0;
     left: 0;
@@ -41,7 +41,7 @@
     cursor: inherit;
 }
 
-.happy2-checkbox__box {
+.happy-checkbox__box {
     display: flex;
     flex: none;
     box-sizing: border-box;
@@ -50,7 +50,7 @@
     width: 18px;
     height: 18px;
     border: 1px solid var(--radio-inactive);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background-color: var(--input-background);
     color: var(--button-primary-tint);
     transition:
@@ -58,34 +58,34 @@
         border-color 120ms ease;
 }
 
-.happy2-checkbox:not([data-checked]):not([data-indeterminate]):hover:not([data-disabled])
-    .happy2-checkbox__box {
+.happy-checkbox:not([data-checked]):not([data-indeterminate]):hover:not([data-disabled])
+    .happy-checkbox__box {
     border-color: var(--radio-inactive);
 }
 
-.happy2-checkbox[data-checked] .happy2-checkbox__box,
-.happy2-checkbox[data-indeterminate] .happy2-checkbox__box {
+.happy-checkbox[data-checked] .happy-checkbox__box,
+.happy-checkbox[data-indeterminate] .happy-checkbox__box {
     border-color: var(--radio-active);
     background-color: var(--radio-active);
 }
 
-.happy2-checkbox:focus-within .happy2-checkbox__box {
+.happy-checkbox:focus-within .happy-checkbox__box {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
 /* Indeterminate bar: bilaterally symmetric, so its centroid is trivially the
  * box center. Pill caps echo the round-capped check stroke. */
-.happy2-checkbox__dash {
+.happy-checkbox__dash {
     display: block;
     flex: none;
     width: 8px;
     height: 2px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background-color: currentColor;
 }
 
-.happy2-checkbox__label {
+.happy-checkbox__label {
     color: var(--text);
     font-size: 13px;
     font-weight: 500;

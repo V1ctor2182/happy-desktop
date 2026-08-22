@@ -4,7 +4,7 @@
  * swapping in place, so a working row reads like a terminal writing its next
  * line. The label is monospace, which lets one reveal stepped by character count
  * stand in for per-character markup: every glyph is the same width, so an even
- * split of the label into `--happy2-typed-chars` steps lands each one on a glyph
+ * split of the label into `--happy-typed-chars` steps lands each one on a glyph
  * boundary with a single element.
  *
  * The animation is only applied to text that replaced earlier text; the first
@@ -18,23 +18,23 @@
  * leaves the box alone.
  */
 
-.happy2-typed-text {
+.happy-typed-text {
     /* Typing rate, in time per character. The duration below is this multiplied
        by the character count, so every label — one word or a long path — is
        typed at the same speed and only takes longer for being longer. */
-    --happy2-typed-char-duration: 18ms;
+    --happy-typed-char-duration: 18ms;
 
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- the label is one inline text run that is revealed by clipping: as a flex box the text would become an anonymous, shrinkable item that squeezes instead of being clipped */
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- the label is one inline text run that is revealed by clipping: as a flex box the text would become an anonymous, shrinkable item that squeezes instead of being clipped */
     display: inline-block;
     /* The label is one unwrapped run; nothing overflows its natural box, and
        what the reveal has not reached yet is clipped by `clip-path` below. */
     overflow: hidden;
     vertical-align: bottom;
     white-space: nowrap;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
 }
 
-.happy2-typed-text[data-typing] {
+.happy-typed-text[data-typing] {
     /* No fill mode: once typed, the label is unclipped again and stops
        depending on the `ch` estimate for what it reveals.
 
@@ -43,12 +43,12 @@
        relaying out fifty times a second — which, inside a `ScrollingText`
        watching its content with a ResizeObserver, was fifty measurements and
        fifty layouts of the transcript around it per typing label. */
-    animation: happy2-typed-text-type
-        calc(var(--happy2-typed-chars) * var(--happy2-typed-char-duration))
-        steps(var(--happy2-typed-chars), end);
+    animation: happy-typed-text-type
+        calc(var(--happy-typed-chars) * var(--happy-typed-char-duration))
+        steps(var(--happy-typed-chars), end);
 }
 
-@keyframes happy2-typed-text-type {
+@keyframes happy-typed-text-type {
     from {
         clip-path: inset(0 100% 0 0);
     }
@@ -59,7 +59,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy2-typed-text[data-typing] {
+    .happy-typed-text[data-typing] {
         animation: none;
     }
 }

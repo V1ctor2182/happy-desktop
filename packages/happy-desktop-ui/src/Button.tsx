@@ -56,7 +56,7 @@ export function Button(props: ButtonProps) {
         <button
             {...rest}
             aria-keyshortcuts={local.shortcut?.aria ?? rest["aria-keyshortcuts"]}
-            className={["happy2-button", local.className].filter(Boolean).join(" ")}
+            className={["happy-button", local.className].filter(Boolean).join(" ")}
             data-icon-only={local.iconOnly ? "" : undefined}
             data-happy-desktop-ui="button"
             data-loading={local.loading ? "" : undefined}
@@ -74,9 +74,9 @@ export function Button(props: ButtonProps) {
             }}
             type={local.type ?? "button"}
         >
-            <span className="happy2-button__content" data-happy-desktop-ui="button-content">
+            <span className="happy-button__content" data-happy-desktop-ui="button-content">
                 {local.loading ? (
-                    <span className="happy2-button__icon" data-happy-desktop-ui="button-icon">
+                    <span className="happy-button__icon" data-happy-desktop-ui="button-icon">
                         <Spinner
                             size={iconSizes[size()]}
                             tone={
@@ -88,24 +88,24 @@ export function Button(props: ButtonProps) {
                     </span>
                 ) : local.icon ? (
                     ((name) => (
-                        <span className="happy2-button__icon" data-happy-desktop-ui="button-icon">
+                        <span className="happy-button__icon" data-happy-desktop-ui="button-icon">
                             <Icon name={name} size={iconSizes[size()]} />
                         </span>
                     ))(local.icon)
                 ) : local.iconOnly ? (
-                    <span className="happy2-button__icon" data-happy-desktop-ui="button-icon">
+                    <span className="happy-button__icon" data-happy-desktop-ui="button-icon">
                         {local.children}
                     </span>
                 ) : null}
                 {!local.iconOnly ? (
-                    <span className="happy2-button__label" data-happy-desktop-ui="button-label">
+                    <span className="happy-button__label" data-happy-desktop-ui="button-label">
                         {local.children}
                     </span>
                 ) : null}
             </span>
             {local.shortcut ? (
                 <KeyCap
-                    className="happy2-button__shortcut-hint happy2-shortcut-hint--floating"
+                    className="happy-button__shortcut-hint happy-shortcut-hint--floating"
                     decorative
                     keys={local.shortcut.caps}
                 />

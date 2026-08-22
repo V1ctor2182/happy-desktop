@@ -11,7 +11,7 @@
  * underline sits flush at the bottom of the tab here.
  */
 
-.happy2-tabbed-pane {
+.happy-tabbed-pane {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -19,7 +19,7 @@
     min-height: 0;
 }
 
-.happy2-tabbed-pane__bar {
+.happy-tabbed-pane__bar {
     box-sizing: border-box;
     display: flex;
     flex: none;
@@ -28,19 +28,19 @@
     box-shadow: inset 0 -1px var(--divider);
 }
 
-.happy2-tabbed-pane[data-size="small"] .happy2-tabbed-pane__bar {
-    height: var(--happy2-subheader-height);
+.happy-tabbed-pane[data-size="small"] .happy-tabbed-pane__bar {
+    height: var(--happy-subheader-height);
 }
 
-.happy2-tabbed-pane[data-size="medium"] .happy2-tabbed-pane__bar {
+.happy-tabbed-pane[data-size="medium"] .happy-tabbed-pane__bar {
     height: 40px;
 }
 
-.happy2-tabbed-pane[data-size="large"] .happy2-tabbed-pane__bar {
+.happy-tabbed-pane[data-size="large"] .happy-tabbed-pane__bar {
     height: 48px;
 }
 
-.happy2-tabbed-pane__scroller {
+.happy-tabbed-pane__scroller {
     display: flex;
     flex: 0 1 auto;
     min-width: 0;
@@ -49,28 +49,28 @@
     scrollbar-width: none;
 }
 
-.happy2-tabbed-pane__scroller::-webkit-scrollbar {
+.happy-tabbed-pane__scroller::-webkit-scrollbar {
     display: none;
 }
 
 /* Sized by its content so the following action remains beside a short strip. */
-.happy2-tabbed-pane__strip {
+.happy-tabbed-pane__strip {
     display: flex;
     flex: none;
     align-items: stretch;
 }
 
-.happy2-tabbed-pane__tabs {
+.happy-tabbed-pane__tabs {
     flex: none;
     border-bottom: 0;
 }
 
-.happy2-tabbed-pane__tabs .happy2-tabs__tab {
+.happy-tabbed-pane__tabs .happy-tabs__tab {
     max-width: 200px;
 }
 
 /* The label is the only part that gives way, so icons and badges stay whole. */
-.happy2-tabbed-pane__tabs .happy2-tabs__tab-label {
+.happy-tabbed-pane__tabs .happy-tabs__tab-label {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -78,7 +78,7 @@
     white-space: nowrap;
 }
 
-.happy2-tabbed-pane__tabs .happy2-tabs__tab-underline {
+.happy-tabbed-pane__tabs .happy-tabs__tab-underline {
     bottom: 0;
 }
 
@@ -88,7 +88,7 @@
  * Keeping it outside the clipping scrollport also lets a shortcut hint float
  * below the unchanged control instead of widening the bar.
  */
-.happy2-tabbed-pane__actions {
+.happy-tabbed-pane__actions {
     display: flex;
     flex: none;
     align-items: center;
@@ -99,7 +99,7 @@
     padding: 0 8px 0 0;
 }
 
-.happy2-tabbed-pane__body {
+.happy-tabbed-pane__body {
     display: flex;
     flex: 1;
     flex-direction: column;

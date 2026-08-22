@@ -27,7 +27,7 @@ function Frame(props: { children: ReactNode }) {
                 boxSizing: "border-box",
                 padding: "20px",
                 border: "1px solid var(--divider)",
-                borderRadius: "var(--happy2-radius-shell)",
+                borderRadius: "var(--happy-radius-shell)",
                 background: "var(--surface)",
             }}
         >

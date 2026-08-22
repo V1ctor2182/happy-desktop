@@ -11,7 +11,7 @@ import wasmUrl from "@lottiefiles/dotlottie-web/dotlottie-player.wasm?url";
  * pool by id, so a second empty state does not mean a second thread, a second
  * WASM instantiation, or a second copy of the runtime's heap.
  */
-export const LOTTIE_WORKER_ID = "happy2-empty-state";
+export const LOTTIE_WORKER_ID = "happy-empty-state";
 
 /**
  * Frames are drawn on a worker thread against an OffscreenCanvas. The main

@@ -6,12 +6,12 @@
  * Saving is Command-S and unsaved state belongs to the owning tab.
  */
 
-.happy2-file-editor,
-.happy2-file-editor * {
+.happy-file-editor,
+.happy-file-editor * {
     box-sizing: border-box;
 }
 
-.happy2-file-editor {
+.happy-file-editor {
     display: flex;
     /* The editor fills whichever region it was given — a main-content tab or
        the panel column beside a conversation — so it takes the remaining space
@@ -24,18 +24,18 @@
     min-height: 0;
     background: var(--surface);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* ---- Header ----------------------------------------------------------- */
 
-.happy2-file-editor__header {
+.happy-file-editor__header {
     display: flex;
     flex: none;
     align-items: center;
     gap: 10px;
-    height: var(--happy2-subheader-height);
+    height: var(--happy-subheader-height);
     padding: 0 16px;
     background: var(--surface);
     box-shadow: inset 0 -1px var(--divider);
@@ -44,27 +44,27 @@
     line-height: 20px;
 }
 
-.happy2-file-editor__glyph {
+.happy-file-editor__glyph {
     width: 16px;
     height: 16px;
 }
 
-.happy2-file-editor__heading {
+.happy-file-editor__heading {
     min-width: 0;
 }
 
-.happy2-file-editor__heading .happy2-file-path-label__directory {
+.happy-file-editor__heading .happy-file-path-label__directory {
     color: var(--text);
 }
 
-.happy2-file-editor__actions {
+.happy-file-editor__actions {
     display: flex;
     flex: none;
     align-items: center;
     gap: 6px;
 }
 
-.happy2-file-editor__status {
+.happy-file-editor__status {
     display: block;
     max-width: 240px;
     overflow: hidden;
@@ -75,7 +75,7 @@
 
 /* ---- Banner slot ------------------------------------------------------ */
 
-.happy2-file-editor__banner {
+.happy-file-editor__banner {
     flex: none;
     padding: 8px 12px 0;
 }
@@ -91,7 +91,7 @@
  */
 /* The body is `CodeEditor`, which owns the code type, the gutter, and its own
    scrollport; the editor surface only says how much of the pane it takes. */
-.happy2-file-editor__area {
+.happy-file-editor__area {
     flex: 1 1 0%;
     width: 100%;
     min-height: 0;

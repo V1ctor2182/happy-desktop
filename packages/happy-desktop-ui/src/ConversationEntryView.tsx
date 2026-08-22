@@ -167,7 +167,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 agent
                 author={props.activityAuthor.displayName}
                 body=""
-                className={["happy2-message--activity-lead", props.className]
+                className={["happy-message--activity-lead", props.className]
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
@@ -180,8 +180,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         ) : (
             <div
                 className={[
-                    "happy2-delegated-agent-entry",
-                    traceRow ? "happy2-delegated-agent-entry--trace" : undefined,
+                    "happy-delegated-agent-entry",
+                    traceRow ? "happy-delegated-agent-entry--trace" : undefined,
                     props.className,
                 ]
                     .filter(Boolean)
@@ -229,7 +229,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 agent
                 author={props.activityAuthor.displayName}
                 body=""
-                className={["happy2-message--activity-lead", props.className]
+                className={["happy-message--activity-lead", props.className]
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
@@ -250,8 +250,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             <TurnSummary
                 className={
                     props.activityAuthor
-                        ? "happy2-conversation-turn-status"
-                        : ["happy2-conversation-turn-status", props.className]
+                        ? "happy-conversation-turn-status"
+                        : ["happy-conversation-turn-status", props.className]
                               .filter(Boolean)
                               .join(" ")
                 }
@@ -274,7 +274,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 agent
                 author={props.activityAuthor.displayName}
                 body=""
-                className={["happy2-message--activity-lead", props.className]
+                className={["happy-message--activity-lead", props.className]
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
@@ -348,7 +348,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 agent
                 author={props.activityAuthor.displayName}
                 body=""
-                className={["happy2-message--activity-lead", props.className]
+                className={["happy-message--activity-lead", props.className]
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}

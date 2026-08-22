@@ -473,7 +473,7 @@ export function CodeEditor(props: CodeEditorProps) {
         },
         [scrollbarController],
     );
-    // eslint-disable-next-line happy2-react/no-layout-effect -- CodeMirror is an imperative document; this is the only boundary where the authoritative text, the file's grammar, and the read-only state reach it, and the view itself is created and destroyed by the ref callback above
+    // eslint-disable-next-line happy-react/no-layout-effect -- CodeMirror is an imperative document; this is the only boundary where the authoritative text, the file's grammar, and the read-only state reach it, and the view itself is created and destroyed by the ref callback above
     useLayoutEffect(() => {
         latest.current = props;
         const editor = handle.current;
@@ -532,7 +532,7 @@ export function CodeEditor(props: CodeEditorProps) {
     });
     return (
         <div
-            className={["happy2-code-editor", props.className].filter(Boolean).join(" ")}
+            className={["happy-code-editor", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="code-editor"
             data-read-only={props.readOnly ? "" : undefined}
             data-scrollbar-axes="both"
@@ -542,7 +542,7 @@ export function CodeEditor(props: CodeEditorProps) {
             ref={hostAttach}
             style={props.style}
         >
-            <div className="happy2-code-editor__mount" ref={attach} />
+            <div className="happy-code-editor__mount" ref={attach} />
             <ScrollbarTracks axes="both" controller={scrollbarController} />
         </div>
     );

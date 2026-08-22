@@ -58,7 +58,7 @@ export function HappyAgentDebugSettings(props: HappyAgentDebugSettingsProps) {
                 </Banner>
             ) : null}
             {props.loading ? (
-                <Box className="happy2-happy-agent-settings__pending">
+                <Box className="happy-agent-settings__pending">
                     <Spinner size={16} />
                     <span>Reading debugger status…</span>
                 </Box>

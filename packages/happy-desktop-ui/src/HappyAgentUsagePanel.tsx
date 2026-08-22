@@ -58,26 +58,23 @@ function GroupRow(props: { compact: boolean; group: HappyAgentUsageGroup }) {
     const number = (value: number) => formatTokens(value, props.compact);
     const exactTitle = (value: number) => (props.compact ? formatTokens(value) : undefined);
     return (
-        <tr
-            className="happy2-happy-agent-usage__row"
-            data-happy-desktop-ui="happy-agent-usage-group"
-        >
-            <th className="happy2-happy-agent-usage__model" scope="row" title={group.modelId}>
+        <tr className="happy-agent-usage__row" data-happy-desktop-ui="happy-agent-usage-group">
+            <th className="happy-agent-usage__model" scope="row" title={group.modelId}>
                 {group.modelId}
             </th>
-            <td className="happy2-happy-agent-usage__num" title={exactTitle(group.inputTokens)}>
+            <td className="happy-agent-usage__num" title={exactTitle(group.inputTokens)}>
                 {number(group.inputTokens)}
             </td>
-            <td className="happy2-happy-agent-usage__num" title={exactTitle(group.outputTokens)}>
+            <td className="happy-agent-usage__num" title={exactTitle(group.outputTokens)}>
                 {number(group.outputTokens)}
             </td>
-            <td className="happy2-happy-agent-usage__num" title={exactTitle(cacheTokens)}>
+            <td className="happy-agent-usage__num" title={exactTitle(cacheTokens)}>
                 {number(cacheTokens)}
             </td>
-            <td className="happy2-happy-agent-usage__num" title={exactTitle(group.totalTokens)}>
+            <td className="happy-agent-usage__num" title={exactTitle(group.totalTokens)}>
                 {number(group.totalTokens)}
             </td>
-            <td className="happy2-happy-agent-usage__num">{formatCost(group.cost)}</td>
+            <td className="happy-agent-usage__num">{formatCost(group.cost)}</td>
         </tr>
     );
 }
@@ -85,44 +82,38 @@ function GroupRow(props: { compact: boolean; group: HappyAgentUsageGroup }) {
 function QuotaRow(props: { quota: HappyAgentUsageQuota }) {
     const { quota } = props;
     return (
-        <div
-            className="happy2-happy-agent-usage__quota"
-            data-happy-desktop-ui="happy-agent-usage-quota"
-        >
-            <span className="happy2-happy-agent-usage__quota-provider">{quota.providerId}</span>
+        <div className="happy-agent-usage__quota" data-happy-desktop-ui="happy-agent-usage-quota">
+            <span className="happy-agent-usage__quota-provider">{quota.providerId}</span>
             {quota.windows.length === 0 ? (
-                <span className="happy2-happy-agent-usage__quota-empty">No limits reported</span>
+                <span className="happy-agent-usage__quota-empty">No limits reported</span>
             ) : (
                 quota.windows.map((window) => {
                     const percent = usagePercentClamp(window.usedPercent);
                     return (
                         <span
-                            className="happy2-happy-agent-usage__quota-window"
+                            className="happy-agent-usage__quota-window"
                             data-happy-desktop-ui="happy-agent-usage-quota-window"
                             data-tone={usageWindowTone(percent)}
                             key={window.kind}
                         >
-                            <span className="happy2-happy-agent-usage__quota-label">
+                            <span className="happy-agent-usage__quota-label">
                                 {QUOTA_LABELS[window.kind]}
                             </span>
-                            <span
-                                className="happy2-happy-agent-usage__quota-bar"
-                                aria-hidden="true"
-                            >
+                            <span className="happy-agent-usage__quota-bar" aria-hidden="true">
                                 <span
-                                    className="happy2-happy-agent-usage__quota-fill"
+                                    className="happy-agent-usage__quota-fill"
                                     data-full={percent >= USAGE_CRITICAL_PERCENT ? "" : undefined}
                                     style={{ width: `${String(percent)}%` }}
                                 />
                             </span>
                             <span
                                 aria-label={`${String(Math.round(percent))}% of ${QUOTA_LABELS[window.kind]} used`}
-                                className="happy2-happy-agent-usage__quota-percent"
+                                className="happy-agent-usage__quota-percent"
                                 role="img"
                             >
                                 {Math.round(percent)}%
                             </span>
-                            <span className="happy2-happy-agent-usage__quota-reset">
+                            <span className="happy-agent-usage__quota-reset">
                                 resets {formatReset(window.resetsAt)}
                             </span>
                         </span>
@@ -155,7 +146,7 @@ export function HappyAgentUsagePanel(props: HappyAgentUsagePanelProps) {
     const panel = props.placement === "panel";
     const content = (
         <section
-            className={["happy2-happy-agent-usage", props.className].filter(Boolean).join(" ")}
+            className={["happy-agent-usage", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="happy-agent-usage-panel"
             data-loading={props.loading ? "" : undefined}
             data-placement={panel ? "panel" : undefined}
@@ -164,14 +155,14 @@ export function HappyAgentUsagePanel(props: HappyAgentUsagePanelProps) {
         >
             {props.error !== undefined ? (
                 <p
-                    className="happy2-happy-agent-usage__error"
+                    className="happy-agent-usage__error"
                     data-happy-desktop-ui="happy-agent-usage-error"
                 >
                     {props.error}
                 </p>
             ) : usage === undefined ? (
                 <p
-                    className="happy2-happy-agent-usage__empty"
+                    className="happy-agent-usage__empty"
                     data-happy-desktop-ui="happy-agent-usage-empty"
                 >
                     Loading usage…
@@ -179,26 +170,26 @@ export function HappyAgentUsagePanel(props: HappyAgentUsagePanelProps) {
             ) : (
                 <>
                     <div
-                        className="happy2-happy-agent-usage__totals"
+                        className="happy-agent-usage__totals"
                         data-happy-desktop-ui="happy-agent-usage-totals"
                     >
-                        <span className="happy2-happy-agent-usage__total">
-                            <span className="happy2-happy-agent-usage__total-value">
+                        <span className="happy-agent-usage__total">
+                            <span className="happy-agent-usage__total-value">
                                 {formatTokens(usage.totalTokens)}
                             </span>
-                            <span className="happy2-happy-agent-usage__total-label">tokens</span>
+                            <span className="happy-agent-usage__total-label">tokens</span>
                         </span>
-                        <span className="happy2-happy-agent-usage__total">
-                            <span className="happy2-happy-agent-usage__total-value">
+                        <span className="happy-agent-usage__total">
+                            <span className="happy-agent-usage__total-value">
                                 {formatCost(usage.totalCost)}
                             </span>
-                            <span className="happy2-happy-agent-usage__total-label">cost</span>
+                            <span className="happy-agent-usage__total-label">cost</span>
                         </span>
                     </div>
 
                     {usage.groups.length > 0 ? (
                         <table
-                            className="happy2-happy-agent-usage__table"
+                            className="happy-agent-usage__table"
                             data-happy-desktop-ui="happy-agent-usage-table"
                         >
                             <thead>
@@ -222,12 +213,12 @@ export function HappyAgentUsagePanel(props: HappyAgentUsagePanelProps) {
                             </tbody>
                         </table>
                     ) : (
-                        <p className="happy2-happy-agent-usage__empty">No model usage yet.</p>
+                        <p className="happy-agent-usage__empty">No model usage yet.</p>
                     )}
 
                     {usage.context ? (
                         <p
-                            className="happy2-happy-agent-usage__context"
+                            className="happy-agent-usage__context"
                             data-happy-desktop-ui="happy-agent-usage-context"
                         >
                             Context: {formatTokens(usage.context.totalTokens)} tokens
@@ -238,7 +229,7 @@ export function HappyAgentUsagePanel(props: HappyAgentUsagePanelProps) {
 
                     {usage.quotas.length > 0 ? (
                         <div
-                            className="happy2-happy-agent-usage__quotas"
+                            className="happy-agent-usage__quotas"
                             data-happy-desktop-ui="happy-agent-usage-quotas"
                         >
                             {usage.quotas.map((quota) => (
@@ -252,10 +243,10 @@ export function HappyAgentUsagePanel(props: HappyAgentUsagePanelProps) {
     );
     return panel ? (
         <div
-            className="happy2-happy-agent-usage-panel-scroll"
+            className="happy-agent-usage-panel-scroll"
             data-happy-desktop-ui="happy-agent-usage-panel-scroll"
         >
-            <div className="happy2-happy-agent-usage-panel-scroll__content">{content}</div>
+            <div className="happy-agent-usage-panel-scroll__content">{content}</div>
         </div>
     ) : (
         content

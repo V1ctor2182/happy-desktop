@@ -73,9 +73,9 @@ function workspace(): HappyAgentWorkspaceStore {
                 value: [
                     {
                         id: "prj_one",
-                        path: "/Users/happy/happy2",
-                        displayPath: "~/happy2",
-                        name: "happy2",
+                        path: "/Users/happy/happy",
+                        displayPath: "~/happy",
+                        name: "happy",
                         kind: "regular" as const,
                         lifecycle: { phase: "ready" as const },
                         worktrees: [],
@@ -85,7 +85,7 @@ function workspace(): HappyAgentWorkspaceStore {
                             {
                                 id: "ses_one",
                                 title: "Fix token rotation race",
-                                subtitle: "~/happy2",
+                                subtitle: "~/happy",
                                 updatedAt: 1_763_999_000_000,
                                 activity: "idle" as const,
                             },
@@ -211,7 +211,7 @@ it("heads the local sidebar with the shared brand mark, not a local-only title",
 
     // The plain title row and its chevron affordance are gone.
     expect(container.textContent).not.toContain("Local");
-    expect(container.querySelector(".happy2-sidebar__title-chevron")).toBeNull();
+    expect(container.querySelector(".happy-sidebar__title-chevron")).toBeNull();
 });
 
 it("highlights the addressed project and asks to navigate into it when it is picked", () => {
@@ -246,8 +246,8 @@ it("lists one row per project and its sessions as tabs", () => {
     ]);
     // The row is the project's name alone; its path would crowd the name out,
     // and the heading over the open project states it in full.
-    expect(rows[1]?.textContent).toContain("happy2");
-    expect(rows[1]?.textContent).not.toContain("~/happy2");
+    expect(rows[1]?.textContent).toContain("happy");
+    expect(rows[1]?.textContent).not.toContain("~/happy");
 
     // The sessions inside the addressed project are its tabs.
     const tabs = [...container.querySelectorAll('[data-happy-desktop-ui="tab"]')];

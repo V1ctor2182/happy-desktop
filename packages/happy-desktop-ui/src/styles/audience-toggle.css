@@ -4,7 +4,7 @@
  * A compact current-mode text control beneath the composer input.
  */
 
-.happy2-audience-toggle {
+.happy-audience-toggle {
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -14,7 +14,7 @@
     border: 0;
     background: transparent;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;
@@ -27,17 +27,17 @@
         opacity 120ms ease;
 }
 
-.happy2-audience-toggle:hover:not(:disabled) {
+.happy-audience-toggle:hover:not(:disabled) {
     color: var(--text);
     opacity: 1;
 }
 
-.happy2-audience-toggle:focus-visible {
+.happy-audience-toggle:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-audience-toggle:disabled {
+.happy-audience-toggle:disabled {
     cursor: not-allowed;
     opacity: 0.48;
 }

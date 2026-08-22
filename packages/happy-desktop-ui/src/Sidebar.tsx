@@ -124,7 +124,7 @@ export type SidebarItem = {
 };
 /**
  * Left inset of the row content at depth 0. It is the shared row padding —
- * `--happy2-panel-row-padding`, which is what the CSS states — restated here
+ * `--happy-panel-row-padding`, which is what the CSS states — restated here
  * because an indented row and a tree stem are positioned from script.
  */
 export const SIDEBAR_ROW_PADDING_X = 10;
@@ -447,7 +447,7 @@ const DRAG_THRESHOLD = 4;
  * identity of their own. A symbol, so that no caller's section id can ever be
  * mistaken for it.
  */
-const ACTIONS_LIST = Symbol("happy2-sidebar-actions");
+const ACTIONS_LIST = Symbol("happy-sidebar-actions");
 
 /** Which list a reorder is happening in: one section, or the pinned actions. */
 type SidebarListId = string | typeof ACTIONS_LIST;
@@ -745,7 +745,7 @@ function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
     return (
         <div
             aria-hidden="true"
-            className="happy2-sidebar__tree-connectors"
+            className="happy-sidebar__tree-connectors"
             data-happy-desktop-ui="sidebar-tree-connectors"
         >
             {groups.map((group) => {
@@ -761,7 +761,7 @@ function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
                 const key = rowKey(props.listId, group.parentId);
                 return (
                     <span
-                        className="happy2-sidebar__tree-connector"
+                        className="happy-sidebar__tree-connector"
                         data-parent-id={group.parentId}
                         data-happy-desktop-ui="sidebar-tree-connector"
                         key={group.parentId}
@@ -803,7 +803,7 @@ function SidebarDragSurface(props: { readonly drag: SidebarDrag; readonly carrie
     return (
         <span
             aria-hidden="true"
-            className="happy2-sidebar__tree-drag-surface"
+            className="happy-sidebar__tree-drag-surface"
             data-happy-desktop-ui="sidebar-tree-drag-surface"
             data-carried={props.carried ? "" : undefined}
             style={{
@@ -823,7 +823,7 @@ function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => vo
             aria-disabled={props.action.disabled ? "true" : undefined}
             aria-keyshortcuts={props.action.shortcut?.aria}
             aria-label={props.action.label}
-            className="happy2-sidebar__item-action"
+            className="happy-sidebar__item-action"
             data-happy-desktop-ui="sidebar-item-action"
             data-reveal={props.action.reveal}
             data-disabled={props.action.disabled ? "" : undefined}
@@ -844,12 +844,12 @@ function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => vo
             role="button"
             tabIndex={props.action.disabled ? -1 : 0}
         >
-            <span className="happy2-sidebar__item-action-icon">
+            <span className="happy-sidebar__item-action-icon">
                 <Icon name={props.action.icon} size={12} />
             </span>
             {props.action.shortcut ? (
                 <KeyCap
-                    className="happy2-sidebar__item-action-shortcut happy2-shortcut-hint--floating"
+                    className="happy-sidebar__item-action-shortcut happy-shortcut-hint--floating"
                     decorative
                     keys={props.action.shortcut.caps}
                 />
@@ -928,7 +928,7 @@ function SidebarRow({
         trailingActions().every((control) => control.action.reveal === "hover");
     const trailingLane = () => (
         <span
-            className="happy2-sidebar__item-actions"
+            className="happy-sidebar__item-actions"
             data-happy-desktop-ui="sidebar-item-actions"
             /* Stated here for the same reason the slot's own gap is: it is a
                term in the slot width computed beside it. */
@@ -1030,7 +1030,7 @@ function SidebarRow({
         if (!state) return undefined;
         return (
             <span
-                className="happy2-sidebar__item-activity"
+                className="happy-sidebar__item-activity"
                 data-activity={state.kind === "spinner" ? "spinner" : state.lifecycle}
                 data-happy-desktop-ui="sidebar-item-activity"
             >
@@ -1068,7 +1068,7 @@ function SidebarRow({
             aria-keyshortcuts={
                 ariaKeyShortcuts().length > 0 ? ariaKeyShortcuts().join(" ") : undefined
             }
-            className={["happy2-sidebar__item", props.className].filter(Boolean).join(" ")}
+            className={["happy-sidebar__item", props.className].filter(Boolean).join(" ")}
             data-active={props.active ? "" : undefined}
             data-archived={item().archived ? "" : undefined}
             /* Both are needed and neither implies the other: a row that folds is
@@ -1110,13 +1110,13 @@ function SidebarRow({
             {depth() > 0 ? (
                 <span
                     aria-hidden="true"
-                    className="happy2-sidebar__item-branch"
+                    className="happy-sidebar__item-branch"
                     data-happy-desktop-ui="sidebar-item-branch"
                 />
             ) : null}
             {showsLeadingSlot(item()) || activityLeading() || props.onCollapseToggle ? (
                 <span
-                    className="happy2-sidebar__item-leading"
+                    className="happy-sidebar__item-leading"
                     data-happy-desktop-ui="sidebar-item-leading"
                 >
                     {/* Identity, unless the window asked for work to be reported
@@ -1157,11 +1157,11 @@ function SidebarRow({
                            and the column of names below it never shifts. */
                         <span
                             aria-hidden="true"
-                            className="happy2-sidebar__item-emoji"
+                            className="happy-sidebar__item-emoji"
                             data-happy-desktop-ui="sidebar-item-emoji"
                         >
                             <span
-                                className="happy2-sidebar__item-emoji-glyph"
+                                className="happy-sidebar__item-emoji-glyph"
                                 data-happy-desktop-ui="sidebar-item-emoji-glyph"
                             >
                                 {item().emoji}
@@ -1173,7 +1173,7 @@ function SidebarRow({
                     {unreadOnLeading() ? (
                         <span
                             aria-label="Unread activity"
-                            className="happy2-sidebar__item-leading-unread"
+                            className="happy-sidebar__item-leading-unread"
                             data-happy-desktop-ui="sidebar-item-leading-unread"
                         />
                     ) : null}
@@ -1193,7 +1193,7 @@ function SidebarRow({
                            button inside a button is invalid. */
                         <span
                             aria-hidden="true"
-                            className="happy2-sidebar__item-fold"
+                            className="happy-sidebar__item-fold"
                             data-happy-desktop-ui="sidebar-item-fold"
                             onClick={(event) => {
                                 event.stopPropagation();
@@ -1209,7 +1209,7 @@ function SidebarRow({
                     ) : null}
                 </span>
             ) : null}
-            <span className="happy2-sidebar__item-label" data-happy-desktop-ui="sidebar-item-label">
+            <span className="happy-sidebar__item-label" data-happy-desktop-ui="sidebar-item-label">
                 {/* The row's own colour, with a near-white band wiping through
                         it. Busy is a passing state, so it may not restyle the name:
                         an unread row is already heavier and darker than its
@@ -1226,7 +1226,7 @@ function SidebarRow({
             </span>
             {props.shortcut ? (
                 <KeyCap
-                    className="happy2-sidebar__item-shortcut"
+                    className="happy-sidebar__item-shortcut"
                     decorative
                     keys={props.shortcut.caps}
                 />
@@ -1234,17 +1234,17 @@ function SidebarRow({
             {unread() && !unreadOnLeading() && !mentioned() ? (
                 <span
                     aria-label="Unread"
-                    className="happy2-sidebar__item-unread"
+                    className="happy-sidebar__item-unread"
                     data-happy-desktop-ui="sidebar-item-unread"
                 />
             ) : null}
             {mentioned() ? (
-                <CountBadge className="happy2-sidebar__item-badge" count={item().badge!} />
+                <CountBadge className="happy-sidebar__item-badge" count={item().badge!} />
             ) : null}
 
             {showLifecycle() ? (
                 <span
-                    className="happy2-sidebar__item-lifecycle"
+                    className="happy-sidebar__item-lifecycle"
                     data-happy-desktop-ui="sidebar-item-lifecycle"
                     data-lifecycle={lifecycle()}
                 >
@@ -1255,7 +1255,7 @@ function SidebarRow({
                 <>
                     {item().status === "working" ? (
                         <span
-                            className="happy2-sidebar__item-working"
+                            className="happy-sidebar__item-working"
                             data-happy-desktop-ui="sidebar-item-working"
                         >
                             working
@@ -1263,7 +1263,7 @@ function SidebarRow({
                     ) : null}
                     <span
                         aria-hidden="true"
-                        className="happy2-sidebar__item-status"
+                        className="happy-sidebar__item-status"
                         data-happy-desktop-ui="sidebar-item-status"
                         data-status={item().status}
                     />
@@ -1271,7 +1271,7 @@ function SidebarRow({
             ) : null}
             {showMeta() ? (
                 <span
-                    className="happy2-sidebar__item-meta"
+                    className="happy-sidebar__item-meta"
                     data-happy-desktop-ui="sidebar-item-meta"
                 >
                     {item().meta}
@@ -1289,7 +1289,7 @@ function SidebarRow({
                    hidden where it stands. */
                 state || controls || stats ? (
                     <span
-                        className="happy2-sidebar__item-trailing"
+                        className="happy-sidebar__item-trailing"
                         data-happy-desktop-ui="sidebar-item-trailing"
                         data-swaps={controls && swaps ? "" : undefined}
                         style={{
@@ -1301,7 +1301,7 @@ function SidebarRow({
                             /* Abbreviated for the column, exact for the reader
                                who is listening rather than looking. */
                             <span
-                                className="happy2-sidebar__item-change-stats"
+                                className="happy-sidebar__item-change-stats"
                                 data-happy-desktop-ui="sidebar-item-change-stats"
                             >
                                 {stats.added > 0 ? (
@@ -1318,7 +1318,7 @@ function SidebarRow({
                                     falls between the two visible marks alone,
                                     and so the count stays readable to assistive
                                     technology while the marks are covered. */}
-                                <span className="happy2-visually-hidden">
+                                <span className="happy-visually-hidden">
                                     {changeCountLabel(stats.added, stats.deleted)}
                                 </span>
                             </span>
@@ -1377,7 +1377,7 @@ export function Sidebar(props: SidebarProps) {
         x: number;
         y: number;
     }>();
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the context menu must measure its rendered height before clamping the fixed popover to the viewport, and global dismissal listeners require imperative cleanup
+    // eslint-disable-next-line happy-react/no-layout-effect -- the context menu must measure its rendered height before clamping the fixed popover to the viewport, and global dismissal listeners require imperative cleanup
     useLayoutEffect(() => {
         if (!itemMenu) return;
         const bounds = menuRoot.current?.getBoundingClientRect();
@@ -1494,7 +1494,7 @@ export function Sidebar(props: SidebarProps) {
         event.preventDefault();
         onItemSelect(row.item.id);
     });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- Command-number navigation must reach the sidebar no matter which window control currently owns focus
+    // eslint-disable-next-line happy-react/no-layout-effect -- Command-number navigation must reach the sidebar no matter which window control currently owns focus
     useLayoutEffect(() => {
         if (!numberShortcutNavigation) return;
         const onKeyDown = (event: KeyboardEvent) => shortcutNavigate(event);
@@ -1724,7 +1724,7 @@ export function Sidebar(props: SidebarProps) {
      * a legitimate move away.
      */
     const dragLive = dragPaint !== undefined;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a capture lost with its own element is announced only to the document, which no declarative boundary exposes; the listener lives for one gesture and must be removed imperatively
+    // eslint-disable-next-line happy-react/no-layout-effect -- a capture lost with its own element is announced only to the document, which no declarative boundary exposes; the listener lives for one gesture and must be removed imperatively
     useLayoutEffect(() => {
         if (!dragLive) return;
         const lost = (event: Event): void => {
@@ -1803,7 +1803,7 @@ export function Sidebar(props: SidebarProps) {
      * that moving a node between parents, which is what rearranging the list
      * does, cannot restart or strand it.
      */
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a drop animation must measure the laid-out result of the render it follows, which no declarative or event-driven boundary exposes
+    // eslint-disable-next-line happy-react/no-layout-effect -- a drop animation must measure the laid-out result of the render it follows, which no declarative or event-driven boundary exposes
     useLayoutEffect(() => {
         const firsts = flipRef.current;
         if (!firsts) return;
@@ -1908,20 +1908,17 @@ export function Sidebar(props: SidebarProps) {
     return (
         <nav
             {...rest}
-            className={["happy2-sidebar", local.className].filter(Boolean).join(" ")}
+            className={["happy-sidebar", local.className].filter(Boolean).join(" ")}
             data-back={local.onBack ? "" : undefined}
             data-happy-desktop-ui="sidebar"
             style={local.style}
         >
-            <header className="happy2-sidebar__header" data-happy-desktop-ui="sidebar-header">
+            <header className="happy-sidebar__header" data-happy-desktop-ui="sidebar-header">
                 {local.onBack ? (
-                    <div
-                        className="happy2-sidebar__heading"
-                        data-happy-desktop-ui="sidebar-heading"
-                    >
+                    <div className="happy-sidebar__heading" data-happy-desktop-ui="sidebar-heading">
                         <button
                             aria-label="Back"
-                            className="happy2-sidebar__back"
+                            className="happy-sidebar__back"
                             data-happy-desktop-ui="sidebar-back"
                             onClick={local.onBack}
                             type="button"
@@ -1929,50 +1926,47 @@ export function Sidebar(props: SidebarProps) {
                             <Icon name="chevron-right" size={16} />
                         </button>
                         <span
-                            className="happy2-sidebar__title happy2-sidebar__title--back"
+                            className="happy-sidebar__title happy-sidebar__title--back"
                             data-happy-desktop-ui="sidebar-title"
                         >
                             {local.title}
                         </span>
                     </div>
                 ) : (
-                    <div
-                        className="happy2-sidebar__heading"
-                        data-happy-desktop-ui="sidebar-heading"
-                    >
+                    <div className="happy-sidebar__heading" data-happy-desktop-ui="sidebar-heading">
                         {local.brand ? (
-                            <span className="happy2-sidebar__title-row happy2-sidebar__title-row--brand">
+                            <span className="happy-sidebar__title-row happy-sidebar__title-row--brand">
                                 <img
                                     alt=""
                                     aria-hidden="true"
-                                    className="happy2-sidebar__brand-logo"
+                                    className="happy-sidebar__brand-logo"
                                     data-happy-desktop-ui="sidebar-brand-logo"
                                     draggable={false}
                                     src={happyLogoUrl}
                                 />
                                 <span
-                                    className="happy2-sidebar__title happy2-sidebar__title--brand"
+                                    className="happy-sidebar__title happy-sidebar__title--brand"
                                     data-happy-desktop-ui="sidebar-title"
                                 >
                                     Happy
                                 </span>
                             </span>
                         ) : local.title !== undefined ? (
-                            <span className="happy2-sidebar__title-row">
+                            <span className="happy-sidebar__title-row">
                                 <span
-                                    className="happy2-sidebar__title"
+                                    className="happy-sidebar__title"
                                     data-happy-desktop-ui="sidebar-title"
                                 >
                                     {local.title}
                                 </span>
-                                <span className="happy2-sidebar__title-chevron" aria-hidden="true">
+                                <span className="happy-sidebar__title-chevron" aria-hidden="true">
                                     <Icon name="chevron-down" size={14} />
                                 </span>
                             </span>
                         ) : null}
                         {local.subtitle ? (
                             <span
-                                className="happy2-sidebar__subtitle"
+                                className="happy-sidebar__subtitle"
                                 data-happy-desktop-ui="sidebar-subtitle"
                             >
                                 {local.subtitle}
@@ -1982,7 +1976,7 @@ export function Sidebar(props: SidebarProps) {
                 )}
                 {local.headerTrailing ? (
                     <div
-                        className="happy2-sidebar__header-trailing"
+                        className="happy-sidebar__header-trailing"
                         data-happy-desktop-ui="sidebar-header-trailing"
                     >
                         {local.headerTrailing}
@@ -1991,26 +1985,26 @@ export function Sidebar(props: SidebarProps) {
             </header>
             {local.headerAccessory ? (
                 <div
-                    className="happy2-sidebar__header-accessory"
+                    className="happy-sidebar__header-accessory"
                     data-happy-desktop-ui="sidebar-header-accessory"
                 >
                     {local.headerAccessory}
                 </div>
             ) : null}
             <ScrollArea
-                className="happy2-sidebar__body"
+                className="happy-sidebar__body"
                 data-happy-desktop-ui="sidebar-body"
                 data-scrollbar-rows=""
-                viewportClassName="happy2-sidebar__body-viewport"
+                viewportClassName="happy-sidebar__body-viewport"
             >
                 <div
-                    className="happy2-sidebar__body-content"
+                    className="happy-sidebar__body-content"
                     data-happy-desktop-ui="sidebar-body-content"
                 >
                     {local.onCompose ? (
                         <SidebarRow
                             active={false}
-                            className="happy2-sidebar__compose"
+                            className="happy-sidebar__compose"
                             item={{
                                 icon: "plus",
                                 id: "new-chat",
@@ -2027,7 +2021,7 @@ export function Sidebar(props: SidebarProps) {
                            compose row and every section would have it measuring
                            the whole sidebar. */
                         <div
-                            className="happy2-sidebar__actions"
+                            className="happy-sidebar__actions"
                             data-happy-desktop-ui="sidebar-actions"
                             data-reordering={dragOf(ACTIONS_LIST) ? "" : undefined}
                         >
@@ -2037,7 +2031,7 @@ export function Sidebar(props: SidebarProps) {
                                 return (
                                     <SidebarRow
                                         active={false}
-                                        className="happy2-sidebar__compose"
+                                        className="happy-sidebar__compose"
                                         dragging={
                                             (dragging && drag.from === index) ||
                                             rowKey(ACTIONS_LIST, action.id) === dropped?.key
@@ -2087,7 +2081,7 @@ export function Sidebar(props: SidebarProps) {
                     ) : null}
                     {local.bodyAccessory ? (
                         <div
-                            className="happy2-sidebar__body-accessory"
+                            className="happy-sidebar__body-accessory"
                             data-happy-desktop-ui="sidebar-body-accessory"
                         >
                             {local.bodyAccessory}
@@ -2118,7 +2112,7 @@ export function Sidebar(props: SidebarProps) {
                             (dropped?.carried === true && dropped.listId === section.id);
                         return (
                             <section
-                                className="happy2-sidebar__section"
+                                className="happy-sidebar__section"
                                 key={section.id}
                                 data-happy-desktop-ui="sidebar-section"
                                 data-reordering={sectionDrag ? "" : undefined}
@@ -2126,11 +2120,11 @@ export function Sidebar(props: SidebarProps) {
                             >
                                 {section.label ? (
                                     <div
-                                        className="happy2-sidebar__section-head"
+                                        className="happy-sidebar__section-head"
                                         data-happy-desktop-ui="sidebar-section-head"
                                     >
                                         <span
-                                            className="happy2-sidebar__section-label"
+                                            className="happy-sidebar__section-label"
                                             data-happy-desktop-ui="sidebar-section-label"
                                         >
                                             {section.label}
@@ -2140,7 +2134,7 @@ export function Sidebar(props: SidebarProps) {
                                                   <button
                                                       aria-busy={action.busy ? true : undefined}
                                                       aria-label={action.label}
-                                                      className="happy2-sidebar__section-action"
+                                                      className="happy-sidebar__section-action"
                                                       data-busy={action.busy ? "" : undefined}
                                                       data-happy-desktop-ui="sidebar-section-action"
                                                       data-reveal={action.reveal ?? "hover"}
@@ -2165,7 +2159,7 @@ export function Sidebar(props: SidebarProps) {
                                 ) : null}
                                 {section.error !== undefined ? (
                                     <p
-                                        className="happy2-sidebar__section-error"
+                                        className="happy-sidebar__section-error"
                                         data-happy-desktop-ui="sidebar-section-error"
                                         role="status"
                                     >
@@ -2174,7 +2168,7 @@ export function Sidebar(props: SidebarProps) {
                                 ) : null}
                                 {!section.headingOnly ? (
                                     <div
-                                        className="happy2-sidebar__tree"
+                                        className="happy-sidebar__tree"
                                         data-connector-dragging={surfaceLift ? "" : undefined}
                                         data-happy-desktop-ui="sidebar-tree"
                                     >
@@ -2309,18 +2303,18 @@ export function Sidebar(props: SidebarProps) {
                                 (section.items.length === 0 ? section.empty : undefined)
                                     ? ((empty) => (
                                           <div
-                                              className="happy2-sidebar__empty"
+                                              className="happy-sidebar__empty"
                                               data-happy-desktop-ui="sidebar-section-empty"
                                           >
                                               <span
-                                                  className="happy2-sidebar__empty-description"
+                                                  className="happy-sidebar__empty-description"
                                                   data-happy-desktop-ui="sidebar-section-empty-description"
                                               >
                                                   {empty.description}
                                               </span>
                                               {empty.actionLabel === undefined ? null : (
                                                   <Button
-                                                      className="happy2-sidebar__empty-action"
+                                                      className="happy-sidebar__empty-action"
                                                       onClick={() =>
                                                           local.onSectionAction?.(
                                                               section.id,
@@ -2348,7 +2342,7 @@ export function Sidebar(props: SidebarProps) {
             {announcements.map((text, slot) => (
                 <span
                     aria-live="polite"
-                    className="happy2-sidebar__announcement"
+                    className="happy-sidebar__announcement"
                     data-happy-desktop-ui="sidebar-announcement"
                     key={slot === 0 ? "first" : "second"}
                     role="status"
@@ -2357,13 +2351,13 @@ export function Sidebar(props: SidebarProps) {
                 </span>
             ))}
             {local.footer ? (
-                <footer className="happy2-sidebar__footer" data-happy-desktop-ui="sidebar-footer">
+                <footer className="happy-sidebar__footer" data-happy-desktop-ui="sidebar-footer">
                     {local.footer}
                 </footer>
             ) : null}
             {itemMenu ? (
                 <div
-                    className="happy2-sidebar__item-menu"
+                    className="happy-sidebar__item-menu"
                     data-happy-desktop-ui="sidebar-item-menu"
                     ref={menuRoot}
                     style={{ left: itemMenu.x, top: itemMenu.y }}

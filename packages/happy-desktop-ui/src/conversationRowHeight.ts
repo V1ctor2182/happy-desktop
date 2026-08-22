@@ -88,9 +88,9 @@ function rowHeightCached(
     return value;
 }
 /**
- * `--happy2-chat-measure`. Both surfaces centre their scrolling column at this
- * readable measure — `.happy2-conversation` in `conversation.css`, and
- * `.happy2-chat-conversation` in `terminal-panel.css` — so a wide window does
+ * `--happy-chat-measure`. Both surfaces centre their scrolling column at this
+ * readable measure — `.happy-conversation` in `conversation.css`, and
+ * `.happy-chat-conversation` in `terminal-panel.css` — so a wide window does
  * not widen a row, and neither does its text measure.
  */
 export const CHAT_MEASURE = 880;
@@ -100,23 +100,23 @@ const MESSAGE_CHROME = {
     chat: { agent: [41, 16], incoming: [77, 28], own: [52, 28] },
 } as const;
 /**
- * `.happy2-conversation__resumed` raises an agent row's top padding to 8px when
+ * `.happy-conversation__resumed` raises an agent row's top padding to 8px when
  * its prose resumes after a tool run, replacing whichever padding grouping had
  * given it. Only the top edge changes.
  */
 const RESUMED_PADDING_TOP = 8;
 const CONVERSATION_AGENT_PADDING_TOP = { leading: 16, grouped: 2 } as const;
 /**
- * `.happy2-conversation__continues` gives prose the same 8px on the way into a
- * tool run that `.happy2-conversation__resumed` gives it on the way out, and
- * `.happy2-conversation__closing` trims an answer's trailing padding to 4px so
+ * `.happy-conversation__continues` gives prose the same 8px on the way into a
+ * tool run that `.happy-conversation__resumed` gives it on the way out, and
+ * `.happy-conversation__closing` trims an answer's trailing padding to 4px so
  * the status closing it sits a paragraph break away. Only the bottom edge
  * changes.
  */
 const CONTINUES_PADDING_BOTTOM = 8;
 const CLOSING_PADDING_BOTTOM = 4;
 const CONVERSATION_AGENT_PADDING_BOTTOM = { leading: 16, grouped: 2 } as const;
-/** `.happy2-message__meta` — 20px row plus its 5px separation from the body. */
+/** `.happy-message__meta` — 20px row plus its 5px separation from the body. */
 const META_ROW = 25;
 /** Horizontal chrome: row padding, then the 76% bubble cap, then bubble padding. */
 const AGENT_INSET = 94;
@@ -126,7 +126,7 @@ const BUBBLE_CAP = 0.76;
 const BUBBLE_PADDING = 24;
 /** The transparent-until-hover time that shares an own message's bubble line. */
 const ASIDE_TIME_GAP = 8;
-/** `.happy2-message__media` — top margin, inter-tile gap, and its own cap. */
+/** `.happy-message__media` — top margin, inter-tile gap, and its own cap. */
 const MEDIA_GAP = 4;
 const MEDIA_MARGIN = 8;
 const MEDIA_MARGIN_BARE = 4;
@@ -146,7 +146,7 @@ const MEDIA_FALLBACK_H = 180;
 /** Linked attachment cards: 64px cards, 4px gaps, and the message slot's top inset. */
 const ATTACHMENT_CARD_HEIGHT = 64;
 const ATTACHMENT_CARD_GAP = 4;
-/** Collapsed `.happy2-agent-activity-row` heights, by activity kind. */
+/** Collapsed `.happy-agent-activity-row` heights, by activity kind. */
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
 /** Tool-first Message: 16px top inset + 20px identity row, then no lower chrome. */
 const ACTIVITY_LEAD_CHROME = 36;
@@ -158,9 +158,9 @@ const ACTIVITY_LEAD_CHROME = 36;
 const ACTIVITY_LEAD_RUN_SEPARATION = 6;
 /** One delegated agent row: 20px call + 20px metadata + 4px vertical inset. */
 const DELEGATION_HEIGHT = 44;
-/** `.happy2-day-divider` — 20px padding around a 20px label that never wraps. */
+/** `.happy-day-divider` — 20px padding around a 20px label that never wraps. */
 export const DIVIDER_HEIGHT = 60;
-/** Centered `.happy2-system-notice`: 16px padding above and below. */
+/** Centered `.happy-system-notice`: 16px padding above and below. */
 const NOTICE_CHROME_CENTER = 32;
 const NOTICE_INSET = 50;
 /* A steering notice keeps the notice row's 16px lead but closes to 4px above the

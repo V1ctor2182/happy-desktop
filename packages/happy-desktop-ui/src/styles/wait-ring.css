@@ -4,15 +4,15 @@
  * it sits in owns the font, the size, and the spacing around it.
  */
 
-.happy2-wait-ring {
+.happy-wait-ring {
     display: block;
     flex: none;
 }
 
-.happy2-wait-ring__track {
+.happy-wait-ring__track {
     stroke: var(--divider);
 }
 
-.happy2-wait-ring__fill {
+.happy-wait-ring__fill {
     stroke: currentcolor;
 }

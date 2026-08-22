@@ -124,7 +124,7 @@ export function TextFieldPage() {
                             leadingIcon="link"
                             size="large"
                             style={{ width: "280px" }}
-                            value="happy2.dev/ada"
+                            value="happy.dev/ada"
                         />
                     </div>
                 </Specimen>

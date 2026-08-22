@@ -72,7 +72,7 @@ export function HappyAgentProjectCloneDialog(props: HappyAgentProjectCloneDialog
                 title="Clone GitHub project"
             >
                 <div
-                    className="happy2-happy-agent-project-clone-dialog"
+                    className="happy-agent-project-clone-dialog"
                     data-happy-desktop-ui="happy-agent-project-clone-dialog"
                 >
                     {props.submitDisabledReason ? (
@@ -98,7 +98,7 @@ export function HappyAgentProjectCloneDialog(props: HappyAgentProjectCloneDialog
                         value={props.repository}
                     />
                     <p
-                        className="happy2-happy-agent-project-clone-dialog__hint"
+                        className="happy-agent-project-clone-dialog__hint"
                         data-happy-desktop-ui="happy-agent-project-clone-dialog-hint"
                     >
                         Clone a repository this HappyAgent can access.

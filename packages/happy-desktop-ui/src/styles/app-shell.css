@@ -25,7 +25,7 @@
     overflow: hidden;
     background-color: var(--header-background);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
@@ -85,9 +85,9 @@
  * The prior transparent full-width overlay sat above these controls and
  * swallowed pointer input. Interactive descendants opt out explicitly.
  */
-.happy-desktop-app-shell[data-window-controls] .happy2-sidebar__header,
-.happy-desktop-app-shell[data-window-controls] .happy2-channel-header,
-.happy-desktop-app-shell[data-window-controls] .happy2-panel-header,
+.happy-desktop-app-shell[data-window-controls] .happy-sidebar__header,
+.happy-desktop-app-shell[data-window-controls] .happy-channel-header,
+.happy-desktop-app-shell[data-window-controls] .happy-panel-header,
 .happy-desktop-app-shell__reveal[data-window-controls] {
     -webkit-app-region: drag;
     app-region: drag;
@@ -99,8 +99,8 @@
    every menu that opened downwards out of that header. */
 .happy-desktop-app-shell[data-window-controls]
     .happy-desktop-app-shell__workspace
-    > .happy2-tabbed-pane:first-child
-    > .happy2-tabbed-pane__bar {
+    > .happy-tabbed-pane:first-child
+    > .happy-tabbed-pane__bar {
     -webkit-app-region: drag;
     app-region: drag;
 }
@@ -112,7 +112,7 @@
    all — `app-region: none` is not an escape hatch, Chromium resolves it to
    `no-drag`, so the only way out of the region list is to not match here. */
 .happy-desktop-app-shell[data-window-controls]
-    button:not(.happy2-happy-agent-control__backdrop, .happy2-slot-backdrop),
+    button:not(.happy-agent-control__backdrop, .happy-slot-backdrop),
 .happy-desktop-app-shell[data-window-controls] a,
 .happy-desktop-app-shell[data-window-controls] input,
 .happy-desktop-app-shell[data-window-controls] select,
@@ -126,7 +126,7 @@
    trailing action lane is one stable interactive target. Carve out the whole
    lane so native hit testing cannot reclaim the button's padded surround while
    tabs scroll or reflow. */
-.happy-desktop-app-shell[data-window-controls] .happy2-tabbed-pane__actions {
+.happy-desktop-app-shell[data-window-controls] .happy-tabbed-pane__actions {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
@@ -137,9 +137,9 @@
    unless the overlay claims its whole box. Each of these is the shared surface
    every product popover is built from, so claiming them here covers the menus
    opened from any header rather than one call site's control. */
-.happy-desktop-app-shell[data-window-controls] .happy2-menu,
-.happy-desktop-app-shell[data-window-controls] .happy2-happy-agent-control__popover,
-.happy-desktop-app-shell[data-window-controls] .happy2-channel-header__menu-popover {
+.happy-desktop-app-shell[data-window-controls] .happy-menu,
+.happy-desktop-app-shell[data-window-controls] .happy-agent-control__popover,
+.happy-desktop-app-shell[data-window-controls] .happy-channel-header__menu-popover {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
@@ -148,9 +148,9 @@
    lights, the sidebar toggle, and the heading beside them read as one band of
    window furniture rather than a 56px product header the lights float inside.
    The 28px toggle centres on the lights' axis at y=6. */
-.happy-desktop-app-shell[data-window-controls] .happy2-sidebar__header,
-.happy-desktop-app-shell[data-window-controls] .happy2-channel-header,
-.happy-desktop-app-shell[data-window-controls] .happy2-panel-header {
+.happy-desktop-app-shell[data-window-controls] .happy-sidebar__header,
+.happy-desktop-app-shell[data-window-controls] .happy-channel-header,
+.happy-desktop-app-shell[data-window-controls] .happy-panel-header {
     height: 40px;
 }
 
@@ -169,15 +169,15 @@
    control is independently docked to the sidebar's right edge. */
 .happy-desktop-app-shell[data-window-controls]
     .happy-desktop-app-shell__sidebar
-    > .happy2-sidebar
-    > .happy2-sidebar__header {
+    > .happy-sidebar
+    > .happy-sidebar__header {
     padding-left: var(--happy-desktop-app-shell-chrome-inset);
 }
 
 /* The collapse control floats over the header's trailing 40px. Reserve that
    lane in the hosted sidebar so header context truncates before the control
    instead of painting underneath it. */
-.happy-desktop-app-shell__sidebar[data-resizable] > .happy2-sidebar > .happy2-sidebar__header {
+.happy-desktop-app-shell__sidebar[data-resizable] > .happy-sidebar > .happy-sidebar__header {
     padding-right: 56px;
 }
 
@@ -188,26 +188,26 @@
    rows' glyph lane; the 8px gap after it puts the wordmark on their label lane. */
 .happy-desktop-app-shell[data-window-controls][data-window-full-screen]
     .happy-desktop-app-shell__sidebar
-    > .happy2-sidebar
-    > .happy2-sidebar__header {
+    > .happy-sidebar
+    > .happy-sidebar__header {
     padding-left: 18px;
 }
 
 .happy-desktop-app-shell[data-window-controls][data-window-full-screen]
     .happy-desktop-app-shell__sidebar
-    > .happy2-sidebar
-    > .happy2-sidebar__header
-    .happy2-sidebar__title-row {
+    > .happy-sidebar
+    > .happy-sidebar__header
+    .happy-sidebar__title-row {
     gap: 8px;
 }
 
 /* Same reservation on whichever strip heads the workspace once the sidebar is
    hidden and the traffic lights plus the floating toggle sit over it. */
-.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed] .happy2-channel-header,
+.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed] .happy-channel-header,
 .happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed]
     .happy-desktop-app-shell__workspace
-    > .happy2-tabbed-pane:first-child
-    .happy2-tabbed-pane__bar {
+    > .happy-tabbed-pane:first-child
+    .happy-tabbed-pane__bar {
     padding-left: calc(var(--happy-desktop-app-shell-chrome-inset) + 44px);
 }
 
@@ -217,7 +217,7 @@
    other heading here, which puts the file's name and the controls beside it on
    the lights' own axis rather than 6px under it. Its 28px controls keep the
    band's y=6, exactly as the sidebar toggle does. */
-.happy-desktop-app-shell[data-window-controls] .happy2-lightbox__header {
+.happy-desktop-app-shell[data-window-controls] .happy-lightbox__header {
     min-height: 40px;
     padding-top: 0;
     padding-bottom: 0;
@@ -227,7 +227,7 @@
    and the header keeps its own 16px inset, which is why only this half of the
    reservation is scoped away from it. */
 .happy-desktop-app-shell[data-window-controls]:not([data-window-full-screen])
-    .happy2-lightbox__header {
+    .happy-lightbox__header {
     padding-left: var(--happy-desktop-app-shell-chrome-inset);
 }
 
@@ -300,7 +300,7 @@
 
 /* AppShell owns the sidebar width. The reusable Sidebar keeps its standalone
    clamp, but must fill rather than overflow when it is hosted by this shell. */
-.happy-desktop-app-shell__sidebar > .happy2-sidebar {
+.happy-desktop-app-shell__sidebar > .happy-sidebar {
     width: 100%;
     min-width: 0;
 }
@@ -538,7 +538,7 @@
    no longer reaches the corner and holding the bar off the end would be a gap
    for nothing. */
 .happy-desktop-app-shell__panel-content:last-child {
-    --happy2-scrollbar-end-inset: 16px;
+    --happy-scrollbar-end-inset: 16px;
 }
 
 .happy-desktop-app-shell__panel-footer {

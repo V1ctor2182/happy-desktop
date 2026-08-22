@@ -4,7 +4,7 @@
  * same pane; neither may displace the other while a switch is in flight.
  */
 
-.happy2-deferred-pane {
+.happy-deferred-pane {
     position: relative;
     display: flex;
     flex: 1 1 0%;
@@ -13,7 +13,7 @@
     min-height: 0;
 }
 
-.happy2-deferred-pane__layer {
+.happy-deferred-pane__layer {
     position: absolute;
     inset: 0;
     z-index: 1;
@@ -23,17 +23,17 @@
     background: var(--surface);
 }
 
-.happy2-deferred-pane__layer[data-state="pending"],
-.happy2-deferred-pane__layer[data-state="slow"] {
+.happy-deferred-pane__layer[data-state="pending"],
+.happy-deferred-pane__layer[data-state="slow"] {
     z-index: 2;
 }
 
-.happy2-deferred-pane__layer[data-state="pending"] {
+.happy-deferred-pane__layer[data-state="pending"] {
     background: transparent;
     pointer-events: none;
 }
 
-.happy2-deferred-pane__content {
+.happy-deferred-pane__content {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -41,13 +41,13 @@
     min-height: 0;
 }
 
-.happy2-deferred-pane__layer[data-state="pending"] .happy2-deferred-pane__content,
-.happy2-deferred-pane__layer[data-state="slow"] .happy2-deferred-pane__content {
+.happy-deferred-pane__layer[data-state="pending"] .happy-deferred-pane__content,
+.happy-deferred-pane__layer[data-state="slow"] .happy-deferred-pane__content {
     visibility: hidden;
     pointer-events: none;
 }
 
-.happy2-deferred-pane__fallback {
+.happy-deferred-pane__fallback {
     position: absolute;
     inset: 0;
     z-index: 1;

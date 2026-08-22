@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Architecture check for React state boundaries in packages that are not linted
-// by the `happy2-react` ESLint plugin (currently happy-desktop-electron). It enforces the
+// by the `happy-react` ESLint plugin (currently happy-desktop-electron). It enforces the
 // same two contracts the plugin enforces for happy-desktop-app and happy-desktop-ui:
 //
 //   * useLayoutEffect is banned as an imperative DOM boundary. A genuine
 //     imperative measurement may keep one documented, local
-//     `eslint-disable-next-line happy2-react/no-layout-effect -- <concrete reason>`
+//     `eslint-disable-next-line happy-react/no-layout-effect -- <concrete reason>`
 //     on the line directly above the call.
 //   * useEffect, useState, and useReducer are banned outright: the desktop shell
 //     must be fully drivable from a happy-desktop-state snapshot and mockable like the
@@ -22,7 +22,7 @@ const TARGETS = [join(repoRoot, "packages", "happy-desktop-electron", "sources")
 const SOURCE = /\.(?:ts|tsx)$/u;
 const SKIP = /\.test\.(?:ts|tsx)$/u;
 const MINIMUM_REASON_LENGTH = 12;
-const LAYOUT_EFFECT_RULE = "happy2-react/no-layout-effect";
+const LAYOUT_EFFECT_RULE = "happy-react/no-layout-effect";
 
 function sourceFiles(root) {
     const files = [];

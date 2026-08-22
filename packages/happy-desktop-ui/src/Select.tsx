@@ -73,7 +73,7 @@ export function Select(props: SelectProps) {
     const message = () => local.error ?? local.hint;
     return (
         <div
-            className={["happy2-select", local.className].filter(Boolean).join(" ")}
+            className={["happy-select", local.className].filter(Boolean).join(" ")}
             data-disabled={local.disabled ? "" : undefined}
             data-error={local.error ? "" : undefined}
             data-full-width={local.fullWidth ? "" : undefined}
@@ -93,7 +93,7 @@ export function Select(props: SelectProps) {
             {local.label
                 ? ((label) => (
                       <label
-                          className="happy2-select__label"
+                          className="happy-select__label"
                           data-happy-desktop-ui="select-label"
                           htmlFor={local.id}
                       >
@@ -101,10 +101,10 @@ export function Select(props: SelectProps) {
                       </label>
                   ))(local.label)
                 : null}
-            <div className="happy2-select__control" data-happy-desktop-ui="select-control">
+            <div className="happy-select__control" data-happy-desktop-ui="select-control">
                 <span
                     aria-hidden="true"
-                    className="happy2-select__value"
+                    className="happy-select__value"
                     data-placeholder={placeholderVisible() ? "" : undefined}
                     data-happy-desktop-ui="select-value"
                 >
@@ -112,14 +112,14 @@ export function Select(props: SelectProps) {
                 </span>
                 <span
                     aria-hidden="true"
-                    className="happy2-select__chevron"
+                    className="happy-select__chevron"
                     data-happy-desktop-ui="select-chevron"
                 >
                     <Icon name="chevron-down" size={chevronSizes[size()]} />
                 </span>
                 <select
                     aria-label={local["aria-label"] ?? local.label}
-                    className="happy2-select__native"
+                    className="happy-select__native"
                     data-happy-desktop-ui="select-native"
                     disabled={local.disabled}
                     id={local.id}
@@ -144,7 +144,7 @@ export function Select(props: SelectProps) {
             {message()
                 ? ((text) => (
                       <span
-                          className="happy2-select__message"
+                          className="happy-select__message"
                           data-happy-desktop-ui={local.error ? "select-error" : "select-hint"}
                       >
                           {text}

@@ -91,12 +91,12 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
               : undefined;
     return (
         <section
-            className="happy2-tool-call-preview"
+            className="happy-tool-call-preview"
             data-happy-desktop-ui="tool-call-preview"
             data-kind={presentation?.type ?? "generic"}
         >
-            <header className="happy2-tool-call-preview__heading">
-                <span aria-hidden="true" className="happy2-tool-call-preview__icon">
+            <header className="happy-tool-call-preview__heading">
+                <span aria-hidden="true" className="happy-tool-call-preview__icon">
                     <Icon
                         name={
                             title === "Terminal"
@@ -108,12 +108,12 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                         size={16}
                     />
                 </span>
-                <span className="happy2-tool-call-preview__heading-copy">
+                <span className="happy-tool-call-preview__heading-copy">
                     <strong>{title}</strong>
                     <span>{humanize(tool.toolName)}</span>
                 </span>
                 <span
-                    className="happy2-tool-call-preview__status"
+                    className="happy-tool-call-preview__status"
                     data-failed={tool.failed || tool.status === "failed" ? "" : undefined}
                 >
                     {statusLabel(tool)}
@@ -121,22 +121,22 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
             </header>
             <ScrollArea
                 axes="both"
-                className="happy2-tool-call-preview__scroll"
-                viewportClassName="happy2-tool-call-preview__scroll-viewport"
+                className="happy-tool-call-preview__scroll"
+                viewportClassName="happy-tool-call-preview__scroll-viewport"
             >
-                <div className="happy2-tool-call-preview__content">
+                <div className="happy-tool-call-preview__content">
                     {command !== undefined ? (
-                        <section className="happy2-tool-call-preview__section">
-                            <span className="happy2-tool-call-preview__label">Command</span>
-                            <pre className="happy2-tool-call-preview__command">{command}</pre>
+                        <section className="happy-tool-call-preview__section">
+                            <span className="happy-tool-call-preview__label">Command</span>
+                            <pre className="happy-tool-call-preview__command">{command}</pre>
                         </section>
                     ) : null}
                     {terminalBody !== undefined ? (
                         <ScrollArea
-                            className="happy2-tool-call-preview__terminal"
-                            viewportClassName="happy2-tool-call-preview__terminal-viewport"
+                            className="happy-tool-call-preview__terminal"
+                            viewportClassName="happy-tool-call-preview__terminal-viewport"
                         >
-                            <pre className="happy2-tool-call-preview__terminal-content">
+                            <pre className="happy-tool-call-preview__terminal-content">
                                 {terminalBody || "(no output)"}
                             </pre>
                         </ScrollArea>
@@ -159,12 +159,12 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                           ))
                         : null}
                     {presentation?.type === "exploration" ? (
-                        <section className="happy2-tool-call-preview__section">
-                            <span className="happy2-tool-call-preview__label">Operations</span>
-                            <div className="happy2-tool-call-preview__operations">
+                        <section className="happy-tool-call-preview__section">
+                            <span className="happy-tool-call-preview__label">Operations</span>
+                            <div className="happy-tool-call-preview__operations">
                                 {presentation.operations.map((operation, index) => (
                                     <div
-                                        className="happy2-tool-call-preview__operation"
+                                        className="happy-tool-call-preview__operation"
                                         key={`${operation.kind}:${index}`}
                                     >
                                         <span>{humanize(operation.kind)}</span>
@@ -181,20 +181,20 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                         </section>
                     ) : null}
                     {presentation === undefined ? (
-                        <section className="happy2-tool-call-preview__section">
-                            <span className="happy2-tool-call-preview__label">Arguments</span>
-                            <pre className="happy2-tool-call-preview__arguments">
+                        <section className="happy-tool-call-preview__section">
+                            <span className="happy-tool-call-preview__label">Arguments</span>
+                            <pre className="happy-tool-call-preview__arguments">
                                 {json(tool.arguments)}
                             </pre>
                         </section>
                     ) : null}
                     {tool.display || tool.failure?.message ? (
-                        <section className="happy2-tool-call-preview__section">
-                            <span className="happy2-tool-call-preview__label">
+                        <section className="happy-tool-call-preview__section">
+                            <span className="happy-tool-call-preview__label">
                                 {tool.failed ? "Failure" : "Result"}
                             </span>
                             <pre
-                                className="happy2-tool-call-preview__result"
+                                className="happy-tool-call-preview__result"
                                 data-failed={tool.failed ? "" : undefined}
                             >
                                 {tool.failure?.message ?? tool.display}

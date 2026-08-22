@@ -25,7 +25,7 @@ export interface TabTransferTarget {
 }
 
 /** Marks an element as a region tabs may be dropped into, by zone id. */
-export const TRANSFER_ZONE_ATTRIBUTE = "data-happy2-transfer-zone";
+export const TRANSFER_ZONE_ATTRIBUTE = "data-happy-transfer-zone";
 
 /**
  * How a zone is being addressed right now, written straight onto the element by

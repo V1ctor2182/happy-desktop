@@ -230,11 +230,11 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     render() {
         if (!this.state.ready)
             return createElement("div", {
-                "data-happy2-browser-proxy-loading": "",
+                "data-happy-browser-proxy-loading": "",
             });
         return createElement("webview", {
             allowpopups: "",
-            "data-happy2-browser-guest": "",
+            "data-happy-browser-guest": "",
             partition: happyBrowserPartition,
             ref: this.elementApply,
             src: this.props.source,

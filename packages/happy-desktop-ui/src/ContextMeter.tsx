@@ -31,7 +31,7 @@ function contextMeterAnimate(node: HTMLElement | null, fraction: number): void {
     )
         return;
 
-    const track = node.querySelector<HTMLElement>(".happy2-context-meter__track");
+    const track = node.querySelector<HTMLElement>(".happy-context-meter__track");
     if (!track) return;
 
     track.getAnimations().forEach((animation) => animation.cancel());
@@ -48,7 +48,7 @@ function contextMeterAnimate(node: HTMLElement | null, fraction: number): void {
                 easing: "cubic-bezier(0.22, 1, 0.36, 1)",
             },
         );
-        const shine = track.querySelector<HTMLElement>(".happy2-context-meter__shine");
+        const shine = track.querySelector<HTMLElement>(".happy-context-meter__shine");
         shine?.animate(
             [
                 { opacity: 0, transform: "translateX(-160%)" },
@@ -119,7 +119,7 @@ export function ContextMeter(props: ContextMeterProps) {
                     ? `${tokensFormat(used)} of ${tokensFormat(total)} context tokens used${props.approximate ? ", approximate" : ""}`
                     : `Context measurement pending for a ${tokensFormat(total)} token window`
             }
-            className={["happy2-context-meter", props.className].filter(Boolean).join(" ")}
+            className={["happy-context-meter", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="context-meter"
             data-testid={props["data-testid"]}
             data-tone={tone}
@@ -134,17 +134,17 @@ export function ContextMeter(props: ContextMeterProps) {
                     : `Waiting for the first context measurement (${tokensFormat(total)} token window)`
             }
         >
-            <span aria-hidden="true" className="happy2-context-meter__readout">
-                <span className="happy2-context-meter__percent">
+            <span aria-hidden="true" className="happy-context-meter__readout">
+                <span className="happy-context-meter__percent">
                     {measured ? `${props.approximate ? "~" : ""}${String(percent)}%` : "—"}
                 </span>
-                <span className="happy2-context-meter__tokens">
+                <span className="happy-context-meter__tokens">
                     {measured ? tokensFormat(used) : "—"}/{tokensFormat(total)}
                 </span>
             </span>
             <span
                 aria-hidden="true"
-                className="happy2-context-meter__track"
+                className="happy-context-meter__track"
                 data-happy-desktop-ui="context-meter-track"
             >
                 {/*
@@ -152,18 +152,18 @@ export function ContextMeter(props: ContextMeterProps) {
                  * tall and a scaled fill would smear its rounded end.
                  */}
                 <span
-                    className="happy2-context-meter__fill"
+                    className="happy-context-meter__fill"
                     data-happy-desktop-ui="context-meter-fill"
                     style={{ width: `${String(fraction * 100)}%` }}
                 />
-                <span className="happy2-context-meter__shine" />
+                <span className="happy-context-meter__shine" />
                 {/*
                  * Where compacting becomes the right move, notched into the
                  * track itself, so the fill approaching it is legible before the
                  * colour changes rather than only after.
                  */}
                 <span
-                    className="happy2-context-meter__threshold"
+                    className="happy-context-meter__threshold"
                     style={{ left: `${String(COMPACT_FRACTION * 100)}%` }}
                 />
             </span>

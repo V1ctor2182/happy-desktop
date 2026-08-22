@@ -34,12 +34,12 @@ function frame(children: ReactNode, size: { height: string; width: string } = FR
 }
 
 const DESTINATIONS: readonly HappyAgentCreateSessionDestination[] = [
-    { displayPath: "~/Developer/happy2", id: "prj_happy2", label: "happy2" },
+    { displayPath: "~/Developer/happy", id: "prj_happy", label: "happy" },
     {
-        displayPath: "~/Happy/Workspaces/happy2/global-create-modal",
+        displayPath: "~/Happy/Workspaces/happy/global-create-modal",
         id: "wt_create",
         label: "global-create-modal",
-        parentLabel: "happy2",
+        parentLabel: "happy",
     },
     { displayPath: "~/Developer/happy-agent", id: "prj_happy_agent", label: "happy-agent" },
     { displayPath: "~", id: "prj_home", label: "Home" },
@@ -130,7 +130,7 @@ export function HappyAgentCreateSessionDialogPage() {
                 {frame(
                     <HappyAgentCreateSessionDialog
                         {...HANDLERS}
-                        destinationId="prj_happy2"
+                        destinationId="prj_happy"
                         destinations={DESTINATIONS}
                         keepOpen={false}
                         menus={MENUS}
@@ -165,7 +165,7 @@ export function HappyAgentCreateSessionDialogPage() {
                 {frame(
                     <HappyAgentCreateSessionDialog
                         {...HANDLERS}
-                        destinationId="prj_happy2"
+                        destinationId="prj_happy"
                         destinations={DESTINATIONS}
                         keepOpen={false}
                         menus={MENUS}
@@ -182,7 +182,7 @@ export function HappyAgentCreateSessionDialogPage() {
                 {frame(
                     <HappyAgentCreateSessionDialog
                         {...HANDLERS}
-                        destinationId="prj_happy2"
+                        destinationId="prj_happy"
                         destinations={DESTINATIONS}
                         keepOpen={false}
                         menus={MENUS}
@@ -249,7 +249,7 @@ export function HappyAgentCreateSessionDialogPage() {
                 {frame(
                     <HappyAgentCreateSessionDialog
                         {...HANDLERS}
-                        destinationId="prj_happy2"
+                        destinationId="prj_happy"
                         destinations={DESTINATIONS}
                         keepOpen={false}
                         menus={MENUS}
@@ -268,7 +268,7 @@ export function HappyAgentCreateSessionDialogPage() {
                 {frame(
                     <HappyAgentCreateSessionDialog
                         {...HANDLERS}
-                        destinationId="prj_happy2"
+                        destinationId="prj_happy"
                         destinations={DESTINATIONS}
                         keepOpen={false}
                         menus={MENUS}

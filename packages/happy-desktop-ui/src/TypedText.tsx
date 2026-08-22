@@ -41,14 +41,14 @@ export function TypedText(props: TypedTextProps) {
     return (
         <span
             key={props.value}
-            className="happy2-typed-text"
+            className="happy-typed-text"
             data-happy-desktop-ui={props["data-happy-desktop-ui"]}
             data-testid={props["data-testid"]}
             data-typing={shown.typed ? "" : undefined}
             style={
                 {
                     // A label is never typed out in less than one step.
-                    "--happy2-typed-chars": Math.max(1, props.value.length),
+                    "--happy-typed-chars": Math.max(1, props.value.length),
                 } as CSSProperties
             }
         >

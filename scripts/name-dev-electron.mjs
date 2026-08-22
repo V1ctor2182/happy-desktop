@@ -89,7 +89,7 @@ const name = label === "dev" ? "Happy Dev" : `Happy Dev — ${label}`;
 // branch name, and `feature/x` and `feature-x` reduce to the same characters a
 // bundle identifier admits. Two checkouts sharing an identifier are one
 // application to LaunchServices, which is the collision being avoided.
-const identifier = `com.slopus.happy2.dev.${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`;
+const identifier = `com.slopus.happy.dev.${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`;
 const entries = [
     ["CFBundleName", name],
     ["CFBundleDisplayName", name],

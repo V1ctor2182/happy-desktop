@@ -7,12 +7,12 @@
  * carry [data-clickable].
  */
 
-.happy2-event-card,
-.happy2-event-card * {
+.happy-event-card,
+.happy-event-card * {
     box-sizing: border-box;
 }
 
-.happy2-event-card {
+.happy-event-card {
     display: flex;
     flex: none;
     align-items: center;
@@ -27,29 +27,29 @@
     border: 1px solid var(--divider);
     border-radius: 8px;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
 }
 
-.happy2-event-card[data-clickable] {
+.happy-event-card[data-clickable] {
     cursor: pointer;
     transition:
         background-color 120ms ease,
         border-color 120ms ease;
 }
 
-.happy2-event-card[data-clickable]:hover {
+.happy-event-card[data-clickable]:hover {
     background-image: linear-gradient(var(--surface-ripple), var(--surface-ripple));
     border-color: var(--divider);
 }
 
-.happy2-event-card[data-clickable]:focus-visible {
+.happy-event-card[data-clickable]:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-event-card__chip {
+.happy-event-card__chip {
     display: flex;
     flex: none;
     align-items: center;
@@ -57,19 +57,19 @@
     width: 24px;
     height: 24px;
     background: var(--groupped-background);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text-secondary);
 }
 
-.happy2-event-card__text {
+.happy-event-card__text {
     display: flex;
     align-items: baseline;
     gap: 6px;
     min-width: 0;
-    transform: translateY(var(--happy2-event-text-optical-y, 0px));
+    transform: translateY(var(--happy-event-text-optical-y, 0px));
 }
 
-.happy2-event-card__title {
+.happy-event-card__title {
     display: block;
     flex: 0 1 auto;
     overflow: hidden;
@@ -81,7 +81,7 @@
     white-space: nowrap;
 }
 
-.happy2-event-card__meta {
+.happy-event-card__meta {
     display: block;
     flex: none;
     color: var(--text-secondary);
@@ -89,10 +89,10 @@
     font-weight: 500;
     line-height: 16px;
     /* Composes with the lane translate on __text (transforms nest). */
-    transform: translateY(var(--happy2-event-meta-optical-y, 0px));
+    transform: translateY(var(--happy-event-meta-optical-y, 0px));
 }
 
-.happy2-event-card__side {
+.happy-event-card__side {
     display: flex;
     flex: none;
     align-items: center;
@@ -100,47 +100,47 @@
     margin-left: auto;
 }
 
-.happy2-event-card__transition {
+.happy-event-card__transition {
     display: flex;
     flex: none;
     align-items: center;
     gap: 6px;
 }
 
-.happy2-event-card__transition > .happy2-icon {
+.happy-event-card__transition > .happy-icon {
     color: var(--text-secondary);
 }
 
-.happy2-event-card__from {
+.happy-event-card__from {
     display: block;
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;
-    transform: translateY(var(--happy2-event-fromto-optical-y, 0px));
+    transform: translateY(var(--happy-event-fromto-optical-y, 0px));
 }
 
 /* Where the thing ended up. The pair already reads as a change — the arrow and
    the quieter "from" say so — and this is the half a person actually needs, so
    it is the one at full contrast rather than the one in an accent. */
-.happy2-event-card__to {
+.happy-event-card__to {
     display: block;
     color: var(--text);
     font-size: 12px;
     font-weight: 600;
     line-height: 16px;
-    transform: translateY(var(--happy2-event-fromto-optical-y, 0px));
+    transform: translateY(var(--happy-event-fromto-optical-y, 0px));
 }
 
-.happy2-event-card__time {
+.happy-event-card__time {
     display: block;
     flex: none;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 16px;
-    transform: translateY(var(--happy2-event-time-optical-y, 0px));
+    transform: translateY(var(--happy-event-time-optical-y, 0px));
 }
 
 /* ---- Engine-measured optical corrections --------------------------------- */
@@ -163,25 +163,25 @@
  * by path data (measured |drift| <= 0.2px).
  */
 
-.happy2-event-card {
-    --happy2-event-fromto-optical-y: -0.75px;
-    --happy2-event-meta-optical-y: 0.5px;
-    --happy2-event-text-optical-y: 0px;
-    --happy2-event-time-optical-y: 0px;
+.happy-event-card {
+    --happy-event-fromto-optical-y: -0.75px;
+    --happy-event-meta-optical-y: 0.5px;
+    --happy-event-text-optical-y: 0px;
+    --happy-event-time-optical-y: 0px;
 }
 
 /* Firefox — only Gecko parses -moz-appearance. */
 @supports (-moz-appearance: none) {
-    .happy2-event-card {
-        --happy2-event-fromto-optical-y: -1.4px;
-        --happy2-event-text-optical-y: -0.5px;
+    .happy-event-card {
+        --happy-event-fromto-optical-y: -1.4px;
+        --happy-event-text-optical-y: -0.5px;
     }
 }
 
 /* WebKit — Blink and Gecko do not parse -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
-    .happy2-event-card {
-        --happy2-event-fromto-optical-y: -0.75px;
-        --happy2-event-text-optical-y: -0.5px;
+    .happy-event-card {
+        --happy-event-fromto-optical-y: -0.75px;
+        --happy-event-text-optical-y: -0.5px;
     }
 }

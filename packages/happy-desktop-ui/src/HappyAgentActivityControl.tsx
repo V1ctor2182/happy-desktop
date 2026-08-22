@@ -39,13 +39,13 @@ export function HappyAgentActivityControl(props: HappyAgentActivityControlProps)
     const fullSummary = summaryParts.map((part) => part.label).join(" · ");
     return (
         <div
-            className="happy2-happy-agent-activity-transcript"
+            className="happy-agent-activity-transcript"
             data-happy-desktop-ui="happy-agent-activity-entry"
             style={props.style}
         >
             <button
                 aria-label={`Open session details: ${fullSummary}`}
-                className={["happy2-happy-agent-activity-transcript__row", props.className]
+                className={["happy-agent-activity-transcript__row", props.className]
                     .filter(Boolean)
                     .join(" ")}
                 data-happy-desktop-ui="happy-agent-activity-control"
@@ -55,13 +55,13 @@ export function HappyAgentActivityControl(props: HappyAgentActivityControlProps)
                 title={`Open session details: ${fullSummary}`}
                 type="button"
             >
-                <span className="happy2-happy-agent-activity-transcript__primary">
+                <span className="happy-agent-activity-transcript__primary">
                     {summaryParts.map((part, index) => (
                         <Fragment key={part.id}>
                             {index > 0 ? (
                                 <span
                                     aria-hidden="true"
-                                    className="happy2-happy-agent-activity-transcript__separator"
+                                    className="happy-agent-activity-transcript__separator"
                                 >
                                     ·
                                 </span>

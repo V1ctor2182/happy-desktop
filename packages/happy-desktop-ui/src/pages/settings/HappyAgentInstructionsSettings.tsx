@@ -76,12 +76,12 @@ export function HappyAgentInstructionsSettings(props: HappyAgentInstructionsSett
                     {active.error}
                 </Banner>
             ) : active.loading ? (
-                <Box className="happy2-happy-agent-settings__pending">
+                <Box className="happy-agent-settings__pending">
                     <Spinner size={16} />
                     <span>{`Reading ${active.label}…`}</span>
                 </Box>
             ) : (
-                <Box className="happy2-happy-agent-settings__editor">
+                <Box className="happy-agent-settings__editor">
                     <FileEditor
                         banner={
                             active.saveError ? (

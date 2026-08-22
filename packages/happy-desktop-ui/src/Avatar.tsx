@@ -40,7 +40,7 @@ export function Avatar(props: AvatarProps) {
     return (
         <span
             {...rest}
-            className={["happy2-avatar", local.className].filter(Boolean).join(" ")}
+            className={["happy-avatar", local.className].filter(Boolean).join(" ")}
             data-image={local.imageUrl ? "" : undefined}
             data-happy-desktop-ui="avatar"
             data-size={size()}
@@ -52,24 +52,24 @@ export function Avatar(props: AvatarProps) {
         >
             {local.imageUrl ? (
                 <img
-                    className="happy2-avatar__image"
+                    className="happy-avatar__image"
                     data-happy-desktop-ui="avatar-image"
                     src={local.imageUrl}
                     alt=""
                     draggable={false}
                 />
             ) : local.icon ? (
-                <span className="happy2-avatar__glyph" data-happy-desktop-ui="avatar-glyph">
+                <span className="happy-avatar__glyph" data-happy-desktop-ui="avatar-glyph">
                     <Icon name={local.icon} size={iconSize[size()]} />
                 </span>
             ) : (
-                <span className="happy2-avatar__initials" data-happy-desktop-ui="avatar-initials">
+                <span className="happy-avatar__initials" data-happy-desktop-ui="avatar-initials">
                     {local.initials}
                 </span>
             )}
             {local.online && (
                 <span
-                    className="happy2-avatar__presence"
+                    className="happy-avatar__presence"
                     data-happy-desktop-ui="avatar-presence"
                     aria-hidden="true"
                 />

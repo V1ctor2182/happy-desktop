@@ -235,7 +235,7 @@ it(
              * Alignment means a common browser-laid-out baseline and a
              * centered lining-figure HEIGHT band. It does not mean forcing
              * every content-dependent centroid to zero: "7" is inherently
-             * top-heavy. happy2 Mono's lining/tabular figures make the band
+             * top-heavy. happy Mono's lining/tabular figures make the band
              * and advance width stable for every number assembled from 0–9.
              */
             const metrics = label.textMetrics();
@@ -251,7 +251,7 @@ it(
                 `${id} measured baseline position`,
             ).toBeLessThanOrEqual(0.005);
             expect(metrics.font.family, `${id} numeric font`).toBe(
-                "happy2 Mono, ui-monospace, monospace",
+                "happy Mono, ui-monospace, monospace",
             );
             const numericVariant = label.computedStyle("font-variant-numeric");
             expect(numericVariant, `${id} lining figures`).toContain("lining-nums");
@@ -418,7 +418,7 @@ it(
                 `${count} baseline position`,
             ).toBeLessThanOrEqual(0.1);
             expect(metrics.font.family, `${count} numeric font`).toBe(
-                "happy2 Mono, ui-monospace, monospace",
+                "happy Mono, ui-monospace, monospace",
             );
             const numericVariant = label.computedStyle("font-variant-numeric");
             expect(numericVariant, `${count} lining figures`).toContain("lining-nums");
@@ -451,7 +451,7 @@ it(
          * the 10px slot center at the integer fixture position (Chromium ~0,
          * Gecko ~-0.11, WebKit ~-0.16); no finer correction survives the raster.
          * Every modifier symbol is tuned to sit on THAT same axis (styles/
-         * badge.css --happy2-keycap-symbol-y), so ⌘/⇧/⌥/⌃ share the letters' optical
+         * badge.css --happy-keycap-symbol-y), so ⌘/⇧/⌥/⌃ share the letters' optical
          * line instead of an absolute zero. Content letters (T, A, 1 …) carry
          * asymmetric ink and are deliberately NOT forced onto the 0 centroid:
          * they assert a shared baseline and cell rhythm instead, per DESIGN.md
@@ -616,7 +616,7 @@ it(
                 } else {
                     const text = innerOf(cls, k, false);
                     expect(text.computedStyle("font-family"), `${keys}/${ch} font`).toContain(
-                        "happy2 Mono",
+                        "happy Mono",
                     );
                     expect(text.computedStyle("font-size"), `${keys}/${ch} size`).toBe("10.8px");
                     expect(text.computedStyle("font-weight"), `${keys}/${ch} weight`).toBe("500");
@@ -701,8 +701,8 @@ it("holds Badge family geometry, colors, and behavior", async () => {
     await view.ready();
     const mono =
         server.browser === "webkit"
-            ? "happy2 Mono, ui-monospace, monospace"
-            : '"happy2 Mono", ui-monospace, monospace';
+            ? "happy Mono, ui-monospace, monospace"
+            : '"happy Mono", ui-monospace, monospace';
     /* Badge: 18px mono uppercase pill; each variant maps to its tokens. */
     const badgeColors: Record<
         BadgeVariant,

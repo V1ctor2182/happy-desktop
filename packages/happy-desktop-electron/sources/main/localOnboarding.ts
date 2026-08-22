@@ -294,6 +294,12 @@ export class LocalOnboarding implements Disposable {
      */
     private connecting = false;
     /**
+     * Whether the waiting poll's own connection attempt is still running, so the
+     * attempts stay one at a time rather than queueing behind each other on a
+     * daemon that is refusing every one of them.
+     */
+    private providersConnecting = false;
+    /**
      * How many attempts the agent Happy just installed has already had.
      *
      * A freshly reloaded daemon is not listening the instant `reload` returns,
@@ -1075,10 +1081,46 @@ export class LocalOnboarding implements Disposable {
         if (waiting && !this.poll) {
             this.poll = setInterval(() => {
                 void this.probeRun();
-                if (stage === "providersMissing") this.freshnessInvalidate();
+                // The stage is read at the tick rather than captured when the
+                // interval was made: one interval outlives several waiting
+                // stages, and a poll still asking the question its first stage
+                // needed is watching for something nobody is waiting on.
+                if (this.snapshotValue.stage === "providersMissing") this.providersRecheck();
             }, waitingPollMs);
             this.poll.unref?.();
         } else if (!waiting) this.pollStop();
+    }
+
+    /**
+     * Asks again whether anything on this machine is signed in yet.
+     *
+     * Which question that is depends on where the refusal came from, and the
+     * two are not the same question. A connected Happy Agent reporting provider
+     * setup answers it itself, so its answer is dropped and read again. A daemon
+     * that refused to start for the same reason is not connected at all, and
+     * nothing it has said can change until something tries to start it again —
+     * so the connection is what is retried there. Without that, signing in to an
+     * assistant left this screen standing with nothing on it to press and
+     * nothing behind it looking, which is a dead end rather than a step.
+     *
+     * The attempt is deliberately not `connecting`: that flag means an install
+     * Happy is seeing through, and borrowing it here would swap this screen for
+     * a connecting one every few seconds while the person is reading it.
+     */
+    private providersRecheck(): void {
+        if (this.options.runtime.get().phase !== "error") {
+            this.freshnessInvalidate();
+            return;
+        }
+        if (this.providersConnecting) return;
+        this.providersConnecting = true;
+        void this.options.runtime
+            .retry()
+            .catch(() => undefined)
+            .finally(() => {
+                this.providersConnecting = false;
+                if (!this.closed) this.publish();
+            });
     }
 
     private pollStop(): void {

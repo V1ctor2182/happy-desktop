@@ -232,7 +232,7 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                 title="Project settings"
             >
                 <div
-                    className="happy2-happy-agent-project-settings"
+                    className="happy-agent-project-settings"
                     data-happy-desktop-ui="happy-agent-project-settings"
                 >
                     {props.submitDisabledReason ? (
@@ -241,7 +241,7 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                         </Banner>
                     ) : null}
                     <div
-                        className="happy2-happy-agent-project-settings__identity"
+                        className="happy-agent-project-settings__identity"
                         data-happy-desktop-ui="happy-agent-project-settings-identity"
                     >
                         <Avatar
@@ -250,12 +250,12 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                             size="md"
                             type="agent"
                         />
-                        <div className="happy2-happy-agent-project-settings__identity-text">
-                            <span className="happy2-happy-agent-project-settings__identity-name">
+                        <div className="happy-agent-project-settings__identity-text">
+                            <span className="happy-agent-project-settings__identity-name">
                                 {props.name}
                             </span>
                             {props.contents ? (
-                                <span className="happy2-happy-agent-project-settings__identity-meta">
+                                <span className="happy-agent-project-settings__identity-meta">
                                     {contentsSummary(props.contents)}
                                 </span>
                             ) : null}
@@ -275,22 +275,22 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                     {props.location
                         ? ((location) => (
                               <div
-                                  className="happy2-happy-agent-project-settings__field"
+                                  className="happy-agent-project-settings__field"
                                   data-happy-desktop-ui="happy-agent-project-settings-location"
                               >
-                                  <span className="happy2-happy-agent-project-settings__label">
+                                  <span className="happy-agent-project-settings__label">
                                       Location
                                   </span>
-                                  <div className="happy2-happy-agent-project-settings__path">
+                                  <div className="happy-agent-project-settings__path">
                                       <span
-                                          className="happy2-happy-agent-project-settings__path-text"
+                                          className="happy-agent-project-settings__path-text"
                                           title={location.path}
                                       >
                                           {location.displayPath}
                                       </span>
                                       <CopyButton label="Copy project path" text={location.path} />
                                   </div>
-                                  <span className="happy2-happy-agent-project-settings__hint">
+                                  <span className="happy-agent-project-settings__hint">
                                       The checkout this project runs in. The daemon owns it, so it
                                       is shown here rather than set.
                                   </span>
@@ -311,10 +311,10 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                                   computeDraftKeyOf(compute) !== computeKeyOf(compute.current);
                               return (
                                   <div
-                                      className="happy2-happy-agent-project-settings__compute"
+                                      className="happy-agent-project-settings__compute"
                                       data-happy-desktop-ui="happy-agent-project-settings-compute"
                                   >
-                                      <span className="happy2-happy-agent-project-settings__label">
+                                      <span className="happy-agent-project-settings__label">
                                           Where sessions run
                                       </span>
                                       {compute.status === "error" ? (
@@ -381,12 +381,12 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                                               value={compute.image}
                                           />
                                       ) : null}
-                                      <span className="happy2-happy-agent-project-settings__hint">
+                                      <span className="happy-agent-project-settings__hint">
                                           {compute.status === "loading"
                                               ? "Reading what this project is set to…"
                                               : computeEffect[compute.mode]}
                                       </span>
-                                      <span className="happy2-happy-agent-project-settings__hint">
+                                      <span className="happy-agent-project-settings__hint">
                                           Applies to sessions started after it is saved. Anything
                                           already running stays where it is, and a container in use
                                           now is left behind rather than reused.
@@ -399,11 +399,11 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                                           setting. */}
                                       {changed ? (
                                           <div
-                                              className="happy2-happy-agent-project-settings__compute-pending"
+                                              className="happy-agent-project-settings__compute-pending"
                                               data-happy-desktop-ui="happy-agent-project-settings-compute-pending"
                                           >
                                               <span
-                                                  className="happy2-happy-agent-project-settings__compute-current"
+                                                  className="happy-agent-project-settings__compute-current"
                                                   data-happy-desktop-ui="happy-agent-project-settings-compute-current"
                                                   title={computeCurrentLabel(compute.current)}
                                               >
@@ -429,12 +429,10 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                         : null}
                     {props.archive ? (
                         <div
-                            className="happy2-happy-agent-project-settings__archive"
+                            className="happy-agent-project-settings__archive"
                             data-happy-desktop-ui="happy-agent-project-settings-archive"
                         >
-                            <span className="happy2-happy-agent-project-settings__label">
-                                Archive
-                            </span>
+                            <span className="happy-agent-project-settings__label">Archive</span>
                             {props.archive.error ? (
                                 <Banner
                                     data-testid="happy-agent-project-archive-error"
@@ -447,12 +445,12 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                             {/* The question and the answer occupy the same block,
                                 so asking does not move the dialog's other rows
                                 or take the reader somewhere else to answer it. */}
-                            <span className="happy2-happy-agent-project-settings__hint">
+                            <span className="happy-agent-project-settings__hint">
                                 {confirming
                                     ? `Archive ${props.name}? It leaves the sidebar with its sessions, and every workspace under it is archived and its worktree folder removed. The project's own checkout stays exactly where it is.`
                                     : "Takes the project out of the sidebar with its sessions, archives every workspace under it, and removes those workspaces' worktree folders. The project's own checkout is left alone."}
                             </span>
-                            <div className="happy2-happy-agent-project-settings__archive-actions">
+                            <div className="happy-agent-project-settings__archive-actions">
                                 {confirming ? (
                                     <>
                                         <Button

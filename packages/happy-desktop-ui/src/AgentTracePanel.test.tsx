@@ -17,13 +17,13 @@ const engine = () => server.browser as Engine;
 
 const uiFamily = () =>
     engine() === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 const monoFamily = () =>
     engine() === "webkit"
-        ? "happy2 Mono, ui-monospace, monospace"
-        : '"happy2 Mono", ui-monospace, monospace';
+        ? "happy Mono, ui-monospace, monospace"
+        : '"happy Mono", ui-monospace, monospace';
 
 /* Fixed UTC instants: the panel formats HH:MM:SS with plain UTC epoch math. */
 const T0 = Date.UTC(2026, 5, 12, 14, 3, 7);
@@ -107,7 +107,7 @@ function host(children: ReactNode, testid: string, height: number) {
 
 /* Alpha-weighted dot ink drift from its 16px first-line lane center. */
 async function dotDrift(view: View, entrySelector: string) {
-    const lane = view.$(`${entrySelector} .happy2-agent-trace-panel__entry-dot-lane`);
+    const lane = view.$(`${entrySelector} .happy-agent-trace-panel__entry-dot-lane`);
     const dot = view.$(`${entrySelector} [data-happy-desktop-ui="agent-trace-panel-entry-dot"]`);
     const vis = await dot.visibleMetrics();
     expect(vis.pixelCount, `${entrySelector} dot paints no pixels`).toBeGreaterThan(0);
@@ -345,7 +345,7 @@ it("holds AgentTracePanel header, scrollport contract, entry rows, and timestamp
     const firstRow = view.$(
         '[data-testid="tp-running"] [data-happy-desktop-ui="agent-trace-panel-entries"] > :nth-child(2)',
     );
-    const lane = view.$(`${second} .happy2-agent-trace-panel__entry-dot-lane`);
+    const lane = view.$(`${second} .happy-agent-trace-panel__entry-dot-lane`);
     const icon = view.$(`${second} [data-happy-desktop-ui="agent-trace-panel-entry-icon"]`);
     expect(lane.bounds().y).toBe(firstRow.bounds().y);
     expect(lane.bounds().height).toBe(16);
@@ -353,7 +353,7 @@ it("holds AgentTracePanel header, scrollport contract, entry rows, and timestamp
     expect(time.bounds().y).toBe(firstRow.bounds().y);
     /* Declared 8px gaps between the row's adjacent children. */
     expect(icon.bounds().x - (lane.bounds().x + lane.bounds().width)).toBeCloseTo(8, 1);
-    const main = view.$(`${second} .happy2-agent-trace-panel__entry-main`);
+    const main = view.$(`${second} .happy-agent-trace-panel__entry-main`);
     expect(main.bounds().x - (icon.bounds().x + icon.bounds().width)).toBeCloseTo(8, 1);
     expect(time.bounds().x - (main.bounds().x + main.bounds().width)).toBeCloseTo(8, 1);
     /* An entry without a detail renders no detail node and keeps one 16px line. */
@@ -364,7 +364,7 @@ it("holds AgentTracePanel header, scrollport contract, entry rows, and timestamp
             `${noDetail} [data-happy-desktop-ui="agent-trace-panel-entry-detail"]`,
         ),
     ).toBeNull();
-    expect(view.$(`${noDetail} .happy2-agent-trace-panel__entry-main`).bounds().height).toBe(16);
+    expect(view.$(`${noDetail} .happy-agent-trace-panel__entry-main`).bounds().height).toBe(16);
 
     /* First entry is fully visible and painted at the top of the scrollport. */
     const firstEntry = view.$(

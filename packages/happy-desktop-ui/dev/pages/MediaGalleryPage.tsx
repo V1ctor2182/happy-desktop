@@ -185,7 +185,7 @@ export function MediaGalleryPage() {
                                             border: "1px dashed var(--surface-pressed-overlay)",
                                             borderRadius: "10px",
                                             color: "var(--text-secondary)",
-                                            fontFamily: "var(--happy2-font-ui)",
+                                            fontFamily: "var(--happy-font-ui)",
                                             fontSize: "13px",
                                         }}
                                     >

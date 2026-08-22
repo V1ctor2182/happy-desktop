@@ -7,8 +7,8 @@ import "./styles/badge.css";
 import { Menu, type MenuItem } from "./Menu";
 import { createRenderer } from "./testing";
 
-const FIGTREE = "happy2 Figtree, system-ui, sans-serif";
-const MONO = "happy2 Mono, ui-monospace, monospace";
+const FIGTREE = "happy Figtree, system-ui, sans-serif";
+const MONO = "happy Mono, ui-monospace, monospace";
 
 /*
  * The leading glyph fills its 16px slot. The icon font paints the glyph

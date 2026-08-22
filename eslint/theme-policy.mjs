@@ -118,7 +118,7 @@ const themeColorVariableReferencesOnly = {
 };
 
 export default {
-    meta: { name: "eslint-plugin-happy2-theme", version: "0.1.0" },
+    meta: { name: "eslint-plugin-happy-theme", version: "0.1.0" },
     rules: {
         "no-direct-color": noDirectColor,
         "theme-color-variables-only": themeColorVariablesOnly,

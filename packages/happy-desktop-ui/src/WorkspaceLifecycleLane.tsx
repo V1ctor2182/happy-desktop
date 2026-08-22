@@ -52,7 +52,7 @@ export function WorkspaceLifecycleLane(props: WorkspaceLifecycleLaneProps) {
     const phase = () => local.phase;
     return (
         <div
-            className={["happy2-workspace-lifecycle-lane", local.className]
+            className={["happy-workspace-lifecycle-lane", local.className]
                 .filter(Boolean)
                 .join(" ")}
             data-happy-desktop-ui="workspace-lifecycle-lane"

@@ -42,7 +42,7 @@ describe("happyAgentDaemonPathsResolve", () => {
 
 describe("happyAgentDaemonTokenRead", () => {
     it("reads a trimmed token and treats a missing token as unavailable", async () => {
-        const directory = await mkdtemp(join(tmpdir(), "happy2-happy-agent-token-"));
+        const directory = await mkdtemp(join(tmpdir(), "happy-agent-token-"));
         const tokenPath = join(directory, "token");
         try {
             expect(await happyAgentDaemonTokenRead(tokenPath)).toBeUndefined();

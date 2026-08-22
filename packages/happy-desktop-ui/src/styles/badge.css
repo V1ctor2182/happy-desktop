@@ -7,20 +7,20 @@
  * uses mono lining/tabular figures so arbitrary counts share one figure band.
  */
 
-.happy2-badge,
-.happy2-badge *,
-.happy2-count-badge,
-.happy2-count-badge *,
-.happy2-reaction-chip,
-.happy2-reaction-chip *,
-.happy2-key-cap,
-.happy2-key-cap * {
+.happy-badge,
+.happy-badge *,
+.happy-count-badge,
+.happy-count-badge *,
+.happy-reaction-chip,
+.happy-reaction-chip *,
+.happy-key-cap,
+.happy-key-cap * {
     box-sizing: border-box;
 }
 
 /* ---- Badge ---------------------------------------------------------- */
 
-.happy2-badge {
+.happy-badge {
     display: inline-flex;
     align-items: center;
     flex: none;
@@ -28,7 +28,7 @@
     height: 18px;
     padding: 0 6px;
     border-radius: 4px;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 10px;
     font-weight: 700;
     line-height: 18px;
@@ -38,7 +38,7 @@
     white-space: nowrap;
 }
 
-.happy2-badge__label {
+.happy-badge__label {
     display: block;
     /*
      * letter-spacing also trails the last glyph, so the advance box the flex
@@ -46,10 +46,10 @@
      * space here recenters the ink structurally (no translate needed on x).
      */
     margin-right: -0.06em;
-    transform: translate(var(--happy2-badge-label-x, 0px), var(--happy2-badge-label-y, 0px));
+    transform: translate(var(--happy-badge-label-x, 0px), var(--happy-badge-label-y, 0px));
 }
 
-.happy2-badge__icon {
+.happy-badge__icon {
     display: flex;
     flex: none;
     /*
@@ -57,40 +57,40 @@
      * its box in every engine (Badge.test.tsx); the path lives in Icon.tsx,
      * which the badge cannot edit, so compensate at the slot.
      */
-    transform: translateX(var(--happy2-badge-icon-x, 0px));
+    transform: translateX(var(--happy-badge-icon-x, 0px));
 }
 
-.happy2-badge[data-variant="neutral"] {
+.happy-badge[data-variant="neutral"] {
     background: var(--input-background);
     color: var(--text-secondary);
 }
 
-.happy2-badge[data-variant="accent"] {
+.happy-badge[data-variant="accent"] {
     background: var(--surface-selected);
     color: var(--text-link);
 }
 
-.happy2-badge[data-variant="success"] {
+.happy-badge[data-variant="success"] {
     background: var(--surface-high);
     color: var(--success);
 }
 
-.happy2-badge[data-variant="warning"] {
+.happy-badge[data-variant="warning"] {
     background: var(--box-warning-background);
     color: var(--box-warning-text);
 }
 
-.happy2-badge[data-variant="danger"] {
+.happy-badge[data-variant="danger"] {
     background: var(--box-error-background);
     color: var(--box-error-text);
 }
 
-.happy2-badge[data-variant="info"] {
+.happy-badge[data-variant="info"] {
     background: var(--surface-high);
     color: var(--radio-active);
 }
 
-.happy2-badge[data-variant="outline"] {
+.happy-badge[data-variant="outline"] {
     background: transparent;
     border: 1px solid var(--divider);
     padding: 0 5px; /* keeps label 6px from the visual edge */
@@ -99,7 +99,7 @@
 
 /* ---- CountBadge ------------------------------------------------------ */
 
-.happy2-count-badge {
+.happy-count-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -107,8 +107,8 @@
     height: 18px;
     min-width: 18px;
     padding: 0 5px;
-    border-radius: var(--happy2-radius-pill);
-    font-family: var(--happy2-font-mono);
+    border-radius: var(--happy-radius-pill);
+    font-family: var(--happy-font-mono);
     font-size: 10.8px;
     font-weight: 700;
     line-height: 18px;
@@ -117,7 +117,7 @@
     white-space: nowrap;
 }
 
-.happy2-count-badge__label {
+.happy-count-badge__label {
     display: block;
 }
 
@@ -125,19 +125,19 @@
    hue never was, and system blue made a ten-pixel number the loudest thing in
    the sidebar while reading at 4:1 against its own fill. Ink on paper is
    louder still and legible in both appearances. */
-.happy2-count-badge[data-tone="accent"] {
+.happy-count-badge[data-tone="accent"] {
     background: var(--text);
     color: var(--surface);
 }
 
-.happy2-count-badge[data-tone="neutral"] {
+.happy-count-badge[data-tone="neutral"] {
     background: var(--input-background);
     color: var(--text-secondary);
 }
 
 /* ---- ReactionChip ---------------------------------------------------- */
 
-.happy2-reaction-chip {
+.happy-reaction-chip {
     display: inline-flex;
     align-items: center;
     flex: none;
@@ -147,8 +147,8 @@
     padding: 0 8px;
     background: var(--input-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-pill);
-    font-family: var(--happy2-font-ui);
+    border-radius: var(--happy-radius-pill);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     appearance: none;
     cursor: pointer;
@@ -157,36 +157,36 @@
         background-color 120ms ease;
 }
 
-.happy2-reaction-chip:hover {
+.happy-reaction-chip:hover {
     border-color: var(--divider);
 }
 
-.happy2-reaction-chip:focus-visible {
+.happy-reaction-chip:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-reaction-chip__emoji {
+.happy-reaction-chip__emoji {
     display: flex;
     align-items: center;
     justify-content: center;
     flex: none;
     width: 18px;
     height: 18px;
-    font-family: var(--happy2-font-emoji);
+    font-family: var(--happy-font-emoji);
     font-size: 13px;
     line-height: 18px;
 }
 
-.happy2-reaction-chip__emoji-glyph {
+.happy-reaction-chip__emoji-glyph {
     display: block;
     line-height: 18px;
-    transform: translate(var(--happy2-chip-emoji-x, 0px), var(--happy2-chip-emoji-y, 0px));
+    transform: translate(var(--happy-chip-emoji-x, 0px), var(--happy-chip-emoji-y, 0px));
 }
 
-.happy2-reaction-chip__count {
+.happy-reaction-chip__count {
     display: block;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 700;
     line-height: 22px;
@@ -194,18 +194,18 @@
     color: var(--text-secondary);
 }
 
-.happy2-reaction-chip[data-active] {
+.happy-reaction-chip[data-active] {
     background: var(--surface-selected);
     border-color: var(--text-link);
 }
 
-.happy2-reaction-chip[data-active] .happy2-reaction-chip__count {
+.happy-reaction-chip[data-active] .happy-reaction-chip__count {
     color: var(--text-link);
 }
 
 /* ---- KeyCap ---------------------------------------------------------- */
 
-.happy2-key-cap {
+.happy-key-cap {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -214,7 +214,7 @@
     padding: 0 4px;
     background: var(--input-background);
     border-radius: 4px;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 10.8px;
     font-weight: 500;
     line-height: 18px;
@@ -223,7 +223,7 @@
     white-space: nowrap;
 }
 
-.happy2-shortcut-hint--floating {
+.happy-shortcut-hint--floating {
     position: absolute;
     z-index: 4;
     /* Hidden hints stay inside their owner so they add no phantom scroll range. */
@@ -241,7 +241,7 @@
         transform 0s linear 80ms;
 }
 
-[data-shortcut-hint]:hover > .happy2-shortcut-hint--floating {
+[data-shortcut-hint]:hover > .happy-shortcut-hint--floating {
     top: calc(100% + 4px);
     opacity: 1;
     transform: translateX(-50%);
@@ -249,9 +249,9 @@
     transition-delay: 500ms;
 }
 
-[data-shortcut-hint]:focus-visible > .happy2-shortcut-hint--floating,
-[data-shortcut-hints] .happy2-shortcut-hint--floating,
-[data-shortcut-hints] [data-shortcut-hint]:hover > .happy2-shortcut-hint--floating {
+[data-shortcut-hint]:focus-visible > .happy-shortcut-hint--floating,
+[data-shortcut-hints] .happy-shortcut-hint--floating,
+[data-shortcut-hints] [data-shortcut-hint]:hover > .happy-shortcut-hint--floating {
     top: calc(100% + 4px);
     opacity: 1;
     transform: translateX(-50%);
@@ -259,14 +259,14 @@
     transition-delay: 0ms;
 }
 
-.happy2-key-cap__label {
+.happy-key-cap__label {
     display: flex;
     align-items: center;
     gap: 0;
     height: 10px;
 }
 
-.happy2-key-cap__key {
+.happy-key-cap__key {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -274,22 +274,22 @@
     height: 10px;
 }
 
-.happy2-key-cap__key[data-kind="text"] {
+.happy-key-cap__key[data-kind="text"] {
     width: 6.5px;
-    transform: translateY(var(--happy2-keycap-text-y, 0px));
+    transform: translateY(var(--happy-keycap-text-y, 0px));
 }
 
-.happy2-key-cap__text {
+.happy-key-cap__text {
     display: block;
     line-height: 10px;
 }
 
-.happy2-key-cap__key[data-kind="symbol"] {
+.happy-key-cap__key[data-kind="symbol"] {
     width: 9px;
-    transform: translateY(var(--happy2-keycap-symbol-y, 0px));
+    transform: translateY(var(--happy-keycap-symbol-y, 0px));
 }
 
-.happy2-key-cap__key svg {
+.happy-key-cap__key svg {
     display: block;
     width: 9px;
     height: 9px;
@@ -312,18 +312,18 @@
  * response to a translate is non-linear; re-measure, never extrapolate.
  * Base values are the Chromium measurements; Gecko and WebKit override below.
  */
-.happy2-badge {
-    --happy2-badge-icon-x: -0.2px;
-    --happy2-badge-label-x: 0.2px;
-    --happy2-badge-label-y: 0.7px;
+.happy-badge {
+    --happy-badge-icon-x: -0.2px;
+    --happy-badge-label-x: 0.2px;
+    --happy-badge-label-y: 0.7px;
 }
 
-.happy2-reaction-chip {
-    --happy2-chip-emoji-x: 0.95px;
-    --happy2-chip-emoji-y: 0px;
+.happy-reaction-chip {
+    --happy-chip-emoji-x: 0.95px;
+    --happy-chip-emoji-y: 0px;
 }
 
-.happy2-key-cap {
+.happy-key-cap {
     /*
      * KeyCap vertical is calibrated on '0' (bilaterally symmetric figure band)
      * at the integer fixture position used by Badge.test.tsx. The raster snaps
@@ -331,8 +331,8 @@
      * modifier symbols rise 0.5px to sit on that same axis. Chromium and Gecko
      * rasterize the shared slot identically, so only WebKit overrides it.
      */
-    --happy2-keycap-symbol-y: -0.5px;
-    --happy2-keycap-text-y: 0px;
+    --happy-keycap-symbol-y: -0.5px;
+    --happy-keycap-text-y: 0px;
 }
 
 /*
@@ -342,30 +342,30 @@
  * scopes cannot be used here.)
  */
 @supports (-moz-appearance: none) {
-    .happy2-badge {
-        --happy2-badge-label-y: -0.5px;
+    .happy-badge {
+        --happy-badge-label-y: -0.5px;
     }
 
-    .happy2-reaction-chip {
-        --happy2-chip-emoji-x: 1.5px;
-        --happy2-chip-emoji-y: 0.9px;
+    .happy-reaction-chip {
+        --happy-chip-emoji-x: 1.5px;
+        --happy-chip-emoji-y: 0.9px;
     }
     /* KeyCap: Gecko rasterizes identically to the Chromium base here. */
 }
 
 /* WebKit — Blink and Gecko do not parse -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
-    .happy2-badge {
-        --happy2-badge-label-y: 0.3px;
+    .happy-badge {
+        --happy-badge-label-y: 0.3px;
     }
 
-    .happy2-reaction-chip {
-        --happy2-chip-emoji-x: 0px;
-        --happy2-chip-emoji-y: -0.9px;
+    .happy-reaction-chip {
+        --happy-chip-emoji-x: 0px;
+        --happy-chip-emoji-y: -0.9px;
     }
 
-    .happy2-key-cap {
-        --happy2-keycap-symbol-y: 0px;
-        --happy2-keycap-text-y: 0px;
+    .happy-key-cap {
+        --happy-keycap-symbol-y: 0px;
+        --happy-keycap-text-y: 0px;
     }
 }

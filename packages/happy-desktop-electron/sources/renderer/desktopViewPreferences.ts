@@ -3,7 +3,7 @@ import type {
     HappyAgentViewPreferencesPersistence,
 } from "happy-desktop-state";
 
-const VIEW_PREFERENCES_KEY = "happy2.view-preferences.v1";
+const VIEW_PREFERENCES_KEY = "happy.view-preferences.v1";
 
 /**
  * How long a run of changes is allowed to settle before it is written down.

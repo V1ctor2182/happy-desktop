@@ -27,7 +27,7 @@ const cell: Record<string, string> = {
 
 const caption: Record<string, string> = {
     color: "var(--text-secondary)",
-    fontFamily: "var(--happy2-font-mono)",
+    fontFamily: "var(--happy-font-mono)",
     fontSize: "10px",
     letterSpacing: "0.06em",
     textTransform: "uppercase",
@@ -175,7 +175,7 @@ export function ShimmerTextPage() {
                     </span>
                     <span
                         style={{
-                            fontFamily: "var(--happy2-font-mono)",
+                            fontFamily: "var(--happy-font-mono)",
                             fontSize: "12px",
                         }}
                     >

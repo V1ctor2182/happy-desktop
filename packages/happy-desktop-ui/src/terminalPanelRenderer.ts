@@ -95,7 +95,7 @@ interface TerminalRowEntry {
 
 function rowEntryCreate(row: TerminalRowSnapshot): TerminalRowEntry {
     const element = document.createElement("div");
-    element.className = "happy2-terminal-panel__row";
+    element.className = "happy-terminal-panel__row";
     rowElementRender(element, row);
     return { element, row };
 }
@@ -105,7 +105,7 @@ function rowElementRender(element: HTMLDivElement, row: TerminalRowSnapshot): vo
     let previousEnd = 0;
     for (const cell of row.cells) {
         const span = document.createElement("span");
-        span.className = "happy2-terminal-panel__cell";
+        span.className = "happy-terminal-panel__cell";
         span.dataset.column = String(cell.x);
         span.dataset.width = String(cell.width);
         if (cell.inverse) span.dataset.inverse = "";

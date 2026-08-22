@@ -109,7 +109,7 @@ export function SetupPage(props: SetupPageProps) {
     ]);
     return (
         <div
-            className={["happy2-setup-page", local.className].filter(Boolean).join(" ")}
+            className={["happy-setup-page", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="setup-page"
             data-testid={local["data-testid"]}
             style={local.style}
@@ -117,13 +117,13 @@ export function SetupPage(props: SetupPageProps) {
             <WindowDragRegion />
             <ScrollArea
                 axes="both"
-                className="happy2-setup-page__scroll"
-                viewportClassName="happy2-setup-page__scroll-viewport"
+                className="happy-setup-page__scroll"
+                viewportClassName="happy-setup-page__scroll-viewport"
             >
-                <div className="happy2-setup-page__body" data-happy-desktop-ui="setup-page-body">
+                <div className="happy-setup-page__body" data-happy-desktop-ui="setup-page-body">
                     {local.scene ? (
                         <span
-                            className="happy2-setup-page__stage"
+                            className="happy-setup-page__stage"
                             data-happy-desktop-ui="setup-page-stage"
                         >
                             <LottieScene
@@ -136,14 +136,14 @@ export function SetupPage(props: SetupPageProps) {
                         </span>
                     ) : null}
                     <h1
-                        className="happy2-setup-page__title"
+                        className="happy-setup-page__title"
                         data-happy-desktop-ui="setup-page-title"
                     >
                         {local.title}
                     </h1>
                     {local.copy === undefined ? null : (
                         <p
-                            className="happy2-setup-page__copy"
+                            className="happy-setup-page__copy"
                             data-happy-desktop-ui="setup-page-copy"
                         >
                             {local.copy}
@@ -151,7 +151,7 @@ export function SetupPage(props: SetupPageProps) {
                     )}
                     {local.command === undefined ? null : (
                         <code
-                            className="happy2-setup-page__command"
+                            className="happy-setup-page__command"
                             data-happy-desktop-ui="setup-page-command"
                         >
                             {local.command}
@@ -159,7 +159,7 @@ export function SetupPage(props: SetupPageProps) {
                     )}
                     {local.children === undefined ? null : (
                         <div
-                            className="happy2-setup-page__slot"
+                            className="happy-setup-page__slot"
                             data-happy-desktop-ui="setup-page-slot"
                         >
                             {local.children}
@@ -208,7 +208,7 @@ function SetupPageProgressBar(props: { label: string; progress: SetupPageProgres
     const fraction = measured ? Math.min(1, Math.max(0, measured.fraction)) : 0;
     return (
         <div
-            className="happy2-setup-page__progress"
+            className="happy-setup-page__progress"
             data-happy-desktop-ui="setup-page-progress"
             data-state={props.progress.kind}
         >
@@ -219,23 +219,23 @@ function SetupPageProgressBar(props: { label: string; progress: SetupPageProgres
                 // Absent while nothing is measured, which is what tells a screen
                 // reader this is indeterminate rather than stalled at zero.
                 aria-valuenow={measured ? Math.round(fraction * 100) : undefined}
-                className="happy2-setup-page__progress-track"
+                className="happy-setup-page__progress-track"
                 data-happy-desktop-ui="setup-page-progress-track"
                 role="progressbar"
             >
                 <span
-                    className="happy2-setup-page__progress-fill"
+                    className="happy-setup-page__progress-fill"
                     data-happy-desktop-ui="setup-page-progress-fill"
                     style={measured ? { width: `${String(fraction * 100)}%` } : undefined}
                 />
             </span>
             <span
-                className="happy2-setup-page__progress-line"
+                className="happy-setup-page__progress-line"
                 data-happy-desktop-ui="setup-page-progress-line"
             >
-                <span className="happy2-setup-page__progress-label">{props.label}</span>
+                <span className="happy-setup-page__progress-label">{props.label}</span>
                 {measured?.detail === undefined ? null : (
-                    <span className="happy2-setup-page__progress-detail">{measured.detail}</span>
+                    <span className="happy-setup-page__progress-detail">{measured.detail}</span>
                 )}
             </span>
         </div>

@@ -20,30 +20,30 @@
  * Every dimension is on the 4px grid.
  */
 
-.happy2-welcome-screen,
-.happy2-welcome-screen__view,
-.happy2-welcome-screen__body,
-.happy2-welcome-screen__slideshow,
-.happy2-welcome-screen__stage,
-.happy2-welcome-screen__mark,
-.happy2-welcome-screen__panels,
-.happy2-welcome-screen__panel,
-.happy2-welcome-screen__dots,
-.happy2-welcome-screen__dot,
-.happy2-welcome-screen__dot-mark {
+.happy-welcome-screen,
+.happy-welcome-screen__view,
+.happy-welcome-screen__body,
+.happy-welcome-screen__slideshow,
+.happy-welcome-screen__stage,
+.happy-welcome-screen__mark,
+.happy-welcome-screen__panels,
+.happy-welcome-screen__panel,
+.happy-welcome-screen__dots,
+.happy-welcome-screen__dot,
+.happy-welcome-screen__dot-mark {
     box-sizing: border-box;
 }
 
 /*
  * The root is the window, and it is the positioning context the window-drag
- * lane pins itself to — `.happy2-window-drag-region` is absolute and expects
+ * lane pins itself to — `.happy-window-drag-region` is absolute and expects
  * its host surface to say what "top" means. The lane is deliberately *outside*
  * the scrollport below it: an absolute box inside a scroll container scrolls
  * away with the content, and a drag lane that leaves the top of the window is
  * no drag lane at all. Being out of flow, it also cannot push the centred
  * column down — this screen looks identical with and without it.
  */
-.happy2-welcome-screen {
+.happy-welcome-screen {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -54,7 +54,7 @@
     overflow: hidden;
     background: var(--surface);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
@@ -65,13 +65,13 @@
  * window, where a 160px hero plus two lines of copy plus the action is taller
  * than the glass.
  */
-.happy2-welcome-screen__view {
+.happy-welcome-screen__view {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
 }
 
-.happy2-welcome-screen__view-viewport {
+.happy-welcome-screen__view-viewport {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -89,7 +89,7 @@
  * action's own focus treatment are painted far inside it, so no scroll edge can
  * clip a focus indicator.
  */
-.happy2-welcome-screen__body {
+.happy-welcome-screen__body {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -99,7 +99,7 @@
     padding: 32px 40px;
 }
 
-.happy2-welcome-screen__slideshow {
+.happy-welcome-screen__slideshow {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -117,7 +117,7 @@
  * as `ART_SIZE` in the component, which is what the Lottie renderer rasterises
  * into.
  */
-.happy2-welcome-screen__stage {
+.happy-welcome-screen__stage {
     display: flex;
     flex: none;
     align-items: center;
@@ -131,7 +131,7 @@
  * the screen that introduces the product, not the one that admits it is still
  * starting.
  */
-.happy2-welcome-screen__mark {
+.happy-welcome-screen__mark {
     display: block;
     width: 100%;
     height: 100%;
@@ -148,8 +148,8 @@
  * has it move away. Flexbox lays siblings out in sequence and has no way to say
  * "these all share one box, size it to the biggest".
  */
-.happy2-welcome-screen__panels {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- one-cell stack: every slide shares grid-area 1/1 so the block is as tall as the tallest slide and the dots and action below it never move */
+.happy-welcome-screen__panels {
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- one-cell stack: every slide shares grid-area 1/1 so the block is as tall as the tallest slide and the dots and action below it never move */
     display: grid;
     flex: none;
     width: 100%;
@@ -164,7 +164,7 @@
  * of the fade in, so the outgoing slide is hidden exactly when it stops being
  * visible.
  */
-.happy2-welcome-screen__panel {
+.happy-welcome-screen__panel {
     grid-area: 1 / 1;
     display: flex;
     flex-direction: column;
@@ -179,7 +179,7 @@
         visibility 0s linear 200ms;
 }
 
-.happy2-welcome-screen__panel[data-active] {
+.happy-welcome-screen__panel[data-active] {
     opacity: 1;
     visibility: visible;
     transition:
@@ -189,13 +189,13 @@
 
 /* The panel takes a tab stop because it holds no control of its own; its ring
    is painted on the words rather than on the full-width cell. */
-.happy2-welcome-screen__panel:focus-visible {
+.happy-welcome-screen__panel:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 4px;
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
 }
 
-.happy2-welcome-screen__title {
+.happy-welcome-screen__title {
     margin: 0;
     color: var(--text);
     font-size: 32px;
@@ -210,7 +210,7 @@
  * reference this screen is drawn from puts the slogan on two of them; 400px at
  * 16px is about fifty characters a line.
  */
-.happy2-welcome-screen__copy {
+.happy-welcome-screen__copy {
     max-width: 400px;
     margin: 0;
     color: var(--text-secondary);
@@ -228,14 +228,14 @@
  * surface between marks. A gap here would buy nothing visually and cost the
  * clickable area between the dots.
  */
-.happy2-welcome-screen__dots {
+.happy-welcome-screen__dots {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
 }
 
-.happy2-welcome-screen__dot {
+.happy-welcome-screen__dot {
     display: flex;
     flex: none;
     align-items: center;
@@ -245,13 +245,13 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: transparent;
     appearance: none;
     cursor: pointer;
 }
 
-.happy2-welcome-screen__dot:focus-visible {
+.happy-welcome-screen__dot:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
@@ -261,16 +261,16 @@
  * cannot see is not a position indicator. The selected one is plain ink — the
  * deck carries position, not accent.
  */
-.happy2-welcome-screen__dot-mark {
+.happy-welcome-screen__dot-mark {
     flex: none;
     width: 8px;
     height: 8px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--radio-inactive);
     transition: background-color 200ms ease;
 }
 
-.happy2-welcome-screen__dot[data-active] .happy2-welcome-screen__dot-mark {
+.happy-welcome-screen__dot[data-active] .happy-welcome-screen__dot-mark {
     background: var(--text);
 }
 
@@ -280,7 +280,7 @@
  * Wide enough to read as the way out of this screen rather than as an ordinary
  * button that happens to be centred, and never wider than the slogan measure.
  */
-.happy2-welcome-screen__action {
+.happy-welcome-screen__action {
     flex: none;
     min-width: 240px;
 }
@@ -298,7 +298,7 @@
  * clip. It sits in the bottom-right because the drag lane owns the top band:
  * the two are at opposite ends of the window and cannot contend for a pixel.
  */
-.happy2-welcome-screen__appearance {
+.happy-welcome-screen__appearance {
     position: absolute;
     z-index: 1;
     right: 24px;
@@ -311,9 +311,9 @@
  * dot should get the slide, not a dissolve into it.
  */
 @media (prefers-reduced-motion: reduce) {
-    .happy2-welcome-screen__panel,
-    .happy2-welcome-screen__panel[data-active],
-    .happy2-welcome-screen__dot-mark {
+    .happy-welcome-screen__panel,
+    .happy-welcome-screen__panel[data-active],
+    .happy-welcome-screen__dot-mark {
         transition: none;
     }
 }

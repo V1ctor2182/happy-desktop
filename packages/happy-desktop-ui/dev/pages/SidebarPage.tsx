@@ -167,7 +167,7 @@ const lifecycleSections: SidebarSection[] = [
                 id: "lifecycle-project",
                 initials: "H",
                 kind: "project",
-                label: "happy2",
+                label: "happy",
                 secondaryAction: { icon: "settings", label: "Project settings", reveal: "hover" },
                 tone: "ember",
             },
@@ -217,7 +217,7 @@ const lifecycleSections: SidebarSection[] = [
                 lifecycleLabel: "creating",
             },
         ],
-        label: "happy2",
+        label: "happy",
     },
 ];
 
@@ -590,7 +590,7 @@ function PinnedReorderDemo() {
                     sections={[
                         {
                             id: "projects",
-                            items: [{ id: "happy2", kind: "project", label: "happy2" }],
+                            items: [{ id: "happy", kind: "project", label: "happy" }],
                             label: "Projects",
                         },
                     ]}
@@ -778,16 +778,16 @@ const ALIGNMENT_CASES: readonly {
  */
 function BranchListSketch(props: { working: boolean }) {
     return (
-        <div className="happy2-sidebar">
-            <div className="happy2-sidebar__body">
-                <div className="happy2-sidebar__body-content">
-                    <div className="happy2-sidebar__section">
-                        <div className="happy2-sidebar__section-head">
-                            <span className="happy2-sidebar__section-label">happy-desktop</span>
+        <div className="happy-sidebar">
+            <div className="happy-sidebar__body">
+                <div className="happy-sidebar__body-content">
+                    <div className="happy-sidebar__section">
+                        <div className="happy-sidebar__section-head">
+                            <span className="happy-sidebar__section-label">happy-desktop</span>
                         </div>
                         {ALIGNMENT_WORKTREES.map((worktree) => (
                             <button
-                                className="happy2-sidebar__item"
+                                className="happy-sidebar__item"
                                 data-active={
                                     worktree.id === "react-electron-plugin" ? "" : undefined
                                 }
@@ -795,7 +795,7 @@ function BranchListSketch(props: { working: boolean }) {
                                 key={worktree.id}
                                 type="button"
                             >
-                                <span className="happy2-sidebar__item-leading">
+                                <span className="happy-sidebar__item-leading">
                                     {props.working && worktree.working ? (
                                         <Spinner
                                             label={`${worktree.label} is working`}
@@ -806,12 +806,12 @@ function BranchListSketch(props: { working: boolean }) {
                                         <Icon name="branch" size={16} />
                                     )}
                                 </span>
-                                <span className="happy2-sidebar__item-label">{worktree.label}</span>
+                                <span className="happy-sidebar__item-label">{worktree.label}</span>
                                 <span
-                                    className="happy2-sidebar__item-trailing"
+                                    className="happy-sidebar__item-trailing"
                                     style={{ columnGap: SIDEBAR_TRAILING_GAP }}
                                 >
-                                    <span className="happy2-sidebar__item-change-stats">
+                                    <span className="happy-sidebar__item-change-stats">
                                         <span data-tone="added">
                                             +{sketchCount(worktree.added)}
                                         </span>
@@ -836,7 +836,7 @@ function sketchCount(lines: number): string {
 
 /** The rows a machine's section holds, reused by each heading-action state. */
 const HEADING_ACTION_ITEMS: SidebarItem[] = [
-    { id: "happy2", initials: "H", kind: "project", label: "happy2" },
+    { id: "happy", initials: "H", kind: "project", label: "happy" },
     { id: "happy-agent", initials: "H", kind: "project", label: "happy-agent" },
 ];
 
@@ -1316,7 +1316,7 @@ export function SidebarPage() {
                                 <span
                                     style={{
                                         color: "var(--text-secondary)",
-                                        font: "600 10px var(--happy2-font-mono)",
+                                        font: "600 10px var(--happy-font-mono)",
                                     }}
                                 >
                                     {state.label}

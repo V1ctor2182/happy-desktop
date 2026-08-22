@@ -48,23 +48,23 @@ export function Toolbar(props: ToolbarProps) {
     const hasActions = () => local.search !== undefined || local.trailing !== undefined;
     return (
         <header
-            className={["happy2-toolbar", local.className].filter(Boolean).join(" ")}
+            className={["happy-toolbar", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="toolbar"
             data-testid={local["data-testid"]}
             style={{
                 ...local.style,
                 ...(local.height === undefined
                     ? {}
-                    : { "--happy2-toolbar-height": `${local.height}px` }),
+                    : { "--happy-toolbar-height": `${local.height}px` }),
             }}
         >
             {local.leading ? (
-                <div className="happy2-toolbar__leading" data-happy-desktop-ui="toolbar-leading">
+                <div className="happy-toolbar__leading" data-happy-desktop-ui="toolbar-leading">
                     {local.leading}
                 </div>
             ) : null}
             {hasHeading() ? (
-                <div className="happy2-toolbar__heading" data-happy-desktop-ui="toolbar-heading">
+                <div className="happy-toolbar__heading" data-happy-desktop-ui="toolbar-heading">
                     {local.title !== undefined
                         ? ((
                               Title = local.titleLevel === undefined
@@ -72,41 +72,41 @@ export function Toolbar(props: ToolbarProps) {
                                   : (`h${String(local.titleLevel)}` as "h1" | "h2" | "h3"),
                           ) => (
                               <Title
-                                  className="happy2-toolbar__title"
+                                  className="happy-toolbar__title"
                                   data-happy-desktop-ui="toolbar-title"
                               >
-                                  <span className="happy2-toolbar__title-ink">{local.title}</span>
+                                  <span className="happy-toolbar__title-ink">{local.title}</span>
                               </Title>
                           ))()
                         : null}
                     {local.subtitle !== undefined ? (
                         <span
-                            className="happy2-toolbar__subtitle"
+                            className="happy-toolbar__subtitle"
                             data-happy-desktop-ui="toolbar-subtitle"
                         >
-                            <span className="happy2-toolbar__subtitle-ink">{local.subtitle}</span>
+                            <span className="happy-toolbar__subtitle-ink">{local.subtitle}</span>
                         </span>
                     ) : null}
                 </div>
             ) : null}
             {hasActions() ? (
-                <div className="happy2-toolbar__actions" data-happy-desktop-ui="toolbar-actions">
+                <div className="happy-toolbar__actions" data-happy-desktop-ui="toolbar-actions">
                     {local.search
                         ? ((search) => (
                               <div
-                                  className="happy2-toolbar__search"
+                                  className="happy-toolbar__search"
                                   data-happy-desktop-ui="toolbar-search"
                               >
                                   <span
                                       aria-hidden="true"
-                                      className="happy2-toolbar__search-icon"
+                                      className="happy-toolbar__search-icon"
                                       data-happy-desktop-ui="toolbar-search-icon"
                                   >
                                       <Icon name="search" size={14} />
                                   </span>
                                   <input
                                       aria-label={search.placeholder ?? "Search"}
-                                      className="happy2-toolbar__search-input"
+                                      className="happy-toolbar__search-input"
                                       data-happy-desktop-ui="toolbar-search-input"
                                       onInput={(event) =>
                                           search.onChange(event.currentTarget.value)
@@ -120,7 +120,7 @@ export function Toolbar(props: ToolbarProps) {
                         : null}
                     {local.trailing ? (
                         <div
-                            className="happy2-toolbar__trailing"
+                            className="happy-toolbar__trailing"
                             data-happy-desktop-ui="toolbar-trailing"
                         >
                             {local.trailing}

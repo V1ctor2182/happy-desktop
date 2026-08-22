@@ -30,9 +30,7 @@ export function ConversationErrorCard(props: ConversationErrorCardProps) {
     const tone = local.tone ?? "error";
     return (
         <div
-            className={["happy2-conversation-error-card", local.className]
-                .filter(Boolean)
-                .join(" ")}
+            className={["happy-conversation-error-card", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="conversation-error-card"
             data-tone={tone}
             data-testid={local["data-testid"]}
@@ -40,28 +38,28 @@ export function ConversationErrorCard(props: ConversationErrorCardProps) {
             style={local.style}
         >
             <div
-                className="happy2-conversation-error-card__bubble"
+                className="happy-conversation-error-card__bubble"
                 data-happy-desktop-ui="conversation-error-bubble"
             >
                 <span
                     aria-hidden="true"
-                    className="happy2-conversation-error-card__icon"
+                    className="happy-conversation-error-card__icon"
                     data-happy-desktop-ui="conversation-error-icon"
                 >
                     <Octicon name={tone === "warning" ? "alert" : "alert-fill"} size={14} />
                 </span>
                 <span
-                    className="happy2-conversation-error-card__content"
+                    className="happy-conversation-error-card__content"
                     data-happy-desktop-ui="conversation-error-content"
                 >
                     <strong
-                        className="happy2-conversation-error-card__title"
+                        className="happy-conversation-error-card__title"
                         data-happy-desktop-ui="conversation-error-title"
                     >
                         {local.title}
                     </strong>
                     <ScrollingText
-                        className="happy2-conversation-error-card__reason"
+                        className="happy-conversation-error-card__reason"
                         data-happy-desktop-ui="conversation-error-reason"
                     >
                         {local.reason}

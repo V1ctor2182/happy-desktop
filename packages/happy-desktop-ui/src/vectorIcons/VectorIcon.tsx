@@ -41,7 +41,7 @@ function renderVectorIcon(
         <span
             aria-hidden={local["aria-label"] ? undefined : "true"}
             aria-label={local["aria-label"]}
-            className={["happy2-vector-icon", local.className].filter(Boolean).join(" ")}
+            className={["happy-vector-icon", local.className].filter(Boolean).join(" ")}
             data-glyph={name}
             data-happy-desktop-ui="vector-icon"
             data-set={set}

@@ -95,7 +95,7 @@ export function CodeEditorPage() {
                 number="04"
                 stage="surface"
             >
-                <div className="happy2-theme-dark" style={{ display: "flex" }}>
+                <div className="happy-theme-dark" style={{ display: "flex" }}>
                     {frame(<CodeEditor name="Editor.tsx" value={typescript} />)}
                 </div>
             </Specimen>

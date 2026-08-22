@@ -24,7 +24,7 @@ function region(children: ReactNode) {
                 width: "720px",
                 height: "300px",
                 border: "1px solid var(--divider)",
-                borderRadius: "var(--happy2-radius-md)",
+                borderRadius: "var(--happy-radius-md)",
                 background: "var(--surface)",
             }}
         >
@@ -53,7 +53,7 @@ export function WorkspaceLifecycleNoticePage() {
                 {region(
                     <WorkspaceLifecycleNotice
                         name="Fix login redirect"
-                        path="/Users/steve/Happy/Workspaces/happy2/fix-login-redirect"
+                        path="/Users/steve/Happy/Workspaces/happy/fix-login-redirect"
                         phase="creating"
                         spinnerFrame={2}
                     />,
@@ -81,7 +81,7 @@ export function WorkspaceLifecycleNoticePage() {
                     <WorkspaceLifecycleNotice
                         detail={FETCH_FAILURE}
                         name="Fix login redirect"
-                        path="/Users/steve/Happy/Workspaces/happy2/fix-login-redirect"
+                        path="/Users/steve/Happy/Workspaces/happy/fix-login-redirect"
                         phase="failed"
                     />,
                 )}
@@ -120,7 +120,7 @@ export function WorkspaceLifecycleNoticePage() {
                 {region(
                     <WorkspaceLifecycleNotice
                         name="Fix login redirect"
-                        path="/Users/steve/Happy/Workspaces/happy2/fix-login-redirect"
+                        path="/Users/steve/Happy/Workspaces/happy/fix-login-redirect"
                         phase="missing"
                     />,
                 )}
@@ -154,7 +154,7 @@ export function WorkspaceLifecycleNoticePage() {
                         />
                         <WorkspaceLifecycleNotice
                             name="Fix login redirect"
-                            path="/Users/steve/Happy/Workspaces/happy2/fix-login-redirect"
+                            path="/Users/steve/Happy/Workspaces/happy/fix-login-redirect"
                             phase="missing"
                             size="compact"
                         />
@@ -172,7 +172,7 @@ export function WorkspaceLifecycleNoticePage() {
                     <WorkspaceLifecycleNotice
                         detail={FETCH_FAILURE}
                         name="Rewrite the session catalogue so worktrees reconcile from the stream"
-                        path="/Users/steve/Happy/Workspaces/happy2/rewrite-the-session-catalogue-so-worktrees-reconcile"
+                        path="/Users/steve/Happy/Workspaces/happy/rewrite-the-session-catalogue-so-worktrees-reconcile"
                         phase="failed"
                         size="compact"
                     />,

@@ -65,7 +65,7 @@ export function WaitRing(props: WaitRingProps) {
     return (
         <svg
             aria-hidden="true"
-            className={["happy2-wait-ring", props.className].filter(Boolean).join(" ")}
+            className={["happy-wait-ring", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="wait-ring"
             data-progress={Math.round(progress * 100)}
             height={size}
@@ -74,7 +74,7 @@ export function WaitRing(props: WaitRingProps) {
             width={size}
         >
             <circle
-                className="happy2-wait-ring__track"
+                className="happy-wait-ring__track"
                 cx={center}
                 cy={center}
                 fill="none"
@@ -82,7 +82,7 @@ export function WaitRing(props: WaitRingProps) {
                 strokeWidth={RING_STROKE}
             />
             <circle
-                className="happy2-wait-ring__fill"
+                className="happy-wait-ring__fill"
                 cx={center}
                 cy={center}
                 fill="none"

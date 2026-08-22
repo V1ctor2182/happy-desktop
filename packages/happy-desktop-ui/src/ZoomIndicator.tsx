@@ -15,7 +15,7 @@ import type { ReactElement } from "react";
  */
 export function ZoomIndicator(props: { percent: number }): ReactElement {
     return (
-        <div aria-hidden="true" className="happy2-zoom-indicator">
+        <div aria-hidden="true" className="happy-zoom-indicator">
             {props.percent}%
         </div>
     );

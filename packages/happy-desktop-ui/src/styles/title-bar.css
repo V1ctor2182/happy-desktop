@@ -8,11 +8,11 @@
  * hairline border, 14px search icon, 12px text, trailing KeyCap hint.
  */
 
-.happy2-title-bar,
-.happy2-title-bar *,
-.happy2-window-drag-region,
-.happy2-search-field,
-.happy2-search-field * {
+.happy-title-bar,
+.happy-title-bar *,
+.happy-window-drag-region,
+.happy-search-field,
+.happy-search-field * {
     box-sizing: border-box;
 }
 
@@ -24,7 +24,7 @@
    below the DOM, so `pointer-events: none` costs it nothing there, while
    without it the overlay is an opaque box over the first 56px of whatever it
    covers and eats every click landing on the surface's own header controls. */
-.happy2-window-drag-region {
+.happy-window-drag-region {
     position: absolute;
     z-index: 1;
     top: 0;
@@ -40,7 +40,7 @@
 
 /* ---- TitleBar --------------------------------------------------------- */
 
-.happy2-title-bar {
+.happy-title-bar {
     display: flex;
     align-items: center;
     column-gap: 12px;
@@ -53,7 +53,7 @@
     padding: 0 12px;
     background: transparent;
     color: var(--header-tint);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     /* Explicit chrome text metrics: bare text slotted into the lanes gets a
        deterministic line box — Gecko's `line-height: normal` builds a taller
        box for the same font and floats slotted text visibly low. Re-verified
@@ -74,11 +74,11 @@
 /* Traffic-light inset: the 78px reservation starts at the window edge. The
    Electron host positions the native 14px controls at x=14, y=12 so their
    visual center lands on this panel's 19px vertical center. */
-.happy2-title-bar[data-window-controls] {
+.happy-title-bar[data-window-controls] {
     padding-left: 0;
 }
 
-.happy2-title-bar__controls {
+.happy-title-bar__controls {
     display: block;
     flex: none;
     width: 78px;
@@ -87,8 +87,8 @@
     app-region: drag;
 }
 
-.happy2-title-bar__leading,
-.happy2-title-bar__trailing {
+.happy-title-bar__leading,
+.happy-title-bar__trailing {
     display: flex;
     /* Equal side lanes (was 1fr | … | 1fr): each takes half the space left of
        the centered search well, so the well stays centered in the bar. */
@@ -99,11 +99,11 @@
     height: 100%;
 }
 
-.happy2-title-bar__trailing {
+.happy-title-bar__trailing {
     justify-content: flex-end;
 }
 
-.happy2-title-bar__center {
+.happy-title-bar__center {
     display: flex;
     /* Center lane capped at 420px (was minmax(0, 420px)); it never grows past
        420 and shrinks on a narrow window while the side lanes absorb slack. */
@@ -113,15 +113,15 @@
 }
 
 /* Slotted controls stay clickable inside the drag region. */
-.happy2-title-bar__leading > :not(.happy2-title-bar__controls),
-.happy2-title-bar__trailing > * {
+.happy-title-bar__leading > :not(.happy-title-bar__controls),
+.happy-title-bar__trailing > * {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
 
 /* ---- SearchField ------------------------------------------------------ */
 
-.happy2-search-field {
+.happy-search-field {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -131,27 +131,27 @@
     padding: 0 3px 0 8px;
     background: var(--input-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
-    font-family: var(--happy2-font-ui);
+    border-radius: var(--happy-radius-sm);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     -webkit-app-region: no-drag;
     app-region: no-drag;
     transition: border-color 120ms ease;
 }
 
-.happy2-search-field:focus-within {
+.happy-search-field:focus-within {
     border-color: var(--divider);
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
 
-.happy2-search-field__icon {
+.happy-search-field__icon {
     display: flex;
     flex: none;
     color: var(--text-secondary);
 }
 
-.happy2-search-field__input {
+.happy-search-field__input {
     flex: 1 1 auto;
     min-width: 0;
     height: 30px;
@@ -161,7 +161,7 @@
     border: none;
     outline: none;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 12px;
     font-weight: 500;
     line-height: 30px;
@@ -170,15 +170,15 @@
     caret-color: var(--radio-active);
 }
 
-.happy2-search-field__input::placeholder {
+.happy-search-field__input::placeholder {
     color: var(--text-secondary);
     opacity: 1;
 }
 
-.happy2-search-field__hint {
+.happy-search-field__hint {
     flex: none;
 }
 
-.happy2-search-field__hint.happy2-key-cap {
+.happy-search-field__hint.happy-key-cap {
     border-radius: 2px;
 }

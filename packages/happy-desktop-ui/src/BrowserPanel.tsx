@@ -103,12 +103,12 @@ export function BrowserPanel(props: BrowserPanelProps) {
 
     return (
         <section
-            className="happy2-browser-panel"
+            className="happy-browser-panel"
             data-unavailable={props.unavailable === undefined ? undefined : ""}
             data-happy-desktop-ui="browser-panel"
             hidden={!props.active}
         >
-            <div className="happy2-browser-panel__toolbar" data-happy-desktop-ui="browser-toolbar">
+            <div className="happy-browser-panel__toolbar" data-happy-desktop-ui="browser-toolbar">
                 <Button
                     aria-label="Back"
                     disabled={props.unavailable !== undefined || !view.canGoBack}
@@ -147,7 +147,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 </Button>
                 <TextField
                     aria-label="Address and search"
-                    className="happy2-browser-panel__address"
+                    className="happy-browser-panel__address"
                     fullWidth
                     leadingIcon={view.address.startsWith("https://") ? "lock" : "globe"}
                     onSubmit={navigate}
@@ -161,14 +161,14 @@ export function BrowserPanel(props: BrowserPanelProps) {
             </div>
             {props.unavailable ? (
                 <div
-                    className="happy2-browser-panel__unavailable"
+                    className="happy-browser-panel__unavailable"
                     data-happy-desktop-ui="browser-unavailable"
                     role="status"
                 >
                     {props.unavailable}
                 </div>
             ) : null}
-            <div className="happy2-browser-panel__content" data-happy-desktop-ui="browser-content">
+            <div className="happy-browser-panel__content" data-happy-desktop-ui="browser-content">
                 {props.renderContent ? (
                     props.renderContent({
                         source,
@@ -224,7 +224,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 {view.failure
                     ? ((page) => (
                           <div
-                              className="happy2-browser-panel__error"
+                              className="happy-browser-panel__error"
                               data-happy-desktop-ui="browser-error"
                               role="alert"
                           >
@@ -241,7 +241,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                                   title={page.title}
                               />
                               <p
-                                  className="happy2-browser-panel__error-code"
+                                  className="happy-browser-panel__error-code"
                                   data-happy-desktop-ui="browser-error-code"
                               >
                                   {page.code}

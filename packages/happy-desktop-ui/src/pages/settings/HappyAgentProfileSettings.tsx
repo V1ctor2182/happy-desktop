@@ -55,30 +55,30 @@ export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps)
                 </Banner>
             ) : null}
             {props.loading ? (
-                <Box className="happy2-happy-agent-settings__pending">
+                <Box className="happy-agent-settings__pending">
                     <Spinner size={16} />
                     <span>Reading the profile…</span>
                 </Box>
             ) : (
                 <form
-                    className="happy2-happy-agent-profile"
+                    className="happy-agent-profile"
                     data-happy-desktop-ui="happy-agent-profile"
                     onSubmit={(event) => {
                         event.preventDefault();
                         if (!blocked) props.onSave();
                     }}
                 >
-                    <Box className="happy2-happy-agent-profile__identity">
+                    <Box className="happy-agent-profile__identity">
                         <Avatar
                             imageUrl={props.imageUrl}
                             initials={initials(props.name) || "?"}
                             size="lg"
                         />
-                        <Box className="happy2-happy-agent-profile__naming">
-                            <span className="happy2-happy-agent-profile__name">
+                        <Box className="happy-agent-profile__naming">
+                            <span className="happy-agent-profile__name">
                                 {props.name.trim() === "" ? "Unnamed" : props.name}
                             </span>
-                            <span className="happy2-happy-agent-profile__status">
+                            <span className="happy-agent-profile__status">
                                 {props.email.trim() === "" ? "No Git email yet" : props.email}
                             </span>
                         </Box>
@@ -107,8 +107,8 @@ export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps)
                         type="email"
                         value={props.email}
                     />
-                    <Box className="happy2-happy-agent-profile__actions">
-                        <span className="happy2-happy-agent-profile__state">
+                    <Box className="happy-agent-profile__actions">
+                        <span className="happy-agent-profile__state">
                             {props.saving
                                 ? "Saving…"
                                 : props.dirty

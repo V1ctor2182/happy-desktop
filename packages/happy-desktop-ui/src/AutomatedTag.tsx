@@ -21,20 +21,20 @@ export function AutomatedTag(props: AutomatedTagProps) {
     return (
         <span
             aria-label={props["aria-label"] ?? "Posted automatically on the author’s behalf"}
-            className={["happy2-automated-tag", props.className].filter(Boolean).join(" ")}
+            className={["happy-automated-tag", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="automated-tag"
             role="note"
         >
             <span
                 aria-hidden="true"
-                className="happy2-automated-tag__icon"
+                className="happy-automated-tag__icon"
                 data-happy-desktop-ui="automated-tag-icon"
             >
                 <Icon name="agents" size={12} />
             </span>
             <span
                 aria-hidden="true"
-                className="happy2-automated-tag__label"
+                className="happy-automated-tag__label"
                 data-happy-desktop-ui="automated-tag-label"
             >
                 Automated

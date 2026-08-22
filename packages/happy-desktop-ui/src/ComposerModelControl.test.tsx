@@ -24,7 +24,7 @@ function Fixture() {
     const [model, setModel] = useState("sol");
     const [effort, setEffort] = useState("extra-high");
     return (
-        <div className="happy2-theme-dark" style={{ marginTop: "280px" }}>
+        <div className="happy-theme-dark" style={{ marginTop: "280px" }}>
             <Composer
                 data-testid="composer"
                 modelControl={

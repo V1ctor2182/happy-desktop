@@ -36,25 +36,25 @@ export type ComposerPanelProps = {
 export function ComposerPanel(props: ComposerPanelProps) {
     return (
         <section
-            className={["happy2-composer-panel", props.className].filter(Boolean).join(" ")}
+            className={["happy-composer-panel", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="composer-panel"
             data-testid={props["data-testid"]}
             style={props.style}
         >
             <header
-                className="happy2-composer-panel__header"
+                className="happy-composer-panel__header"
                 data-happy-desktop-ui="composer-panel-header"
             >
-                <div className="happy2-composer-panel__heading">
+                <div className="happy-composer-panel__heading">
                     <span
-                        className="happy2-composer-panel__title"
+                        className="happy-composer-panel__title"
                         data-happy-desktop-ui="composer-panel-title"
                     >
                         {props.title}
                     </span>
                     {props.status === undefined ? null : (
                         <span
-                            className="happy2-composer-panel__status"
+                            className="happy-composer-panel__status"
                             data-happy-desktop-ui="composer-panel-status"
                         >
                             {props.status}
@@ -72,11 +72,11 @@ export function ComposerPanel(props: ComposerPanelProps) {
             </header>
             <ScrollArea
                 axes="both"
-                className="happy2-composer-panel__body"
+                className="happy-composer-panel__body"
                 data-happy-desktop-ui="composer-panel-body"
-                viewportClassName="happy2-composer-panel__body-viewport"
+                viewportClassName="happy-composer-panel__body-viewport"
             >
-                <div className="happy2-composer-panel__content">{props.children}</div>
+                <div className="happy-composer-panel__content">{props.children}</div>
             </ScrollArea>
         </section>
     );

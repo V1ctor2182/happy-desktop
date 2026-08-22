@@ -7,7 +7,7 @@ export const componentNumber = "C-170";
 const IDS = [
     "ses_9f2a",
     "ses_1b74",
-    "prj_happy2",
+    "prj_happy",
     "prj_happy_agent",
     "steve@korshakov.com",
     "Claude",
@@ -90,7 +90,7 @@ export function AvatarBrutalistPage() {
             >
                 <div style={row}>
                     {[0, 1, 2].map((index) => (
-                        <AvatarBrutalist key={index} id="prj_happy2" size={32} />
+                        <AvatarBrutalist key={index} id="prj_happy" size={32} />
                     ))}
                 </div>
             </Specimen>

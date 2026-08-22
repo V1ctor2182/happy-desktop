@@ -146,8 +146,8 @@ it(
         const part = (s: string, name: string) => view.$(sel(s, name));
         const fontFamily =
             server.browser === "webkit"
-                ? "happy2 Figtree, system-ui, sans-serif"
-                : '"happy2 Figtree", system-ui, sans-serif';
+                ? "happy Figtree, system-ui, sans-serif"
+                : '"happy Figtree", system-ui, sans-serif';
         /* Text ink: reject blank or clipped captures, then return centroid drift.
    The line boxes are comfortably taller than the ink, so its top and
    bottom must sit strictly inside the captured box. */
@@ -195,10 +195,10 @@ it(
             "padding-right": "16px",
         });
         /* Engine-scoped optical vars resolve on exactly this engine. */
-        expect(rFull.computedStyle("--happy2-toolbar-title-optical-y")).toBe(
+        expect(rFull.computedStyle("--happy-toolbar-title-optical-y")).toBe(
             titleOpticalY[engine()],
         );
-        expect(rFull.computedStyle("--happy2-toolbar-subtitle-optical-y")).toBe(
+        expect(rFull.computedStyle("--happy-toolbar-subtitle-optical-y")).toBe(
             subtitleOpticalY[engine()],
         );
         /* ---- Title typography + optical centering --------------------------- */
@@ -227,7 +227,7 @@ it(
             "line-height": "20px",
         });
         const titleMetrics = title.textMetrics();
-        expect(titleMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+        expect(titleMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
         expect(titleMetrics.font.size).toBe(15);
         expect(titleMetrics.font.weight).toBe("700");
         expect(titleMetrics.font.lineHeight).toBe(20);

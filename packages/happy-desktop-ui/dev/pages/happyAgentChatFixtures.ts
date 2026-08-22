@@ -426,7 +426,7 @@ export const conversationSummaries: readonly ConversationSummary[] = [
     {
         id: "ses_alpha01234567",
         title: "Fix token rotation race",
-        subtitle: "~/happy2",
+        subtitle: "~/happy",
         activity: "running",
         updatedAt: now - 30_000,
         participants: [],

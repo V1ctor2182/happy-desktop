@@ -180,7 +180,7 @@ it("holds EventCard geometry, transition lane, and optical centering", async () 
         '[data-testid="ev-transition"] [data-happy-desktop-ui="event-card-title"]',
     );
     const titleMetrics = title.textMetrics();
-    expect(titleMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(titleMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(titleMetrics.font.size).toBe(13);
     expect(titleMetrics.font.weight).toBe("600");
     expect(titleMetrics.font.lineHeight).toBe(18);
@@ -241,7 +241,7 @@ it("holds EventCard geometry, transition lane, and optical centering", async () 
 
     const time = view.$('[data-testid="ev-transition"] [data-happy-desktop-ui="event-card-time"]');
     const timeMetrics = time.textMetrics();
-    expect(timeMetrics.font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(timeMetrics.font.family).toBe("happy Mono, ui-monospace, monospace");
     expect(timeMetrics.font.size).toBe(11);
     expect(time.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(row.bounds().x + 680 - (time.bounds().x + time.bounds().width)).toBe(13);

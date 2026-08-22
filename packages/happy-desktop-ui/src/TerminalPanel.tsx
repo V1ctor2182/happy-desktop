@@ -143,14 +143,14 @@ export function TerminalPanel(props: TerminalPanelProps) {
     const inputFocus = useEffectEvent(() => {
         if (!readOnly) input.current?.focus({ preventScroll: true });
     });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- move real keyboard focus to the capture field on mount
+    // eslint-disable-next-line happy-react/no-layout-effect -- move real keyboard focus to the capture field on mount
     useLayoutEffect(() => {
         if (!collapsed) inputFocus();
     }, [collapsed]);
     // A Happy Agent outage can begin while its terminal owns keyboard capture. Release
     // that invisible field immediately without disturbing selection in the
     // retained grid, and do not steal focus back merely because the route heals.
-    // eslint-disable-next-line happy2-react/no-layout-effect -- synchronously release the imperative terminal capture field when it becomes read-only
+    // eslint-disable-next-line happy-react/no-layout-effect -- synchronously release the imperative terminal capture field when it becomes read-only
     useLayoutEffect(() => {
         if (!readOnly) return;
         composing.current = false;
@@ -159,7 +159,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
             input.current.blur();
         }
     }, [readOnly]);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- observe the live screen box to size the PTY in cells
+    // eslint-disable-next-line happy-react/no-layout-effect -- observe the live screen box to size the PTY in cells
     useLayoutEffect(() => {
         const element = screen.current;
         if (!element) return;
@@ -185,7 +185,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
     // WTerm gives one imperative renderer ownership of the grid DOM. Keeping it
     // alive for this screen lifetime preserves row nodes, selection, and scroll
     // anchors while terminal snapshots continue to arrive through React props.
-    // eslint-disable-next-line happy2-react/no-layout-effect -- an imperative terminal renderer owns the children of this stable host
+    // eslint-disable-next-line happy-react/no-layout-effect -- an imperative terminal renderer owns the children of this stable host
     useLayoutEffect(() => {
         const element = rows.current;
         if (!element) return;
@@ -196,14 +196,14 @@ export function TerminalPanel(props: TerminalPanelProps) {
             if (renderer.current === next) renderer.current = undefined;
         };
     }, [collapsed]);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- apply the immutable grid snapshot to the imperative terminal renderer before paint
+    // eslint-disable-next-line happy-react/no-layout-effect -- apply the immutable grid snapshot to the imperative terminal renderer before paint
     useLayoutEffect(() => {
         renderer.current?.render(props.grid);
     }, [collapsed, props.grid]);
     // Scroll position is live browser state. Match WTerm's follow-at-bottom
     // behavior and the product contract that newly advancing scrollback returns
     // the user to current output.
-    // eslint-disable-next-line happy2-react/no-layout-effect -- restore the terminal scroll offset after the grid DOM changes
+    // eslint-disable-next-line happy-react/no-layout-effect -- restore the terminal scroll offset after the grid DOM changes
     useLayoutEffect(() => {
         const element = screen.current;
         const scrollback = props.grid?.scrollback ?? [];
@@ -355,7 +355,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
     const notice = noticeLabel(props);
     return (
         <section
-            className="happy2-terminal-panel"
+            className="happy-terminal-panel"
             data-collapsed={collapsed ? "" : undefined}
             data-fill={height === undefined ? "" : undefined}
             data-happy-desktop-ui="terminal-panel"
@@ -365,15 +365,15 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     ? undefined
                     : ({
                           ...(height === undefined ? {} : { height: `${height}px` }),
-                          "--happy2-terminal-cell-width": `${CELL_WIDTH}px`,
-                          "--happy2-terminal-cell-height": `${CELL_HEIGHT}px`,
+                          "--happy-terminal-cell-width": `${CELL_WIDTH}px`,
+                          "--happy-terminal-cell-height": `${CELL_HEIGHT}px`,
                       } as CSSProperties)
             }
         >
             {collapsed || !resizable ? null : (
                 <div
                     aria-label="Resize terminal"
-                    className="happy2-terminal-panel__resize"
+                    className="happy-terminal-panel__resize"
                     data-happy-desktop-ui="terminal-resize"
                     onPointerDown={dragStart}
                     onPointerMove={(event) => {
@@ -388,11 +388,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
             {notice ? (
                 <div
                     aria-live="polite"
-                    className="happy2-terminal-panel__notice"
+                    className="happy-terminal-panel__notice"
                     data-happy-desktop-ui="terminal-notice"
                     role="status"
                 >
-                    <span className="happy2-terminal-panel__notice-text">{notice}</span>
+                    <span className="happy-terminal-panel__notice-text">{notice}</span>
                     {props.status === "disconnected" || props.status === "error" ? (
                         <Button
                             icon="play"
@@ -410,12 +410,12 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     axes="both"
                     className={
                         props.colorScheme
-                            ? `happy2-terminal-panel__screen happy2-theme-${props.colorScheme}`
-                            : "happy2-terminal-panel__screen"
+                            ? `happy-terminal-panel__screen happy-theme-${props.colorScheme}`
+                            : "happy-terminal-panel__screen"
                     }
                     data-focused={focused && !readOnly ? "" : undefined}
                     data-happy-desktop-ui="terminal-screen"
-                    viewportClassName="happy2-terminal-panel__screen-viewport"
+                    viewportClassName="happy-terminal-panel__screen-viewport"
                     viewportProps={{
                         "aria-label": availability ? `Terminal output. ${availability}` : undefined,
                         onClick: screenClick,
@@ -442,14 +442,14 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     viewportRef={screen}
                 >
                     <div
-                        className="happy2-terminal-panel__rows"
+                        className="happy-terminal-panel__rows"
                         data-happy-desktop-ui="terminal-rows"
                         ref={rows}
                     />
                     {cursor?.visible ? (
                         <div
                             aria-hidden
-                            className="happy2-terminal-panel__cursor"
+                            className="happy-terminal-panel__cursor"
                             data-happy-desktop-ui="terminal-cursor"
                             style={{
                                 // Offset by the rows wrapper padding so cell
@@ -469,7 +469,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                         aria-label="Terminal input"
                         autoCapitalize="off"
                         autoComplete="off"
-                        className="happy2-terminal-panel__input"
+                        className="happy-terminal-panel__input"
                         disabled={readOnly}
                         enterKeyHint="send"
                         /* `input` is the browser's text-entry event. Keeping the
@@ -497,7 +497,7 @@ function terminalSelectionCopy(event: ClipboardEvent<HTMLDivElement>): void {
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
     const rows = [
-        ...event.currentTarget.querySelectorAll<HTMLElement>(".happy2-terminal-panel__row"),
+        ...event.currentTarget.querySelectorAll<HTMLElement>(".happy-terminal-panel__row"),
     ]
         .filter((row) => range.intersectsNode(row))
         .map((row) => terminalRowSelectionText(row, range));
@@ -509,7 +509,7 @@ function terminalSelectionCopy(event: ClipboardEvent<HTMLDivElement>): void {
 function terminalRowSelectionText(row: HTMLElement, range: Range): string {
     let previousEnd: number | undefined;
     let text = "";
-    for (const cell of row.querySelectorAll<HTMLElement>(".happy2-terminal-panel__cell")) {
+    for (const cell of row.querySelectorAll<HTMLElement>(".happy-terminal-panel__cell")) {
         if (!range.intersectsNode(cell)) continue;
         const selectedText = terminalCellSelectionText(cell, range);
         if (!selectedText) continue;
@@ -551,21 +551,21 @@ interface TerminalLink {
 /** Resolves the web URL occupying the terminal cell under one pointer event. */
 function terminalLinkAt(target: EventTarget): TerminalLink | undefined {
     if (!(target instanceof Element)) return undefined;
-    const cell = target.closest<HTMLElement>(".happy2-terminal-panel__cell");
-    const row = cell?.closest<HTMLElement>(".happy2-terminal-panel__row");
+    const cell = target.closest<HTMLElement>(".happy-terminal-panel__cell");
+    const row = cell?.closest<HTMLElement>(".happy-terminal-panel__row");
     if (!cell || !row) return undefined;
     const explicitUrl = terminalWebUrl(cell.dataset.hyperlink);
     if (explicitUrl) {
         return {
             url: explicitUrl,
-            cells: [...row.querySelectorAll<HTMLElement>(".happy2-terminal-panel__cell")].filter(
+            cells: [...row.querySelectorAll<HTMLElement>(".happy-terminal-panel__cell")].filter(
                 (candidate) => terminalWebUrl(candidate.dataset.hyperlink) === explicitUrl,
             ),
         };
     }
     const column = Number(cell.dataset.column);
     if (!Number.isFinite(column)) return undefined;
-    const cells = [...row.querySelectorAll<HTMLElement>(".happy2-terminal-panel__cell")];
+    const cells = [...row.querySelectorAll<HTMLElement>(".happy-terminal-panel__cell")];
     const characters: string[] = [];
     for (const candidate of cells) {
         const start = Number(candidate.dataset.column);

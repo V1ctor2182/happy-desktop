@@ -401,7 +401,6 @@ export {
 } from "./DefaultAgentForm";
 export { CommandPalette, type CommandPaletteProps } from "./CommandPalette";
 export { FormRow, type FormRowAlign, type FormRowLayout, type FormRowProps } from "./FormRow";
-export { NotesPage, type NotesPageProps } from "./pages/notes/NotesPage";
 export {
     DocumentSurface,
     type DocumentSurfaceParticipant,

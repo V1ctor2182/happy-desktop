@@ -1,6 +1,6 @@
 import type { HappyAgentHistoryDocument, HappyAgentHistoryPersistence } from "happy-desktop-app";
 
-const HISTORY_KEY = "happy2.router-history.v1";
+const HISTORY_KEY = "happy.router-history.v1";
 
 /**
  * Where this window's navigation stack is kept between runs, so reopening lands

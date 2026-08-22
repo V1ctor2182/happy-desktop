@@ -71,7 +71,7 @@ export function DelegatedAgentActivity(props: DelegatedAgentActivityProps) {
             ? (props.completedLabel ?? STATUS_LABELS.completed).toLocaleLowerCase("en-US")
             : statusLabel(child.status);
     const label = taskLabel(child);
-    const className = ["happy2-delegated-agent", props.className].filter(Boolean).join(" ");
+    const className = ["happy-delegated-agent", props.className].filter(Boolean).join(" ");
     const accessibleFacts = [
         `model ${child.modelId}`,
         child.status === "completed"
@@ -85,7 +85,7 @@ export function DelegatedAgentActivity(props: DelegatedAgentActivityProps) {
         <>
             <span
                 aria-hidden="true"
-                className="happy2-delegated-agent__glyph"
+                className="happy-delegated-agent__glyph"
                 data-happy-desktop-ui="delegated-agent-glyph"
             >
                 {preparing ? (
@@ -100,16 +100,16 @@ export function DelegatedAgentActivity(props: DelegatedAgentActivityProps) {
                     <Icon name="agents" size={12} />
                 )}
             </span>
-            <span className="happy2-delegated-agent__content">
-                <span className="happy2-delegated-agent__primary">
-                    <span className="happy2-delegated-agent__verb">Agent</span>
-                    <span className="happy2-delegated-agent__arguments">
-                        <span className="happy2-delegated-agent__task">{label}</span>
+            <span className="happy-delegated-agent__content">
+                <span className="happy-delegated-agent__primary">
+                    <span className="happy-delegated-agent__verb">Agent</span>
+                    <span className="happy-delegated-agent__arguments">
+                        <span className="happy-delegated-agent__task">{label}</span>
                         <span aria-hidden="true">·</span>
-                        <span className="happy2-delegated-agent__model">{child.modelId}</span>
+                        <span className="happy-delegated-agent__model">{child.modelId}</span>
                     </span>
                 </span>
-                <span className="happy2-delegated-agent__meta">
+                <span className="happy-delegated-agent__meta">
                     <span>{status}</span>
                     {elapsed === undefined ? null : (
                         <>
@@ -140,7 +140,7 @@ export function DelegatedAgentActivity(props: DelegatedAgentActivityProps) {
             {props.onSelect ? (
                 <button
                     aria-label={accessibleLabel}
-                    className="happy2-delegated-agent__row"
+                    className="happy-delegated-agent__row"
                     data-interactive=""
                     onClick={() => props.onSelect?.(child.sessionId)}
                     type="button"
@@ -150,7 +150,7 @@ export function DelegatedAgentActivity(props: DelegatedAgentActivityProps) {
             ) : (
                 <div
                     aria-label={accessibleLabel}
-                    className="happy2-delegated-agent__row"
+                    className="happy-delegated-agent__row"
                     role="group"
                 >
                     {rowContent}

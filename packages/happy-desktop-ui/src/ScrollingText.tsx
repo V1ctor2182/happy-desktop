@@ -36,7 +36,7 @@ export function ScrollingText(props: ScrollingTextProps) {
     };
     return (
         <div
-            className={["happy2-scrolling-text", props.className].filter(Boolean).join(" ")}
+            className={["happy-scrolling-text", props.className].filter(Boolean).join(" ")}
             data-fade-end={edges.end ? "" : undefined}
             data-fade-start={edges.start ? "" : undefined}
             data-happy-desktop-ui={props["data-happy-desktop-ui"]}
@@ -56,7 +56,7 @@ export function ScrollingText(props: ScrollingTextProps) {
             }}
             style={props.style}
         >
-            <span className="happy2-scrolling-text__content">{props.children}</span>
+            <span className="happy-scrolling-text__content">{props.children}</span>
         </div>
     );
 }

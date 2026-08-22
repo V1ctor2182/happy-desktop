@@ -63,9 +63,7 @@ it("renders per-model token/cost rows, totals, context, and quota windows", asyn
         '[data-testid="u"] [data-happy-desktop-ui="happy-agent-usage-group"]',
     );
     expect(rows.length).toBe(2);
-    expect(rows[0]!.querySelector(".happy2-happy-agent-usage__model")!.textContent).toBe(
-        "gpt-5.6-sol",
-    );
+    expect(rows[0]!.querySelector(".happy-agent-usage__model")!.textContent).toBe("gpt-5.6-sol");
 
     // Totals reflect the snapshot (locale-formatted token count).
     expect(
@@ -85,7 +83,7 @@ it("renders per-model token/cost rows, totals, context, and quota windows", asyn
     );
     expect(windows.length).toBe(2);
     expect(
-        view.container.querySelector(".happy2-happy-agent-usage__quota-fill[data-full]"),
+        view.container.querySelector(".happy-agent-usage__quota-fill[data-full]"),
     ).not.toBeNull();
 }, 120_000);
 

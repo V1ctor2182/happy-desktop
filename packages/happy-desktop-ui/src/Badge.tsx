@@ -17,18 +17,18 @@ export type BadgeProps = {
 export function Badge(props: BadgeProps) {
     return (
         <span
-            className={["happy2-badge", props.className].filter(Boolean).join(" ")}
+            className={["happy-badge", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="badge"
             data-variant={props.variant ?? "neutral"}
         >
             {props.icon
                 ? ((name) => (
-                      <span className="happy2-badge__icon" data-happy-desktop-ui="badge-icon">
+                      <span className="happy-badge__icon" data-happy-desktop-ui="badge-icon">
                           <Icon name={name} size={12} />
                       </span>
                   ))(props.icon)
                 : null}
-            <span className="happy2-badge__label" data-happy-desktop-ui="badge-label">
+            <span className="happy-badge__label" data-happy-desktop-ui="badge-label">
                 {props.label}
             </span>
         </span>
@@ -48,12 +48,12 @@ export function CountBadge(props: CountBadgeProps) {
     const width = () => 18 + (String(props.count).length - 1) * 7;
     return (
         <span
-            className={["happy2-count-badge", props.className].filter(Boolean).join(" ")}
+            className={["happy-count-badge", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="count-badge"
             data-tone={props.tone ?? "accent"}
             style={{ width: `${width()}px` }}
         >
-            <span className="happy2-count-badge__label" data-happy-desktop-ui="count-badge-label">
+            <span className="happy-count-badge__label" data-happy-desktop-ui="count-badge-label">
                 {props.count}
             </span>
         </span>
@@ -72,25 +72,25 @@ export function ReactionChip(props: ReactionChipProps) {
         <button
             aria-label={`${props.emoji} ${props.count}`}
             aria-pressed={props.active ? "true" : "false"}
-            className={["happy2-reaction-chip", props.className].filter(Boolean).join(" ")}
+            className={["happy-reaction-chip", props.className].filter(Boolean).join(" ")}
             data-active={props.active ? "" : undefined}
             data-happy-desktop-ui="reaction-chip"
             onClick={() => props.onSelect?.()}
             type="button"
         >
             <span
-                className="happy2-reaction-chip__emoji"
+                className="happy-reaction-chip__emoji"
                 data-happy-desktop-ui="reaction-chip-emoji"
             >
                 <span
-                    className="happy2-reaction-chip__emoji-glyph"
+                    className="happy-reaction-chip__emoji-glyph"
                     data-happy-desktop-ui="reaction-chip-emoji-glyph"
                 >
                     {props.emoji}
                 </span>
             </span>
             <span
-                className="happy2-reaction-chip__count"
+                className="happy-reaction-chip__count"
                 data-happy-desktop-ui="reaction-chip-count"
             >
                 {props.count}
@@ -123,13 +123,13 @@ export function KeyCap(props: KeyCapProps) {
         <kbd
             aria-hidden={props.decorative ? "true" : undefined}
             aria-label={props.decorative ? undefined : props.keys}
-            className={["happy2-key-cap", props.className].filter(Boolean).join(" ")}
+            className={["happy-key-cap", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="key-cap"
         >
-            <span className="happy2-key-cap__label" data-happy-desktop-ui="key-cap-label">
+            <span className="happy-key-cap__label" data-happy-desktop-ui="key-cap-label">
                 {Array.from(props.keys).map((key, index) => (
                     <span
-                        className="happy2-key-cap__key"
+                        className="happy-key-cap__key"
                         data-kind={shortcutSymbols.has(key) ? "symbol" : "text"}
                         key={`${key}-${index}`}
                         data-happy-desktop-ui="key-cap-key"
@@ -138,7 +138,7 @@ export function KeyCap(props: KeyCapProps) {
                             <ShortcutSymbol symbol={key} />
                         ) : (
                             <span
-                                className="happy2-key-cap__text"
+                                className="happy-key-cap__text"
                                 data-happy-desktop-ui="key-cap-text"
                             >
                                 {key}

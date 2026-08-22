@@ -70,7 +70,7 @@ export function SetupChoice(props: SetupChoiceProps) {
     ]);
     return (
         <div
-            className={["happy2-setup-choice", local.className].filter(Boolean).join(" ")}
+            className={["happy-setup-choice", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="setup-choice"
             data-testid={local["data-testid"]}
             style={local.style}
@@ -78,24 +78,24 @@ export function SetupChoice(props: SetupChoiceProps) {
             {local.options.map((option) => (
                 <div
                     key={option.id}
-                    className="happy2-setup-choice__panel"
+                    className="happy-setup-choice__panel"
                     data-happy-desktop-ui="setup-choice-panel"
                     data-id={option.id}
                 >
                     <span
-                        className="happy2-setup-choice__art"
+                        className="happy-setup-choice__art"
                         data-happy-desktop-ui="setup-choice-art"
                     >
                         <LottieScene name={option.scene} replayLabel={option.title} size={88} />
                     </span>
                     <span
-                        className="happy2-setup-choice__title"
+                        className="happy-setup-choice__title"
                         data-happy-desktop-ui="setup-choice-title"
                     >
                         {option.title}
                     </span>
                     <span
-                        className="happy2-setup-choice__description"
+                        className="happy-setup-choice__description"
                         data-happy-desktop-ui="setup-choice-description"
                     >
                         {option.description}

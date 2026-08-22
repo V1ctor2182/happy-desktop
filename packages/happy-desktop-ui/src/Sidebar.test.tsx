@@ -325,7 +325,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     expect(title.bounds().x).toBe(16);
     const titleMetrics = title.textMetrics();
     expect(titleMetrics.text).toBe("Acme Studio");
-    expect(titleMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(titleMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(titleMetrics.font.size).toBe(15);
     expect(titleMetrics.font.weight).toBe("800");
     expect(titleMetrics.font.lineHeight).toBe(20);
@@ -351,7 +351,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
      * icon-font glyph centered in its own box by the font, so its placement is
      * the box geometry, not a centroid. */
     expect((await title.visibleMetrics()).pixelCount).toBeGreaterThan(0);
-    const chevron = view.$('[data-testid="full"] .happy2-sidebar__title-chevron');
+    const chevron = view.$('[data-testid="full"] .happy-sidebar__title-chevron');
     expect(chevron.bounds().width).toBe(14);
     expect(chevron.computedStyle("color")).toBe("rgb(102, 102, 102)");
     expect((await chevron.visibleMetrics()).pixelCount).toBeGreaterThan(0);
@@ -362,12 +362,12 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     expect(subtitle.computedStyle("color")).toBe("rgb(102, 102, 102)");
     expect((await subtitle.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
-    const compose = view.$('[data-testid="full"] .happy2-sidebar__compose');
+    const compose = view.$('[data-testid="full"] .happy-sidebar__compose');
     expect(compose.element.tagName).toBe("BUTTON");
     expect(compose.element.getAttribute("data-happy-desktop-ui")).toBe("sidebar-item");
     expect(
         view
-            .$('[data-testid="full"] .happy2-sidebar__compose .happy2-sidebar__item-label')
+            .$('[data-testid="full"] .happy-sidebar__compose .happy-sidebar__item-label')
             .textMetrics().text,
     ).toContain("Create");
     expect(compose.bounds().width).toBe(348);
@@ -382,7 +382,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         "border-radius": "6px",
     });
     const composeLeading = view.$(
-        '[data-testid="full"] .happy2-sidebar__compose [data-happy-desktop-ui="sidebar-item-leading"] [data-happy-desktop-ui="icon"]',
+        '[data-testid="full"] .happy-sidebar__compose [data-happy-desktop-ui="sidebar-item-leading"] [data-happy-desktop-ui="icon"]',
     );
     const composeIconBounds = composeLeading.bounds();
     expect(
@@ -400,7 +400,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     );
     expect(body.bounds().y).toBe(56);
     /* Scrollport edge-to-edge; the inner content wrapper owns the shared 6px
-       panel inset (see --happy2-panel-inset). */
+       panel inset (see --happy-panel-inset). */
     expect(
         bodyViewport.computedStyles(["overflow-y", "padding-left", "padding-right", "padding-top"]),
     ).toEqual({
@@ -444,7 +444,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         '[data-testid="full"] [data-section-id="channels"] [data-happy-desktop-ui="sidebar-section-label"]',
     );
     const headMetrics = headLabel.textMetrics();
-    expect(headMetrics.font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(headMetrics.font.family).toBe("happy Mono, ui-monospace, monospace");
     expect(headMetrics.font.size).toBe(11);
     expect(headMetrics.font.weight).toBe("700");
     expect(headMetrics.font.lineHeight).toBe(24);
@@ -657,7 +657,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         '[data-testid="full"] [data-item-id="codex"] [data-happy-desktop-ui="sidebar-item-working"]',
     );
     expect(workingLabel.element.textContent).toBe("working");
-    expect(workingLabel.textMetrics().font.family).toBe("happy2 Mono, ui-monospace, monospace");
+    expect(workingLabel.textMetrics().font.family).toBe("happy Mono, ui-monospace, monospace");
     expect(workingLabel.textMetrics().font.size).toBe(11);
     expect(workingLabel.computedStyle("color")).toBe("rgb(73, 69, 79)");
     /*
@@ -872,7 +872,7 @@ it("renders actionable guidance for empty sections", async () => {
     expect(sectionActions).toEqual(["channels", "dms"]);
 
     const composeButton = document.querySelector<HTMLButtonElement>(
-        '[data-testid="empty"] .happy2-sidebar__compose',
+        '[data-testid="empty"] .happy-sidebar__compose',
     );
     expect(composeButton).not.toBeNull();
     composeButton!.click();

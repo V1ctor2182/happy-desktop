@@ -23,8 +23,8 @@ const GLYPH_TOL = 0.4;
 
 const fontFamily = () =>
     engine() === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 /*
  * Alpha-weighted centroid drift of a painted glyph from the center of its OWN
@@ -163,7 +163,7 @@ it("holds StatTile card geometry, typography, and trend deltas", async () => {
     expect(label.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(label.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             lineHeight: 16,
             size: 12,
             weight: "600",
@@ -200,7 +200,7 @@ it("holds StatTile card geometry, typography, and trend deltas", async () => {
     expect(valueVariant, "value lining-nums").toContain("lining-nums");
     expect(value.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             lineHeight: 32,
             size: 28,
             weight: "700",

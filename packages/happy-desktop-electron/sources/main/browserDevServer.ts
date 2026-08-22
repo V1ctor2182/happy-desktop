@@ -3,18 +3,11 @@ import type { Plugin } from "vite";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import type { LocalHappyAgentConnection } from "./localHappyAgent";
 import { localHappyAgentConnectorCreate } from "./localHappyAgent";
-import {
-    noteApplyRequestValidate,
-    noteIdValidate,
-    noteTitleOptionalValidate,
-    noteTitleValidate,
-} from "./notesIpcValidation";
-import { NotesStore } from "./notesStore";
 import { happyAgentDaemonConnectionUnavailable } from "./happyAgentDaemonClient";
 import { happyAgentProxyHandle } from "./happyAgentProxyHandle";
 import { happyAgentTerminalBridgeCreate } from "./happyAgentTerminalBridge";
 
-const endpoint = "/__happy2_local_happy_agent";
+const endpoint = "/__happy_local_happy_agent";
 const maximumBridgeBodyBytes = 3 * 1024 * 1024;
 
 interface DevRuntime {
@@ -76,18 +69,18 @@ export function browserLocalHappyAgentPlugin(options: BrowserLocalHappyAgentOpti
         );
     };
     return {
-        name: "happy2-browser-local-happy-agent",
+        name: "happy-browser-local-happy-agent",
         apply: "serve",
         transformIndexHtml() {
             // Signal browser-local mode to the renderer without import.meta.env, so
             // the shared renderer entry can pick the dev bridge over the web app. A
             // meta tag (not an inline script) carries the flag because the page CSP
             // forbids inline scripts, which would otherwise silently drop the signal.
-            if (process.env.VITE_HAPPY2_BROWSER_LOCAL !== "1") return;
+            if (process.env.VITE_HAPPY_BROWSER_LOCAL !== "1") return;
             return [
                 {
                     tag: "meta",
-                    attrs: { name: "happy2-browser-local", content: "1" },
+                    attrs: { name: "happy-browser-local", content: "1" },
                     injectTo: "head" as const,
                 },
             ];
@@ -158,52 +151,6 @@ function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * The development bridge's own note collection, reading the same folder the
- * packaged app uses. Notes belong to the machine rather than to a daemon
- * connection, so they are served here directly and stay usable while the daemon
- * is down.
- */
-const devNotes = new NotesStore();
-
-async function notesActionHandle(
-    action: string,
-    input: unknown,
-): Promise<{ readonly handled: boolean; readonly value?: unknown }> {
-    switch (action) {
-        case "notesList":
-            return { handled: true, value: await devNotes.list() };
-        case "noteCreate": {
-            const title = noteTitleOptionalValidate(input);
-            return {
-                handled: true,
-                value: await devNotes.create(title === undefined ? {} : { title }),
-            };
-        }
-        case "noteRead":
-            return { handled: true, value: await devNotes.read(noteIdValidate(input)) };
-        case "noteApply": {
-            const validated = noteApplyRequestValidate(input);
-            return { handled: true, value: await devNotes.applyUpdates(validated.id, validated) };
-        }
-        case "noteRename": {
-            const value = input as { readonly id?: unknown; readonly title?: unknown };
-            return {
-                handled: true,
-                value: await devNotes.rename(
-                    noteIdValidate(value?.id),
-                    noteTitleValidate(value?.title),
-                ),
-            };
-        }
-        case "noteRemove":
-            await devNotes.remove(noteIdValidate(input));
-            return { handled: true, value: undefined };
-        default:
-            return { handled: false };
-    }
-}
-
 async function desktopConfigActionHandle(
     action: string,
     input: unknown,
@@ -228,15 +175,9 @@ async function handleRequest(
 ): Promise<void> {
     try {
         const body = JSON.parse(await bodyRead(request)) as { action?: string; input?: unknown };
-        // Notes are answered before the daemon connection is required, since they
-        // are this machine's own files and have nothing to do with a Happy Agent.
-        const notes = await notesActionHandle(body.action ?? "", body.input);
-        if (notes.handled) {
-            json(response, 200, { value: notes.value });
-            return;
-        }
-        // Desktop config is another machine-local capability. Like notes, it
-        // stays available even while the normal Happy Agent daemon is offline.
+        // Desktop config is a machine-local capability, so it is answered before
+        // the daemon connection is required and stays available even while the
+        // normal Happy Agent daemon is offline.
         const config = await desktopConfigActionHandle(
             body.action ?? "",
             body.input,

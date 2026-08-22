@@ -110,7 +110,7 @@ it("holds vector-icon box geometry, font, and PUA glyph across sizes", async () 
             "flex-shrink": "0",
         });
         expect(icon.computedStyle("font-family").replaceAll('"', ""), `ionicon ${size} font`).toBe(
-            "happy2 Ionicons",
+            "happy Ionicons",
         );
         expect(icon.element.textContent, `ionicon ${size} glyph`).toBe(
             String.fromCodePoint(ioniconsGlyphs["chatbubbles-outline"]),
@@ -124,7 +124,7 @@ it("holds vector-icon box geometry, font, and PUA glyph across sizes", async () 
     expect(ionDefault.element.getAttribute("data-glyph")).toBe("checkmark-circle");
 
     const octDefault = view.$('[data-testid="oct-default"] [data-happy-desktop-ui="vector-icon"]');
-    expect(octDefault.computedStyle("font-family").replaceAll('"', "")).toBe("happy2 Octicons");
+    expect(octDefault.computedStyle("font-family").replaceAll('"', "")).toBe("happy Octicons");
     expect(octDefault.element.getAttribute("data-set")).toBe("octicons");
     expect(octDefault.element.textContent).toBe(String.fromCodePoint(octiconsGlyphs["git-branch"]));
 

@@ -1,9 +1,6 @@
 import type {
     DesktopConfig,
     DesktopDebugSnapshot,
-    DesktopNoteApplyRequest,
-    DesktopNoteContent,
-    DesktopNoteSummary,
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
     HappyDesktopBridge,
@@ -15,7 +12,7 @@ import type {
     DesktopReactDevtoolsMessage,
 } from "../shared/desktopProfiler";
 
-const endpoint = "/__happy2_local_happy_agent";
+const endpoint = "/__happy_local_happy_agent";
 
 const unsupportedDebugSnapshot: DesktopDebugSnapshot = {
     daemon: { status: "stopped" },
@@ -152,16 +149,6 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         profilerReactSubscribe: (_listener: (command: DesktopReactDevtoolsCommand) => void) => () =>
             undefined,
         applicationMenuOpen: async () => undefined,
-        noteApply: (apply: DesktopNoteApplyRequest) =>
-            request<DesktopNoteSummary>("noteApply", apply),
-        noteCreate: (title) => request<DesktopNoteContent>("noteCreate", title),
-        noteRead: (id) => request<DesktopNoteContent>("noteRead", id),
-        noteRemove: (id) => request<void>("noteRemove", id),
-        noteRename: (id, title) => request<DesktopNoteSummary>("noteRename", { id, title }),
-        notesList: () => request<readonly DesktopNoteSummary[]>("notesList"),
-        // The development bridge has no push channel, so a change made outside
-        // this window is picked up the next time the surface reads.
-        notesSubscribe: () => () => undefined,
         // Browser-local development runs against a machine that already has Happy Agent
         // and a daemon, and it has no native picker or PTY to run setup with, so
         // it reports setup as finished rather than presenting steps it cannot

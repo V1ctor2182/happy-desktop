@@ -18,7 +18,7 @@ export function Box(props: BoxProps) {
     return (
         <div
             {...rest}
-            className={["happy2-box", local.className].filter(Boolean).join(" ")}
+            className={["happy-box", local.className].filter(Boolean).join(" ")}
             /* A composing component's explicit part marker must survive so its
                measurable parts stay addressable; plain boxes keep the generic
                marker. */

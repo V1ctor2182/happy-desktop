@@ -38,7 +38,7 @@ export function SetupOptionCard(props: SetupOptionCardProps) {
     const isCompact = () => !props.description && !props.meta && !props.hint;
     return (
         <button
-            className={["happy2-setup-option", props.className].filter(Boolean).join(" ")}
+            className={["happy-setup-option", props.className].filter(Boolean).join(" ")}
             data-compact={isCompact() ? "" : undefined}
             data-disabled={isDisabled() ? "" : undefined}
             data-happy-desktop-ui="setup-option"
@@ -53,27 +53,27 @@ export function SetupOptionCard(props: SetupOptionCardProps) {
             {props.icon
                 ? ((name) => (
                       <span
-                          className="happy2-setup-option__icon"
+                          className="happy-setup-option__icon"
                           data-happy-desktop-ui="setup-option-icon"
                       >
                           <Icon name={name} size={18} />
                       </span>
                   ))(props.icon)
                 : null}
-            <span className="happy2-setup-option__body" data-happy-desktop-ui="setup-option-body">
+            <span className="happy-setup-option__body" data-happy-desktop-ui="setup-option-body">
                 <span
-                    className="happy2-setup-option__title-row"
+                    className="happy-setup-option__title-row"
                     data-happy-desktop-ui="setup-option-title-row"
                 >
                     <span
-                        className="happy2-setup-option__title"
+                        className="happy-setup-option__title"
                         data-happy-desktop-ui="setup-option-title"
                     >
                         {props.title}
                     </span>
                     {props.recommended ? (
                         <span
-                            className="happy2-setup-option__recommended"
+                            className="happy-setup-option__recommended"
                             data-happy-desktop-ui="setup-option-recommended"
                         >
                             Recommended
@@ -82,7 +82,7 @@ export function SetupOptionCard(props: SetupOptionCardProps) {
                     {props.status
                         ? ((status) => (
                               <span
-                                  className="happy2-setup-option__status"
+                                  className="happy-setup-option__status"
                                   data-happy-desktop-ui="setup-option-status"
                               >
                                   <Badge
@@ -97,7 +97,7 @@ export function SetupOptionCard(props: SetupOptionCardProps) {
                 {props.description
                     ? ((description) => (
                           <span
-                              className="happy2-setup-option__description"
+                              className="happy-setup-option__description"
                               data-happy-desktop-ui="setup-option-description"
                           >
                               {description}
@@ -107,7 +107,7 @@ export function SetupOptionCard(props: SetupOptionCardProps) {
                 {props.meta
                     ? ((meta) => (
                           <span
-                              className="happy2-setup-option__meta"
+                              className="happy-setup-option__meta"
                               data-happy-desktop-ui="setup-option-meta"
                           >
                               {meta}
@@ -117,7 +117,7 @@ export function SetupOptionCard(props: SetupOptionCardProps) {
                 {props.hint
                     ? ((hint) => (
                           <span
-                              className="happy2-setup-option__hint"
+                              className="happy-setup-option__hint"
                               data-happy-desktop-ui="setup-option-hint"
                               data-tone={hintTone()}
                           >
@@ -127,17 +127,17 @@ export function SetupOptionCard(props: SetupOptionCardProps) {
                     : null}
             </span>
             <span
-                className="happy2-setup-option__trailing"
+                className="happy-setup-option__trailing"
                 data-happy-desktop-ui="setup-option-trailing"
             >
                 {isPending() ? (
                     <span
-                        className="happy2-setup-option__spinner"
+                        className="happy-setup-option__spinner"
                         data-happy-desktop-ui="setup-option-spinner"
                     />
                 ) : props.selected ? (
                     <span
-                        className="happy2-setup-option__check"
+                        className="happy-setup-option__check"
                         data-happy-desktop-ui="setup-option-check"
                     >
                         <Icon name="check-circle" size={20} />

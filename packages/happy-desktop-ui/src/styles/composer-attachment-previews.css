@@ -1,18 +1,18 @@
-.happy2-composer-attachments,
-.happy2-composer-attachments * {
+.happy-composer-attachments,
+.happy-composer-attachments * {
     box-sizing: border-box;
 }
 
-.happy2-composer-attachments {
+.happy-composer-attachments {
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
     padding: 2px 14px 0 0;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-composer-attachments__item {
+.happy-composer-attachments__item {
     position: relative;
     display: flex;
     flex: none;
@@ -22,12 +22,12 @@
     height: 56px;
     background: var(--surface);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text-secondary);
     overflow: visible;
 }
 
-.happy2-composer-attachments__media {
+.happy-composer-attachments__media {
     display: block;
     width: 100%;
     height: 100%;
@@ -35,7 +35,7 @@
     object-fit: cover;
 }
 
-.happy2-composer-attachments__file {
+.happy-composer-attachments__file {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -45,7 +45,7 @@
     padding: 6px 4px 4px;
 }
 
-.happy2-composer-attachments__name {
+.happy-composer-attachments__name {
     display: block;
     width: 100%;
     color: var(--text-secondary);
@@ -60,12 +60,12 @@
 
 /* The preview action and play mark belong to the media they overlay, so they
  * intentionally leave the preview's flex flow. */
-.happy2-composer-attachments__open,
-.happy2-composer-attachments__play {
+.happy-composer-attachments__open,
+.happy-composer-attachments__play {
     position: absolute;
 }
 
-.happy2-composer-attachments__open {
+.happy-composer-attachments__open {
     z-index: 1;
     inset: 0;
     padding: 0;
@@ -76,16 +76,16 @@
     appearance: none;
 }
 
-.happy2-composer-attachments__open:hover {
+.happy-composer-attachments__open:hover {
     background: color-mix(in srgb, var(--surface-ripple) 28%, transparent);
 }
 
-.happy2-composer-attachments__open:focus-visible {
+.happy-composer-attachments__open:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
-.happy2-composer-attachments__play {
+.happy-composer-attachments__play {
     z-index: 2;
     left: 4px;
     bottom: 4px;

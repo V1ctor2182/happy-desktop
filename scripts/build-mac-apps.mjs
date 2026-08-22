@@ -31,8 +31,8 @@ for (const selectedFlavorName of flavors) {
     const environment =
         selectedFlavorName === "local-web"
             ? {
-                  HAPPY2_DESKTOP_FLAVOR: "local-web",
-                  HAPPY2_LOCAL_WEB_ORIGIN: localWebOrigin,
+                  HAPPY_DESKTOP_FLAVOR: "local-web",
+                  HAPPY_LOCAL_WEB_ORIGIN: localWebOrigin,
               }
             : {};
     if (selectedFlavorName === "standard")

@@ -112,7 +112,7 @@ export function WorkspaceLifecycleNotice(props: WorkspaceLifecycleNoticeProps) {
     const glyphSize = () => (size() === "panel" ? 20 : 14);
     return (
         <div
-            className={["happy2-workspace-lifecycle", local.className].filter(Boolean).join(" ")}
+            className={["happy-workspace-lifecycle", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="workspace-lifecycle"
             data-phase={local.phase}
             data-size={size()}
@@ -126,7 +126,7 @@ export function WorkspaceLifecycleNotice(props: WorkspaceLifecycleNoticeProps) {
                 it would have assistive tech read the same news twice. */}
             <span
                 aria-hidden="true"
-                className="happy2-workspace-lifecycle__media"
+                className="happy-workspace-lifecycle__media"
                 data-happy-desktop-ui="workspace-lifecycle-media"
             >
                 {presentation().icon === undefined ? (
@@ -139,24 +139,24 @@ export function WorkspaceLifecycleNotice(props: WorkspaceLifecycleNoticeProps) {
                 )}
             </span>
             <div
-                className="happy2-workspace-lifecycle__content"
+                className="happy-workspace-lifecycle__content"
                 data-happy-desktop-ui="workspace-lifecycle-content"
             >
                 <span
-                    className="happy2-workspace-lifecycle__title"
+                    className="happy-workspace-lifecycle__title"
                     data-happy-desktop-ui="workspace-lifecycle-title"
                 >
                     {presentation().title(local.name)}
                 </span>
                 <span
-                    className="happy2-workspace-lifecycle__body"
+                    className="happy-workspace-lifecycle__body"
                     data-happy-desktop-ui="workspace-lifecycle-body"
                 >
                     {presentation().body}
                 </span>
                 {local.detail === undefined ? null : (
                     <span
-                        className="happy2-workspace-lifecycle__detail"
+                        className="happy-workspace-lifecycle__detail"
                         data-happy-desktop-ui="workspace-lifecycle-detail"
                     >
                         {local.detail}
@@ -164,7 +164,7 @@ export function WorkspaceLifecycleNotice(props: WorkspaceLifecycleNoticeProps) {
                 )}
                 {local.path === undefined ? null : (
                     <span
-                        className="happy2-workspace-lifecycle__path"
+                        className="happy-workspace-lifecycle__path"
                         data-happy-desktop-ui="workspace-lifecycle-path"
                     >
                         {local.path}

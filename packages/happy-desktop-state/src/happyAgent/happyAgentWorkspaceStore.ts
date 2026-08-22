@@ -1257,7 +1257,7 @@ export function happyAgentWorkspaceStoreCreate(
 ): HappyAgentWorkspaceStore {
     const list: HappyAgentSessionListStore = client.sessionList();
     const output = deps.output ?? (() => undefined);
-    const draftOrigin = `happy2_${Math.random().toString(36).slice(2)}`;
+    const draftOrigin = `happy_${Math.random().toString(36).slice(2)}`;
     let draftUpdatedAt = 0;
     const nextDraftUpdatedAt = (): number => {
         draftUpdatedAt = Math.max(Date.now(), draftUpdatedAt + 1);

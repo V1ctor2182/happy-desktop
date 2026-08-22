@@ -1,18 +1,18 @@
 /* Status rows stay in normal flow. A row may own clearance from preceding
  * activity, but it never shifts itself over content that came before it. */
-.happy2-chat-turn-status,
-.happy2-conversation-turn-status {
+.happy-chat-turn-status,
+.happy-conversation-turn-status {
     margin-top: 0;
     padding: 0 20px 0 30px;
 }
 
 /* The running footer uses the same 16px/24px type measure as message content. */
-.happy2-agent-working-status,
-.happy2-agent-working-status * {
+.happy-agent-working-status,
+.happy-agent-working-status * {
     box-sizing: border-box;
 }
 
-.happy2-agent-working-status {
+.happy-agent-working-status {
     position: relative;
     display: flex;
     flex: none;
@@ -21,7 +21,7 @@
     height: 32px;
     min-height: 32px;
     background: transparent;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 16px;
     font-weight: 400;
     line-height: 24px;
@@ -33,12 +33,12 @@
     pointer-events: none;
 }
 
-.happy2-agent-working-status:not([data-active]) {
+.happy-agent-working-status:not([data-active]) {
     height: 0;
     min-height: 0;
 }
 
-.happy2-agent-working-status[data-active] {
+.happy-agent-working-status[data-active] {
     visibility: visible;
     opacity: 1;
 }
@@ -46,7 +46,7 @@
 /* One typographic run after the loader: clock, separator, and phase share the
    same family, size, line box, and baseline — the row's own body measure, so
    the line reporting the turn reads at the size the turn's own prose does. */
-.happy2-agent-working-status__state {
+.happy-agent-working-status__state {
     display: flex;
     flex: 0 1 auto;
     align-items: baseline;
@@ -58,7 +58,7 @@
     line-height: inherit;
 }
 
-.happy2-agent-working-status__state .happy2-typed-text {
+.happy-agent-working-status__state .happy-typed-text {
     min-width: 0;
     vertical-align: baseline;
     font-family: inherit;
@@ -66,11 +66,11 @@
 
 /* A question pauses work on the human side. The static label starts where the
    loader normally starts; no empty glyph column suggests that work continues. */
-.happy2-agent-working-status[data-awaiting-input] .happy2-agent-working-status__state {
+.happy-agent-working-status[data-awaiting-input] .happy-agent-working-status__state {
     padding-left: 0;
 }
 
-.happy2-agent-working-status__spinner {
+.happy-agent-working-status__spinner {
     flex: none;
     align-self: center;
     margin-right: 3px;
@@ -82,12 +82,12 @@
    column. A ring already fills the column, so it takes the padding back and
    adds no margin of its own: a turn that starts waiting keeps both the glyph
    and the text it precedes exactly where the work above them sits. */
-.happy2-agent-working-status__ring {
+.happy-agent-working-status__ring {
     flex: none;
     margin-left: -3px;
 }
 
-.happy2-agent-working-status__timer {
+.happy-agent-working-status__timer {
     flex: none;
     text-align: right;
     font-variant-numeric: lining-nums tabular-nums;
@@ -95,7 +95,7 @@
 
 /* The wait countdown stands in the phase slot. Its digits change every second,
    but it keeps the exact typography and baseline of the ordinary phase. */
-.happy2-agent-working-status__phase {
+.happy-agent-working-status__phase {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -103,26 +103,26 @@
     font-variant-numeric: lining-nums tabular-nums;
 }
 
-.happy2-agent-working-status__separator {
+.happy-agent-working-status__separator {
     flex: none;
     color: var(--input-placeholder);
 }
 
 /* A live footer follows the newest activity rather than closing settled prose:
  * keep it in normal flow and retain a small block boundary above it. */
-.happy2-chat-turn-status.happy2-agent-working-status,
-.happy2-conversation-turn-status.happy2-agent-working-status {
+.happy-chat-turn-status.happy-agent-working-status,
+.happy-conversation-turn-status.happy-agent-working-status {
     margin-top: 4px;
 }
 
-.happy2-chat-turn-status.happy2-agent-working-status:not([data-active]),
-.happy2-conversation-turn-status.happy2-agent-working-status:not([data-active]) {
+.happy-chat-turn-status.happy-agent-working-status:not([data-active]),
+.happy-conversation-turn-status.happy-agent-working-status:not([data-active]) {
     margin-top: 0;
 }
 
 /* When the status itself opens the agent turn, Message already owns the same
    content inset and author clearance as a tool-first row. */
-.happy2-message--activity-lead .happy2-conversation-turn-status {
+.happy-message--activity-lead .happy-conversation-turn-status {
     margin-top: 0;
     padding: 0;
 }

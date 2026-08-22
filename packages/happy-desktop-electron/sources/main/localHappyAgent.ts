@@ -13,8 +13,8 @@ import {
 
 type HealthResponse = happyAgentProtocol.HealthResponse;
 
-const nodePathMarker = "__HAPPY2_NODE_PATH__=";
-const nodeVersionMarker = "__HAPPY2_NODE_VERSION__=";
+const nodePathMarker = "__HAPPY_NODE_PATH__=";
+const nodeVersionMarker = "__HAPPY_NODE_VERSION__=";
 /**
  * The assistant commands the probe looks for, and the marker each answers on.
  *
@@ -30,9 +30,9 @@ const nodeVersionMarker = "__HAPPY2_NODE_VERSION__=";
  * signed out need different things done to them.
  */
 const assistantCommands = {
-    claude: "__HAPPY2_CLAUDE_PATH__=",
-    codex: "__HAPPY2_CODEX_PATH__=",
-    grok: "__HAPPY2_GROK_PATH__=",
+    claude: "__HAPPY_CLAUDE_PATH__=",
+    codex: "__HAPPY_CODEX_PATH__=",
+    grok: "__HAPPY_GROK_PATH__=",
 } as const satisfies Record<LocalAssistantId, string>;
 const discoveryCommand =
     `printf '${nodePathMarker}%s\\0' "$(command -v node 2>/dev/null)"; ` +

@@ -5,12 +5,12 @@
  * danger-text treatment below the fields.
  */
 
-.happy2-default-agent-form,
-.happy2-default-agent-form__preset {
+.happy-default-agent-form,
+.happy-default-agent-form__preset {
     box-sizing: border-box;
 }
 
-.happy2-default-agent-form {
+.happy-default-agent-form {
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -18,29 +18,29 @@
     margin: 0;
 }
 
-.happy2-default-agent-form__description {
+.happy-default-agent-form__description {
     margin: 0;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 13px;
     line-height: 20px;
 }
 
-.happy2-default-agent-form__preset {
+.happy-default-agent-form__preset {
     display: flex;
     align-items: center;
 }
 
-.happy2-default-agent-form__error {
+.happy-default-agent-form__error {
     margin: 0;
     color: var(--text-destructive);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 13px;
     line-height: 20px;
 }
 
 /* The 16px spark has the same one-backing-pixel low raster centroid in the
  * medium preset button across Blink, Gecko, and WebKit. */
-.happy2-default-agent-form__preset .happy2-button__icon svg {
+.happy-default-agent-form__preset .happy-button__icon svg {
     transform: translateY(-0.5px);
 }

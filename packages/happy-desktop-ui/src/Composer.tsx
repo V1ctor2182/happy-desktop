@@ -49,14 +49,14 @@ const kindIcons: Record<ContextKind, IconName> = {
 export function ContextChips(props: ContextChipsProps) {
     return (
         <div
-            className={["happy2-context-chips", props.className].filter(Boolean).join(" ")}
+            className={["happy-context-chips", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="context-chips"
             data-testid={props["data-testid"]}
             style={props.style}
         >
             {props.label ? (
                 <span
-                    className="happy2-context-chips__label"
+                    className="happy-context-chips__label"
                     data-happy-desktop-ui="context-chips-label"
                 >
                     {props.label}
@@ -64,26 +64,26 @@ export function ContextChips(props: ContextChipsProps) {
             ) : null}
             {props.items.map((item) => (
                 <span
-                    className="happy2-context-chips__chip"
+                    className="happy-context-chips__chip"
                     key={item.id}
                     data-kind={item.kind}
                     data-happy-desktop-ui="context-chips-chip"
                 >
                     <span
-                        className="happy2-context-chips__icon"
+                        className="happy-context-chips__icon"
                         data-happy-desktop-ui="context-chips-icon"
                     >
                         <Icon name={kindIcons[item.kind]} size={12} />
                     </span>
                     <span
-                        className="happy2-context-chips__text"
+                        className="happy-context-chips__text"
                         data-happy-desktop-ui="context-chips-text"
                     >
                         {item.label}
                     </span>
                     {item.detail ? (
                         <span
-                            className="happy2-context-chips__detail"
+                            className="happy-context-chips__detail"
                             data-happy-desktop-ui="context-chips-detail"
                         >
                             {item.detail}
@@ -92,7 +92,7 @@ export function ContextChips(props: ContextChipsProps) {
                     {!props.readOnly && props.onRemove ? (
                         <button
                             aria-label={`Remove ${item.label}`}
-                            className="happy2-context-chips__remove"
+                            className="happy-context-chips__remove"
                             data-happy-desktop-ui="context-chips-remove"
                             onClick={() => props.onRemove?.(item.id)}
                             type="button"
@@ -146,7 +146,7 @@ export function MentionPicker(props: MentionPickerProps) {
         <button
             aria-selected={mention.id === activeId() ? "true" : "false"}
             key={mention.id}
-            className="happy2-mention-picker__row"
+            className="happy-mention-picker__row"
             data-active={mention.id === activeId() ? "" : undefined}
             data-happy-desktop-ui="mention-picker-row"
             data-mention-id={mention.id}
@@ -156,18 +156,18 @@ export function MentionPicker(props: MentionPickerProps) {
         >
             <Avatar initials={mention.initials} size="xs" tone={mention.tone} type="agent" />
             <span
-                className="happy2-mention-picker__meta"
+                className="happy-mention-picker__meta"
                 data-happy-desktop-ui="mention-picker-meta"
             >
                 <span
-                    className="happy2-mention-picker__name"
+                    className="happy-mention-picker__name"
                     data-happy-desktop-ui="mention-picker-name"
                 >
                     {mention.name}
                 </span>
                 {mention.description ? (
                     <span
-                        className="happy2-mention-picker__description"
+                        className="happy-mention-picker__description"
                         data-happy-desktop-ui="mention-picker-description"
                     >
                         {mention.description}
@@ -177,7 +177,7 @@ export function MentionPicker(props: MentionPickerProps) {
             {mention.status
                 ? ((status) => (
                       <Badge
-                          className="happy2-mention-picker__status"
+                          className="happy-mention-picker__status"
                           label={status}
                           variant={status === "ready" ? "success" : "warning"}
                       />
@@ -188,14 +188,14 @@ export function MentionPicker(props: MentionPickerProps) {
     return (
         <div
             aria-label={props.label ?? "Mentions"}
-            className={["happy2-mention-picker", props.className].filter(Boolean).join(" ")}
+            className={["happy-mention-picker", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="mention-picker"
             data-testid={props["data-testid"]}
             role="listbox"
             style={props.style}
         >
             <div
-                className="happy2-mention-picker__header"
+                className="happy-mention-picker__header"
                 data-happy-desktop-ui="mention-picker-header"
             >
                 {props.label ?? "Mentions"}
@@ -204,7 +204,7 @@ export function MentionPicker(props: MentionPickerProps) {
                 candidates().map(row)
             ) : (
                 <div
-                    className="happy2-mention-picker__empty"
+                    className="happy-mention-picker__empty"
                     data-happy-desktop-ui="mention-picker-empty"
                 >
                     No mentions match “{props.query}”
@@ -582,8 +582,8 @@ export function Composer(props: ComposerProps) {
         const hasBelow = el.scrollHeight - el.clientHeight - el.scrollTop > 0.5;
         const top = cutLineFade(cutAbove);
         const bottom = hasBelow ? cutLineFade(cutBelow) : 0;
-        wrapper.style.setProperty("--happy2-composer-fade-top", `${top}px`);
-        wrapper.style.setProperty("--happy2-composer-fade-bottom", `${bottom}px`);
+        wrapper.style.setProperty("--happy-composer-fade-top", `${top}px`);
+        wrapper.style.setProperty("--happy-composer-fade-bottom", `${bottom}px`);
     };
     const closeMention = () => {
         setMentionStart(null);
@@ -598,7 +598,7 @@ export function Composer(props: ComposerProps) {
         closeMention();
         closeEmoji();
     };
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a completed send returns real keyboard focus to the committed textarea only when this composer initiated the focus handoff
+    // eslint-disable-next-line happy-react/no-layout-effect -- a completed send returns real keyboard focus to the committed textarea only when this composer initiated the focus handoff
     useLayoutEffect(() => {
         if (wasBusy.current && !busy && restoreFocusAfterSend.current) {
             textareaEl.current?.focus();
@@ -606,7 +606,7 @@ export function Composer(props: ComposerProps) {
         }
         wasBusy.current = busy;
     }, [busy]);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- moving real keyboard focus to a destination the reader has just arrived at is imperative browser work with no declarative or event-driven boundary: the composer stays mounted across the move, so no ref callback or handler observes it
+    // eslint-disable-next-line happy-react/no-layout-effect -- moving real keyboard focus to a destination the reader has just arrived at is imperative browser work with no declarative or event-driven boundary: the composer stays mounted across the move, so no ref callback or handler observes it
     useLayoutEffect(() => {
         // A composer nobody can type into is not somewhere to put the caret, and
         // taking focus from whatever does have it would be worse than leaving it
@@ -614,7 +614,7 @@ export function Composer(props: ComposerProps) {
         if (props.focusKey === undefined || busy) return;
         textareaEl.current?.focus();
     }, [busy, props.focusKey]);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- composer popovers require one document-level outside-pointer listener whose lifetime follows the mounted composer and is completely cleaned up
+    // eslint-disable-next-line happy-react/no-layout-effect -- composer popovers require one document-level outside-pointer listener whose lifetime follows the mounted composer and is completely cleaned up
     useLayoutEffect(() => {
         const onPointerDown = (event: PointerEvent) => {
             if (!composerEl.current?.contains(event.target as Node)) closePopovers();
@@ -622,7 +622,7 @@ export function Composer(props: ComposerProps) {
         document.addEventListener("pointerdown", onPointerDown);
         return () => document.removeEventListener("pointerdown", onPointerDown);
     });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- claiming typing that no focused control wants requires one window-level keydown listener, which no handler on a rendered element can express
+    // eslint-disable-next-line happy-react/no-layout-effect -- claiming typing that no focused control wants requires one window-level keydown listener, which no handler on a rendered element can express
     useLayoutEffect(() => {
         if (!props.focusOnType || busy) return;
         const onKeyDown = (event: KeyboardEvent) => {
@@ -926,7 +926,7 @@ export function Composer(props: ComposerProps) {
      * the time it reaches the window, and so has the card above, which is what
      * keeps one drop from being attached twice.
      */
-    // eslint-disable-next-line happy2-react/no-layout-effect -- claiming a file drop no surface wants requires window-level drag listeners whose lifetime follows the mounted composer, which no handler on a rendered element can express
+    // eslint-disable-next-line happy-react/no-layout-effect -- claiming a file drop no surface wants requires window-level drag listeners whose lifetime follows the mounted composer, which no handler on a rendered element can express
     useLayoutEffect(() => {
         if (!props.focusOnType || !dropAccepted()) return;
         const onDragOver = (event: DragEvent) => {
@@ -996,7 +996,7 @@ export function Composer(props: ComposerProps) {
     };
     return (
         <div
-            className={["happy2-composer", props.className].filter(Boolean).join(" ")}
+            className={["happy-composer", props.className].filter(Boolean).join(" ")}
             aria-busy={props.pending ? "true" : undefined}
             data-audience={audienceEnabled() ? "" : undefined}
             data-agents={audienceEnabled() && props.audience === "agents" ? "" : undefined}
@@ -1018,10 +1018,10 @@ export function Composer(props: ComposerProps) {
             style={props.style}
             ref={composerEl}
         >
-            <div className="happy2-composer__surface" data-happy-desktop-ui="composer-surface">
+            <div className="happy-composer__surface" data-happy-desktop-ui="composer-surface">
                 {(props.attachmentPreviews?.length ?? 0) > 0 ? (
                     <div
-                        className="happy2-composer__attachments"
+                        className="happy-composer__attachments"
                         data-happy-desktop-ui="composer-attachment-previews"
                     >
                         <ComposerAttachmentPreviews
@@ -1034,7 +1034,7 @@ export function Composer(props: ComposerProps) {
                 ) : null}
                 {(props.contextItems?.length ?? 0) > 0 ? (
                     <div
-                        className="happy2-composer__context"
+                        className="happy-composer__context"
                         data-happy-desktop-ui="composer-context"
                     >
                         <ContextChips
@@ -1045,12 +1045,12 @@ export function Composer(props: ComposerProps) {
                     </div>
                 ) : null}
                 <div
-                    className="happy2-composer__input"
+                    className="happy-composer__input"
                     data-happy-desktop-ui="composer-input"
                     ref={inputEl}
                 >
                     <div
-                        className="happy2-composer__textarea-scroll"
+                        className="happy-composer__textarea-scroll"
                         data-scrollbar-always=""
                         data-scrollbar-axes="vertical"
                         data-scrollbar-host=""
@@ -1058,7 +1058,7 @@ export function Composer(props: ComposerProps) {
                         ref={draftScrollbarHost}
                     >
                         <textarea
-                            className="happy2-composer__textarea"
+                            className="happy-composer__textarea"
                             data-happy-desktop-ui="composer-textarea"
                             disabled={props.disabled}
                             readOnly={props.pending}
@@ -1085,18 +1085,18 @@ export function Composer(props: ComposerProps) {
                         is never cut on a hard edge. */}
                     <div
                         aria-hidden="true"
-                        className="happy2-composer__fade happy2-composer__fade--top"
+                        className="happy-composer__fade happy-composer__fade--top"
                         data-happy-desktop-ui="composer-fade-top"
                     />
                     <div
                         aria-hidden="true"
-                        className="happy2-composer__fade happy2-composer__fade--bottom"
+                        className="happy-composer__fade happy-composer__fade--bottom"
                         data-happy-desktop-ui="composer-fade-bottom"
                     />
                 </div>
-                <div className="happy2-composer__toolbar" data-happy-desktop-ui="composer-toolbar">
+                <div className="happy-composer__toolbar" data-happy-desktop-ui="composer-toolbar">
                     <div
-                        className="happy2-composer__leading"
+                        className="happy-composer__leading"
                         data-happy-desktop-ui="composer-leading"
                     >
                         {hasAttachmentAction() ? (
@@ -1136,12 +1136,12 @@ export function Composer(props: ComposerProps) {
                         ) : null}
                     </div>
                     <div
-                        className="happy2-composer__trailing"
+                        className="happy-composer__trailing"
                         data-happy-desktop-ui="composer-trailing"
                     >
                         {props.modelControl ? (
                             <div
-                                className="happy2-composer__model"
+                                className="happy-composer__model"
                                 data-happy-desktop-ui="composer-model"
                             >
                                 {props.modelControl}
@@ -1150,7 +1150,7 @@ export function Composer(props: ComposerProps) {
                         {stopShown() ? (
                             <Button
                                 aria-label="Stop the agent"
-                                className="happy2-composer__send happy2-composer__stop"
+                                className="happy-composer__send happy-composer__stop"
                                 data-action="stop"
                                 icon="stop"
                                 iconOnly
@@ -1161,7 +1161,7 @@ export function Composer(props: ComposerProps) {
                         ) : (
                             <Button
                                 aria-label="Send message"
-                                className="happy2-composer__send"
+                                className="happy-composer__send"
                                 disabled={!canSend()}
                                 icon="arrow-up"
                                 iconOnly
@@ -1174,7 +1174,7 @@ export function Composer(props: ComposerProps) {
                 </div>
                 {commandOpen() ? (
                     <div
-                        className="happy2-composer__popover"
+                        className="happy-composer__popover"
                         data-happy-desktop-ui="composer-popover"
                         onMouseDown={(event) => event.preventDefault()}
                     >
@@ -1187,7 +1187,7 @@ export function Composer(props: ComposerProps) {
                 ) : null}
                 {mentionOpen() ? (
                     <div
-                        className="happy2-composer__popover"
+                        className="happy-composer__popover"
                         data-happy-desktop-ui="composer-popover"
                         onMouseDown={(event) => event.preventDefault()}
                     >
@@ -1203,7 +1203,7 @@ export function Composer(props: ComposerProps) {
                 {emojiOpen && !busy ? (
                     <div
                         aria-label="Choose emoji"
-                        className="happy2-composer__popover happy2-composer__popover--emoji"
+                        className="happy-composer__popover happy-composer__popover--emoji"
                         data-happy-desktop-ui="composer-emoji-popover"
                         onKeyDown={(event) => {
                             if (event.key !== "Escape") return;
@@ -1226,7 +1226,7 @@ export function Composer(props: ComposerProps) {
                     <input
                         accept={props.attachmentAccept}
                         aria-hidden="true"
-                        className="happy2-composer__file-input"
+                        className="happy-composer__file-input"
                         multiple={props.attachmentMultiple}
                         onChange={selectAttachments}
                         ref={fileInputEl}
@@ -1237,7 +1237,7 @@ export function Composer(props: ComposerProps) {
             </div>
             {audienceEnabled() || props.footerControl ? (
                 <div
-                    className="happy2-composer__footer"
+                    className="happy-composer__footer"
                     data-happy-desktop-ui={
                         audienceEnabled() ? "composer-audience" : "composer-footer"
                     }

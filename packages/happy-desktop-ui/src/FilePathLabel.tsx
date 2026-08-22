@@ -38,29 +38,29 @@ export function FilePathLabel(props: FilePathLabelProps) {
     const parts = splitPath(local.path);
     return (
         <span
-            className={["happy2-file-path-label", local.className].filter(Boolean).join(" ")}
+            className={["happy-file-path-label", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-path-label"
             data-testid={local["data-testid"]}
             style={local.style}
         >
             {parts.directory ? (
                 <span
-                    className="happy2-file-path-label__directory"
+                    className="happy-file-path-label__directory"
                     data-happy-desktop-ui="file-path-label-directory"
                     title={parts.directory}
                 >
                     {parts.directoryHead ? (
-                        <span className="happy2-file-path-label__directory-head">
+                        <span className="happy-file-path-label__directory-head">
                             {parts.directoryHead}
                         </span>
                     ) : null}
-                    <span className="happy2-file-path-label__directory-tail">
+                    <span className="happy-file-path-label__directory-tail">
                         {parts.directoryTail}
                     </span>
                 </span>
             ) : null}
             <span
-                className="happy2-file-path-label__name"
+                className="happy-file-path-label__name"
                 data-happy-desktop-ui="file-path-label-name"
             >
                 {parts.name}

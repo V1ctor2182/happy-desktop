@@ -81,7 +81,7 @@ export function CodeBlockPage() {
                 number="04"
                 stage="surface"
             >
-                <div className="happy2-theme-dark" style={{ borderRadius: "10px" }}>
+                <div className="happy-theme-dark" style={{ borderRadius: "10px" }}>
                     {frame(<CodeBlock lineNumbers name="Snippet.tsx" text={typescript} />)}
                 </div>
             </Specimen>

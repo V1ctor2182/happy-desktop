@@ -336,7 +336,7 @@ export interface DesktopBuildIdentity {
 }
 
 /** Launch argument prefix carrying `DesktopBuildIdentity` JSON into the preload. */
-export const buildIdentityArgument = "--happy2-build-identity=";
+export const buildIdentityArgument = "--happy-build-identity=";
 
 /**
  * Where local first-run setup currently stands. The stage is always derived from
@@ -474,38 +474,6 @@ export interface LocalOnboardingSnapshot {
     readonly assistants?: readonly LocalAssistantState[];
     /** An attempt to reach Happy Agent is running, started from a failed stage. */
     readonly retrying?: boolean;
-}
-
-/**
- * One note in this machine's collection. A note belongs to the machine rather
- * than to a Happy Agent connection, so it travels over the desktop bridge instead of a
- * Happy Agent's HTTP proxy and stays available whichever Happy Agent the window is looking at.
- */
-export interface DesktopNoteSummary {
-    readonly id: string;
-    readonly title: string;
-    readonly createdAt: number;
-    readonly updatedAt: number;
-    readonly sequence: number;
-    readonly excerpt: string;
-}
-
-export interface DesktopNoteContent {
-    readonly note: DesktopNoteSummary;
-    /** Complete collaborative state as one base64 Yjs update. */
-    readonly state: string;
-}
-
-export interface DesktopNoteApplyRequest {
-    readonly id: string;
-    readonly updates: readonly string[];
-    /**
-     * The author's normalized Markdown after these updates. The editor's schema
-     * lives with the editor, so the writer derives this and the main process
-     * stores it beside the note without interpreting the collaborative bytes.
-     */
-    readonly markdown?: string;
-    readonly title?: string;
 }
 
 /**
@@ -709,14 +677,6 @@ export interface HappyDesktopBridge {
     /** Private typed Wall transport used by the profile renderer bootstrap. */
     profilerReactMessage(message: DesktopReactDevtoolsMessage): void;
     profilerReactSubscribe(listener: (command: DesktopReactDevtoolsCommand) => void): () => void;
-    noteApply(request: DesktopNoteApplyRequest): Promise<DesktopNoteSummary>;
-    noteCreate(title?: string): Promise<DesktopNoteContent>;
-    noteRead(id: string): Promise<DesktopNoteContent>;
-    noteRemove(id: string): Promise<void>;
-    noteRename(id: string, title: string): Promise<DesktopNoteSummary>;
-    notesList(): Promise<readonly DesktopNoteSummary[]>;
-    /** Fires whenever the collection changes, including edits made outside Happy. */
-    notesSubscribe(listener: () => void): () => void;
     applicationMenuOpen(): Promise<void>;
     /** Where local first-run setup stands, without waiting for its next change. */
     onboardingGet(): Promise<LocalOnboardingSnapshot>;
@@ -749,10 +709,9 @@ export interface HappyDesktopBridge {
  * The whole capability of the window that shows one file.
  *
  * It is deliberately not `HappyDesktopBridge`: a window whose only job is to
- * show one picture or play one recording has no business reading notes, writing
- * preferences or choosing a topology, so it is handed a
- * bridge that cannot do any of them rather than the application's and a promise
- * not to use it.
+ * show one picture or play one recording has no business writing preferences or
+ * choosing a topology, so it is handed a bridge that cannot do either rather
+ * than the application's and a promise not to use it.
  */
 export interface HappyMediaPreviewBridge {
     /** What this window was opened for; it has not been sent anything yet. */
@@ -765,77 +724,70 @@ export interface HappyMediaPreviewBridge {
 
 export const desktopIpc = {
     /** Renderer → main only: the appearance source inherited by local web contents. */
-    appearanceSet: "happy2:appearance:set",
-    browserProxyApply: "happy2:browser:proxy-apply",
-    browserOpenRequested: "happy2:browser:open-requested",
-    browserStatusChanged: "happy2:browser:status-changed",
-    guestKey: "happy2:guest:key",
-    previewNavigationChanged: "happy2:html-preview:navigation-changed",
+    appearanceSet: "happy:appearance:set",
+    browserProxyApply: "happy:browser:proxy-apply",
+    browserOpenRequested: "happy:browser:open-requested",
+    browserStatusChanged: "happy:browser:status-changed",
+    guestKey: "happy:guest:key",
+    previewNavigationChanged: "happy:html-preview:navigation-changed",
     /** Main → renderer: the reader asked to go back or forward. */
-    navigationStep: "happy2:navigation:step",
-    directoryPick: "happy2:directory:pick",
-    mediaPreviewChanged: "happy2:media-preview:changed",
-    mediaPreviewClose: "happy2:media-preview:close",
-    mediaPreviewGet: "happy2:media-preview:get",
-    mediaPreviewOpen: "happy2:media-preview:open",
+    navigationStep: "happy:navigation:step",
+    directoryPick: "happy:directory:pick",
+    mediaPreviewChanged: "happy:media-preview:changed",
+    mediaPreviewClose: "happy:media-preview:close",
+    mediaPreviewGet: "happy:media-preview:get",
+    mediaPreviewOpen: "happy:media-preview:open",
     /** Renderer → main only: the number of conversations waiting for the person. */
-    dockUnreadSet: "happy2:dock:unread-set",
+    dockUnreadSet: "happy:dock:unread-set",
     /** Main → renderer only: the window's zoom, every time the View menu is used. */
-    zoomChanged: "happy2:zoom:changed",
-    desktopConfigGet: "happy2:desktop-config:get",
-    desktopConfigWrite: "happy2:desktop-config:write",
-    daemonChanged: "happy2:daemon:changed",
-    daemonCheck: "happy2:daemon:check",
-    daemonDownload: "happy2:daemon:download",
-    daemonInstall: "happy2:daemon:install",
-    daemonInstallDismiss: "happy2:daemon:install-dismiss",
-    daemonInstallKill: "happy2:daemon:install-kill",
-    daemonRestart: "happy2:daemon:restart",
-    daemonGet: "happy2:daemon:get",
-    daemonUpgrade: "happy2:daemon:upgrade",
-    daemonVersionSelect: "happy2:daemon:version-select",
-    debugAllStart: "happy2:debug:all-start",
-    debugAllStop: "happy2:debug:all-stop",
-    debugChanged: "happy2:debug:changed",
-    debugDaemonInspectorStart: "happy2:debug:daemon-inspector-start",
-    debugDaemonInspectorStop: "happy2:debug:daemon-inspector-stop",
-    debugGet: "happy2:debug:get",
-    debugMainInspectorStart: "happy2:debug:main-inspector-start",
-    debugMainInspectorStop: "happy2:debug:main-inspector-stop",
-    debugRendererInspectorStart: "happy2:debug:renderer-inspector-start",
-    debugRendererInspectorStop: "happy2:debug:renderer-inspector-stop",
-    profilerGet: "happy2:profiler:get",
-    profilerStart: "happy2:profiler:start",
-    profilerStop: "happy2:profiler:stop",
-    profilerChanged: "happy2:profiler:changed",
-    profilerReactCommand: "happy2:profiler:react-command",
-    profilerReactMessage: "happy2:profiler:react-message",
-    applicationMenuOpen: "happy2:application-menu:open",
-    noteApply: "happy2:notes:apply",
-    noteCreate: "happy2:notes:create",
-    noteRead: "happy2:notes:read",
-    noteRemove: "happy2:notes:remove",
-    noteRename: "happy2:notes:rename",
-    notesChanged: "happy2:notes:changed",
-    notesList: "happy2:notes:list",
-    onboardingAssistantsContinue: "happy2:onboarding:assistants-continue",
-    onboardingChanged: "happy2:onboarding:changed",
-    onboardingGet: "happy2:onboarding:get",
-    onboardingProfileCreate: "happy2:onboarding:profile-create",
-    onboardingProjectChoose: "happy2:onboarding:project-choose",
-    runtimeChanged: "happy2:runtime:changed",
-    runtimeGet: "happy2:runtime:get",
-    runtimeReset: "happy2:runtime:reset",
-    runtimeRetry: "happy2:runtime:retry",
-    runtimeStart: "happy2:runtime:start",
-    topologySelect: "happy2:topology:select",
-    updateInstall: "happy2:update:install",
-    windowStateChanged: "happy2:window-state:changed",
-    windowStateGet: "happy2:window-state:get",
+    zoomChanged: "happy:zoom:changed",
+    desktopConfigGet: "happy:desktop-config:get",
+    desktopConfigWrite: "happy:desktop-config:write",
+    daemonChanged: "happy:daemon:changed",
+    daemonCheck: "happy:daemon:check",
+    daemonDownload: "happy:daemon:download",
+    daemonInstall: "happy:daemon:install",
+    daemonInstallDismiss: "happy:daemon:install-dismiss",
+    daemonInstallKill: "happy:daemon:install-kill",
+    daemonRestart: "happy:daemon:restart",
+    daemonGet: "happy:daemon:get",
+    daemonUpgrade: "happy:daemon:upgrade",
+    daemonVersionSelect: "happy:daemon:version-select",
+    debugAllStart: "happy:debug:all-start",
+    debugAllStop: "happy:debug:all-stop",
+    debugChanged: "happy:debug:changed",
+    debugDaemonInspectorStart: "happy:debug:daemon-inspector-start",
+    debugDaemonInspectorStop: "happy:debug:daemon-inspector-stop",
+    debugGet: "happy:debug:get",
+    debugMainInspectorStart: "happy:debug:main-inspector-start",
+    debugMainInspectorStop: "happy:debug:main-inspector-stop",
+    debugRendererInspectorStart: "happy:debug:renderer-inspector-start",
+    debugRendererInspectorStop: "happy:debug:renderer-inspector-stop",
+    profilerGet: "happy:profiler:get",
+    profilerStart: "happy:profiler:start",
+    profilerStop: "happy:profiler:stop",
+    profilerChanged: "happy:profiler:changed",
+    profilerReactCommand: "happy:profiler:react-command",
+    profilerReactMessage: "happy:profiler:react-message",
+    applicationMenuOpen: "happy:application-menu:open",
+    onboardingAssistantsContinue: "happy:onboarding:assistants-continue",
+    onboardingChanged: "happy:onboarding:changed",
+    onboardingGet: "happy:onboarding:get",
+    onboardingProfileCreate: "happy:onboarding:profile-create",
+    onboardingProjectChoose: "happy:onboarding:project-choose",
+    runtimeChanged: "happy:runtime:changed",
+    runtimeGet: "happy:runtime:get",
+    runtimeReset: "happy:runtime:reset",
+    runtimeRetry: "happy:runtime:retry",
+    runtimeStart: "happy:runtime:start",
+    topologySelect: "happy:topology:select",
+    updateInstall: "happy:update:install",
+    windowStateChanged: "happy:window-state:changed",
+    windowStateGet: "happy:window-state:get",
 } as const;
 
 /** Persistent, capability-isolated Chromium profile used only by embedded browser tabs. */
-export const happyBrowserPartition = "persist:happy2-browser";
+export const happyBrowserPartition = "persist:happy-browser";
 
 /**
  * In-memory Chromium profile used only by rendered HTML file previews. It is
@@ -843,7 +795,7 @@ export const happyBrowserPartition = "persist:happy2-browser";
  * cookies or storage between sessions, and can reach nothing the browser tabs
  * are logged into.
  */
-export const happyHtmlPreviewPartition = "happy2-html-preview";
+export const happyHtmlPreviewPartition = "happy-html-preview";
 
 /**
  * Query the preview window is loaded with, so the renderer entry mounts only the
@@ -858,4 +810,4 @@ export const mediaPreviewView = { key: "view", value: "media-preview" } as const
  * the reduced bridge is chosen before the page exists rather than inferred from
  * an address the page could later change.
  */
-export const mediaPreviewArgument = "--happy2-media-preview";
+export const mediaPreviewArgument = "--happy-media-preview";

@@ -19,8 +19,8 @@ import { createRenderer } from "./testing";
  * so this file asserts layout, computed tokens, and intent callbacks.
  */
 
-const fontUi = "happy2 Figtree, system-ui, sans-serif";
-const fontMono = "happy2 Mono, ui-monospace, monospace";
+const fontUi = "happy Figtree, system-ui, sans-serif";
+const fontMono = "happy Mono, ui-monospace, monospace";
 const content = "const answer = 42;\nexport default answer;\n";
 
 /* Visible word labels of the action buttons, in DOM order. Icon-only buttons
@@ -123,7 +123,7 @@ it("holds FileEditor path row, code body, and tab-owned dirty affordances", asyn
     /* Writing happens on the surface itself, not on a tinted code panel. */
     expect(area.computedStyle("background-color")).toBe("rgb(255, 255, 255)");
     /* The code type belongs to the editor's own content, not to its container.
-       Engines quote font family names with spaces (`"happy2 Mono"`); normalize. */
+       Engines quote font family names with spaces (`"happy Mono"`); normalize. */
     const editable = view.$('[data-testid="clean"] .cm-content');
     expect(editable.computedStyle("font-family").replace(/"/g, "")).toBe(fontMono);
     expect(editable.computedStyles(["font-size", "line-height"])).toEqual({

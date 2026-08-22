@@ -33,7 +33,7 @@
     overflow: auto;
     background: var(--groupped-background);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
@@ -88,7 +88,7 @@
     height: 24px;
     align-items: center;
     justify-content: center;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--fab-background);
     color: var(--fab-icon);
 }
@@ -101,7 +101,7 @@
 
 .workbench-brand i {
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
     font-style: normal;
     letter-spacing: 0.08em;
@@ -118,7 +118,7 @@
     gap: 12px;
     padding: 0 20px;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -148,7 +148,7 @@
 .workbench-appearance > span,
 .component-select > span {
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -157,7 +157,7 @@
 /* Appearance is switched while review captures are being taken, so the control's
    selection transition must not leave an intermediate frame in a screenshot of
    the workbench. */
-.workbench-appearance .happy2-segmented-control__segment {
+.workbench-appearance .happy-segmented-control__segment {
     transition: none;
 }
 
@@ -172,11 +172,11 @@
     height: 28px;
     appearance: none;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--input-background);
     padding: 0 30px 0 10px;
     color: var(--input-text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -233,7 +233,7 @@
     min-height: 128px;
     align-items: stretch;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface);
     color: var(--text);
 }
@@ -253,9 +253,9 @@
     align-items: center;
     justify-content: center;
     border: 1px solid var(--workbench-rule);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
 }
 
@@ -279,7 +279,7 @@
 
 .component-title p {
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -322,7 +322,7 @@
 
 .component-title dt {
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -330,7 +330,7 @@
 
 .component-title dd {
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     /* One step under the drawing's other mono notation: the widest value has to
        stay on one line inside a third of the meta strip. */
     font-size: 10px;
@@ -340,7 +340,7 @@
    ------------------------------------------------------------------------- */
 
 .specimen-grid {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- specimen matrix: cards wrap into equal-width columns and content-sized rows, and a row's cards must share one height */
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- specimen matrix: cards wrap into equal-width columns and content-sized rows, and a row's cards must share one height */
     display: grid;
     gap: 16px;
     margin-top: 32px;
@@ -355,7 +355,7 @@
     min-width: 0;
     flex-direction: column;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface);
 }
 
@@ -376,7 +376,7 @@
     justify-content: center;
     border-right: 1px solid var(--divider);
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
 }
 
@@ -399,7 +399,7 @@
     align-items: center;
     padding: 0 12px 0 0;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
     text-align: right;
 }
@@ -500,7 +500,7 @@
     width: 100%;
     align-items: center;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
 }
 
@@ -548,7 +548,7 @@
    ------------------------------------------------------------------------- */
 
 .box-plans {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- specimen matrix: two equal columns with a full-width final row */
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- specimen matrix: two equal columns with a full-width final row */
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
@@ -587,7 +587,7 @@
 }
 
 .blueprint-box span {
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 600;
 }
@@ -595,7 +595,7 @@
 .blueprint-box small {
     margin-top: 6px;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 9px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -624,6 +624,6 @@
 /* The zoom read-out takes itself away after a second, which is right in a window
    and wrong in a specimen. Held at its first frame, the chip stays long enough
    to be judged and a screenshot of it is the same one every run. */
-.blueprint-zoom-frame .happy2-zoom-indicator {
+.blueprint-zoom-frame .happy-zoom-indicator {
     animation-play-state: paused;
 }

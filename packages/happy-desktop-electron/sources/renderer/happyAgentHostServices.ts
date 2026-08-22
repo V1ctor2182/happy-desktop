@@ -6,8 +6,8 @@ import type {
     HappyAgentWorkspaceFileBytes,
 } from "happy-desktop-state";
 
-const OPEN_IN_RECENT_KEY = "happy2.happy-agent.open-in-recent.v1";
-const TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy2-capability.";
+const OPEN_IN_RECENT_KEY = "happy.happy-agent.open-in-recent.v1";
+const TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy-capability.";
 
 type WorkspaceFileBytesResponse = Omit<HappyAgentWorkspaceFileBytes, "url">;
 

@@ -59,7 +59,7 @@ function protocolMismatchOf(
     };
 }
 
-const WORKSPACE_MEMORY_PREFIX = "happy2.happy-agent.workspace-memory.v1:";
+const WORKSPACE_MEMORY_PREFIX = "happy.happy-agent.workspace-memory.v1:";
 const RETRY_MS = 1_000;
 
 function workspaceMemoryPersistence(happyAgentId: string): HappyAgentWorkspaceMemoryPersistence {
@@ -245,14 +245,14 @@ export function happyAgentConnectionOpen(input: {
     });
     const directClient = new HappyAgentClient({
         endpoint: input.happyAgentHttpUrl,
-        token: "happy2-local-capability",
+        token: "happy-local-capability",
     });
     const profile = happyAgentProfileSourceCreate(directClient);
     const mutationListeners = new Set<(rejection: MutationRejectedDelta) => void>();
     const agentConnection: HappyAgentConnection = connectHappyAgent({
         client: directClient,
         endpoint: input.happyAgentHttpUrl,
-        token: "happy2-local-capability",
+        token: "happy-local-capability",
         onDebugEntry: debugEntry,
         onMutationRejected: (rejection) => {
             for (const listener of mutationListeners) listener(rejection);

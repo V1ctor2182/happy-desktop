@@ -116,7 +116,7 @@ export function HappyAgentUsageSettings(props: HappyAgentUsageSettingsProps) {
                     title="Provider accounts"
                 >
                     <div
-                        className="happy2-happy-agent-usage-settings__providers"
+                        className="happy-agent-usage-settings__providers"
                         data-happy-desktop-ui="happy-agent-usage-settings-providers"
                     >
                         {providers.map((provider) => (
@@ -149,51 +149,49 @@ function ProviderSection(props: {
     const taken = stamp === undefined ? undefined : props.readingTime?.(stamp);
     return (
         <section
-            className="happy2-happy-agent-usage-settings__provider"
+            className="happy-agent-usage-settings__provider"
             data-happy-desktop-ui="happy-agent-usage-settings-provider"
             data-provider={provider.providerId}
             data-tone={tone}
         >
-            <header className="happy2-happy-agent-usage-settings__provider-header">
-                <span className="happy2-happy-agent-usage-settings__identity">
+            <header className="happy-agent-usage-settings__provider-header">
+                <span className="happy-agent-usage-settings__identity">
                     <span
                         aria-label={TONE_LABELS[tone]}
-                        className="happy2-happy-agent-usage-settings__dot"
+                        className="happy-agent-usage-settings__dot"
                         data-happy-desktop-ui="happy-agent-usage-settings-dot"
                         role="img"
                     />
                     <span
-                        className="happy2-happy-agent-usage-settings__name"
+                        className="happy-agent-usage-settings__name"
                         data-happy-desktop-ui="happy-agent-usage-settings-provider-name"
                     >
                         {providerAccountName(provider.providerId)}
                     </span>
                     {usage?.planName ? (
-                        <span className="happy2-happy-agent-usage-settings__plan">
-                            {usage.planName}
-                        </span>
+                        <span className="happy-agent-usage-settings__plan">{usage.planName}</span>
                     ) : null}
                 </span>
-                <span className="happy2-happy-agent-usage-settings__provider-meta">
+                <span className="happy-agent-usage-settings__provider-meta">
                     {usage?.exhausted ? (
                         <span data-happy-desktop-ui="happy-agent-usage-settings-exhausted">
                             <Badge label="Spent" variant="danger" />
                         </span>
                     ) : null}
                     {taken ? (
-                        <span className="happy2-happy-agent-usage-settings__taken">{taken}</span>
+                        <span className="happy-agent-usage-settings__taken">{taken}</span>
                     ) : null}
                 </span>
             </header>
 
             {provider.error !== undefined ? (
                 <p
-                    className="happy2-happy-agent-usage-settings__note"
+                    className="happy-agent-usage-settings__note"
                     data-happy-desktop-ui="happy-agent-usage-settings-provider-error"
                     data-note="error"
                 >
                     <Ionicon
-                        className="happy2-happy-agent-usage-settings__note-icon"
+                        className="happy-agent-usage-settings__note-icon"
                         name="alert-circle-outline"
                         size={16}
                     />
@@ -203,9 +201,9 @@ function ProviderSection(props: {
 
             {usage === undefined ? (
                 provider.error === undefined ? (
-                    <p className="happy2-happy-agent-usage-settings__note" data-note="unread">
+                    <p className="happy-agent-usage-settings__note" data-note="unread">
                         <Ionicon
-                            className="happy2-happy-agent-usage-settings__note-icon"
+                            className="happy-agent-usage-settings__note-icon"
                             name="time-outline"
                             size={16}
                         />
@@ -215,7 +213,7 @@ function ProviderSection(props: {
             ) : (
                 <>
                     {hasWindows(provider) ? (
-                        <div className="happy2-happy-agent-usage-settings__windows">
+                        <div className="happy-agent-usage-settings__windows">
                             <UsageWindow
                                 currentTime={props.currentTime}
                                 label="5 hours"
@@ -233,13 +231,13 @@ function ProviderSection(props: {
                             />
                             {usage.credits ? (
                                 <div
-                                    className="happy2-happy-agent-usage-settings__credits"
+                                    className="happy-agent-usage-settings__credits"
                                     data-happy-desktop-ui="happy-agent-usage-settings-credits"
                                 >
-                                    <span className="happy2-happy-agent-usage-settings__window-label">
+                                    <span className="happy-agent-usage-settings__window-label">
                                         Credits
                                     </span>
-                                    <span className="happy2-happy-agent-usage-settings__credits-value">
+                                    <span className="happy-agent-usage-settings__credits-value">
                                         {creditsText(
                                             usage.credits.available,
                                             usage.credits.unlimited,
@@ -256,9 +254,9 @@ function ProviderSection(props: {
                     ) : null}
 
                     {!hasWindows(provider) && !(usage.models && usage.models.length > 0) ? (
-                        <p className="happy2-happy-agent-usage-settings__note" data-note="idle">
+                        <p className="happy-agent-usage-settings__note" data-note="idle">
                             <Ionicon
-                                className="happy2-happy-agent-usage-settings__note-icon"
+                                className="happy-agent-usage-settings__note-icon"
                                 name="remove-outline"
                                 size={16}
                             />
@@ -296,31 +294,31 @@ function UsageWindow(props: {
             : undefined;
     return (
         <div
-            className="happy2-happy-agent-usage-settings__window"
+            className="happy-agent-usage-settings__window"
             data-happy-desktop-ui="happy-agent-usage-settings-window"
             data-tone={tone}
         >
-            <span className="happy2-happy-agent-usage-settings__window-label">{props.label}</span>
+            <span className="happy-agent-usage-settings__window-label">{props.label}</span>
             <span
                 aria-hidden="true"
-                className="happy2-happy-agent-usage-settings__track"
+                className="happy-agent-usage-settings__track"
                 data-happy-desktop-ui="happy-agent-usage-settings-track"
             >
                 <span
-                    className="happy2-happy-agent-usage-settings__fill"
+                    className="happy-agent-usage-settings__fill"
                     data-happy-desktop-ui="happy-agent-usage-settings-fill"
                     style={{ width: `${String(percent)}%` }}
                 />
             </span>
             <span
                 aria-label={`${String(Math.round(percent))}% of ${props.label} used`}
-                className="happy2-happy-agent-usage-settings__percent"
+                className="happy-agent-usage-settings__percent"
                 role="img"
             >
                 {Math.round(percent)}%
             </span>
             <span
-                className="happy2-happy-agent-usage-settings__reset"
+                className="happy-agent-usage-settings__reset"
                 data-happy-desktop-ui="happy-agent-usage-settings-reset"
             >
                 {reset ?? ""}
@@ -345,7 +343,7 @@ function ModelTokens(props: { models: readonly HappyAgentProviderModelTokenUsage
         // columns must share one measured width down every model row, which a
         // flex row per model could not guarantee.
         <table
-            className="happy2-happy-agent-usage-settings__models"
+            className="happy-agent-usage-settings__models"
             data-happy-desktop-ui="happy-agent-usage-settings-models"
         >
             <thead>
@@ -361,12 +359,12 @@ function ModelTokens(props: { models: readonly HappyAgentProviderModelTokenUsage
             <tbody>
                 {props.models.map((model) => (
                     <tr
-                        className="happy2-happy-agent-usage-settings__model-row"
+                        className="happy-agent-usage-settings__model-row"
                         data-happy-desktop-ui="happy-agent-usage-settings-model"
                         key={model.modelId}
                     >
                         <th
-                            className="happy2-happy-agent-usage-settings__model"
+                            className="happy-agent-usage-settings__model"
                             scope="row"
                             title={model.modelId}
                         >
@@ -376,7 +374,7 @@ function ModelTokens(props: { models: readonly HappyAgentProviderModelTokenUsage
                             const counts = model[window.key];
                             return (
                                 <td
-                                    className="happy2-happy-agent-usage-settings__tokens"
+                                    className="happy-agent-usage-settings__tokens"
                                     data-happy-desktop-ui="happy-agent-usage-settings-tokens"
                                     data-empty={counts === undefined ? "" : undefined}
                                     key={window.key}

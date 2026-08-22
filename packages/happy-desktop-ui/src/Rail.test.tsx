@@ -398,7 +398,7 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
     );
     const labelMetrics = chatLabel.textMetrics();
     expect(labelMetrics.text).toBe("Chat");
-    expect(labelMetrics.font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(labelMetrics.font.family).toBe("happy Figtree, system-ui, sans-serif");
     expect(labelMetrics.font.size).toBe(10);
     expect(labelMetrics.font.weight).toBe("700");
     expect(labelMetrics.font.lineHeight).toBe(12);

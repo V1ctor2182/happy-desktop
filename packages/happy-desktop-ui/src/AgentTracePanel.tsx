@@ -79,21 +79,21 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
     const badge = () => STATUS_BADGES[local.status];
     return (
         <section
-            className={["happy2-agent-trace-panel", local.className].filter(Boolean).join(" ")}
+            className={["happy-agent-trace-panel", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="agent-trace-panel"
             data-status={local.status}
             data-testid={local["data-testid"]}
             style={local.style}
         >
             <Toolbar
-                className="happy2-agent-trace-panel__header"
+                className="happy-agent-trace-panel__header"
                 height={SURFACE_HEADER_HEIGHT}
                 subtitle={`${local.entryCount} ${local.entryCount === 1 ? "step" : "steps"}`}
                 title={local.title}
                 trailing={
                     <>
                         <Badge
-                            className="happy2-agent-trace-panel__badge"
+                            className="happy-agent-trace-panel__badge"
                             label={badge().label}
                             variant={badge().variant}
                         />
@@ -111,13 +111,13 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                 }
             />
             <ScrollArea
-                className="happy2-agent-trace-panel__body"
+                className="happy-agent-trace-panel__body"
                 data-happy-desktop-ui="agent-trace-panel-body"
-                viewportClassName="happy2-agent-trace-panel__body-viewport"
+                viewportClassName="happy-agent-trace-panel__body-viewport"
             >
                 {local.loading ? (
                     <div
-                        className="happy2-agent-trace-panel__state"
+                        className="happy-agent-trace-panel__state"
                         data-happy-desktop-ui="agent-trace-panel-state"
                         data-state="loading"
                     >
@@ -125,7 +125,7 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                     </div>
                 ) : local.error !== undefined ? (
                     <div
-                        className="happy2-agent-trace-panel__state"
+                        className="happy-agent-trace-panel__state"
                         data-happy-desktop-ui="agent-trace-panel-state"
                         data-state="error"
                     >
@@ -133,7 +133,7 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                     </div>
                 ) : local.entries.length === 0 ? (
                     <div
-                        className="happy2-agent-trace-panel__state"
+                        className="happy-agent-trace-panel__state"
                         data-happy-desktop-ui="agent-trace-panel-state"
                         data-state="empty"
                     >
@@ -141,12 +141,12 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                     </div>
                 ) : (
                     <div
-                        className="happy2-agent-trace-panel__entries"
+                        className="happy-agent-trace-panel__entries"
                         data-happy-desktop-ui="agent-trace-panel-entries"
                     >
                         {local.entries.map((entry) => (
                             <div
-                                className="happy2-agent-trace-panel__entry"
+                                className="happy-agent-trace-panel__entry"
                                 data-happy-desktop-ui="agent-trace-panel-entry"
                                 data-kind={entry.kind}
                                 data-status={entry.status}
@@ -154,30 +154,30 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                             >
                                 <span
                                     aria-hidden="true"
-                                    className="happy2-agent-trace-panel__entry-dot-lane"
+                                    className="happy-agent-trace-panel__entry-dot-lane"
                                 >
                                     <span
-                                        className="happy2-agent-trace-panel__entry-dot"
+                                        className="happy-agent-trace-panel__entry-dot"
                                         data-happy-desktop-ui="agent-trace-panel-entry-dot"
                                     />
                                 </span>
                                 <span
                                     aria-hidden="true"
-                                    className="happy2-agent-trace-panel__entry-icon"
+                                    className="happy-agent-trace-panel__entry-icon"
                                     data-happy-desktop-ui="agent-trace-panel-entry-icon"
                                 >
                                     <Icon name={agentTraceKindIcon(entry.kind)} size={14} />
                                 </span>
-                                <span className="happy2-agent-trace-panel__entry-main">
+                                <span className="happy-agent-trace-panel__entry-main">
                                     <span
-                                        className="happy2-agent-trace-panel__entry-title"
+                                        className="happy-agent-trace-panel__entry-title"
                                         data-happy-desktop-ui="agent-trace-panel-entry-title"
                                     >
                                         {entry.title}
                                     </span>
                                     {entry.detail !== undefined ? (
                                         <span
-                                            className="happy2-agent-trace-panel__entry-detail"
+                                            className="happy-agent-trace-panel__entry-detail"
                                             data-happy-desktop-ui="agent-trace-panel-entry-detail"
                                         >
                                             {entry.detail}
@@ -185,7 +185,7 @@ export function AgentTracePanel(props: AgentTracePanelProps) {
                                     ) : null}
                                 </span>
                                 <span
-                                    className="happy2-agent-trace-panel__entry-time"
+                                    className="happy-agent-trace-panel__entry-time"
                                     data-happy-desktop-ui="agent-trace-panel-entry-time"
                                 >
                                     {formatUtcClock(entry.occurredAt)}

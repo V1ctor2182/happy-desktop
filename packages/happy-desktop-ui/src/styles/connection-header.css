@@ -21,7 +21,7 @@
  * shrink, so a window that gains 32px of chrome gives 32px back from the app
  * instead of scrolling or clipping it.
  */
-.happy2-connection-frame {
+.happy-connection-frame {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -29,14 +29,14 @@
     min-height: 0;
 }
 
-.happy2-connection-frame__body {
+.happy-connection-frame__body {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
 }
 
-.happy2-connection-header {
+.happy-connection-header {
     display: flex;
     flex: none;
     align-items: center;
@@ -53,7 +53,7 @@
        dark, or this light. */
     background: var(--surface-inverse);
     color: var(--text-inverse);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 12px;
     line-height: 16px;
     /* The band is chrome, so it never becomes a text-selection target while
@@ -84,7 +84,7 @@
  * It is draggable for the same reason it is inset: it has taken the strip the
  * window was dragged by, so it has to be that strip now.
  */
-.happy2-connection-header[data-window-controls] {
+.happy-connection-header[data-window-controls] {
     height: 40px;
     padding-inline: 78px;
     -webkit-app-region: drag;
@@ -97,12 +97,12 @@
  * as short as a standing condition should be. It stays draggable — the lane is
  * still the window's, and a full-screen window simply ignores being dragged.
  */
-.happy2-connection-header[data-window-full-screen] {
+.happy-connection-header[data-window-full-screen] {
     height: 32px;
     padding-inline: 12px;
 }
 
-.happy2-connection-header__icon {
+.happy-connection-header__icon {
     display: flex;
     flex: none;
     align-items: center;
@@ -114,11 +114,11 @@
 /* The spinner sets `--text` on itself, which is the colour of the very surface
    this band inverted — left alone it draws black on black, or white on white.
    Only the colour is taken over; the spinner keeps its own geometry. */
-.happy2-connection-header__icon .happy2-spinner {
+.happy-connection-header__icon .happy-spinner {
     color: inherit;
 }
 
-.happy2-connection-header__label {
+.happy-connection-header__label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

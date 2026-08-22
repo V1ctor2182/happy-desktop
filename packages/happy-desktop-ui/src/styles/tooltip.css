@@ -13,15 +13,15 @@
  * timer.
  */
 
-.happy2-tooltip,
-.happy2-tooltip * {
+.happy-tooltip,
+.happy-tooltip * {
     box-sizing: border-box;
 }
 
 /* The wrapper exists to be the bubble's containing block, so it must add
    nothing to the row it sits in: it takes the trigger's own size and passes the
    trigger's shrink behaviour through. */
-.happy2-tooltip {
+.happy-tooltip {
     position: relative;
     display: inline-flex;
     flex: 0 1 auto;
@@ -41,10 +41,10 @@
  *
  * Closing has no dwell: once the pointer has left, the bubble is in the way.
  */
-.happy2-tooltip__bubble {
-    --happy2-tooltip-delay: 180ms;
-    --happy2-tooltip-fade: 90ms;
-    --happy2-tooltip-rise: 3px;
+.happy-tooltip__bubble {
+    --happy-tooltip-delay: 180ms;
+    --happy-tooltip-fade: 90ms;
+    --happy-tooltip-rise: 3px;
 }
 
 /* The bubble is an overlay that intentionally leaves the flow: the trigger's
@@ -58,10 +58,10 @@
    to or from `auto`, so the two edges swapped discretely, and the return trip
    was visible as a drop the moment the fade left any opacity behind. Only
    `opacity` and `transform` change here, and both are continuous. */
-.happy2-tooltip__bubble {
+.happy-tooltip__bubble {
     position: absolute;
     left: 50%;
-    z-index: var(--happy2-z-overlay);
+    z-index: var(--happy-z-overlay);
     display: flex;
     align-items: center;
     width: max-content;
@@ -71,10 +71,10 @@
     padding: 3px 8px;
     background: var(--surface);
     border: 1px solid var(--modal-border);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     box-shadow: 0 2px 8px var(--shadow-color);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 12px;
     font-weight: 400;
     line-height: 16px;
@@ -89,43 +89,43 @@
     -webkit-user-select: none;
     user-select: none;
     transition:
-        opacity var(--happy2-tooltip-fade) ease,
-        transform var(--happy2-tooltip-fade) ease;
+        opacity var(--happy-tooltip-fade) ease,
+        transform var(--happy-tooltip-fade) ease;
 }
 
 /* Hidden, the bubble sits a few pixels back toward its trigger and rises into
    place as it fades in — so it reads as coming from the thing it explains. The
    sign follows the placement: a bubble above starts low, one below starts high. */
-.happy2-tooltip__bubble[data-placement="top"] {
+.happy-tooltip__bubble[data-placement="top"] {
     bottom: calc(100% + 4px);
-    transform: translate(-50%, var(--happy2-tooltip-rise));
+    transform: translate(-50%, var(--happy-tooltip-rise));
 }
 
-.happy2-tooltip__bubble[data-placement="bottom"] {
+.happy-tooltip__bubble[data-placement="bottom"] {
     top: calc(100% + 4px);
-    transform: translate(-50%, calc(-1 * var(--happy2-tooltip-rise)));
+    transform: translate(-50%, calc(-1 * var(--happy-tooltip-rise)));
 }
 
 /* Opening waits out the dwell. Closing inherits the base delay of zero, so the
    bubble starts fading the moment the pointer leaves. */
-.happy2-tooltip:hover > .happy2-tooltip__bubble {
+.happy-tooltip:hover > .happy-tooltip__bubble {
     opacity: 1;
     transform: translateX(-50%);
-    transition-delay: var(--happy2-tooltip-delay);
+    transition-delay: var(--happy-tooltip-delay);
 }
 
 /* A keyboard focus and a forced-open specimen are both deliberate: neither
    waits, and a specimen must not depend on a transition to be measurable. */
-.happy2-tooltip:has(:focus-visible) > .happy2-tooltip__bubble,
-.happy2-tooltip[data-open] > .happy2-tooltip__bubble {
+.happy-tooltip:has(:focus-visible) > .happy-tooltip__bubble,
+.happy-tooltip[data-open] > .happy-tooltip__bubble {
     opacity: 1;
     transform: translateX(-50%);
     transition-delay: 0ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy2-tooltip__bubble {
-        --happy2-tooltip-fade: 0s;
-        --happy2-tooltip-rise: 0px;
+    .happy-tooltip__bubble {
+        --happy-tooltip-fade: 0s;
+        --happy-tooltip-rise: 0px;
     }
 }

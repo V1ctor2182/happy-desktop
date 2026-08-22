@@ -81,7 +81,7 @@ export function HappyAgentConnectionStatus(props: HappyAgentConnectionStatusProp
         <>
             <WindowDragRegion />
             <section
-                className={["happy2-happy-agent-connection-status", props.className]
+                className={["happy-agent-connection-status", props.className]
                     .filter(Boolean)
                     .join(" ")}
                 data-testid={props["data-testid"] ?? "happy-agent-connection-status"}
@@ -91,32 +91,29 @@ export function HappyAgentConnectionStatus(props: HappyAgentConnectionStatusProp
             >
                 <div
                     aria-live="polite"
-                    className="happy2-happy-agent-connection-status__content"
+                    className="happy-agent-connection-status__content"
                     data-happy-desktop-ui="happy-agent-connection-status-body"
                 >
                     <span
-                        className="happy2-happy-agent-connection-status__loader"
+                        className="happy-agent-connection-status__loader"
                         data-happy-desktop-ui="happy-agent-connection-status-loader"
                     >
                         {model.loading ? (
                             <Spinner label={model.status} size={20} tone="muted" variant="line" />
                         ) : (
-                            <span
-                                aria-hidden
-                                className="happy2-happy-agent-connection-status__marker"
-                            >
+                            <span aria-hidden className="happy-agent-connection-status__marker">
                                 ·
                             </span>
                         )}
                     </span>
                     <strong
-                        className="happy2-happy-agent-connection-status__status"
+                        className="happy-agent-connection-status__status"
                         data-happy-desktop-ui="happy-agent-connection-status-label"
                     >
                         {model.status}
                     </strong>
                     <span
-                        className="happy2-happy-agent-connection-status__progress"
+                        className="happy-agent-connection-status__progress"
                         data-happy-desktop-ui="happy-agent-connection-status-progress"
                     >
                         {model.progress}

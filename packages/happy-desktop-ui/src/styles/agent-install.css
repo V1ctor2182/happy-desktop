@@ -16,11 +16,11 @@
 
 /* Two lines held from the start: the sentence changes with the daemon's counts,
    and a line appearing or leaving would move everything under it. */
-.happy2-agent-install .happy2-setup-page__copy {
+.happy-agent-install .happy-setup-page__copy {
     min-height: 48px;
 }
 
-.happy2-agent-install__waiting {
+.happy-agent-install__waiting {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -31,7 +31,7 @@
     align-self: center;
 }
 
-.happy2-agent-install__agent {
+.happy-agent-install__agent {
     padding: 3px 10px;
     border-radius: 999px;
     background: var(--surface-high);
@@ -42,7 +42,7 @@
 }
 
 /* One large button's height, reserved for the two states that have one. */
-.happy2-agent-install__action {
+.happy-agent-install__action {
     display: flex;
     flex: none;
     align-items: stretch;

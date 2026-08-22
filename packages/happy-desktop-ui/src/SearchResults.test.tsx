@@ -6,8 +6,8 @@ import "./styles/avatar.css";
 import { SearchResults, type SearchResultGroup } from "./SearchResults";
 import { createRenderer, type RenderedElement } from "./testing";
 
-const FIGTREE = "happy2 Figtree, system-ui, sans-serif";
-const MONO = "happy2 Mono, ui-monospace, monospace";
+const FIGTREE = "happy Figtree, system-ui, sans-serif";
+const MONO = "happy Mono, ui-monospace, monospace";
 
 /*
  * Near-symmetric mono uppercase group labels and asymmetric word ink use the

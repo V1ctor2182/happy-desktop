@@ -5,7 +5,7 @@
  * with a hairline ring; on tracks fill with the system accent. Tokens only.
  */
 
-.happy2-switch {
+.happy-switch {
     display: inline-flex;
     align-items: flex-start;
     box-sizing: border-box;
@@ -13,53 +13,53 @@
     border: 0;
     padding: 0;
     background: transparent;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
     cursor: pointer;
 }
 
-.happy2-switch[data-size="medium"] {
+.happy-switch[data-size="medium"] {
     gap: 10px;
 }
 
-.happy2-switch[data-size="small"] {
+.happy-switch[data-size="small"] {
     gap: 8px;
 }
 
-.happy2-switch[data-disabled] {
+.happy-switch[data-disabled] {
     cursor: not-allowed;
     opacity: 0.48;
 }
 
-.happy2-switch:focus-visible {
+.happy-switch:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
 }
 
 /* Track — the pill that carries the thumb and the on/off fill. */
-.happy2-switch__track {
+.happy-switch__track {
     position: relative;
     flex: none;
     box-sizing: border-box;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--switch-track-inactive);
     box-shadow: inset 0 0 0 1px var(--divider);
     transition: background-color 140ms ease;
 }
 
-.happy2-switch[data-checked] .happy2-switch__track {
+.happy-switch[data-checked] .happy-switch__track {
     background: var(--switch-track-active);
     box-shadow: none;
 }
 
-.happy2-switch[data-size="medium"] .happy2-switch__track {
+.happy-switch[data-size="medium"] .happy-switch__track {
     width: 36px;
     height: 20px;
 }
 
-.happy2-switch[data-size="small"] .happy2-switch__track {
+.happy-switch[data-size="small"] .happy-switch__track {
     width: 28px;
     height: 16px;
 }
@@ -69,70 +69,70 @@
  * sizes ((20-16)/2 and (16-12)/2 are both 2). It travels by the exact free
  * space (track − 2×inset − thumb) so its center lands on an integer.
  */
-.happy2-switch__thumb {
+.happy-switch__thumb {
     position: absolute;
     top: 2px;
     left: 2px;
     box-sizing: border-box;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--switch-thumb-active);
     transition: transform 140ms ease;
 }
 
-.happy2-switch[data-size="medium"] .happy2-switch__thumb {
+.happy-switch[data-size="medium"] .happy-switch__thumb {
     width: 16px;
     height: 16px;
 }
 
-.happy2-switch[data-size="small"] .happy2-switch__thumb {
+.happy-switch[data-size="small"] .happy-switch__thumb {
     width: 12px;
     height: 12px;
 }
 
-.happy2-switch[data-size="medium"][data-checked] .happy2-switch__thumb {
+.happy-switch[data-size="medium"][data-checked] .happy-switch__thumb {
     transform: translateX(16px);
 }
 
-.happy2-switch[data-size="small"][data-checked] .happy2-switch__thumb {
+.happy-switch[data-size="small"][data-checked] .happy-switch__thumb {
     transform: translateX(12px);
 }
 
 /* Text column — label over an optional muted description. */
-.happy2-switch__text {
+.happy-switch__text {
     display: flex;
     min-width: 0;
     flex-direction: column;
     gap: 2px;
 }
 
-.happy2-switch__label {
+.happy-switch__label {
     display: block;
     color: var(--text);
     font-weight: 500;
 }
 
-.happy2-switch__description {
+.happy-switch__description {
     display: block;
     color: var(--text-secondary);
     font-weight: 400;
 }
 
-.happy2-switch[data-size="medium"] .happy2-switch__label {
+.happy-switch[data-size="medium"] .happy-switch__label {
     font-size: 13px;
     line-height: 20px;
 }
 
-.happy2-switch[data-size="medium"] .happy2-switch__description {
+.happy-switch[data-size="medium"] .happy-switch__description {
     font-size: 12px;
     line-height: 16px;
 }
 
-.happy2-switch[data-size="small"] .happy2-switch__label {
+.happy-switch[data-size="small"] .happy-switch__label {
     font-size: 12px;
     line-height: 16px;
 }
 
-.happy2-switch[data-size="small"] .happy2-switch__description {
+.happy-switch[data-size="small"] .happy-switch__description {
     font-size: 11px;
     line-height: 16px;
 }

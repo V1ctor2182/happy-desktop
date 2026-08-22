@@ -5,18 +5,18 @@
  * and chat-list variants.
  */
 
-.happy2-file-attachment,
-.happy2-file-attachment__icon,
-.happy2-file-attachment__thumbnail,
-.happy2-file-attachment__copy,
-.happy2-file-attachment__name,
-.happy2-file-attachment__size,
-.happy2-file-attachment__meta,
-.happy2-file-attachment__action {
+.happy-file-attachment,
+.happy-file-attachment__icon,
+.happy-file-attachment__thumbnail,
+.happy-file-attachment__copy,
+.happy-file-attachment__name,
+.happy-file-attachment__size,
+.happy-file-attachment__meta,
+.happy-file-attachment__action {
     box-sizing: border-box;
 }
 
-.happy2-file-attachment {
+.happy-file-attachment {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -26,9 +26,9 @@
     padding: 8px 12px;
     background: var(--groupped-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
     text-decoration: none;
@@ -38,27 +38,27 @@
         border-color 120ms ease;
 }
 
-button.happy2-file-attachment {
+button.happy-file-attachment {
     cursor: pointer;
 }
 
-.happy2-file-attachment:hover {
+.happy-file-attachment:hover {
     background: var(--surface-high);
     border-color: var(--divider);
 }
 
-.happy2-file-attachment:focus-visible {
+.happy-file-attachment:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-file-attachment__icon {
+.happy-file-attachment__icon {
     display: flex;
     flex: none;
     color: var(--text-secondary);
 }
 
-.happy2-file-attachment__thumbnail {
+.happy-file-attachment__thumbnail {
     display: block;
     width: 16px;
     height: 16px;
@@ -68,12 +68,12 @@ button.happy2-file-attachment {
     object-fit: cover;
 }
 
-.happy2-file-attachment[data-variant="chat"] .happy2-file-attachment__thumbnail {
+.happy-file-attachment[data-variant="chat"] .happy-file-attachment__thumbnail {
     width: 100%;
     height: 100%;
 }
 
-.happy2-file-attachment__name {
+.happy-file-attachment__name {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -85,10 +85,10 @@ button.happy2-file-attachment {
     white-space: nowrap;
 }
 
-.happy2-file-attachment__size {
+.happy-file-attachment__size {
     flex: none;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 18px;
@@ -98,34 +98,34 @@ button.happy2-file-attachment {
 /* Chat-list treatment: a bounded attachment card with a Slack-like file tile
  * and a single hover affordance. It stays intrinsic to the message rather than
  * stretching across the conversation column. */
-.happy2-file-attachment[data-variant="chat"] {
+.happy-file-attachment[data-variant="chat"] {
     width: min(420px, 100%);
     height: 64px;
     gap: 12px;
     padding: 10px 12px;
     background: var(--surface);
     border-color: var(--divider);
-    border-radius: var(--happy2-radius-window);
+    border-radius: var(--happy-radius-window);
 }
 
-.happy2-file-attachment[data-variant="chat"][data-actions-visible] {
+.happy-file-attachment[data-variant="chat"][data-actions-visible] {
     background: var(--surface-high);
 }
 
 /* One tint for every kind of file, so the hue said nothing about the file and
    nothing about the chip being clickable — it is the same neutral icon chip as
    every other leading glyph. */
-.happy2-file-attachment[data-variant="chat"] .happy2-file-attachment__icon {
+.happy-file-attachment[data-variant="chat"] .happy-file-attachment__icon {
     width: 40px;
     height: 40px;
     align-items: center;
     justify-content: center;
     background: var(--surface-selected);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text-secondary);
 }
 
-.happy2-file-attachment[data-variant="chat"] .happy2-file-attachment__copy {
+.happy-file-attachment[data-variant="chat"] .happy-file-attachment__copy {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -133,14 +133,14 @@ button.happy2-file-attachment {
     min-width: 0;
 }
 
-.happy2-file-attachment[data-variant="chat"] .happy2-file-attachment__name {
+.happy-file-attachment[data-variant="chat"] .happy-file-attachment__name {
     display: block;
     flex: none;
     font-size: 14px;
     line-height: 20px;
 }
 
-.happy2-file-attachment__meta {
+.happy-file-attachment__meta {
     display: block;
     overflow: hidden;
     color: var(--text-secondary);
@@ -151,11 +151,11 @@ button.happy2-file-attachment {
     white-space: nowrap;
 }
 
-.happy2-file-attachment__meta-hover {
+.happy-file-attachment__meta-hover {
     display: none;
 }
 
-.happy2-file-attachment__action {
+.happy-file-attachment__action {
     display: flex;
     flex: none;
     width: 32px;
@@ -164,7 +164,7 @@ button.happy2-file-attachment {
     justify-content: center;
     background: var(--surface-high);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text-secondary);
     opacity: 0;
     transform: translateX(4px);
@@ -174,23 +174,23 @@ button.happy2-file-attachment {
         transform 120ms ease;
 }
 
-.happy2-file-attachment[data-variant="chat"]:hover .happy2-file-attachment__meta-default,
-.happy2-file-attachment[data-variant="chat"]:focus-visible .happy2-file-attachment__meta-default,
-.happy2-file-attachment[data-variant="chat"][data-actions-visible]
-    .happy2-file-attachment__meta-default {
+.happy-file-attachment[data-variant="chat"]:hover .happy-file-attachment__meta-default,
+.happy-file-attachment[data-variant="chat"]:focus-visible .happy-file-attachment__meta-default,
+.happy-file-attachment[data-variant="chat"][data-actions-visible]
+    .happy-file-attachment__meta-default {
     display: none;
 }
 
-.happy2-file-attachment[data-variant="chat"]:hover .happy2-file-attachment__meta-hover,
-.happy2-file-attachment[data-variant="chat"]:focus-visible .happy2-file-attachment__meta-hover,
-.happy2-file-attachment[data-variant="chat"][data-actions-visible]
-    .happy2-file-attachment__meta-hover {
+.happy-file-attachment[data-variant="chat"]:hover .happy-file-attachment__meta-hover,
+.happy-file-attachment[data-variant="chat"]:focus-visible .happy-file-attachment__meta-hover,
+.happy-file-attachment[data-variant="chat"][data-actions-visible]
+    .happy-file-attachment__meta-hover {
     display: inline;
 }
 
-.happy2-file-attachment[data-variant="chat"]:hover .happy2-file-attachment__action,
-.happy2-file-attachment[data-variant="chat"]:focus-visible .happy2-file-attachment__action,
-.happy2-file-attachment[data-variant="chat"][data-actions-visible] .happy2-file-attachment__action {
+.happy-file-attachment[data-variant="chat"]:hover .happy-file-attachment__action,
+.happy-file-attachment[data-variant="chat"]:focus-visible .happy-file-attachment__action,
+.happy-file-attachment[data-variant="chat"][data-actions-visible] .happy-file-attachment__action {
     color: var(--text);
     opacity: 1;
     transform: none;

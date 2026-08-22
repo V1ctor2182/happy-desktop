@@ -325,12 +325,12 @@ export function ImageViewer(props: ImageViewerProps) {
     };
 
     const wanted = local.autoFocus === true;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- move real keyboard focus to the frame on mount
+    // eslint-disable-next-line happy-react/no-layout-effect -- move real keyboard focus to the frame on mount
     useLayoutEffect(() => {
         if (wanted) frameElement.current?.focus({ preventScroll: true });
     }, [wanted]);
 
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the frame's live box is what "fit" means and only the browser can report it; the observer is created with the committed element and torn down with it
+    // eslint-disable-next-line happy-react/no-layout-effect -- the frame's live box is what "fit" means and only the browser can report it; the observer is created with the committed element and torn down with it
     useLayoutEffect(() => {
         const element = frameElement.current;
         if (!element || typeof ResizeObserver === "undefined") return;
@@ -352,12 +352,12 @@ export function ImageViewer(props: ImageViewerProps) {
     // pinch at wheel frequency, and rebinding a non-passive listener per event
     // would churn the element while the hand is still moving.
     const gesture = useRef<ImageGesture>({ geometry, ready: showing, url });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the committed picture is what the bound-once wheel listener below must see; assigning it here rather than during render leaves render itself pure
+    // eslint-disable-next-line happy-react/no-layout-effect -- the committed picture is what the bound-once wheel listener below must see; assigning it here rather than during render leaves render itself pure
     useLayoutEffect(() => {
         gesture.current = { geometry, ready: showing, url };
     });
 
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a pinch and a modified wheel must cancel the page's own zoom, which a React wheel handler cannot do because React attaches wheel passively at the root
+    // eslint-disable-next-line happy-react/no-layout-effect -- a pinch and a modified wheel must cancel the page's own zoom, which a React wheel handler cannot do because React attaches wheel passively at the root
     useLayoutEffect(() => {
         const element = frameElement.current;
         if (!element) return;
@@ -488,7 +488,7 @@ export function ImageViewer(props: ImageViewerProps) {
     return (
         <div
             {...rest}
-            className={["happy2-image-viewer", local.className].filter(Boolean).join(" ")}
+            className={["happy-image-viewer", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="image-viewer"
             data-testid={local["data-testid"]}
             data-tone={local.tone === "immersive" ? "immersive" : undefined}
@@ -496,7 +496,7 @@ export function ImageViewer(props: ImageViewerProps) {
         >
             <div
                 aria-label={`${local.name}, image`}
-                className="happy2-image-viewer__frame"
+                className="happy-image-viewer__frame"
                 data-dragging={dragging ? "" : undefined}
                 data-happy-desktop-ui="image-viewer-frame"
                 data-pannable={pannable ? "" : undefined}
@@ -538,7 +538,7 @@ export function ImageViewer(props: ImageViewerProps) {
                     state={live}
                 />
             </div>
-            <div className="happy2-image-viewer__tools" data-happy-desktop-ui="image-viewer-tools">
+            <div className="happy-image-viewer__tools" data-happy-desktop-ui="image-viewer-tools">
                 {local.actions}
                 <Button
                     aria-label="Zoom out"
@@ -551,7 +551,7 @@ export function ImageViewer(props: ImageViewerProps) {
                     <Octicon name="zoom-out" size={14} />
                 </Button>
                 <span
-                    className="happy2-image-viewer__zoom"
+                    className="happy-image-viewer__zoom"
                     data-happy-desktop-ui="image-viewer-zoom"
                 >
                     {showing ? `${String(Math.round(scale * 100))}%` : "—"}
@@ -566,7 +566,7 @@ export function ImageViewer(props: ImageViewerProps) {
                 >
                     <Octicon name="zoom-in" size={14} />
                 </Button>
-                <span className="happy2-image-viewer__divider" />
+                <span className="happy-image-viewer__divider" />
                 <Button
                     aria-label="Fit to view"
                     aria-pressed={live.view.kind === "fit"}
@@ -597,7 +597,7 @@ export function ImageViewer(props: ImageViewerProps) {
                 themselves, and the only one worth interrupting them with. */}
             <span
                 aria-live="polite"
-                className="happy2-image-viewer__announcement"
+                className="happy-image-viewer__announcement"
                 data-happy-desktop-ui="image-viewer-announcement"
                 role="status"
             >
@@ -627,14 +627,14 @@ function ImageViewerStage(props: {
     if (props.content.type === "unavailable")
         return (
             <div
-                className="happy2-image-viewer__notice"
+                className="happy-image-viewer__notice"
                 data-happy-desktop-ui="image-viewer-unavailable"
             >
                 <Icon name="image" size={20} />
-                <span className="happy2-image-viewer__notice-title">
+                <span className="happy-image-viewer__notice-title">
                     {props.name} has no preview
                 </span>
-                <span className="happy2-image-viewer__notice-detail">
+                <span className="happy-image-viewer__notice-detail">
                     This file is not a picture Happy can show.
                 </span>
             </div>
@@ -648,7 +648,7 @@ function ImageViewerStage(props: {
             {status === "loading" ? <ImageViewerOpening name={props.name} /> : null}
             <img
                 alt={props.name}
-                className="happy2-image-viewer__image"
+                className="happy-image-viewer__image"
                 data-happy-desktop-ui="image-viewer-image"
                 draggable={false}
                 onError={props.onError}
@@ -684,9 +684,9 @@ function ImageViewerStage(props: {
 
 function ImageViewerOpening(props: { name: string }) {
     return (
-        <div className="happy2-image-viewer__notice" data-happy-desktop-ui="image-viewer-loading">
+        <div className="happy-image-viewer__notice" data-happy-desktop-ui="image-viewer-loading">
             <Spinner size={16} />
-            <span className="happy2-image-viewer__notice-title">Opening {props.name}…</span>
+            <span className="happy-image-viewer__notice-title">Opening {props.name}…</span>
         </div>
     );
 }
@@ -694,15 +694,15 @@ function ImageViewerOpening(props: { name: string }) {
 function ImageViewerFailure(props: { detail: string; name: string }) {
     return (
         <div
-            className="happy2-image-viewer__notice"
+            className="happy-image-viewer__notice"
             data-happy-desktop-ui="image-viewer-error"
             data-tone="danger"
         >
             <Icon name="close" size={20} />
-            <span className="happy2-image-viewer__notice-title">
+            <span className="happy-image-viewer__notice-title">
                 {props.name} could not be opened
             </span>
-            <span className="happy2-image-viewer__notice-detail">{props.detail}</span>
+            <span className="happy-image-viewer__notice-detail">{props.detail}</span>
         </div>
     );
 }

@@ -5,17 +5,17 @@
  * a compact tool call. Icon, label, and reason stay in one scanning row.
  */
 
-.happy2-conversation-error-card,
-.happy2-conversation-error-card * {
+.happy-conversation-error-card,
+.happy-conversation-error-card * {
     box-sizing: border-box;
 }
 
-.happy2-conversation-error-card {
+.happy-conversation-error-card {
     display: flex;
     width: 100%;
     padding: 6px 96px 6px 30px;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
@@ -23,12 +23,12 @@
    the Message that owns the agent identity line. Message already supplies the
    transcript inset, so keeping the card's own would indent it past the notices
    beneath it. */
-.happy2-message--activity-lead .happy2-conversation-error-card {
+.happy-message--activity-lead .happy-conversation-error-card {
     padding-right: 0;
     padding-left: 0;
 }
 
-.happy2-conversation-error-card__bubble {
+.happy-conversation-error-card__bubble {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -36,7 +36,7 @@
     min-width: 0;
 }
 
-.happy2-conversation-error-card__icon {
+.happy-conversation-error-card__icon {
     display: flex;
     flex: none;
     align-items: center;
@@ -46,7 +46,7 @@
     color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
 }
 
-.happy2-conversation-error-card__content {
+.happy-conversation-error-card__content {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
@@ -54,7 +54,7 @@
     min-width: 0;
 }
 
-.happy2-conversation-error-card__title {
+.happy-conversation-error-card__title {
     flex: none;
     color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
     font-size: 14px;
@@ -62,15 +62,15 @@
     line-height: 20px;
 }
 
-.happy2-conversation-error-card[data-tone="warning"] .happy2-conversation-error-card__icon,
-.happy2-conversation-error-card[data-tone="warning"] .happy2-conversation-error-card__title,
-.happy2-conversation-error-card[data-tone="warning"] .happy2-conversation-error-card__reason {
+.happy-conversation-error-card[data-tone="warning"] .happy-conversation-error-card__icon,
+.happy-conversation-error-card[data-tone="warning"] .happy-conversation-error-card__title,
+.happy-conversation-error-card[data-tone="warning"] .happy-conversation-error-card__reason {
     color: color-mix(in srgb, var(--box-warning-text) 38%, var(--text-secondary));
 }
 
 /* The reason scrolls sideways (see ScrollingText) instead of ending in an
    ellipsis: a failure a reader cannot finish reading is not a report. */
-.happy2-conversation-error-card__reason {
+.happy-conversation-error-card__reason {
     min-width: 0;
     flex: 1 1 auto;
     color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
@@ -79,7 +79,7 @@
     line-height: 20px;
 }
 
-.happy2-conversation-error-card:hover .happy2-copy-button,
-.happy2-conversation-error-card:focus-within .happy2-copy-button {
+.happy-conversation-error-card:hover .happy-copy-button,
+.happy-conversation-error-card:focus-within .happy-copy-button {
     opacity: 1;
 }

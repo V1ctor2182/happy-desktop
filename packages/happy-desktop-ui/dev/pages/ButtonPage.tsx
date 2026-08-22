@@ -192,7 +192,7 @@ export function ButtonPage() {
                                 <span
                                     style={{
                                         color: "var(--text-secondary)",
-                                        font: "600 10px var(--happy2-font-mono)",
+                                        font: "600 10px var(--happy-font-mono)",
                                     }}
                                 >
                                     {state.label}

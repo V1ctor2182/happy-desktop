@@ -81,7 +81,7 @@ export function DefaultAgentForm(props: DefaultAgentFormProps) {
     return (
         <form
             aria-busy={local.submitting === true ? "true" : undefined}
-            className={["happy2-default-agent-form", local.className].filter(Boolean).join(" ")}
+            className={["happy-default-agent-form", local.className].filter(Boolean).join(" ")}
             data-disabled={local.disabled ? "" : undefined}
             data-happy-desktop-ui="default-agent-form"
             data-submitting={local.submitting ? "" : undefined}
@@ -96,7 +96,7 @@ export function DefaultAgentForm(props: DefaultAgentFormProps) {
             style={local.style}
         >
             <p
-                className="happy2-default-agent-form__description"
+                className="happy-default-agent-form__description"
                 data-happy-desktop-ui="default-agent-description"
             >
                 {local.description ??
@@ -134,7 +134,7 @@ export function DefaultAgentForm(props: DefaultAgentFormProps) {
                 value={local.username}
             />
             <div
-                className="happy2-default-agent-form__preset"
+                className="happy-default-agent-form__preset"
                 data-happy-desktop-ui="default-agent-preset"
             >
                 <Button
@@ -150,7 +150,7 @@ export function DefaultAgentForm(props: DefaultAgentFormProps) {
             </div>
             {local.formError ? (
                 <p
-                    className="happy2-default-agent-form__error"
+                    className="happy-default-agent-form__error"
                     data-happy-desktop-ui="default-agent-error"
                     role="alert"
                 >

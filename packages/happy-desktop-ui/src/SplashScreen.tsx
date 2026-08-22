@@ -40,21 +40,21 @@ export function SplashScreen(props: SplashScreenProps) {
     ]);
     return (
         <div
-            className={["happy2-splash-screen", local.className].filter(Boolean).join(" ")}
+            className={["happy-splash-screen", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="splash-screen"
             data-testid={local["data-testid"]}
             style={local.style}
         >
-            <div className="happy2-splash-screen__body">
+            <div className="happy-splash-screen__body">
                 <img
                     alt={local.label ?? "Happy"}
-                    className="happy2-splash-screen__mark"
+                    className="happy-splash-screen__mark"
                     data-happy-desktop-ui="splash-screen-mark"
                     src={happyLogoUrl}
                 />
                 {local.note !== undefined ? (
                     <div
-                        className="happy2-splash-screen__note"
+                        className="happy-splash-screen__note"
                         data-happy-desktop-ui="splash-screen-note"
                     >
                         {local.note}

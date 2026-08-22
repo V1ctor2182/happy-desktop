@@ -135,7 +135,7 @@ export function BadgePage() {
                     <span
                         style={{
                             color: "var(--text)",
-                            font: "700 13px var(--happy2-font-ui)",
+                            font: "700 13px var(--happy-font-ui)",
                         }}
                     >
                         Codex finished a run

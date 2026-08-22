@@ -112,7 +112,7 @@ it("holds TitleBar geometry: 56px contract, grid lanes, drag chrome", async () =
         "padding-right": "12px",
         "padding-top": "0px",
     });
-    expect(root.textMetrics().font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(root.textMetrics().font.family).toBe("happy Figtree, system-ui, sans-serif");
 
     const leading = view.$(
         '[data-happy-desktop-ui="title-bar"]:not([data-window-controls]) [data-happy-desktop-ui="title-bar-leading"]',
@@ -443,7 +443,7 @@ it("holds SearchField geometry, colors, and optical centering", async () => {
         "padding-left": "0px",
         "padding-top": "0px",
     });
-    expect(input.textMetrics().font.family).toBe("happy2 Figtree, system-ui, sans-serif");
+    expect(input.textMetrics().font.family).toBe("happy Figtree, system-ui, sans-serif");
     /* Vertical-only centroid: input text is left-aligned by design, so the
        horizontal centroid is meaningless. Caps/digits content is vertically
        symmetric; raw true-2x dy: cr -0.18, ff +0.32, wk -0.26 — all inside

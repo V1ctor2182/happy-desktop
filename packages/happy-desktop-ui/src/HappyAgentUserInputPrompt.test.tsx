@@ -42,7 +42,7 @@ const request: HappyAgentUserInputRequest = {
 
 function control(view: ReturnType<typeof createRenderer>, questionId: string, index: number) {
     const options = view.container.querySelectorAll(
-        `[data-question-id="${questionId}"] [data-happy-desktop-ui="happy-agent-user-input-option"] .happy2-checkbox__control`,
+        `[data-question-id="${questionId}"] [data-happy-desktop-ui="happy-agent-user-input-option"] .happy-checkbox__control`,
     );
     return options[index] as HTMLInputElement;
 }

@@ -16,7 +16,7 @@ function Region(props: { label: string }) {
                 minHeight: 0,
                 color: "var(--text-secondary)",
                 background: "var(--groupped-background)",
-                fontFamily: "var(--happy2-font-ui)",
+                fontFamily: "var(--happy-font-ui)",
                 fontSize: "13px",
             }}
         >

@@ -104,7 +104,7 @@ jobs:
             - name: Build hosted local renderer
               if: matrix.arch == 'arm64'
               env:
-                  HAPPY2_LOCAL_WEB_BUILD_ID: ${{ github.sha }}
+                  HAPPY_LOCAL_WEB_BUILD_ID: ${{ github.sha }}
               run: pnpm desktop:local:web
 
             - name: Upload hosted local renderer

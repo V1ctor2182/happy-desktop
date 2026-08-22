@@ -280,7 +280,7 @@ it("holds Switch label typography, layout, and disabled state", async () => {
     );
     await view.ready();
 
-    const fontFamily = "happy2 Figtree, system-ui, sans-serif";
+    const fontFamily = "happy Figtree, system-ui, sans-serif";
 
     // Medium labeled: label 13/20, description 12/16 muted, 10px gap, track
     // top-aligned with the label line (track height 20 = label line-height 20,

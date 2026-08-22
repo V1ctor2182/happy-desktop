@@ -30,8 +30,8 @@ type Renderer = ReturnType<typeof createRenderer>;
 /* WebKit reports the family unquoted; textMetrics strips quotes for both. */
 const fontFamily = () =>
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 async function settleSegmentColors(view: Renderer, activeSelector: string) {
     /* The browser pointer can begin over the first fixture's inactive segment.
@@ -39,7 +39,7 @@ async function settleSegmentColors(view: Renderer, activeSelector: string) {
      * computed token assertions cannot sample an interpolated Firefox frame. */
     await userEvent.hover(view.$(activeSelector).element);
     for (const segment of view.container.querySelectorAll<HTMLElement>(
-        ".happy2-segmented-control__segment",
+        ".happy-segmented-control__segment",
     )) {
         segment.style.setProperty("transition", "none", "important");
     }
@@ -168,7 +168,7 @@ it("holds SegmentedControl dimensions, layout, colors, and one-layer selection",
         // Label typography contract.
         expect(activeLabel.textMetrics(), `${id} typography`).toMatchObject({
             font: {
-                family: "happy2 Figtree, system-ui, sans-serif",
+                family: "happy Figtree, system-ui, sans-serif",
                 letterSpacing: spec.fontSize / 100,
                 lineHeight: spec.lineHeight,
                 size: spec.fontSize,

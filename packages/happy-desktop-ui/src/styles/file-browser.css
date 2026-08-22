@@ -6,18 +6,18 @@
  * switch. No rule separates it from the file rows.
  */
 
-.happy2-file-browser,
-.happy2-file-browser * {
+.happy-file-browser,
+.happy-file-browser * {
     box-sizing: border-box;
 }
 
-.happy2-file-browser {
+.happy-file-browser {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
     min-height: 0;
     height: 100%;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     color: var(--text);
 }
@@ -26,47 +26,47 @@
 
 /* The control row is inset like the listing beneath it, so its leading control
    starts on the same edge the file rows start on. */
-.happy2-file-browser__controls {
+.happy-file-browser__controls {
     display: flex;
     flex: none;
     align-items: center;
     gap: 8px;
-    height: var(--happy2-subheader-height);
-    padding: 0 var(--happy2-panel-inset);
+    height: var(--happy-subheader-height);
+    padding: 0 var(--happy-panel-inset);
 }
 
-.happy2-file-browser__scopes {
+.happy-file-browser__scopes {
     flex: none;
 }
 
-.happy2-file-browser__layouts {
+.happy-file-browser__layouts {
     display: flex;
     flex: none;
     align-items: center;
     gap: 2px;
 }
 
-.happy2-file-browser__layout {
+.happy-file-browser__layout {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
     width: 24px;
-    height: var(--happy2-subheader-control-height);
+    height: var(--happy-subheader-control-height);
     margin: 0;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
 }
 
-.happy2-file-browser__layout:hover {
+.happy-file-browser__layout:hover {
     color: var(--text);
 }
 
-.happy2-file-browser__layout[data-active] {
+.happy-file-browser__layout[data-active] {
     border-color: var(--surface-selected);
     background: var(--surface-selected);
     color: var(--text);
@@ -74,7 +74,7 @@
 
 /* Takes the slack before the layout switch. The cluster is clipped as a unit
    if a very narrow panel cannot state the whole selection or diff total. */
-.happy2-file-browser__summary {
+.happy-file-browser__summary {
     display: flex;
     flex: 1 1 auto;
     flex-wrap: wrap;
@@ -84,7 +84,7 @@
     min-width: 0;
     height: 16px;
     overflow: hidden;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 600;
     line-height: 16px;
@@ -92,7 +92,7 @@
     font-feature-settings: "tnum" 1;
 }
 
-.happy2-file-browser__count {
+.happy-file-browser__count {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
@@ -102,26 +102,26 @@
 }
 
 /* The two totals travel together: half a diff stat is worse than none. */
-.happy2-file-browser__lines {
+.happy-file-browser__lines {
     display: flex;
     flex: none;
     align-items: baseline;
     gap: 6px;
 }
 
-.happy2-file-browser__added {
+.happy-file-browser__added {
     display: block;
     flex: none;
     color: var(--git-added-text);
 }
 
-.happy2-file-browser__deleted {
+.happy-file-browser__deleted {
     display: block;
     flex: none;
     color: var(--git-removed-text);
 }
 
-.happy2-file-browser__note {
+.happy-file-browser__note {
     display: flex;
     flex: none;
     align-items: center;
@@ -136,7 +136,7 @@
 
 /* The region the listing fills. The tree inside it owns the scrolling and the
    inset, so this is only the box that says how much room it has. */
-.happy2-file-browser__body {
+.happy-file-browser__body {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;

@@ -28,14 +28,14 @@ export function LoadingSwap(props: LoadingSwapProps) {
     const size = props.size ?? 20;
     return (
         <span
-            className={["happy2-loading-swap", props.className].filter(Boolean).join(" ")}
+            className={["happy-loading-swap", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="loading-swap"
             data-loading={props.loading ? "" : undefined}
-            style={{ "--happy2-loading-swap-size": `${size}px` } as CSSProperties}
+            style={{ "--happy-loading-swap-size": `${size}px` } as CSSProperties}
         >
             <span
                 aria-hidden={props.loading ? undefined : "true"}
-                className="happy2-loading-swap__layer"
+                className="happy-loading-swap__layer"
                 data-happy-desktop-ui="loading-swap-spinner"
                 data-layer="spinner"
             >
@@ -48,7 +48,7 @@ export function LoadingSwap(props: LoadingSwapProps) {
             </span>
             <span
                 aria-hidden={props.loading ? "true" : undefined}
-                className="happy2-loading-swap__layer"
+                className="happy-loading-swap__layer"
                 data-happy-desktop-ui="loading-swap-content"
                 data-layer="content"
             >

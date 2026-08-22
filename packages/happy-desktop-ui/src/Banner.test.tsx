@@ -23,11 +23,11 @@ import { createRenderer } from "./testing";
 
 /* textMetrics() strips the family quotes; getComputedStyle keeps them except
  * on WebKit (same quirk asserted in Button.test.tsx). */
-const fontFamily = "happy2 Figtree, system-ui, sans-serif";
+const fontFamily = "happy Figtree, system-ui, sans-serif";
 const computedFontFamily =
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : `"happy2 Figtree", system-ui, sans-serif`;
+        ? "happy Figtree, system-ui, sans-serif"
+        : `"happy Figtree", system-ui, sans-serif`;
 
 /* Fixed theme tokens, resolved to the exact rgb()/rgba() each engine reports. */
 const toneStyles: Record<
@@ -312,7 +312,7 @@ it("holds Banner layout modes: message-only, no-icon, action, dismiss, and wrapp
     const full = view.$('[data-testid="full"]');
     // Title+message block (40px) dominates the 28px Button => 66px row.
     expect(full.bounds().height).toBe(66);
-    const action = view.$('[data-testid="full"] .happy2-banner__action');
+    const action = view.$('[data-testid="full"] .happy-banner__action');
     expect(action.element.tagName).toBe("BUTTON");
     expect(action.bounds().height).toBe(28);
     expect(action.textMetrics().text).toBe("Review");
@@ -333,7 +333,7 @@ it("holds Banner layout modes: message-only, no-icon, action, dismiss, and wrapp
     // ---- Action, no dismiss: 28px Button drives a 54px single-line row -------
     const actionOnly = view.$('[data-testid="action-only"]');
     expect(actionOnly.bounds().height).toBe(54);
-    const retry = view.$('[data-testid="action-only"] .happy2-banner__action');
+    const retry = view.$('[data-testid="action-only"] .happy-banner__action');
     expect(retry.bounds().height).toBe(28);
     // Last in the group => it holds the 15px right inset itself.
     expect(

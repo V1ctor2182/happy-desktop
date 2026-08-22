@@ -356,7 +356,7 @@ export function fileTreeFamily(node: Pick<FileTreeNode, "kind" | "name">): FileT
  *
  * A path is at its most identifying where it starts and where it stops, so
  * cutting the tail off `packages/happy-desktop-ui/src/pages/files` leaves every row in
- * a monorepo reading `packages/happy2…`. The last segment is held out of the
+ * a monorepo reading `packages/happy…`. The last segment is held out of the
  * shrinking run as a fixed-width tail, so the elision opens in the middle and
  * both ends survive. Doing it in CSS keeps a listing of thousands of rows free
  * of per-row measurement.
@@ -369,12 +369,12 @@ function FileTreePath(props: { path: string }) {
     const tail = cut === -1 ? "/" : `${props.path.slice(cut)}/`;
     return (
         <span
-            className="happy2-file-tree__path"
+            className="happy-file-tree__path"
             data-happy-desktop-ui="file-tree-path"
             title={props.path}
         >
-            {cut === -1 ? null : <span className="happy2-file-tree__path-head">{head}</span>}
-            <span className="happy2-file-tree__path-tail">{cut === -1 ? `${head}/` : tail}</span>
+            {cut === -1 ? null : <span className="happy-file-tree__path-head">{head}</span>}
+            <span className="happy-file-tree__path-tail">{cut === -1 ? `${head}/` : tail}</span>
         </span>
     );
 }
@@ -392,19 +392,19 @@ function FileTreeName(props: { name: string }) {
     const cut = props.name.lastIndexOf("/");
     if (cut === -1)
         return (
-            <span className="happy2-file-tree__name" data-happy-desktop-ui="file-tree-name">
+            <span className="happy-file-tree__name" data-happy-desktop-ui="file-tree-name">
                 {props.name}
             </span>
         );
     return (
         <span
-            className="happy2-file-tree__name"
+            className="happy-file-tree__name"
             data-happy-desktop-ui="file-tree-name"
             data-joined=""
             title={props.name}
         >
-            <span className="happy2-file-tree__name-head">{props.name.slice(0, cut + 1)}</span>
-            <span className="happy2-file-tree__name-tail">{props.name.slice(cut + 1)}</span>
+            <span className="happy-file-tree__name-head">{props.name.slice(0, cut + 1)}</span>
+            <span className="happy-file-tree__name-tail">{props.name.slice(cut + 1)}</span>
         </span>
     );
 }
@@ -419,23 +419,23 @@ function FileTreeStat(props: { added?: number; deleted?: number }) {
     const deleted = props.deleted !== undefined && props.deleted > 0;
     if (!added && !deleted) return null;
     return (
-        <span className="happy2-file-tree__stat" data-happy-desktop-ui="file-tree-stat">
+        <span className="happy-file-tree__stat" data-happy-desktop-ui="file-tree-stat">
             {added ? (
                 <span
                     aria-hidden="true"
-                    className="happy2-file-tree__stat-added"
+                    className="happy-file-tree__stat-added"
                     data-happy-desktop-ui="file-tree-insertions"
                 >{`+${compactCount(props.added ?? 0)}`}</span>
             ) : null}
             {deleted ? (
                 <span
                     aria-hidden="true"
-                    className="happy2-file-tree__stat-deleted"
+                    className="happy-file-tree__stat-deleted"
                     data-happy-desktop-ui="file-tree-deletions"
                 >{`−${compactCount(props.deleted ?? 0)}`}</span>
             ) : null}
             {/* Out of flow, so the visible pair keeps the row's own spacing. */}
-            <span className="happy2-visually-hidden">
+            <span className="happy-visually-hidden">
                 {changeCountLabel(props.added ?? 0, props.deleted ?? 0)}
             </span>
         </span>
@@ -514,7 +514,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
     if (row.kind === "loading")
         return (
             <div
-                className="happy2-file-tree__loading"
+                className="happy-file-tree__loading"
                 data-happy-desktop-ui="file-tree-loading"
                 data-row={row.id}
                 ref={onElement}
@@ -542,7 +542,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                 props.selectable && row.kind === "entry" && !directory ? props.picked : undefined
             }
             aria-setsize={row.setSize}
-            className={row.kind === "more" ? "happy2-file-tree__more" : "happy2-file-tree__row"}
+            className={row.kind === "more" ? "happy-file-tree__more" : "happy-file-tree__row"}
             data-family={row.kind === "entry" ? family : undefined}
             data-happy-desktop-ui={row.kind === "more" ? "file-tree-more" : "file-tree-row"}
             data-kind={row.kind === "entry" ? node.kind : undefined}
@@ -593,11 +593,11 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                 props.moreLabel
             ) : (
                 <>
-                    <span className="happy2-file-tree__disc" data-happy-desktop-ui="file-tree-disc">
+                    <span className="happy-file-tree__disc" data-happy-desktop-ui="file-tree-disc">
                         {directory ? (
                             <span
                                 aria-hidden="true"
-                                className="happy2-file-tree__chevron"
+                                className="happy-file-tree__chevron"
                                 data-happy-desktop-ui="file-tree-chevron"
                                 onClick={(event) => {
                                     event.stopPropagation();
@@ -612,17 +612,17 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                         ) : null}
                     </span>
                     <span
-                        className="happy2-file-tree__entry"
+                        className="happy-file-tree__entry"
                         data-happy-desktop-ui="file-tree-entry"
                     >
                         <span
-                            className="happy2-file-tree__icon"
+                            className="happy-file-tree__icon"
                             data-happy-desktop-ui="file-tree-icon"
                         >
                             <FileTreeFamilyIcon family={family} expanded={node.expanded} />
                         </span>
                         <span
-                            className="happy2-file-tree__label"
+                            className="happy-file-tree__label"
                             data-happy-desktop-ui="file-tree-label"
                         >
                             {node.directory ? <FileTreePath path={node.directory} /> : null}
@@ -632,7 +632,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                         {status ? (
                             <span
                                 aria-label={status.label}
-                                className="happy2-file-tree__status"
+                                className="happy-file-tree__status"
                                 data-happy-desktop-ui="file-tree-status"
                                 title={status.label}
                             >
@@ -879,7 +879,7 @@ export function FileTree(props: FileTreeProps) {
     );
     return (
         <ScrollArea
-            className={["happy2-file-tree", local.className].filter(Boolean).join(" ")}
+            className={["happy-file-tree", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-tree"
             data-testid={local["data-testid"]}
             data-virtualized={virtualized ? "" : undefined}
@@ -888,7 +888,7 @@ export function FileTree(props: FileTreeProps) {
             // them. Unvirtualized, the panel around it scrolls and marks itself.
             data-scrollbar-rows={virtualized ? "" : undefined}
             style={local.style}
-            viewportClassName="happy2-file-tree__viewport"
+            viewportClassName="happy-file-tree__viewport"
             viewportProps={{
                 "aria-label": local.label ?? "Files",
                 "aria-multiselectable": local.selectedIds ? true : undefined,
@@ -901,35 +901,32 @@ export function FileTree(props: FileTreeProps) {
         >
             {local.loading ? (
                 <div
-                    className="happy2-file-tree__status-line"
+                    className="happy-file-tree__status-line"
                     data-happy-desktop-ui="file-tree-status-line"
                 >
                     {local.loadingLabel ?? "Loading files…"}
                 </div>
             ) : model.rows.length === 0 ? (
                 <div
-                    className="happy2-file-tree__status-line"
+                    className="happy-file-tree__status-line"
                     data-happy-desktop-ui="file-tree-empty"
                 >
                     {local.emptyLabel ?? "No files to show."}
                 </div>
             ) : virtualized ? (
-                <div
-                    className="happy2-file-tree__virtual"
-                    data-happy-desktop-ui="file-tree-virtual"
-                >
+                <div className="happy-file-tree__virtual" data-happy-desktop-ui="file-tree-virtual">
                     {/* The rows leave the flow so the listing can be as tall as
                         all of them while only the drawn ones exist; this box is
                         what holds that height open. */}
                     <div
-                        className="happy2-file-tree__virtual-sizer"
+                        className="happy-file-tree__virtual-sizer"
                         style={{ height: `${String(virtualizer.getTotalSize())}px` }}
                     >
                         {virtualizer.getVirtualItems().map((item) => {
                             const row = model.rows[item.index];
                             return row ? (
                                 <div
-                                    className="happy2-file-tree__virtual-row"
+                                    className="happy-file-tree__virtual-row"
                                     key={item.key}
                                     style={{ transform: `translateY(${String(item.start)}px)` }}
                                 >

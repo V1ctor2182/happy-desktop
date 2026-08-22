@@ -22,7 +22,7 @@ const row = {
     flexDirection: "row" as const,
     alignItems: "center",
     gap: "10px",
-    fontFamily: "var(--happy2-font-mono)",
+    fontFamily: "var(--happy-font-mono)",
     fontSize: "16px",
     lineHeight: "24px",
     color: "var(--text-secondary)",

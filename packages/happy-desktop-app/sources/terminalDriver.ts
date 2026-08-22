@@ -17,7 +17,7 @@ import type {
 import { ghosttyEmulatorCreate, type TerminalEmulator } from "./ghosttyTerminal";
 
 const RECONNECT_DELAY_MS = 500;
-const TERMINAL_CLIENT_ID = "happy2-terminal";
+const TERMINAL_CLIENT_ID = "happy-terminal";
 /** The protocol rejects any single input frame larger than 64 KiB. */
 const MAX_INPUT_BYTES = 64 * 1024;
 

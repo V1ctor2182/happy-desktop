@@ -5,7 +5,7 @@
  * internals.
  */
 
-.happy2-changed-file-diff {
+.happy-changed-file-diff {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -16,26 +16,26 @@
 }
 
 /* The mode switch sits above the code and stays put while it scrolls. */
-.happy2-changed-file-diff__bar {
+.happy-changed-file-diff__bar {
     box-sizing: border-box;
     flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    height: var(--happy2-subheader-height);
+    height: var(--happy-subheader-height);
     padding: 0 8px;
     background: var(--surface);
     box-shadow: inset 0 -1px var(--divider);
 }
 
-.happy2-changed-file-diff__bar-end {
+.happy-changed-file-diff__bar-end {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.happy2-changed-file-diff__body {
+.happy-changed-file-diff__body {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -46,8 +46,8 @@
     overflow: hidden;
 }
 
-.happy2-changed-file-diff[data-mode="unified"] .happy2-changed-file-diff__body,
-.happy2-changed-file-diff[data-mode="split"] .happy2-changed-file-diff__body {
+.happy-changed-file-diff[data-mode="unified"] .happy-changed-file-diff__body,
+.happy-changed-file-diff[data-mode="split"] .happy-changed-file-diff__body {
     /*
      * The renderer owns both scroll axes: Pierre keeps horizontal scrolling
      * inside each code column, while the renderer host owns the one vertical
@@ -57,15 +57,15 @@
     overflow: hidden;
 }
 
-.happy2-changed-file-diff__viewport {
+.happy-changed-file-diff__viewport {
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
-.happy2-changed-file-diff[data-mode="unified"] .happy2-changed-file-diff__viewport,
-.happy2-changed-file-diff[data-mode="split"] .happy2-changed-file-diff__viewport {
-    --happy2-code-trailing-clearance: calc(var(--happy2-scrollbar-track) + 1ch);
+.happy-changed-file-diff[data-mode="unified"] .happy-changed-file-diff__viewport,
+.happy-changed-file-diff[data-mode="split"] .happy-changed-file-diff__viewport {
+    --happy-code-trailing-clearance: calc(var(--happy-scrollbar-track) + 1ch);
     display: block;
     overflow-x: hidden;
     overflow-y: auto;
@@ -75,12 +75,12 @@
    reading measure, a picture on a stage, a recording that fills its frame — so
    the pane hands it the region rather than scrolling it from outside, which
    would give the same content two scrollbars. */
-.happy2-changed-file-diff[data-mode="preview"] .happy2-changed-file-diff__body {
+.happy-changed-file-diff[data-mode="preview"] .happy-changed-file-diff__body {
     display: flex;
     overflow: hidden;
 }
 
-.happy2-changed-file-diff__renderer {
+.happy-changed-file-diff__renderer {
     display: block;
     flex: none;
     width: 100%;
@@ -92,13 +92,13 @@
        being scrolled and is gone otherwise. It is an overlay and takes no
        layout, so a row's green or red runs to the pane edge and continues
        underneath it. */
-    --diffs-font-family: var(--happy2-font-mono);
-    --diffs-header-font-family: var(--happy2-font-ui);
+    --diffs-font-family: var(--happy-font-mono);
+    --diffs-header-font-family: var(--happy-font-ui);
     --diffs-font-size: 12px;
     --diffs-line-height: 20px;
     /* Pierre's default header is `1lh + 3 × gap-block`: 20 + 3 × 4 = 32,
        exactly the same row as the tabs, mode bar, and Preview path. */
-    --diffs-gap-block: var(--happy2-subheader-inset);
+    --diffs-gap-block: var(--happy-subheader-inset);
     --diffs-gap-inline: 10px;
     --diffs-light-bg: var(--surface);
     --diffs-dark-bg: var(--surface);
@@ -121,19 +121,19 @@
 
 /* The same code editor the file tab uses: editing a change should not look like
    a different application from editing the file it is a change to. */
-.happy2-changed-file-diff__editor {
+.happy-changed-file-diff__editor {
     width: 100%;
     height: 100%;
 }
 
-.happy2-changed-file-diff__updating {
+.happy-changed-file-diff__updating {
     flex: none;
     padding: 3px 7px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--surface-high);
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 11px;
     font-weight: 600;
     line-height: 16px;

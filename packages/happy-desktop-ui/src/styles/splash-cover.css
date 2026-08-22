@@ -8,7 +8,7 @@
  * dissolve off a window that was always there.
  */
 
-.happy2-splash-cover {
+.happy-splash-cover {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -17,12 +17,12 @@
     min-height: 0;
 }
 
-.happy2-splash-cover > *:not(.happy2-splash-cover__veil) {
+.happy-splash-cover > *:not(.happy-splash-cover__veil) {
     flex: 1 1 auto;
     min-height: 0;
 }
 
-.happy2-splash-cover__veil {
+.happy-splash-cover__veil {
     position: absolute;
     inset: 0;
     z-index: 10;
@@ -34,12 +34,12 @@
  * accident, and nothing under it may be reached by the keyboard either while the
  * window still reads as loading.
  */
-.happy2-splash-cover__veil[data-leaving] {
+.happy-splash-cover__veil[data-leaving] {
     pointer-events: none;
-    animation: happy2-splash-cover-leave 260ms ease-out forwards;
+    animation: happy-splash-cover-leave 260ms ease-out forwards;
 }
 
-@keyframes happy2-splash-cover-leave {
+@keyframes happy-splash-cover-leave {
     from {
         opacity: 1;
     }
@@ -54,7 +54,7 @@
  * the same path rather than being left on screen forever.
  */
 @media (prefers-reduced-motion: reduce) {
-    .happy2-splash-cover__veil[data-leaving] {
+    .happy-splash-cover__veil[data-leaving] {
         animation-duration: 1ms;
     }
 }

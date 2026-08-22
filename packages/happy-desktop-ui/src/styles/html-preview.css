@@ -1,7 +1,7 @@
 /* The region a rendered HTML document occupies. The page inside it is drawn by
    the embedder, so this owns only the box: it fills whatever it is given and
    lets nothing of the page escape it. */
-.happy2-html-preview {
+.happy-html-preview {
     position: relative;
     display: flex;
     flex: 1 1 0%;
@@ -20,7 +20,7 @@
  * document, so this covers it completely rather than floating over it. It
  * overlays instead of replacing the guest, which is what lets the guest keep
  * its size and its process while the page comes back. */
-.happy2-html-preview__error {
+.happy-html-preview__error {
     position: absolute;
     inset: 0;
     box-sizing: border-box;
@@ -33,10 +33,10 @@
     background: var(--surface);
 }
 
-.happy2-html-preview__error-detail {
+.happy-html-preview__error-detail {
     margin: 0;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 16px;
     text-align: center;
@@ -45,8 +45,8 @@
 
 /* Whatever the host mounted — an Electron guest, an inert stand-in — is the
    page, and the page is the whole region. */
-.happy2-html-preview > webview,
-.happy2-html-preview > iframe {
+.happy-html-preview > webview,
+.happy-html-preview > iframe {
     display: flex;
     flex: 1 1 0%;
     width: 100%;

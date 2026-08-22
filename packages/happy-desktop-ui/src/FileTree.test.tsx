@@ -20,8 +20,8 @@ import { createRenderer } from "./testing";
  * because that row names something that is no longer there.
  */
 
-const fontFamily = "happy2 Figtree, system-ui, sans-serif";
-const monoFamily = "happy2 Mono, ui-monospace, monospace";
+const fontFamily = "happy Figtree, system-ui, sans-serif";
+const monoFamily = "happy Mono, ui-monospace, monospace";
 
 const nodes: FileTreeNode[] = [
     {
@@ -367,8 +367,8 @@ it("prints a flat row's directory ahead of its name, dimmer and lighter, eliding
 
     /* Too narrow for the whole path: the leading run elides, its last segment
        survives whole, and the file name never loses a character. */
-    const head = view.$('[data-testid="flat"] .happy2-file-tree__path-head');
-    const tail = view.$('[data-testid="flat"] .happy2-file-tree__path-tail');
+    const head = view.$('[data-testid="flat"] .happy-file-tree__path-head');
+    const tail = view.$('[data-testid="flat"] .happy-file-tree__path-tail');
     expect(head.element.scrollWidth).toBeGreaterThan(head.element.clientWidth);
     expect(tail.element.scrollWidth).toBe(tail.element.clientWidth);
     expect(tail.element.textContent).toBe("/detail/");
@@ -379,24 +379,24 @@ it("prints a flat row's directory ahead of its name, dimmer and lighter, eliding
        name, which is what a path that refuses to shrink at all ends up doing. */
     const narrowPath = view.$('[data-testid="narrow"] [data-happy-desktop-ui="file-tree-path"]');
     const narrowName = view.$('[data-testid="narrow"] [data-happy-desktop-ui="file-tree-name"]');
-    const narrowTail = view.$('[data-testid="narrow"] .happy2-file-tree__path-tail');
+    const narrowTail = view.$('[data-testid="narrow"] .happy-file-tree__path-tail');
     expect(narrowTail.element.scrollWidth).toBeGreaterThan(narrowTail.element.clientWidth);
     expect(narrowPath.bounds().x + narrowPath.bounds().width).toBeLessThanOrEqual(
         narrowName.bounds().x + 0.5,
     );
 
     /* Both sides of the per-file stat, in the diff's own colours. */
-    expect(view.$('[data-testid="flat"] .happy2-file-tree__stat-added').element.textContent).toBe(
+    expect(view.$('[data-testid="flat"] .happy-file-tree__stat-added').element.textContent).toBe(
         "+42",
     );
-    expect(view.$('[data-testid="flat"] .happy2-file-tree__stat-deleted').element.textContent).toBe(
+    expect(view.$('[data-testid="flat"] .happy-file-tree__stat-deleted').element.textContent).toBe(
         "−7",
     );
+    expect(view.$('[data-testid="flat"] .happy-file-tree__stat-added').computedStyle("color")).toBe(
+        "rgb(34, 197, 94)",
+    );
     expect(
-        view.$('[data-testid="flat"] .happy2-file-tree__stat-added').computedStyle("color"),
-    ).toBe("rgb(34, 197, 94)");
-    expect(
-        view.$('[data-testid="flat"] .happy2-file-tree__stat-deleted').computedStyle("color"),
+        view.$('[data-testid="flat"] .happy-file-tree__stat-deleted').computedStyle("color"),
     ).toBe("rgb(239, 68, 68)");
 
     /* A row with no directory prints only its name — no empty path box. */

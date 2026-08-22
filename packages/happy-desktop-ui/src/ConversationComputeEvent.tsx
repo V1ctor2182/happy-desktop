@@ -82,7 +82,7 @@ export function ConversationComputeEvent(props: ConversationComputeEventProps) {
     const elapsed = props.elapsedMs === undefined ? undefined : elapsedLabel(props.elapsedMs);
     return (
         <div
-            className={["happy2-conversation-compute", props.className].filter(Boolean).join(" ")}
+            className={["happy-conversation-compute", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="conversation-compute"
             data-state={props.state}
             data-testid={props["data-testid"]}
@@ -90,18 +90,18 @@ export function ConversationComputeEvent(props: ConversationComputeEventProps) {
             style={props.style}
         >
             <div
-                className="happy2-conversation-compute__row"
+                className="happy-conversation-compute__row"
                 data-happy-desktop-ui="conversation-compute-row"
             >
                 <span
                     aria-hidden="true"
-                    className="happy2-conversation-compute__icon"
+                    className="happy-conversation-compute__icon"
                     data-happy-desktop-ui="conversation-compute-icon"
                 >
                     <Ionicon name={state.glyph} size={14} />
                 </span>
                 <span
-                    className="happy2-conversation-compute__label"
+                    className="happy-conversation-compute__label"
                     data-happy-desktop-ui="conversation-compute-label"
                 >
                     {state.label}
@@ -110,14 +110,14 @@ export function ConversationComputeEvent(props: ConversationComputeEventProps) {
                     an ellipsis: a failure a reader cannot finish reading is not a
                     report. */}
                 <ScrollingText
-                    className="happy2-conversation-compute__message"
+                    className="happy-conversation-compute__message"
                     data-happy-desktop-ui="conversation-compute-message"
                 >
                     {props.message}
                 </ScrollingText>
                 {progress === undefined ? null : (
                     <span
-                        className="happy2-conversation-compute__metric"
+                        className="happy-conversation-compute__metric"
                         data-happy-desktop-ui="conversation-compute-percent"
                     >
                         {progress}
@@ -125,7 +125,7 @@ export function ConversationComputeEvent(props: ConversationComputeEventProps) {
                 )}
                 {elapsed === undefined ? null : (
                     <span
-                        className="happy2-conversation-compute__metric"
+                        className="happy-conversation-compute__metric"
                         data-happy-desktop-ui="conversation-compute-elapsed"
                     >
                         {elapsed}
@@ -133,7 +133,7 @@ export function ConversationComputeEvent(props: ConversationComputeEventProps) {
                 )}
                 <button
                     aria-expanded={open}
-                    className="happy2-conversation-compute__toggle"
+                    className="happy-conversation-compute__toggle"
                     data-happy-desktop-ui="conversation-compute-toggle"
                     onClick={() => setOpen(!open)}
                     type="button"
@@ -149,7 +149,7 @@ export function ConversationComputeEvent(props: ConversationComputeEventProps) {
             </div>
             {open ? (
                 <div
-                    className="happy2-conversation-compute__details"
+                    className="happy-conversation-compute__details"
                     data-happy-desktop-ui="conversation-compute-details"
                 >
                     <ComputeDetail label="Provider" value={props.provider} />
@@ -167,11 +167,11 @@ export function ConversationComputeEvent(props: ConversationComputeEventProps) {
 function ComputeDetail(props: { readonly label: string; readonly value: string }) {
     return (
         <span
-            className="happy2-conversation-compute__detail"
+            className="happy-conversation-compute__detail"
             data-happy-desktop-ui="conversation-compute-detail"
         >
-            <span className="happy2-conversation-compute__detail-label">{props.label}</span>
-            <span className="happy2-conversation-compute__detail-value">{props.value}</span>
+            <span className="happy-conversation-compute__detail-label">{props.label}</span>
+            <span className="happy-conversation-compute__detail-value">{props.value}</span>
         </span>
     );
 }

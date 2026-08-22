@@ -10,12 +10,12 @@
  * the picture viewer hangs its images in.
  */
 
-.happy2-video-viewer,
-.happy2-video-viewer * {
+.happy-video-viewer,
+.happy-video-viewer * {
     box-sizing: border-box;
 }
 
-.happy2-video-viewer {
+.happy-video-viewer {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
@@ -27,7 +27,7 @@
     min-height: 0;
     height: 100%;
     background: var(--surface);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     color: var(--text);
 }
@@ -38,7 +38,7 @@
    edge. The room is plain, and its colour is what letterboxing looks like — a
    recording that does not share the frame's proportions rests on the same
    surface a picture that does not fill its frame rests on. */
-.happy2-video-viewer__frame {
+.happy-video-viewer__frame {
     display: flex;
     flex: 1 1 0%;
     align-items: center;
@@ -50,14 +50,14 @@
     background-color: var(--groupped-background);
 }
 
-.happy2-video-viewer__frame:focus-visible {
+.happy-video-viewer__frame:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
 /* While the controls are away the pointer goes with them: it is the same
    gesture that brings both back. */
-.happy2-video-viewer[data-idle] .happy2-video-viewer__frame {
+.happy-video-viewer[data-idle] .happy-video-viewer__frame {
     cursor: none;
 }
 
@@ -66,7 +66,7 @@
    display is still meant to be looked at. `contain` keeps its proportions
    exactly, and the frames themselves are scaled by the compositor at the
    device's own resolution — nothing is drawn through a canvas on the way. */
-.happy2-video-viewer__video {
+.happy-video-viewer__video {
     display: block;
     width: 100%;
     height: 100%;
@@ -76,7 +76,7 @@
 
 /* The picture is also the play button. It carries no appearance of its own: the
    recording underneath is the whole of what it looks like. */
-.happy2-video-viewer__surface {
+.happy-video-viewer__surface {
     position: absolute;
     inset: 0;
     margin: 0;
@@ -86,7 +86,7 @@
     cursor: pointer;
 }
 
-.happy2-video-viewer__surface:focus-visible {
+.happy-video-viewer__surface:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
@@ -96,7 +96,7 @@
 /* Centred over the frame rather than in it, so a notice that has a recording
    behind it — playback refused, playing elsewhere — sits in the same place as
    one that has nothing behind it at all. */
-.happy2-video-viewer__notice {
+.happy-video-viewer__notice {
     display: flex;
     position: absolute;
     inset: 0;
@@ -110,11 +110,11 @@
     pointer-events: none;
 }
 
-.happy2-video-viewer__notice[data-tone="danger"] {
+.happy-video-viewer__notice[data-tone="danger"] {
     color: var(--text-destructive);
 }
 
-.happy2-video-viewer__notice-title {
+.happy-video-viewer__notice-title {
     max-width: 320px;
     font-size: 13px;
     font-weight: 600;
@@ -122,11 +122,11 @@
     color: var(--text);
 }
 
-.happy2-video-viewer__notice[data-tone="danger"] .happy2-video-viewer__notice-title {
+.happy-video-viewer__notice[data-tone="danger"] .happy-video-viewer__notice-title {
     color: var(--text-destructive);
 }
 
-.happy2-video-viewer__notice-detail {
+.happy-video-viewer__notice-detail {
     max-width: 320px;
     font-size: 12px;
     font-weight: 500;
@@ -136,7 +136,7 @@
 
 /* Waiting for data is not a failure and does not get a notice: it gets the one
    mark that says the recording is still coming. */
-.happy2-video-viewer__buffering {
+.happy-video-viewer__buffering {
     display: flex;
     position: absolute;
     top: 50%;
@@ -148,7 +148,7 @@
     /* Centred on the frame's middle by its own size, which is the one thing a
        flex parent cannot do for an overlay that must not affect the layout. */
     transform: translate(-50%, -50%);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--surface);
     color: var(--text-secondary);
     pointer-events: none;
@@ -159,7 +159,7 @@
 /* Floated over the bottom of the recording, inset on the grid. Absolute because
    it is an overlay: taking room from the frame would make the picture change
    size every time the controls came and went. */
-.happy2-video-viewer__bar {
+.happy-video-viewer__bar {
     display: flex;
     position: absolute;
     right: 12px;
@@ -172,7 +172,7 @@
        shapes rather than curves that must run parallel to the panel's. */
     padding: 8px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--surface);
     box-shadow: 0 4px 16px var(--shadow-subtle);
     container-type: inline-size;
@@ -182,23 +182,23 @@
 /* Away while the recording plays and nothing is being done to it. Opacity
    rather than visibility, so the controls stay in the tab order and the rule
    below can bring them back the instant one of them takes focus. */
-.happy2-video-viewer[data-idle] .happy2-video-viewer__bar {
+.happy-video-viewer[data-idle] .happy-video-viewer__bar {
     opacity: 0;
     pointer-events: none;
 }
 
-.happy2-video-viewer[data-idle] .happy2-video-viewer__bar:focus-within {
+.happy-video-viewer[data-idle] .happy-video-viewer__bar:focus-within {
     opacity: 1;
     pointer-events: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy2-video-viewer__bar {
+    .happy-video-viewer__bar {
         transition: none;
     }
 }
 
-.happy2-video-viewer__transport {
+.happy-video-viewer__transport {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -206,7 +206,7 @@
     min-height: 28px;
 }
 
-.happy2-video-viewer__group {
+.happy-video-viewer__group {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -217,7 +217,7 @@
 
 /* A 16px band to aim at, holding a 4px track: the thing worth hitting with a
    pointer is bigger than the thing worth drawing. */
-.happy2-video-viewer__timeline {
+.happy-video-viewer__timeline {
     display: flex;
     position: relative;
     flex: none;
@@ -227,30 +227,30 @@
     touch-action: none;
 }
 
-.happy2-video-viewer__timeline[aria-disabled="true"] {
+.happy-video-viewer__timeline[aria-disabled="true"] {
     cursor: default;
 }
 
-.happy2-video-viewer__timeline:focus-visible {
+.happy-video-viewer__timeline:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
 }
 
-.happy2-video-viewer__track {
+.happy-video-viewer__track {
     display: block;
     position: relative;
     flex: 1 1 auto;
     height: 4px;
     overflow: hidden;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--surface-selected);
 }
 
 /* How much of the recording has arrived, and how much of it has been watched.
    Both are laid over the track from its left edge, which is what a track is. */
-.happy2-video-viewer__buffered,
-.happy2-video-viewer__played {
+.happy-video-viewer__buffered,
+.happy-video-viewer__played {
     display: block;
     position: absolute;
     top: 0;
@@ -259,20 +259,20 @@
 
 /* What has arrived, which is a run somewhere in the recording rather than a
    length from the start: its left edge is placed, not assumed. */
-.happy2-video-viewer__buffered {
+.happy-video-viewer__buffered {
     background: var(--surface-highest);
 }
 
-.happy2-video-viewer__played {
+.happy-video-viewer__played {
     left: 0;
 }
 
-.happy2-video-viewer__played {
+.happy-video-viewer__played {
     background: var(--text);
 }
 
 /* Where the recording is, as a mark that can be aimed at rather than only read. */
-.happy2-video-viewer__handle {
+.happy-video-viewer__handle {
     display: block;
     position: absolute;
     top: 50%;
@@ -281,16 +281,16 @@
     /* Sat exactly on the position rather than beside it: the offset is half the
        handle on each axis, which no flow can express. */
     transform: translate(-50%, -50%);
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--text);
     pointer-events: none;
 }
 
-.happy2-video-viewer__timeline[aria-disabled="true"] .happy2-video-viewer__handle {
+.happy-video-viewer__timeline[aria-disabled="true"] .happy-video-viewer__handle {
     display: none;
 }
 
-.happy2-video-viewer__timeline[data-scrubbing] .happy2-video-viewer__handle {
+.happy-video-viewer__timeline[data-scrubbing] .happy-video-viewer__handle {
     width: 12px;
     height: 12px;
 }
@@ -299,13 +299,13 @@
 
 /* Lining, tabular digits so the clock does not shuffle its own width once a
    second, and the same mono face the picture viewer states its zoom in. */
-.happy2-video-viewer__clock {
+.happy-video-viewer__clock {
     display: flex;
     flex: none;
     align-items: center;
     gap: 4px;
     padding: 0 4px;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     font-variant-numeric: tabular-nums lining-nums;
@@ -313,17 +313,17 @@
     color: var(--text-secondary);
 }
 
-.happy2-video-viewer__elapsed {
+.happy-video-viewer__elapsed {
     color: var(--text);
 }
 
-.happy2-video-viewer__elapsed::after {
+.happy-video-viewer__elapsed::after {
     content: "/";
     padding: 0 4px;
     color: var(--text-secondary);
 }
 
-button.happy2-video-viewer__total {
+button.happy-video-viewer__total {
     margin: 0;
     padding: 0;
     border: 0;
@@ -335,18 +335,18 @@ button.happy2-video-viewer__total {
     cursor: pointer;
 }
 
-button.happy2-video-viewer__total:hover {
+button.happy-video-viewer__total:hover {
     color: var(--text);
 }
 
-button.happy2-video-viewer__total:focus-visible {
+button.happy-video-viewer__total:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
 /* ---- Volume ------------------------------------------------------------- */
 
-.happy2-video-viewer__volume {
+.happy-video-viewer__volume {
     display: flex;
     flex: none;
     align-items: center;
@@ -357,7 +357,7 @@ button.happy2-video-viewer__total:focus-visible {
    from three engines' worth of vendor pseudo-elements. A level is exactly what
    a range input is, and the browser's own keyboard handling of one is better
    than any reimplementation of it. */
-.happy2-video-viewer__level {
+.happy-video-viewer__level {
     flex: none;
     width: 56px;
     height: 16px;
@@ -366,7 +366,7 @@ button.happy2-video-viewer__total:focus-visible {
     cursor: pointer;
 }
 
-.happy2-video-viewer__level:focus-visible {
+.happy-video-viewer__level:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
@@ -374,14 +374,14 @@ button.happy2-video-viewer__total:focus-visible {
 /* In a panel this narrow the level is the first thing to go. Mute and the up
    and down keys still carry all of it, so nothing becomes unreachable. */
 @container (max-width: 400px) {
-    .happy2-video-viewer__level {
+    .happy-video-viewer__level {
         display: none;
     }
 }
 
 /* ---- Speed -------------------------------------------------------------- */
 
-.happy2-video-viewer__rate {
+.happy-video-viewer__rate {
     display: flex;
     position: relative;
     flex: none;
@@ -390,7 +390,7 @@ button.happy2-video-viewer__total:focus-visible {
 
 /* Opened upwards, because the panel it belongs to is already at the bottom of
    the frame and a list below it would leave the viewer entirely. */
-.happy2-video-viewer__rates {
+.happy-video-viewer__rates {
     display: block;
     position: absolute;
     right: 0;
@@ -402,7 +402,7 @@ button.happy2-video-viewer__total:focus-visible {
 
 /* Said out loud, never drawn: the region reports what a key changed, and must
    not take any of the viewer's room to do it. */
-.happy2-video-viewer__announcement {
+.happy-video-viewer__announcement {
     position: absolute;
     width: 1px;
     height: 1px;

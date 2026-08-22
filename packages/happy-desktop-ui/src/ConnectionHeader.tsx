@@ -49,7 +49,7 @@ export function ConnectionHeader(props: ConnectionHeaderProps) {
     if (props.message === undefined) return null;
     return (
         <div
-            className="happy2-connection-header"
+            className="happy-connection-header"
             data-happy-desktop-ui="connection-header"
             data-testid="connection-header"
             data-window-controls={props.windowControls === true ? "" : undefined}
@@ -62,10 +62,10 @@ export function ConnectionHeader(props: ConnectionHeaderProps) {
             aria-live="polite"
             role="status"
         >
-            <span className="happy2-connection-header__icon" aria-hidden="true">
+            <span className="happy-connection-header__icon" aria-hidden="true">
                 {props.retrying === true ? <Spinner size={14} /> : <Icon name="alert" size={14} />}
             </span>
-            <span className="happy2-connection-header__label">{props.message}</span>
+            <span className="happy-connection-header__label">{props.message}</span>
         </div>
     );
 }

@@ -46,7 +46,7 @@ export function TransferZone(props: TransferZoneProps) {
         <div
             {...rest}
             {...{ [TRANSFER_ZONE_ATTRIBUTE]: local.id }}
-            className={["happy2-transfer-zone", local.className].filter(Boolean).join(" ")}
+            className={["happy-transfer-zone", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="transfer-zone"
             data-transfer-state={local.state}
             style={local.style}
@@ -56,11 +56,11 @@ export function TransferZone(props: TransferZoneProps) {
                 invitation is painted over it for as long as the drag lasts. */}
             <div
                 aria-hidden="true"
-                className="happy2-transfer-zone__invite"
+                className="happy-transfer-zone__invite"
                 data-happy-desktop-ui="transfer-zone-invite"
             >
                 <span
-                    className="happy2-transfer-zone__badge"
+                    className="happy-transfer-zone__badge"
                     data-happy-desktop-ui="transfer-zone-badge"
                 >
                     <Icon name={local.icon ?? "panel-expand"} size={16} />

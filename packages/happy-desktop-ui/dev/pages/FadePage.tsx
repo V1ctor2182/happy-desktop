@@ -16,7 +16,7 @@ function ScreenCard(props: { label: string }) {
                 height: "100%",
                 color: "var(--text)",
                 background: "var(--groupped-background)",
-                fontFamily: "var(--happy2-font-ui)",
+                fontFamily: "var(--happy-font-ui)",
                 fontSize: "18px",
                 fontWeight: "600",
             }}
@@ -49,7 +49,7 @@ export function FadePage() {
                                 width: "480px",
                                 height: "240px",
                                 overflow: "hidden",
-                                borderRadius: "var(--happy2-radius-md)",
+                                borderRadius: "var(--happy-radius-md)",
                                 border: "1px solid var(--divider)",
                             }}
                         >
@@ -67,8 +67,8 @@ export function FadePage() {
                                 color: "var(--text)",
                                 background: "var(--surface-high)",
                                 border: "1px solid var(--surface-pressed-overlay)",
-                                borderRadius: "var(--happy2-radius-sm)",
-                                fontFamily: "var(--happy2-font-ui)",
+                                borderRadius: "var(--happy-radius-sm)",
+                                fontFamily: "var(--happy-font-ui)",
                                 cursor: "pointer",
                             }}
                         >

@@ -1,6 +1,6 @@
 import type { WelcomeDocument, WelcomePersistence } from "happy-desktop-state";
 
-const WELCOME_KEY = "happy2.welcome.v1";
+const WELCOME_KEY = "happy.welcome.v1";
 
 /**
  * Where this machine remembers that its owner has already been welcomed. It is

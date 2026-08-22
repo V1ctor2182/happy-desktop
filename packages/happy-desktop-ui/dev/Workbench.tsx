@@ -70,7 +70,7 @@ export function Workbench(props: WorkbenchProps = {}) {
     const hashAddressed = props.hashAddressed ?? true;
     const [active, setActive] = useState(hashAddressed ? pageFromHash() : defaultPageId);
     const [appearance, setAppearance] = useState<ThemeMode>("system");
-    // eslint-disable-next-line happy2-react/no-layout-effect -- standalone Blueprint navigation is driven by the browser hash and requires one synchronously cleaned-up hashchange listener
+    // eslint-disable-next-line happy-react/no-layout-effect -- standalone Blueprint navigation is driven by the browser hash and requires one synchronously cleaned-up hashchange listener
     useLayoutEffect(() => {
         if (!hashAddressed) return;
         const syncHash = () => setActive(pageFromHash());

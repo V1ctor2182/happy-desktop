@@ -4,7 +4,7 @@ React visuals and product-surface composition for Happy Place, implementing the 
 theme. Leaf components remain props-only. A complete product surface may use `StoreSurface` to
 consume one concrete framework-independent `happy-desktop-state` store directly, without callback shims or
 framework-specific selectors. Colors use Happy's original `--colors-*` roles and typography uses
-the non-color `--happy2-*` tokens in `src/theme.css`. The package bundles the OFL-licensed Figtree
+the non-color `--happy-*` tokens in `src/theme.css`. The package bundles the OFL-licensed Figtree
 (UI) and JetBrains Mono (code) variable
 fonts so component typography does not depend on host operating-system fonts.
 

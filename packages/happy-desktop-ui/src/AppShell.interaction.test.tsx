@@ -114,7 +114,7 @@ it("contains a Sidebar within the width owned by the resizable shell", async () 
         () => (
             <AppShell
                 data-testid="shell"
-                sidebar={<div className="happy2-sidebar" data-testid="sidebar-content" />}
+                sidebar={<div className="happy-sidebar" data-testid="sidebar-content" />}
                 sidebarCollapsible
                 sidebarDefaultWidth={288}
                 sidebarMinWidth={220}
@@ -140,7 +140,7 @@ it("resizes the sidebar by pointer drag and clamps to its min/max bounds", async
     const view = createRenderer().render(
         () => (
             <AppShell
-                className="happy2-theme-dark"
+                className="happy-theme-dark"
                 data-testid="shell"
                 sidebar={slot("sidebar", {
                     background: "var(--groupped-background)",
@@ -188,7 +188,7 @@ it("exposes accessible separator semantics and resizes with the keyboard", async
     const view = createRenderer().render(
         () => (
             <AppShell
-                className="happy2-theme-dark"
+                className="happy-theme-dark"
                 data-testid="shell"
                 sidebar={slot("sidebar", {
                     background: "var(--groupped-background)",

@@ -16,11 +16,11 @@ const CUSTOM_IMAGE =
 
 /* textMetrics().font.family strips quotes; a raw computed style keeps them on
  * Chromium/Firefox but not WebKit (see Button.test.tsx). */
-const MONO = "happy2 Mono, ui-monospace, monospace";
+const MONO = "happy Mono, ui-monospace, monospace";
 const figtreeComputed =
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 type Engine = "chromium" | "firefox" | "webkit";
 type Renderer = ReturnType<typeof createRenderer>;
@@ -242,10 +242,10 @@ it("holds EmojiPicker card, search, fixed grid slots, and per-emoji centering", 
     const probeGlyph = view.$(
         '[data-testid="picker"] [data-happy-desktop-ui="emoji-picker-grid"] [data-emoji-id="thumbsup"] [data-happy-desktop-ui="emoji-picker-glyph"]',
     );
-    expect(probeGlyph.computedStyle("--happy2-emoji-x"), "emoji-x correction").toBe(
+    expect(probeGlyph.computedStyle("--happy-emoji-x"), "emoji-x correction").toBe(
         emojiCorrection[engine].x,
     );
-    expect(probeGlyph.computedStyle("--happy2-emoji-y"), "emoji-y correction").toBe(
+    expect(probeGlyph.computedStyle("--happy-emoji-y"), "emoji-y correction").toBe(
         emojiCorrection[engine].y,
     );
 

@@ -13,27 +13,27 @@
  * the command picker's geometry, so both popovers read as one surface.
  */
 
-.happy2-composer,
-.happy2-composer *,
-.happy2-context-chips,
-.happy2-context-chips *,
-.happy2-mention-picker,
-.happy2-mention-picker * {
+.happy-composer,
+.happy-composer *,
+.happy-context-chips,
+.happy-context-chips *,
+.happy-mention-picker,
+.happy-mention-picker * {
     box-sizing: border-box;
 }
 
 /* ---- Composer --------------------------------------------------------- */
 
-.happy2-composer {
+.happy-composer {
     container-type: inline-size;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-composer__surface {
+.happy-composer__surface {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -57,7 +57,7 @@
         border-color 120ms ease;
 }
 
-.happy2-composer:focus-within .happy2-composer__surface {
+.happy-composer:focus-within .happy-composer__surface {
     border-color: var(--divider);
 }
 
@@ -67,11 +67,11 @@
  * resolves to the full accent while typing. No chips, labels, or extra rows —
  * the mode reads from the frame and the recipient-named placeholder.
  */
-.happy2-composer[data-agents] .happy2-composer__surface {
+.happy-composer[data-agents] .happy-composer__surface {
     border-color: var(--surface-selected);
 }
 
-.happy2-composer[data-agents]:focus-within .happy2-composer__surface {
+.happy-composer[data-agents]:focus-within .happy-composer__surface {
     border-color: var(--radio-active);
 }
 
@@ -82,7 +82,7 @@
  * fill is a state, not a surface of its own, so it uses the same selected role
  * the rest of the system uses to say "this one".
  */
-.happy2-composer[data-dropping] .happy2-composer__surface {
+.happy-composer[data-dropping] .happy-composer__surface {
     background: var(--surface-selected);
     border-color: var(--radio-active);
 }
@@ -90,56 +90,56 @@
 /* The edge fades carry the card's fill over the scrollport's cut edges, so they
  * follow it into this state instead of leaving two bands of the resting fill
  * across a lifted card. */
-.happy2-composer[data-dropping] .happy2-composer__fade {
+.happy-composer[data-dropping] .happy-composer__fade {
     background: var(--surface-selected);
 }
 
 /* Chips sit clear of the card's 16px corner field (inset ≥ radius) and align
  * with the textarea's 20px left edge; a chip cannot nest concentrically inside
  * the larger card corner (see the nested-corner contract in testing). */
-.happy2-composer__context {
+.happy-composer__context {
     display: flex;
     padding: 8px 20px 0;
 }
 
-.happy2-composer__attachments {
+.happy-composer__attachments {
     display: flex;
     padding: 12px 16px 0;
 }
 
-.happy2-composer[data-disabled] .happy2-composer__surface {
+.happy-composer[data-disabled] .happy-composer__surface {
     cursor: not-allowed;
 }
 
-.happy2-composer[data-pending] .happy2-composer__surface {
+.happy-composer[data-pending] .happy-composer__surface {
     cursor: wait;
 }
 
 /* A popover is chrome to choose from, not text to write in; it keeps the
  * ordinary pointer instead of inheriting the card's caret. */
-.happy2-composer__popover {
+.happy-composer__popover {
     cursor: default;
 }
 
 /* The textarea owns the vertical hit area instead of leaving its surrounding
  * inset as inert wrapper space. The insets are named because the draft's edge
  * fades are placed against the text box they produce. */
-.happy2-composer__input {
+.happy-composer__input {
     /* Measured from the scrolled draft by the component; zero whenever that end
      * of the scrollport cuts nothing. */
-    --happy2-composer-fade-top: 0px;
-    --happy2-composer-fade-bottom: 0px;
-    --happy2-composer-input-top: 20px;
-    --happy2-composer-input-side: 19px;
+    --happy-composer-fade-top: 0px;
+    --happy-composer-fade-bottom: 0px;
+    --happy-composer-input-top: 20px;
+    --happy-composer-input-side: 19px;
     /*
      * Keep the roomier draft-to-toolbar inset while the dock gives back the
      * same 16px below the complete composer stack, preserving its total height.
      */
-    --happy2-composer-input-bottom: 24px;
+    --happy-composer-input-bottom: 24px;
     position: relative;
     box-sizing: border-box;
-    padding: var(--happy2-composer-input-top) var(--happy2-composer-input-side)
-        var(--happy2-composer-input-bottom);
+    padding: var(--happy-composer-input-top) var(--happy-composer-input-side)
+        var(--happy-composer-input-bottom);
 }
 
 /*
@@ -159,17 +159,17 @@
  * A 14px fixed band was tried first and visibly washed out the last complete
  * line at 2× in both schemes.
  */
-.happy2-composer__fade {
+.happy-composer__fade {
     position: absolute;
-    left: var(--happy2-composer-input-side);
-    right: var(--happy2-composer-input-side);
+    left: var(--happy-composer-input-side);
+    right: var(--happy-composer-input-side);
     background: var(--input-background);
     pointer-events: none;
 }
 
-.happy2-composer__fade--top {
-    top: var(--happy2-composer-input-top);
-    height: var(--happy2-composer-fade-top);
+.happy-composer__fade--top {
+    top: var(--happy-composer-input-top);
+    height: var(--happy-composer-fade-top);
     /* Eased alpha stencil, solid on the cut edge and gone within the band; a
      * linear ramp reads as a grey bar with a visible end. */
     -webkit-mask-image: linear-gradient(
@@ -188,9 +188,9 @@
     );
 }
 
-.happy2-composer__fade--bottom {
-    bottom: var(--happy2-composer-input-bottom);
-    height: var(--happy2-composer-fade-bottom);
+.happy-composer__fade--bottom {
+    bottom: var(--happy-composer-input-bottom);
+    height: var(--happy-composer-fade-bottom);
     -webkit-mask-image: linear-gradient(
         to top,
         black 0,
@@ -220,11 +220,11 @@
  * engine we do not ship on — there it degrades to the `rows` default, a static
  * one-line box, which is a rendering difference and not a broken product.
  */
-.happy2-composer__textarea-scroll {
+.happy-composer__textarea-scroll {
     width: 100%;
 }
 
-.happy2-composer__textarea {
+.happy-composer__textarea {
     display: block;
     field-sizing: content;
     width: 100%;
@@ -237,7 +237,7 @@
     background: transparent;
     color: var(--input-text);
     caret-color: var(--radio-active);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 16px;
     font-weight: 400;
     line-height: 22px;
@@ -247,20 +247,20 @@
     outline: none;
     /* Engine-scoped optical correction (see the corrections block below).
      * transform keeps layout — card height and auto-grow math — untouched. */
-    transform: translateY(var(--happy2-composer-textarea-y, 0px));
+    transform: translateY(var(--happy-composer-textarea-y, 0px));
 }
 
-.happy2-composer__textarea::placeholder {
+.happy-composer__textarea::placeholder {
     color: var(--input-placeholder);
     opacity: 1;
 }
 
-.happy2-composer__textarea:disabled {
+.happy-composer__textarea:disabled {
     color: var(--text-secondary);
     cursor: not-allowed;
 }
 
-.happy2-composer[data-pending] .happy2-composer__textarea {
+.happy-composer[data-pending] .happy-composer__textarea {
     color: var(--text-secondary);
     opacity: 0.64;
     cursor: wait;
@@ -268,7 +268,7 @@
 
 /* 32px action lane. The attachment, model selector, and circular send button
  * share a 16px card inset on their outer/bottom edges. */
-.happy2-composer__toolbar {
+.happy-composer__toolbar {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -276,7 +276,7 @@
     padding: 0 15px 8px;
 }
 
-.happy2-composer__footer {
+.happy-composer__footer {
     display: flex;
     flex: none;
     align-items: center;
@@ -285,14 +285,14 @@
     padding: 0 16px;
 }
 
-.happy2-composer__leading {
+.happy-composer__leading {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
 }
 
-.happy2-composer__model {
+.happy-composer__model {
     display: flex;
     flex: 0 1 auto;
     min-width: 0;
@@ -302,47 +302,47 @@
  * the composer's unified panel uses 32px controls (matches the original app).
  * Overridden here, not in the Button API, so other Button call sites are
  * unaffected. */
-.happy2-composer__send.happy2-button[data-size="small"] {
+.happy-composer__send.happy-button[data-size="small"] {
     height: 32px;
 }
 
-.happy2-composer__leading .happy2-button[data-size="small"] {
+.happy-composer__leading .happy-button[data-size="small"] {
     height: 32px;
 }
 
-.happy2-composer__send.happy2-button[data-icon-only][data-size="small"] {
+.happy-composer__send.happy-button[data-icon-only][data-size="small"] {
     width: 32px;
 }
 
-.happy2-composer__leading .happy2-button[data-icon-only][data-size="small"] {
+.happy-composer__leading .happy-button[data-icon-only][data-size="small"] {
     width: 32px;
     border-radius: 50%;
 }
 
 /* Native plugin composer contribution triggers sit beside the attachment
  * affordance on the left side of the toolbar. */
-.happy2-composer__contributions {
+.happy-composer__contributions {
     display: inline-flex;
     align-items: center;
     gap: 8px;
 }
 
 /* Composer ghost controls share one subtle hover treatment. */
-.happy2-composer__contributions .happy2-button[data-variant="ghost"]:hover:not(:disabled),
-.happy2-composer__leading .happy2-button[data-variant="ghost"]:hover:not(:disabled),
-.happy2-composer__trailing .happy2-button[data-variant="ghost"]:hover:not(:disabled) {
+.happy-composer__contributions .happy-button[data-variant="ghost"]:hover:not(:disabled),
+.happy-composer__leading .happy-button[data-variant="ghost"]:hover:not(:disabled),
+.happy-composer__trailing .happy-button[data-variant="ghost"]:hover:not(:disabled) {
     background: var(--surface-ripple);
     color: var(--text);
 }
 
-.happy2-composer__trailing {
+.happy-composer__trailing {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-left: auto;
 }
 
-.happy2-composer__send.happy2-button {
+.happy-composer__send.happy-button {
     border-radius: 50%;
     /* Availability fades this one stable light control in and out. Its black
      * arrow never swaps color as the draft becomes sendable. */
@@ -357,7 +357,7 @@
 /* The toolbar uses a 16px upward arrow in its 32px circular send control. The
  * slightly larger ink matches adjacent 14px line icons while retaining equal
  * transparent space on every edge of the directional glyph's bounds. */
-.happy2-composer__send .happy2-button__icon .happy2-icon {
+.happy-composer__send .happy-button__icon .happy-icon {
     width: 16px !important;
     height: 16px !important;
     font-size: 16px !important;
@@ -366,13 +366,13 @@
 /* The stop square is solid ink, not an outline, so the same 16px box would read
  * far heavier than the send arrow it replaces in that one circle. 11px keeps the
  * two states equal in weight and leaves the control's geometry untouched. */
-.happy2-composer__stop .happy2-button__icon .happy2-icon {
+.happy-composer__stop .happy-button__icon .happy-icon {
     width: 11px !important;
     height: 11px !important;
     font-size: 11px !important;
 }
 
-.happy2-composer__trailing > .happy2-button:not(.happy2-composer__send) .happy2-icon {
+.happy-composer__trailing > .happy-button:not(.happy-composer__send) .happy-icon {
     width: 16px !important;
     height: 16px !important;
     font-size: 16px !important;
@@ -380,13 +380,13 @@
 
 /* The attachment plus needs a fuller 20px stroke presence in its 32px target;
  * the directional send glyph remains 16px for its lighter arrow silhouette. */
-.happy2-composer__leading > .happy2-button[aria-label="Attach file"] .happy2-icon {
+.happy-composer__leading > .happy-button[aria-label="Attach file"] .happy-icon {
     width: 20px !important;
     height: 20px !important;
     font-size: 20px !important;
 }
 
-.happy2-composer__popover {
+.happy-composer__popover {
     position: absolute;
     /* Offsets resolve against the padding box, which is inset by the card's 1px
      * border: -1px puts the popover's own edges exactly on the composer's
@@ -400,12 +400,12 @@
 
 /* The emoji picker is a fixed-size grid, not a list that follows the composer
    width, so it keeps its own leading anchor. */
-.happy2-composer__popover--emoji {
+.happy-composer__popover--emoji {
     left: 11px;
     right: auto;
 }
 
-.happy2-composer__file-input {
+.happy-composer__file-input {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -419,21 +419,21 @@
 
 /* ---- ContextChips ------------------------------------------------------ */
 
-.happy2-context-chips {
+.happy-context-chips {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-context-chips__label {
-    margin-top: var(--happy2-chips-label-y, 0px);
+.happy-context-chips__label {
+    margin-top: var(--happy-chips-label-y, 0px);
     margin-right: 2px;
-    margin-bottom: calc(-1 * var(--happy2-chips-label-y, 0px));
+    margin-bottom: calc(-1 * var(--happy-chips-label-y, 0px));
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 10px;
     font-weight: 700;
     line-height: 24px;
@@ -442,7 +442,7 @@
     white-space: nowrap;
 }
 
-.happy2-context-chips__chip {
+.happy-context-chips__chip {
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -451,18 +451,18 @@
     padding: 0 8px;
     background: var(--input-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
 }
 
-.happy2-context-chips__icon {
+.happy-context-chips__icon {
     display: flex;
     flex: none;
     color: var(--text-secondary);
 }
 
-.happy2-context-chips__text {
-    margin-top: var(--happy2-chip-text-y, 0px);
-    margin-bottom: calc(-1 * var(--happy2-chip-text-y, 0px));
+.happy-context-chips__text {
+    margin-top: var(--happy-chip-text-y, 0px);
+    margin-bottom: calc(-1 * var(--happy-chip-text-y, 0px));
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 600;
@@ -470,9 +470,9 @@
     white-space: nowrap;
 }
 
-.happy2-context-chips__detail {
-    margin-top: var(--happy2-chip-detail-y, 0px);
-    margin-bottom: calc(-1 * var(--happy2-chip-detail-y, 0px));
+.happy-context-chips__detail {
+    margin-top: var(--happy-chip-detail-y, 0px);
+    margin-bottom: calc(-1 * var(--happy-chip-detail-y, 0px));
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 500;
@@ -480,7 +480,7 @@
     white-space: nowrap;
 }
 
-.happy2-context-chips__remove {
+.happy-context-chips__remove {
     display: flex;
     flex: none;
     align-items: center;
@@ -500,12 +500,12 @@
         color 120ms ease;
 }
 
-.happy2-context-chips__remove:hover {
+.happy-context-chips__remove:hover {
     background: var(--surface-ripple);
     color: var(--text);
 }
 
-.happy2-context-chips__remove:focus-visible {
+.happy-context-chips__remove:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
@@ -519,7 +519,7 @@
  * rest of the composer.
  */
 
-.happy2-mention-picker {
+.happy-mention-picker {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -527,12 +527,12 @@
     background: var(--surface);
     border: 1px solid var(--divider);
     border-radius: 16px;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     overflow: hidden;
 }
 
-.happy2-mention-picker__header {
+.happy-mention-picker__header {
     display: flex;
     flex: none;
     align-items: center;
@@ -544,7 +544,7 @@
     line-height: 16px;
 }
 
-.happy2-mention-picker__row {
+.happy-mention-picker__row {
     display: flex;
     flex: none;
     align-items: center;
@@ -560,26 +560,26 @@
     background: transparent;
     cursor: pointer;
     text-align: left;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     appearance: none;
     transition: background-color 120ms ease;
 }
 
-.happy2-mention-picker__row:hover {
+.happy-mention-picker__row:hover {
     background: var(--surface-ripple);
 }
 
-.happy2-mention-picker__row[data-active] {
+.happy-mention-picker__row[data-active] {
     background: var(--surface-selected);
 }
 
-.happy2-mention-picker__row:focus-visible {
+.happy-mention-picker__row:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
-.happy2-mention-picker__meta {
+.happy-mention-picker__meta {
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
@@ -587,7 +587,7 @@
     gap: 8px;
 }
 
-.happy2-mention-picker__name {
+.happy-mention-picker__name {
     /* No correction: Blink paints this 13px/16px lane 0.5px above the
      * Gecko/WebKit consensus, but Blink snaps half-pixel paint offsets (via
      * margins or position: relative) to whole pixels, so a +0.5px nudge
@@ -604,7 +604,7 @@
     text-overflow: ellipsis;
 }
 
-.happy2-mention-picker__description {
+.happy-mention-picker__description {
     flex: 1 1 auto;
     min-width: 0;
     color: var(--text-secondary);
@@ -616,11 +616,11 @@
     text-overflow: ellipsis;
 }
 
-.happy2-mention-picker__status {
+.happy-mention-picker__status {
     flex: none;
 }
 
-.happy2-mention-picker__empty {
+.happy-mention-picker__empty {
     display: flex;
     align-items: center;
     height: 32px;
@@ -651,10 +651,10 @@
  * the 24px lane — cap-block centroid Blink -0.75 / WebKit -0.25 / Gecko +0.25.
  * Each correction pins every engine to the shared consensus placement.
  */
-.happy2-context-chips {
-    --happy2-chip-text-y: 0px;
-    --happy2-chip-detail-y: 1px;
-    --happy2-chips-label-y: 0.75px;
+.happy-context-chips {
+    --happy-chip-text-y: 0px;
+    --happy-chip-detail-y: 1px;
+    --happy-chips-label-y: 0.75px;
 }
 
 /*
@@ -663,21 +663,21 @@
  * Blink on macOS, so neither is a usable engine scope.)
  */
 @supports (-moz-appearance: none) {
-    .happy2-composer {
-        --happy2-composer-textarea-y: -0.5px;
+    .happy-composer {
+        --happy-composer-textarea-y: -0.5px;
     }
 
-    .happy2-context-chips {
-        --happy2-chip-text-y: -0.5px;
-        --happy2-chip-detail-y: 0px;
-        --happy2-chips-label-y: -0.25px;
+    .happy-context-chips {
+        --happy-chip-text-y: -0.5px;
+        --happy-chip-detail-y: 0px;
+        --happy-chips-label-y: -0.25px;
     }
 }
 
 /* WebKit — Blink and Gecko do not parse -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
-    .happy2-context-chips {
-        --happy2-chip-detail-y: 0px;
-        --happy2-chips-label-y: 0.25px;
+    .happy-context-chips {
+        --happy-chip-detail-y: 0px;
+        --happy-chips-label-y: 0.25px;
     }
 }

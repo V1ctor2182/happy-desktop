@@ -134,7 +134,7 @@ it("keeps the send action inside every measured toolbar stage", async () => {
         const rootSelector = `[data-testid="${stage.testid}"]`;
         const composer = view.$(rootSelector);
         const toolbar = view.$(`${rootSelector} [data-happy-desktop-ui="composer-toolbar"]`);
-        const send = view.$(`${rootSelector} .happy2-composer__send`);
+        const send = view.$(`${rootSelector} .happy-composer__send`);
         const composerBounds = composer.bounds();
         const sendBounds = send.bounds();
         const composerElement = composer.element as HTMLElement;

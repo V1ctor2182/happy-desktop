@@ -25,7 +25,7 @@ const FOCUSABLE =
 /**
  * C-058 ModalOverlay — the single backdrop every modal-class surface sits on.
  *
- * One dim (`Happy primary-background scrim`), one stacking level (`--happy2-z-overlay`), fixed
+ * One dim (`Happy primary-background scrim`), one stacking level (`--happy-z-overlay`), fixed
  * to the app window, and a flex box that hosts exactly one card (Modal,
  * Lightbox, editor panel, or transient type-ahead) inside a 24px safe-area
  * gutter. The default placement centers dialogs and forms; `top` anchors a
@@ -50,7 +50,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
     // Imperative focus handoff at the overlay's lifetime boundary: there is no
     // declarative way to move browser focus into the dialog on open and back to
     // the invoking control on close.
-    // eslint-disable-next-line happy2-react/no-layout-effect -- opening and closing a modal must move live browser focus into its committed dialog and back to the still-connected invoker
+    // eslint-disable-next-line happy-react/no-layout-effect -- opening and closing a modal must move live browser focus into its committed dialog and back to the still-connected invoker
     useLayoutEffect(() => {
         const overlay = overlayEl.current;
         if (!overlay) return;
@@ -68,7 +68,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
     return (
         <div
             {...rest}
-            className={["happy2-modal-overlay", local.className].filter(Boolean).join(" ")}
+            className={["happy-modal-overlay", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="modal-overlay"
             data-placement={local.placement === "center" ? undefined : local.placement}
             onClick={(event) => {
@@ -90,7 +90,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
         >
             {local.placement === "top" ? (
                 <div
-                    className="happy2-modal-overlay__top-layout"
+                    className="happy-modal-overlay__top-layout"
                     data-happy-desktop-ui="modal-overlay-top-layout"
                 >
                     {local.children}

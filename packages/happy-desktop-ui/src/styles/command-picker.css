@@ -12,12 +12,12 @@
  * visible.
  */
 
-.happy2-command-picker,
-.happy2-command-picker * {
+.happy-command-picker,
+.happy-command-picker * {
     box-sizing: border-box;
 }
 
-.happy2-command-picker {
+.happy-command-picker {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -26,31 +26,31 @@
     background: var(--surface);
     border: 1px solid var(--divider);
     border-radius: 16px;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-command-picker__scroll {
+.happy-command-picker__scroll {
     flex: 1 1 auto;
     min-height: 0;
     margin: 0;
     padding: 0;
 }
 
-.happy2-command-picker__scroll-viewport {
+.happy-command-picker__scroll-viewport {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
 }
 
-.happy2-command-picker__list {
+.happy-command-picker__list {
     display: flex;
     flex: none;
     flex-direction: column;
     padding: 6px;
 }
 
-.happy2-command-picker__header {
+.happy-command-picker__header {
     display: flex;
     flex: none;
     align-items: center;
@@ -62,7 +62,7 @@
     line-height: 16px;
 }
 
-.happy2-command-picker__row {
+.happy-command-picker__row {
     display: flex;
     flex: none;
     align-items: center;
@@ -83,20 +83,20 @@
     transition: background-color 120ms ease;
 }
 
-.happy2-command-picker__row:hover {
+.happy-command-picker__row:hover {
     background: var(--surface-ripple);
 }
 
-.happy2-command-picker__row[data-active] {
+.happy-command-picker__row[data-active] {
     background: var(--surface-selected);
 }
 
-.happy2-command-picker__row:focus-visible {
+.happy-command-picker__row:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
-.happy2-command-picker__icon {
+.happy-command-picker__icon {
     display: flex;
     flex: none;
     align-items: center;
@@ -106,7 +106,7 @@
     color: var(--text-secondary);
 }
 
-.happy2-command-picker__slash {
+.happy-command-picker__slash {
     flex: none;
     color: var(--text);
     font-size: 13px;
@@ -115,7 +115,7 @@
     white-space: nowrap;
 }
 
-.happy2-command-picker__description {
+.happy-command-picker__description {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;

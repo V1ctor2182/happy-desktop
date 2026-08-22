@@ -103,11 +103,11 @@ function attachmentFixtures(): ComposerSnapshot["attachments"] {
 }
 
 const chatItems = [
-    { kind: "label" as const, label: "happy2" },
-    { kind: "item" as const, id: "happy2|ses_a", label: "Local settings", icon: "check" as const },
-    { kind: "item" as const, id: "happy2|ses_b", label: "Panel expansion" },
+    { kind: "label" as const, label: "happy" },
+    { kind: "item" as const, id: "happy|ses_a", label: "Local settings", icon: "check" as const },
+    { kind: "item" as const, id: "happy|ses_b", label: "Panel expansion" },
     { kind: "separator" as const },
-    { kind: "label" as const, label: "happy2 · worktree-3" },
+    { kind: "label" as const, label: "happy · worktree-3" },
     { kind: "item" as const, id: "wt3|ses_c", label: "Provider catalog" },
 ];
 
@@ -191,7 +191,7 @@ function panelBody() {
                     boxSizing: "border-box",
                     display: "flex",
                     flexDirection: "column",
-                    fontFamily: "var(--happy2-font-mono)",
+                    fontFamily: "var(--happy-font-mono)",
                     fontSize: "12px",
                     gap: "4px",
                     lineHeight: "18px",
@@ -252,7 +252,7 @@ export function FloatingConversationDockPage() {
                     panelResizable
                     sidebar={
                         <Sidebar
-                            activeItemId="happy2"
+                            activeItemId="happy"
                             brand
                             onItemSelect={noop}
                             sections={[
@@ -260,7 +260,7 @@ export function FloatingConversationDockPage() {
                                     id: "projects",
                                     label: "This Mac",
                                     items: [
-                                        { id: "happy2", kind: "project", label: "happy2" },
+                                        { id: "happy", kind: "project", label: "happy" },
                                         {
                                             id: "wt3",
                                             kind: "workspace",
@@ -286,14 +286,14 @@ export function FloatingConversationDockPage() {
                     panelResizable
                     sidebar={
                         <Sidebar
-                            activeItemId="happy2"
+                            activeItemId="happy"
                             brand
                             onItemSelect={noop}
                             sections={[
                                 {
                                     id: "projects",
                                     label: "This Mac",
-                                    items: [{ id: "happy2", kind: "project", label: "happy2" }],
+                                    items: [{ id: "happy", kind: "project", label: "happy" }],
                                 },
                             ]}
                         />

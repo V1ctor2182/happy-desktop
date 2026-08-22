@@ -15,26 +15,26 @@
  * paint in --text-destructive.
  */
 
-.happy2-menu,
-.happy2-menu * {
+.happy-menu,
+.happy-menu * {
     box-sizing: border-box;
 }
 
-.happy2-menu {
+.happy-menu {
     display: block;
     width: 220px;
     background: var(--surface);
     border: 1px solid var(--modal-border);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     box-shadow: 0 2px 8px var(--shadow-color);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     -webkit-user-select: none;
     user-select: none;
 }
 
-.happy2-menu__list {
+.happy-menu__list {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -43,7 +43,7 @@
 
 /* ---- Item rows -------------------------------------------------------- */
 
-.happy2-menu__item {
+.happy-menu__item {
     display: flex;
     flex: none;
     align-items: center;
@@ -59,7 +59,7 @@
     border-radius: 5px;
     background: transparent;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
     appearance: none;
@@ -69,34 +69,34 @@
         color 120ms ease;
 }
 
-.happy2-menu__item:hover {
+.happy-menu__item:hover {
     background: var(--surface-ripple);
 }
 
-.happy2-menu__item:focus-visible {
+.happy-menu__item:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
-.happy2-menu__item:disabled {
+.happy-menu__item:disabled {
     cursor: not-allowed;
     opacity: 0.4;
 }
 
-.happy2-menu__item:disabled:hover {
+.happy-menu__item:disabled:hover {
     background: transparent;
 }
 
-.happy2-menu__item[data-danger] {
+.happy-menu__item[data-danger] {
     color: var(--text-destructive);
 }
 
 /* Higher specificity than the base :hover, so danger keeps its hue on hover. */
-.happy2-menu__item[data-danger]:hover:not(:disabled) {
+.happy-menu__item[data-danger]:hover:not(:disabled) {
     background: var(--box-error-background);
 }
 
-.happy2-menu__item-icon {
+.happy-menu__item-icon {
     display: flex;
     flex: none;
     align-items: center;
@@ -108,7 +108,7 @@
 
 /* An application's own artwork, sized to the same gutter as a house glyph and
    rounded so it reads as an app tile rather than a loose bitmap. */
-.happy2-menu__item-image {
+.happy-menu__item-image {
     display: block;
     width: 16px;
     height: 16px;
@@ -116,11 +116,11 @@
     object-fit: contain;
 }
 
-.happy2-menu__item[data-danger] .happy2-menu__item-icon {
+.happy-menu__item[data-danger] .happy-menu__item-icon {
     color: var(--text-destructive);
 }
 
-.happy2-menu__item-label {
+.happy-menu__item-label {
     display: block;
     flex: 1;
     min-width: 0;
@@ -132,21 +132,21 @@
     white-space: nowrap;
 }
 
-.happy2-menu__item-shortcut {
+.happy-menu__item-shortcut {
     flex: none;
     margin-left: 8px;
 }
 
 /* ---- Section label --------------------------------------------------- */
 
-.happy2-menu__label {
+.happy-menu__label {
     display: block;
     flex: none;
     height: 24px;
     padding: 0 8px;
     overflow: hidden;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -158,7 +158,7 @@
 
 /* ---- Separator ------------------------------------------------------- */
 
-.happy2-menu__separator {
+.happy-menu__separator {
     flex: none;
     height: 1px;
     margin: 4px 0;

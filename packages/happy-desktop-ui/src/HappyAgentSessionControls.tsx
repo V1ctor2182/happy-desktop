@@ -81,7 +81,7 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
 
     return (
         <div
-            className={["happy2-happy-agent-control", props.className].filter(Boolean).join(" ")}
+            className={["happy-agent-control", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="happy-agent-control"
             data-open={expanded ? "" : undefined}
             data-split={split ? "" : undefined}
@@ -113,7 +113,7 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
                           "aria-haspopup": "menu" as const,
                           onClick: () => setOpen((value) => !value),
                       })}
-                className="happy2-happy-agent-control__trigger"
+                className="happy-agent-control__trigger"
                 data-happy-desktop-ui="happy-agent-control-trigger"
                 disabled={props.disabled}
                 type="button"
@@ -121,14 +121,14 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
                 {props.leadingIconUrl === undefined ? null : (
                     <img
                         alt=""
-                        className="happy2-happy-agent-control__leading"
+                        className="happy-agent-control__leading"
                         data-happy-desktop-ui="happy-agent-control-leading"
                         src={props.leadingIconUrl}
                     />
                 )}
                 {props.label === undefined ? null : (
                     <span
-                        className="happy2-happy-agent-control__label"
+                        className="happy-agent-control__label"
                         data-happy-desktop-ui="happy-agent-control-label"
                     >
                         {props.label}
@@ -136,14 +136,14 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
                 )}
                 {props.value === undefined ? null : (
                     <span
-                        className="happy2-happy-agent-control__value"
+                        className="happy-agent-control__value"
                         data-happy-desktop-ui="happy-agent-control-value"
                     >
                         {props.value}
                     </span>
                 )}
                 {split ? null : (
-                    <span aria-hidden="true" className="happy2-happy-agent-control__chevron">
+                    <span aria-hidden="true" className="happy-agent-control__chevron">
                         <Icon name="chevron-down" size={12} />
                     </span>
                 )}
@@ -156,13 +156,13 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
                     aria-expanded={expanded ? "true" : "false"}
                     aria-haspopup="menu"
                     aria-label={props.label === undefined ? "More options" : `${props.label}…`}
-                    className="happy2-happy-agent-control__trigger happy2-happy-agent-control__trigger--menu"
+                    className="happy-agent-control__trigger happy-agent-control__trigger--menu"
                     data-happy-desktop-ui="happy-agent-control-menu-trigger"
                     disabled={props.disabled}
                     onClick={() => setOpen((value) => !value)}
                     type="button"
                 >
-                    <span aria-hidden="true" className="happy2-happy-agent-control__chevron">
+                    <span aria-hidden="true" className="happy-agent-control__chevron">
                         <Icon name="chevron-down" size={12} />
                     </span>
                 </button>
@@ -173,14 +173,14 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
                         outside pointer-down without an imperative document listener. */}
                     <button
                         aria-hidden="true"
-                        className="happy2-happy-agent-control__backdrop"
+                        className="happy-agent-control__backdrop"
                         data-happy-desktop-ui="happy-agent-control-backdrop"
                         onClick={() => setOpen(false)}
                         tabIndex={-1}
                         type="button"
                     />
                     <div
-                        className="happy2-happy-agent-control__popover"
+                        className="happy-agent-control__popover"
                         data-happy-desktop-ui="happy-agent-control-popover"
                         data-align={props.menuAlign === "end" ? "end" : undefined}
                         data-placement={props.menuPlacement === "above" ? "above" : undefined}
@@ -371,7 +371,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
 
     return (
         <div
-            className={["happy2-happy-agent-controls", props.className].filter(Boolean).join(" ")}
+            className={["happy-agent-controls", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="happy-agent-session-controls"
             data-testid={props["data-testid"]}
             style={props.style}

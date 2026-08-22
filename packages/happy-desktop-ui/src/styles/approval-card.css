@@ -22,9 +22,9 @@
     overflow: hidden;
     background: var(--surface);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
@@ -41,7 +41,7 @@
     height: 32px;
     padding: 0 16px;
     border-bottom: 1px solid var(--divider);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 700;
     line-height: 30px;
@@ -69,7 +69,7 @@
 
 /* The 14px banner icon flex-centers in the 31px content strip at a half-pixel
  * offset (8.5px); Blink and Gecko snap the SVG down a half pixel. */
-.happy-desktop-approval-card__banner > .happy2-icon {
+.happy-desktop-approval-card__banner > .happy-icon {
     transform: translateY(var(--happy-desktop-approval-banner-icon-optical-y, 0px));
 }
 
@@ -149,9 +149,9 @@
     overflow: hidden;
     background: var(--diff-context-bg);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     font-weight: 500;
     line-height: 18px;
@@ -175,7 +175,7 @@
 .happy-desktop-approval-card__detail-label {
     display: block;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 10px;
     font-weight: 700;
     line-height: 14px;
@@ -224,13 +224,13 @@
 
 .happy-desktop-approval-card[data-resolution="approved"]
     .happy-desktop-approval-card__state
-    > .happy2-icon {
+    > .happy-icon {
     color: var(--success);
 }
 
 .happy-desktop-approval-card[data-resolution="denied"]
     .happy-desktop-approval-card__state
-    > .happy2-icon {
+    > .happy-icon {
     color: var(--text-destructive);
 }
 
@@ -256,10 +256,10 @@
     appearance: none;
     background: transparent;
     border: none;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text-secondary);
     cursor: pointer;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     transition:
         background-color 120ms ease,
@@ -284,11 +284,11 @@
     transform: translateY(var(--happy-desktop-approval-toggle-optical-y, 0px));
 }
 
-.happy-desktop-approval-card__toggle > .happy2-icon {
+.happy-desktop-approval-card__toggle > .happy-icon {
     transition: transform 120ms ease;
 }
 
-.happy-desktop-approval-card__toggle[aria-expanded="true"] > .happy2-icon {
+.happy-desktop-approval-card__toggle[aria-expanded="true"] > .happy-icon {
     transform: rotate(180deg);
 }
 

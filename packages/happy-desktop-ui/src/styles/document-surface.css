@@ -1,4 +1,4 @@
-.happy2-document-surface {
+.happy-document-surface {
     box-sizing: border-box;
     display: flex;
     flex: 1 1 auto;
@@ -9,49 +9,49 @@
     background: var(--surface);
 }
 
-.happy2-document-surface__header {
+.happy-document-surface__header {
     flex: 0 0 auto;
     border-bottom: 1px solid var(--divider);
 }
 
-.happy2-document-surface__title {
+.happy-document-surface__title {
     box-sizing: border-box;
     width: min(56vw, 640px);
     min-width: 120px;
     padding: 4px 6px;
     border: 1px solid transparent;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text);
-    font: 600 15px/1.4 var(--happy2-font-ui);
+    font: 600 15px/1.4 var(--happy-font-ui);
     outline: none;
     text-overflow: ellipsis;
 }
 
-.happy2-document-surface__title:not(:read-only):hover {
+.happy-document-surface__title:not(:read-only):hover {
     background: var(--surface-ripple);
 }
 
-.happy2-document-surface__title:not(:read-only):focus {
+.happy-document-surface__title:not(:read-only):focus {
     border-color: var(--radio-active);
     background: var(--surface);
 }
 
-.happy2-document-surface__save {
+.happy-document-surface__save {
     flex: 0 0 auto;
     max-width: 240px;
     color: var(--text-secondary);
-    font: 400 12px/1.4 var(--happy2-font-ui);
+    font: 400 12px/1.4 var(--happy-font-ui);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy2-document-surface__save[data-state="error"] {
+.happy-document-surface__save[data-state="error"] {
     color: var(--text-destructive);
 }
 
-.happy2-document-surface__participant {
+.happy-document-surface__participant {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -60,10 +60,10 @@
     height: 24px;
     border-radius: 999px;
     color: var(--fab-icon);
-    font: 600 11px/1 var(--happy2-font-ui);
+    font: 600 11px/1 var(--happy-font-ui);
 }
 
-.happy2-document-surface__body {
+.happy-document-surface__body {
     flex: 1 1 auto;
     width: 100%;
     min-width: 0;
@@ -72,13 +72,13 @@
     padding: 0;
 }
 
-.happy2-document-surface__body-viewport {
+.happy-document-surface__body-viewport {
     display: flex;
     flex-direction: column;
     overflow: auto;
 }
 
-.happy2-document-surface__status {
+.happy-document-surface__status {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -86,14 +86,14 @@
     min-height: 100%;
     padding: 24px;
     color: var(--text-secondary);
-    font: 400 13px/1.5 var(--happy2-font-ui);
+    font: 400 13px/1.5 var(--happy-font-ui);
 }
 
-.happy2-document-surface__status[data-happy2-tone="danger"] {
+.happy-document-surface__status[data-happy-tone="danger"] {
     color: var(--text-destructive);
 }
 
-.happy2-document-editor {
+.happy-document-editor {
     display: flex;
     flex: 1 1 auto;
     width: 100%;
@@ -101,13 +101,13 @@
     min-height: 100%;
 }
 
-.happy2-document-editor > .bn-container {
+.happy-document-editor > .bn-container {
     flex: 1 1 auto;
     width: 100%;
     min-width: 0;
 }
 
-.happy2-document-editor .bn-editor {
+.happy-document-editor .bn-editor {
     box-sizing: border-box;
     width: min(100%, 880px);
     min-height: 100%;

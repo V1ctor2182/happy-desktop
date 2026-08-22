@@ -156,7 +156,7 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                 <FormRow
                     control={
                         props.loading ? (
-                            <Box className="happy2-happy-agent-settings__pending">
+                            <Box className="happy-agent-settings__pending">
                                 <Spinner size={16} />
                                 <span>Reading the model catalog…</span>
                             </Box>
@@ -234,8 +234,8 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                 >
                     <FormRow
                         control={
-                            <Box className="happy2-happy-agent-settings__agent-control">
-                                <span className="happy2-happy-agent-settings__agent-version">
+                            <Box className="happy-agent-settings__agent-control">
+                                <span className="happy-agent-settings__agent-version">
                                     {!props.agent.managed
                                         ? "External"
                                         : props.agent.installedVersion
@@ -248,7 +248,7 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                                 {props.agent.managed &&
                                 (props.agent.operation === "checking" ||
                                     props.agent.operation === "downloading") ? (
-                                    <Box className="happy2-happy-agent-settings__pending">
+                                    <Box className="happy-agent-settings__pending">
                                         <Spinner size={16} />
                                         <span>
                                             {props.agent.operation === "checking"
@@ -328,8 +328,8 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                     ) : null}
                     <FormRow
                         control={
-                            <Box className="happy2-happy-agent-settings__agent-control">
-                                <span className="happy2-happy-agent-settings__agent-runtime">
+                            <Box className="happy-agent-settings__agent-control">
+                                <span className="happy-agent-settings__agent-runtime">
                                     {agentRuntimeLabel(
                                         props.agent.runtime,
                                         props.agent.runningVersion,

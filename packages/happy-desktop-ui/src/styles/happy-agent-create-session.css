@@ -11,33 +11,33 @@
  * reads as one of its fields.
  */
 
-.happy2-happy-agent-create-session,
-.happy2-happy-agent-create-session * {
+.happy-agent-create-session,
+.happy-agent-create-session * {
     box-sizing: border-box;
 }
 
-.happy2-happy-agent-create-session {
+.happy-agent-create-session {
     display: flex;
     flex-direction: column;
     gap: 16px;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* ---- The task ---------------------------------------------------------- */
 
-.happy2-happy-agent-create-session__prompt {
+.happy-agent-create-session__prompt {
     display: flex;
     flex: none;
     padding: 10px 12px;
     background: var(--input-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     transition: border-color 120ms ease;
 }
 
-.happy2-happy-agent-create-session__prompt:focus-within {
+.happy-agent-create-session__prompt:focus-within {
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
@@ -56,7 +56,7 @@
  * (128), the header and footer rows (131), the body inset (24), and the two
  * control rows with their gaps and the well around the field (154).
  */
-.happy2-happy-agent-create-session__input {
+.happy-agent-create-session__input {
     flex: 1 1 auto;
     min-width: 0;
     height: 160px;
@@ -71,7 +71,7 @@
     -webkit-appearance: none;
     resize: none;
     color: var(--input-text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 14px;
     font-weight: 500;
     line-height: 20px;
@@ -80,27 +80,27 @@
     caret-color: var(--radio-active);
 }
 
-.happy2-happy-agent-create-session__input::placeholder {
+.happy-agent-create-session__input::placeholder {
     color: var(--input-placeholder);
     opacity: 1;
 }
 
 /* While a start is in flight the field is read-only rather than disabled, so it
    keeps its caret and its colour and only refuses to be typed into. */
-.happy2-happy-agent-create-session__input:read-only {
+.happy-agent-create-session__input:read-only {
     cursor: default;
 }
 
 /* ---- Where it runs ----------------------------------------------------- */
 
-.happy2-happy-agent-create-session__where {
+.happy-agent-create-session__where {
     display: flex;
     flex: none;
     align-items: flex-end;
     gap: 12px;
 }
 
-.happy2-happy-agent-create-session__destination {
+.happy-agent-create-session__destination {
     flex: 0 1 260px;
     min-width: 0;
 }
@@ -108,12 +108,12 @@
 /* The checkout the session will run in, on the control's own line: it is read
    with the project name rather than under it, and it is a path, so it is set in
    the mono face and truncated from the end when the lane runs out. */
-.happy2-happy-agent-create-session__path {
+.happy-agent-create-session__path {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     font-weight: 400;
     line-height: 28px;
@@ -124,21 +124,21 @@
 
 /* ---- How it is configured ---------------------------------------------- */
 
-.happy2-happy-agent-create-session__how {
+.happy-agent-create-session__how {
     display: flex;
     flex: none;
     align-items: flex-end;
     gap: 12px;
 }
 
-.happy2-happy-agent-create-session__how > * {
+.happy-agent-create-session__how > * {
     flex: 1 1 0;
     min-width: 0;
 }
 
 /* Model names are the longest values in the row and the only ones a reader
    cannot guess from a truncation, so the picker takes the larger share. */
-.happy2-happy-agent-create-session__model {
+.happy-agent-create-session__model {
     flex: 1.7 1 0;
 }
 
@@ -146,7 +146,7 @@
 
 /* The footer holds a setting at one end and the commit at the other, so it
    takes the whole action row rather than sitting inside its right alignment. */
-.happy2-happy-agent-create-session__footer {
+.happy-agent-create-session__footer {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
@@ -155,14 +155,14 @@
     min-width: 0;
 }
 
-.happy2-happy-agent-create-session__actions {
+.happy-agent-create-session__actions {
     display: flex;
     flex: none;
     align-items: center;
     gap: 8px;
 }
 
-.happy2-happy-agent-create-session__chord {
+.happy-agent-create-session__chord {
     display: flex;
     flex: none;
     align-items: center;

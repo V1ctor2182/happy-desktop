@@ -16,20 +16,20 @@ import {
  * scrolls into a correction. Pretext resolves the same line breaking the browser
  * would, so an unmounted row is sized to within a line of its painted height.
  *
- * Every constant below mirrors `styles/message.css` and the `--happy2-font-*`
+ * Every constant below mirrors `styles/message.css` and the `--happy-font-*`
  * tokens in `theme.css`. They are duplicated deliberately — reading them back
  * out of the cascade needs a mounted element, which is the thing this module
  * exists to avoid — so a change to either must be made here too.
  */
-const UI_FAMILY = '"happy2 Figtree", system-ui, sans-serif';
-const MONO_FAMILY = '"happy2 Mono", ui-monospace, monospace';
-/** `.happy2-message__body p` — the shape almost every chat line takes. */
+const UI_FAMILY = '"happy Figtree", system-ui, sans-serif';
+const MONO_FAMILY = '"happy Mono", ui-monospace, monospace';
+/** `.happy-message__body p` — the shape almost every chat line takes. */
 const PARAGRAPH_SIZE = 16;
 const PARAGRAPH_LINE = 24;
-/** `.happy2-message__body pre code`, which never wraps (`white-space: pre`). */
+/** `.happy-message__body pre code`, which never wraps (`white-space: pre`). */
 const CODE_LINE = 20;
 const CODE_PADDING = 16;
-/** `.happy2-message__body > * + *` stacking, and the wider margin around `pre`. */
+/** `.happy-message__body > * + *` stacking, and the wider margin around `pre`. */
 const BLOCK_GAP = 8;
 const CODE_GAP = 12;
 /** `hr`, and the 8px vertical padding inside every table cell. */
@@ -45,7 +45,7 @@ const QUOTE_MARGIN = 16;
 /** `ul/ol` indent, and the extra leading between consecutive `li`. */
 const LIST_INDENT = 24;
 const LIST_ITEM_GAP = 6;
-/** `.happy2-system-notice__text` — 13px copy on a 20px line. */
+/** `.happy-system-notice__text` — 13px copy on a 20px line. */
 const NOTICE_SIZE = 13;
 const NOTICE_LINE = 20;
 let fontsWatched = false;

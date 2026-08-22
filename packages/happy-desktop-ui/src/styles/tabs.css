@@ -7,23 +7,23 @@
  * overlaps and visually replaces the container hairline beneath it. Tokens only.
  */
 
-.happy2-tabs {
+.happy-tabs {
     box-sizing: border-box;
     display: flex;
     align-items: stretch;
     border-bottom: 1px solid var(--divider);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
 }
 
 /* The context menu rides the viewport, not the strip: the bar clips and
    scrolls horizontally, and a popover inside that scrollport would be cut off
    at its edge. */
-.happy2-tabs__menu {
+.happy-tabs__menu {
     position: fixed;
     z-index: 40;
 }
 
-.happy2-tabs__tab {
+.happy-tabs__tab {
     position: relative;
     display: inline-flex;
     flex: none;
@@ -42,29 +42,29 @@
     transition: color 120ms ease;
 }
 
-.happy2-tabs__tab:hover:not([data-active]) {
+.happy-tabs__tab:hover:not([data-active]) {
     color: var(--text);
 }
 
-.happy2-tabs__tab[data-active] {
+.happy-tabs__tab[data-active] {
     color: var(--text);
 }
 
-.happy2-tabs__tab:focus-visible {
+.happy-tabs__tab:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
 /* Per-size geometry — height, label typography, padding, and inter-slot gap. */
-.happy2-tabs[data-size="small"] .happy2-tabs__tab {
-    height: var(--happy2-subheader-height);
+.happy-tabs[data-size="small"] .happy-tabs__tab {
+    height: var(--happy-subheader-height);
     padding: 0 12px;
     gap: 6px;
     font-size: 12px;
     line-height: 16px;
 }
 
-.happy2-tabs[data-size="medium"] .happy2-tabs__tab {
+.happy-tabs[data-size="medium"] .happy-tabs__tab {
     height: 40px;
     padding: 0 14px;
     gap: 8px;
@@ -72,7 +72,7 @@
     line-height: 18px;
 }
 
-.happy2-tabs[data-size="large"] .happy2-tabs__tab {
+.happy-tabs[data-size="large"] .happy-tabs__tab {
     height: 48px;
     padding: 0 16px;
     gap: 8px;
@@ -85,7 +85,7 @@
  * held open with nothing in it all measure the same, so a tab that starts
  * working, finishes, and is then read never slides its own label sideways.
  */
-.happy2-tabs__tab-icon {
+.happy-tabs__tab-icon {
     position: relative;
     display: flex;
     flex: none;
@@ -95,12 +95,12 @@
     height: 16px;
 }
 
-.happy2-tabs[data-size="small"] .happy2-tabs__tab-icon {
+.happy-tabs[data-size="small"] .happy-tabs__tab-icon {
     width: 14px;
     height: 14px;
 }
 
-.happy2-tabs[data-size="large"] .happy2-tabs__tab-icon {
+.happy-tabs[data-size="large"] .happy-tabs__tab-icon {
     width: 18px;
     height: 18px;
 }
@@ -110,25 +110,25 @@
  * deliberately doing nothing still stands apart from an idle one, without
  * borrowing the spinner's claim that work is happening.
  */
-.happy2-tabs__tab-waiting {
+.happy-tabs__tab-waiting {
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-link);
 }
 
-.happy2-tabs__tab-dirty {
+.happy-tabs__tab-dirty {
     display: block;
     width: 8px;
     height: 8px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--text);
 }
 
-.happy2-tabs__tab-unread {
+.happy-tabs__tab-unread {
     width: 6px;
     height: 6px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--text-link);
 }
 
@@ -137,25 +137,25 @@
  * replacing it: the tab keeps the face the reader aims at, and the news is a
  * dot on top of it. The ring separates the dot from whatever it overlaps.
  */
-.happy2-tabs__tab-unread--corner {
+.happy-tabs__tab-unread--corner {
     position: absolute;
     top: -2px;
     right: -2px;
     box-shadow: 0 0 0 1.5px var(--surface);
 }
 
-.happy2-tabs__tab-label {
+.happy-tabs__tab-label {
     display: block;
     flex: none;
 }
 
 /* Preview documents are intentionally provisional: italic title text
    distinguishes the one tab the next preview may replace. */
-.happy2-tabs__tab[data-preview] .happy2-tabs__tab-label {
+.happy-tabs__tab[data-preview] .happy-tabs__tab-label {
     font-style: italic;
 }
 
-.happy2-tabs__tab-badge {
+.happy-tabs__tab-badge {
     flex: none;
 }
 
@@ -169,7 +169,7 @@
  * laying them out in a line would leave a permanent second box on every tab that
  * is merely closable.
  */
-.happy2-tabs__tab-trailing {
+.happy-tabs__tab-trailing {
     display: flex;
     position: relative;
     flex: none;
@@ -194,7 +194,7 @@
  * that pulled its own parent's padding off with a negative margin would be
  * spacing itself against a box it does not own.
  */
-.happy2-tabs__tab:has(.happy2-tabs__tab-trailing) {
+.happy-tabs__tab:has(.happy-tabs__tab-trailing) {
     padding-right: 4px;
 }
 
@@ -203,7 +203,7 @@
  * over it is the thing that can be used. It is out of flow so that a tab which
  * is both busy and closable keeps one 16px lane rather than two.
  */
-.happy2-tabs__tab-activity {
+.happy-tabs__tab-activity {
     display: flex;
     position: absolute;
     align-items: center;
@@ -224,7 +224,7 @@
  * that can be reached by keyboard has to be visible while it holds focus, or the
  * reader is about to press Enter on something they cannot see.
  */
-.happy2-tabs__tab-close {
+.happy-tabs__tab-close {
     display: flex;
     flex: none;
     align-items: center;
@@ -232,15 +232,15 @@
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: var(--text-secondary);
     opacity: 0;
     cursor: pointer;
     transition: opacity 120ms ease;
 }
 
-.happy2-tabs__tab:hover .happy2-tabs__tab-close,
-.happy2-tabs__tab-close:focus-visible {
+.happy-tabs__tab:hover .happy-tabs__tab-close,
+.happy-tabs__tab-close:focus-visible {
     opacity: 1;
 }
 
@@ -255,22 +255,22 @@
  * while the pointer is over it, and every tab reports again as soon as the
  * pointer leaves.
  */
-.happy2-tabs__tab:hover .happy2-tabs__tab-trailing:has(.happy2-tabs__tab-close),
-.happy2-tabs__tab-trailing:has(.happy2-tabs__tab-close:focus-visible) {
+.happy-tabs__tab:hover .happy-tabs__tab-trailing:has(.happy-tabs__tab-close),
+.happy-tabs__tab-trailing:has(.happy-tabs__tab-close:focus-visible) {
     /* Consumed by the activity mark below; the close control sets its own. */
-    --happy2-tabs-activity-opacity: 0;
+    --happy-tabs-activity-opacity: 0;
 }
 
-.happy2-tabs__tab-activity {
-    opacity: var(--happy2-tabs-activity-opacity, 1);
+.happy-tabs__tab-activity {
+    opacity: var(--happy-tabs-activity-opacity, 1);
 }
 
-.happy2-tabs__tab-close:hover {
+.happy-tabs__tab-close:hover {
     background: var(--surface-selected);
     color: var(--text);
 }
 
-.happy2-tabs__tab-close:focus-visible {
+.happy-tabs__tab-close:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
@@ -280,7 +280,7 @@
  * bottom:-1px drops the 2px bar over the container's 1px hairline so the accent
  * replaces the hairline directly beneath the active tab.
  */
-.happy2-tabs__tab-underline {
+.happy-tabs__tab-underline {
     position: absolute;
     left: 0;
     right: 0;
@@ -299,15 +299,15 @@
  * pointer exactly. Transitions are suppressed while no drag is running so an
  * ordinary re-render never animates.
  */
-.happy2-tabs__tab[data-reorderable] {
+.happy-tabs__tab[data-reorderable] {
     touch-action: none;
 }
 
-.happy2-tabs[data-dragging] .happy2-tabs__tab {
+.happy-tabs[data-dragging] .happy-tabs__tab {
     transition: transform 140ms ease;
 }
 
-.happy2-tabs[data-dragging] .happy2-tabs__tab[data-dragged] {
+.happy-tabs[data-dragging] .happy-tabs__tab[data-dragged] {
     z-index: 1;
     transition: none;
     cursor: grabbing;
@@ -317,14 +317,14 @@
 /* Carried out of the strip, the tab leaves a gap where it was: it is being
    drawn at the pointer instead, and a tab in two places at once would read as
    two tabs. */
-.happy2-tabs[data-dragging] .happy2-tabs__tab[data-carried] {
+.happy-tabs[data-dragging] .happy-tabs__tab[data-carried] {
     opacity: 0.3;
     transform: none !important;
 }
 
 /* The carried tab follows the pointer across the whole window, so it is fixed
    to the viewport and centred on the pointer rather than laid out anywhere. */
-.happy2-tabs__carried {
+.happy-tabs__carried {
     position: fixed;
     z-index: 60;
     display: flex;
@@ -333,11 +333,11 @@
     height: 32px;
     padding: 0 12px;
     transform: translate(-50%, -50%);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: var(--surface);
     box-shadow: 0 4px 16px var(--shadow-elevated);
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 13px;
     font-weight: 600;
     font-synthesis: none;
@@ -345,7 +345,7 @@
     pointer-events: none;
 }
 
-.happy2-tabs__carried[data-over] {
+.happy-tabs__carried[data-over] {
     box-shadow:
         0 0 0 2px var(--radio-active),
         0 4px 16px var(--shadow-elevated);
@@ -353,7 +353,7 @@
 
 /* Said out loud, never drawn: a move made with the keyboard has to be reported
    to a screen reader without taking a pixel of the strip to do it. */
-.happy2-tabs__announcement {
+.happy-tabs__announcement {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -367,10 +367,10 @@
 
 /* The pointer owns the drag; hover paint on the tabs it passes over would read
    as a second, competing selection. */
-.happy2-tabs[data-dragging] .happy2-tabs__tab:hover:not([data-active]) {
+.happy-tabs[data-dragging] .happy-tabs__tab:hover:not([data-active]) {
     color: var(--text-secondary);
 }
 
-.happy2-tabs[data-dragging] .happy2-tabs__tab-close {
+.happy-tabs[data-dragging] .happy-tabs__tab-close {
     opacity: 0;
 }

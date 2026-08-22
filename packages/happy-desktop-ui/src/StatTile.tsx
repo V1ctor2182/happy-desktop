@@ -51,20 +51,20 @@ export function StatTile(props: StatTileProps) {
     const hasFooter = () => Boolean(local.delta || local.hint);
     return (
         <div
-            className={["happy2-stat-tile", local.className].filter(Boolean).join(" ")}
+            className={["happy-stat-tile", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="stat-tile"
             data-testid={local["data-testid"]}
             data-tone={tone()}
             style={local.style}
         >
-            <div className="happy2-stat-tile__header" data-happy-desktop-ui="stat-tile-header">
-                <span className="happy2-stat-tile__label" data-happy-desktop-ui="stat-tile-label">
+            <div className="happy-stat-tile__header" data-happy-desktop-ui="stat-tile-header">
+                <span className="happy-stat-tile__label" data-happy-desktop-ui="stat-tile-label">
                     {local.label}
                 </span>
                 {local.icon
                     ? ((name) => (
                           <span
-                              className="happy2-stat-tile__icon"
+                              className="happy-stat-tile__icon"
                               data-happy-desktop-ui="stat-tile-icon"
                           >
                               <Icon name={name} size={16} />
@@ -73,22 +73,22 @@ export function StatTile(props: StatTileProps) {
                     : null}
             </div>
 
-            <div className="happy2-stat-tile__value" data-happy-desktop-ui="stat-tile-value">
+            <div className="happy-stat-tile__value" data-happy-desktop-ui="stat-tile-value">
                 {local.value}
             </div>
 
             {hasFooter() ? (
-                <div className="happy2-stat-tile__footer" data-happy-desktop-ui="stat-tile-footer">
+                <div className="happy-stat-tile__footer" data-happy-desktop-ui="stat-tile-footer">
                     {local.delta
                         ? ((delta) => (
                               <span
-                                  className="happy2-stat-tile__delta"
+                                  className="happy-stat-tile__delta"
                                   data-happy-desktop-ui="stat-tile-delta"
                                   data-trend={delta.trend}
                               >
                                   <svg
                                       aria-hidden="true"
-                                      className="happy2-stat-tile__delta-arrow"
+                                      className="happy-stat-tile__delta-arrow"
                                       data-happy-desktop-ui="stat-tile-delta-arrow"
                                       data-trend={delta.trend}
                                       fill="currentColor"
@@ -99,7 +99,7 @@ export function StatTile(props: StatTileProps) {
                                       <path d={trendArrows[delta.trend]} />
                                   </svg>
                                   <span
-                                      className="happy2-stat-tile__delta-value"
+                                      className="happy-stat-tile__delta-value"
                                       data-happy-desktop-ui="stat-tile-delta-value"
                                   >
                                       {delta.value}
@@ -109,7 +109,7 @@ export function StatTile(props: StatTileProps) {
                         : null}
                     {local.hint ? (
                         <span
-                            className="happy2-stat-tile__hint"
+                            className="happy-stat-tile__hint"
                             data-happy-desktop-ui="stat-tile-hint"
                         >
                             {local.hint}

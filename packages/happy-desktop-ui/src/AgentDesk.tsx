@@ -53,39 +53,39 @@ export function AgentDesk(props: AgentDeskProps) {
     return (
         <div
             {...rest}
-            className={["happy2-agent-desk", local.className].filter(Boolean).join(" ")}
+            className={["happy-agent-desk", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="agent-desk"
             style={local.style}
         >
-            <header className="happy2-agent-desk__header" data-happy-desktop-ui="agent-desk-header">
-                <Icon className="happy2-agent-desk__spark" name="spark" size={16} />
-                <span className="happy2-agent-desk__title" data-happy-desktop-ui="agent-desk-title">
+            <header className="happy-agent-desk__header" data-happy-desktop-ui="agent-desk-header">
+                <Icon className="happy-agent-desk__spark" name="spark" size={16} />
+                <span className="happy-agent-desk__title" data-happy-desktop-ui="agent-desk-title">
                     {local.title ?? "Agent desk"}
                 </span>
                 <Badge
-                    className="happy2-agent-desk__count"
+                    className="happy-agent-desk__count"
                     label={runningLabel()}
                     variant="accent"
                 />
             </header>
             <ScrollArea
-                className="happy2-agent-desk__body"
+                className="happy-agent-desk__body"
                 data-happy-desktop-ui="agent-desk-body"
-                viewportClassName="happy2-agent-desk__body-viewport"
+                viewportClassName="happy-agent-desk__body-viewport"
             >
                 <div
-                    className="happy2-agent-desk__body-content"
+                    className="happy-agent-desk__body-content"
                     data-happy-desktop-ui="agent-desk-body-content"
                 >
                     {local.running.map((run) => (
                         <section
                             aria-label={`${run.agent} · ${run.title}`}
-                            className="happy2-agent-desk__run"
+                            className="happy-agent-desk__run"
                             key={run.id}
                             data-happy-desktop-ui="agent-desk-run"
                         >
                             <div
-                                className="happy2-agent-desk__run-head"
+                                className="happy-agent-desk__run-head"
                                 data-happy-desktop-ui="agent-desk-run-head"
                             >
                                 <Avatar
@@ -96,14 +96,14 @@ export function AgentDesk(props: AgentDeskProps) {
                                     type="agent"
                                 />
                                 <span
-                                    className="happy2-agent-desk__run-title"
+                                    className="happy-agent-desk__run-title"
                                     data-happy-desktop-ui="agent-desk-run-title"
                                 >
                                     {run.title}
                                 </span>
                                 {run.eta ? (
                                     <span
-                                        className="happy2-agent-desk__run-eta"
+                                        className="happy-agent-desk__run-eta"
                                         data-happy-desktop-ui="agent-desk-run-eta"
                                     >
                                         {run.eta}
@@ -112,7 +112,7 @@ export function AgentDesk(props: AgentDeskProps) {
                             </div>
                             {run.detail ? (
                                 <div
-                                    className="happy2-agent-desk__run-detail"
+                                    className="happy-agent-desk__run-detail"
                                     data-happy-desktop-ui="agent-desk-run-detail"
                                 >
                                     {run.detail}
@@ -123,12 +123,12 @@ export function AgentDesk(props: AgentDeskProps) {
                                     aria-valuemax={100}
                                     aria-valuemin={0}
                                     aria-valuenow={clampProgress(run.progress)}
-                                    className="happy2-agent-desk__run-track"
+                                    className="happy-agent-desk__run-track"
                                     data-happy-desktop-ui="agent-desk-run-track"
                                     role="progressbar"
                                 >
                                     <div
-                                        className="happy2-agent-desk__run-fill"
+                                        className="happy-agent-desk__run-fill"
                                         data-happy-desktop-ui="agent-desk-run-fill"
                                         style={{ width: `${clampProgress(run.progress)}%` }}
                                     />
@@ -139,7 +139,7 @@ export function AgentDesk(props: AgentDeskProps) {
                     {(local.queued?.length ?? 0) > 0 ? (
                         <>
                             <div
-                                className="happy2-agent-desk__section-label"
+                                className="happy-agent-desk__section-label"
                                 data-happy-desktop-ui="agent-desk-section-label"
                                 data-section="queued"
                             >
@@ -147,26 +147,26 @@ export function AgentDesk(props: AgentDeskProps) {
                             </div>
                             {(local.queued ?? []).map((item) => (
                                 <button
-                                    className="happy2-agent-desk__queued"
+                                    className="happy-agent-desk__queued"
                                     key={item.id}
                                     data-happy-desktop-ui="agent-desk-queued"
                                     onClick={() => local.onItemSelect?.(item.id)}
                                     type="button"
                                 >
                                     <Icon
-                                        className="happy2-agent-desk__row-icon"
+                                        className="happy-agent-desk__row-icon"
                                         name={item.icon ?? "clock"}
                                         size={14}
                                     />
                                     <span
-                                        className="happy2-agent-desk__row-title"
+                                        className="happy-agent-desk__row-title"
                                         data-happy-desktop-ui="agent-desk-row-title"
                                     >
                                         {item.title}
                                     </span>
                                     {item.meta ? (
                                         <span
-                                            className="happy2-agent-desk__row-meta"
+                                            className="happy-agent-desk__row-meta"
                                             data-happy-desktop-ui="agent-desk-row-meta"
                                         >
                                             {item.meta}
@@ -179,7 +179,7 @@ export function AgentDesk(props: AgentDeskProps) {
                     {(local.done?.length ?? 0) > 0 ? (
                         <>
                             <div
-                                className="happy2-agent-desk__section-label"
+                                className="happy-agent-desk__section-label"
                                 data-happy-desktop-ui="agent-desk-section-label"
                                 data-section="done"
                             >
@@ -187,26 +187,26 @@ export function AgentDesk(props: AgentDeskProps) {
                             </div>
                             {(local.done ?? []).map((item) => (
                                 <button
-                                    className="happy2-agent-desk__done"
+                                    className="happy-agent-desk__done"
                                     key={item.id}
                                     data-happy-desktop-ui="agent-desk-done"
                                     onClick={() => local.onItemSelect?.(item.id)}
                                     type="button"
                                 >
                                     <Icon
-                                        className="happy2-agent-desk__row-icon"
+                                        className="happy-agent-desk__row-icon"
                                         name={item.icon ?? "check"}
                                         size={14}
                                     />
                                     <span
-                                        className="happy2-agent-desk__row-title"
+                                        className="happy-agent-desk__row-title"
                                         data-happy-desktop-ui="agent-desk-row-title"
                                     >
                                         {item.title}
                                     </span>
                                     {item.meta ? (
                                         <span
-                                            className="happy2-agent-desk__row-meta"
+                                            className="happy-agent-desk__row-meta"
                                             data-happy-desktop-ui="agent-desk-row-meta"
                                         >
                                             {item.meta}

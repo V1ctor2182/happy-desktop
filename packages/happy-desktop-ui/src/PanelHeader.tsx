@@ -35,7 +35,7 @@ export function PanelHeader(props: PanelHeaderProps) {
     return (
         <header
             {...rest}
-            className={["happy2-panel-header", local.className].filter(Boolean).join(" ")}
+            className={["happy-panel-header", local.className].filter(Boolean).join(" ")}
             data-edge-control={local.edgeControl ? "" : undefined}
             data-happy-desktop-ui="panel-header"
             style={local.style}

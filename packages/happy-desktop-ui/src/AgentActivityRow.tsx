@@ -72,7 +72,7 @@ const MCP_RESULT_ROWS = 5;
 
 function AgentActivityTime(props: { time?: string }) {
     return props.time ? (
-        <span className="happy2-agent-activity__time" data-happy-desktop-ui="agent-activity-time">
+        <span className="happy-agent-activity__time" data-happy-desktop-ui="agent-activity-time">
             {props.time}
         </span>
     ) : null;
@@ -248,7 +248,7 @@ function AgentActivityChangingText(props: { value: string; typed?: boolean; type
         />
     ) : (
         <span
-            className="happy2-agent-activity__still-text"
+            className="happy-agent-activity__still-text"
             data-happy-desktop-ui="agent-activity-changing-text"
         >
             {props.value}
@@ -446,15 +446,15 @@ function boundedJson(value: ConversationJson): string | undefined {
 function ChildRow(props: { tone?: "muted" | "error"; children: React.ReactNode }) {
     return (
         <div
-            className="happy2-agent-activity__child"
+            className="happy-agent-activity__child"
             data-tone={props.tone ?? "muted"}
             data-happy-desktop-ui="agent-activity-child"
         >
-            <span aria-hidden="true" className="happy2-agent-activity__child-marker">
+            <span aria-hidden="true" className="happy-agent-activity__child-marker">
                 └
             </span>
             <span
-                className="happy2-agent-activity__child-text"
+                className="happy-agent-activity__child-text"
                 data-happy-desktop-ui="agent-activity-child-text"
             >
                 {props.children}
@@ -472,23 +472,20 @@ function PermissionReviewRow(props: { review: ConversationActivityReview }) {
               ? "Denied"
               : "Awaiting approval";
     return (
-        <div
-            className="happy2-agent-activity__review"
-            data-happy-desktop-ui="agent-activity-review"
-        >
-            <span aria-hidden="true" className="happy2-agent-activity__child-marker">
+        <div className="happy-agent-activity__review" data-happy-desktop-ui="agent-activity-review">
+            <span aria-hidden="true" className="happy-agent-activity__child-marker">
                 └
             </span>
-            <span className="happy2-agent-activity__review-body">
+            <span className="happy-agent-activity__review-body">
                 <span
-                    className="happy2-agent-activity__review-title"
+                    className="happy-agent-activity__review-title"
                     data-happy-desktop-ui="agent-activity-review-title"
                 >
                     {title} · {review.action}
                 </span>
-                <span className="happy2-agent-activity__review-reason">{review.reason}</span>
+                <span className="happy-agent-activity__review-reason">{review.reason}</span>
                 <span
-                    className="happy2-agent-activity__review-risk"
+                    className="happy-agent-activity__review-risk"
                     data-risk={review.risk}
                     data-happy-desktop-ui="agent-activity-review-risk"
                 >
@@ -662,7 +659,7 @@ function AgentToolActivity(props: {
             {singleLine ? null : (
                 <span
                     aria-hidden="true"
-                    className="happy2-agent-activity__dot"
+                    className="happy-agent-activity__dot"
                     data-tone={tone}
                     data-happy-desktop-ui="agent-activity-dot"
                 />
@@ -672,7 +669,7 @@ function AgentToolActivity(props: {
                 words, so it stays out of the accessibility tree. */}
             <span
                 aria-hidden="true"
-                className="happy2-agent-activity__glyph"
+                className="happy-agent-activity__glyph"
                 data-happy-desktop-ui="agent-activity-glyph"
             >
                 {running ? (
@@ -693,18 +690,18 @@ function AgentToolActivity(props: {
                 )}
             </span>
             <span
-                className="happy2-agent-activity__verb"
+                className="happy-agent-activity__verb"
                 data-happy-desktop-ui="agent-activity-verb"
             >
                 <AgentActivityChangingText typed={verbTyped} value={verb} />
             </span>
             {stats ? (
                 <span
-                    className="happy2-agent-activity__file-summary"
+                    className="happy-agent-activity__file-summary"
                     data-happy-desktop-ui="agent-activity-file-summary"
                 >
                     <ScrollingText
-                        className="happy2-agent-activity__text"
+                        className="happy-agent-activity__text"
                         data-happy-desktop-ui="agent-activity-text"
                     >
                         <AgentActivityChangingText
@@ -718,20 +715,20 @@ function AgentToolActivity(props: {
                         nothing to learn. */}
                     {stats.added || stats.deleted ? (
                         <span
-                            className="happy2-agent-activity__stats"
+                            className="happy-agent-activity__stats"
                             data-happy-desktop-ui="agent-activity-stats"
                         >
                             {stats.added ? (
-                                <span aria-hidden="true" className="happy2-agent-activity__added">
+                                <span aria-hidden="true" className="happy-agent-activity__added">
                                     +{compactCount(stats.added)}
                                 </span>
                             ) : null}
                             {stats.deleted ? (
-                                <span aria-hidden="true" className="happy2-agent-activity__deleted">
+                                <span aria-hidden="true" className="happy-agent-activity__deleted">
                                     &minus;{compactCount(stats.deleted)}
                                 </span>
                             ) : null}
-                            <span className="happy2-visually-hidden">
+                            <span className="happy-visually-hidden">
                                 {changeCountLabel(stats.added ?? 0, stats.deleted ?? 0)}
                             </span>
                         </span>
@@ -739,7 +736,7 @@ function AgentToolActivity(props: {
                 </span>
             ) : (
                 <ScrollingText
-                    className="happy2-agent-activity__text"
+                    className="happy-agent-activity__text"
                     data-happy-desktop-ui="agent-activity-text"
                 >
                     <AgentActivityChangingText
@@ -750,7 +747,7 @@ function AgentToolActivity(props: {
                 </ScrollingText>
             )}
             {hasBody ? (
-                <span aria-hidden="true" className="happy2-agent-activity__chevron">
+                <span aria-hidden="true" className="happy-agent-activity__chevron">
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
             ) : null}
@@ -764,7 +761,7 @@ function AgentToolActivity(props: {
     // survives the single-line variant, where that line is cut.
     return (
         <div
-            className="happy2-agent-activity"
+            className="happy-agent-activity"
             data-status={tool.status}
             data-failed={tool.failed || tool.status === "failed" ? "" : undefined}
             data-tone={tone}
@@ -778,13 +775,10 @@ function AgentToolActivity(props: {
             {/* The copy action is a sibling of the header rather than part of
                 it: the header is itself a button in most variants, and a
                 nested button would be neither valid nor clickable. */}
-            <div
-                className="happy2-agent-activity__line"
-                data-happy-desktop-ui="agent-activity-line"
-            >
+            <div className="happy-agent-activity__line" data-happy-desktop-ui="agent-activity-line">
                 {singleLine && props.onSelect ? (
                     <button
-                        className="happy2-agent-activity__header"
+                        className="happy-agent-activity__header"
                         data-happy-desktop-ui="agent-activity-header"
                         onClick={() => props.onSelect?.(tool)}
                         type="button"
@@ -793,7 +787,7 @@ function AgentToolActivity(props: {
                     </button>
                 ) : singleLine ? (
                     <div
-                        className="happy2-agent-activity__header"
+                        className="happy-agent-activity__header"
                         data-happy-desktop-ui="agent-activity-header"
                     >
                         {header}
@@ -801,7 +795,7 @@ function AgentToolActivity(props: {
                 ) : (
                     <button
                         aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
-                        className="happy2-agent-activity__header"
+                        className="happy-agent-activity__header"
                         data-happy-desktop-ui="agent-activity-header"
                         disabled={!hasBody}
                         onClick={() => hasBody && setExpanded((open) => !open)}
@@ -816,7 +810,7 @@ function AgentToolActivity(props: {
                        variant that opens something. */
                     <button
                         aria-label={`Open ${fileName(filePath)}`}
-                        className="happy2-agent-activity__open"
+                        className="happy-agent-activity__open"
                         data-happy-desktop-ui="agent-activity-open"
                         data-path={filePath}
                         onClick={(event) => {
@@ -860,7 +854,7 @@ function AgentToolActivity(props: {
 
             {expanded && hasBody ? (
                 <div
-                    className="happy2-agent-activity__body"
+                    className="happy-agent-activity__body"
                     data-happy-desktop-ui="agent-activity-body"
                 >
                     {presentation?.type === "fileDiff"
@@ -873,7 +867,7 @@ function AgentToolActivity(props: {
                                   <>
                                       {shown.map((file, index) => (
                                           <div
-                                              className="happy2-agent-activity__diff"
+                                              className="happy-agent-activity__diff"
                                               key={`${file.path}-${index}`}
                                           >
                                               <DiffSnippet
@@ -905,17 +899,17 @@ function AgentToolActivity(props: {
                                   execOutput.omitted > 0 ? EXEC_HEAD_TAIL : execOutput.lines.length;
                               return (
                                   <pre
-                                      className="happy2-agent-activity__output"
+                                      className="happy-agent-activity__output"
                                       data-happy-desktop-ui="agent-activity-output"
                                   >
                                       {execOutput.lines.map((line, index) => (
                                           <div
-                                              className="happy2-agent-activity__output-line"
+                                              className="happy-agent-activity__output-line"
                                               key={index}
                                           >
                                               {line || "\u00a0"}
                                               {execOutput.omitted > 0 && index === headCount - 1 ? (
-                                                  <div className="happy2-agent-activity__output-elide">
+                                                  <div className="happy-agent-activity__output-elide">
                                                       … +{execOutput.omitted} lines
                                                   </div>
                                               ) : null}
@@ -927,7 +921,7 @@ function AgentToolActivity(props: {
                         : null}
 
                     {terminalInput ? (
-                        <div className="happy2-agent-activity__terminal">
+                        <div className="happy-agent-activity__terminal">
                             {terminalInput.map((line, index) => (
                                 <ChildRow key={index}>{line || "\u00a0"}</ChildRow>
                             ))}
@@ -938,7 +932,7 @@ function AgentToolActivity(props: {
                         ? presentation.sources?.map((source) => (
                               <ChildRow key={source.url}>
                                   <a
-                                      className="happy2-agent-activity__source"
+                                      className="happy-agent-activity__source"
                                       href={source.url}
                                       rel="noreferrer"
                                       target="_blank"
@@ -951,7 +945,7 @@ function AgentToolActivity(props: {
 
                     {argsPresent ? (
                         <pre
-                            className="happy2-agent-activity__args"
+                            className="happy-agent-activity__args"
                             data-happy-desktop-ui="agent-activity-args"
                         >
                             {boundedJson(tool.arguments)}
@@ -974,7 +968,7 @@ function AgentReasoningActivity(props: {
     const summary = props.text.split("\n").find((line) => line.trim().length > 0) ?? "";
     return (
         <div
-            className="happy2-agent-activity"
+            className="happy-agent-activity"
             data-expanded={expanded ? "" : undefined}
             data-presentation="reasoning"
             data-tone="warning"
@@ -982,37 +976,37 @@ function AgentReasoningActivity(props: {
         >
             <button
                 aria-expanded={expanded ? "true" : "false"}
-                className="happy2-agent-activity__header"
+                className="happy-agent-activity__header"
                 data-happy-desktop-ui="agent-activity-header"
                 onClick={() => setExpanded((open) => !open)}
                 type="button"
             >
                 <span
                     aria-hidden="true"
-                    className="happy2-agent-activity__dot"
+                    className="happy-agent-activity__dot"
                     data-tone={props.streaming ? "warning" : "success"}
                     data-happy-desktop-ui="agent-activity-dot"
                 />
                 <span
-                    className="happy2-agent-activity__verb"
+                    className="happy-agent-activity__verb"
                     data-happy-desktop-ui="agent-activity-verb"
                 >
                     {props.streaming ? "Thinking" : "Thought"}
                 </span>
                 <ScrollingText
-                    className="happy2-agent-activity__text"
+                    className="happy-agent-activity__text"
                     data-happy-desktop-ui="agent-activity-text"
                 >
                     {summary}
                 </ScrollingText>
-                <span aria-hidden="true" className="happy2-agent-activity__chevron">
+                <span aria-hidden="true" className="happy-agent-activity__chevron">
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
                 <AgentActivityTime time={props.time} />
             </button>
             {expanded ? (
                 <div
-                    className="happy2-agent-activity__body happy2-agent-activity__reasoning happy2-message__body--markdown"
+                    className="happy-agent-activity__body happy-agent-activity__reasoning happy-message__body--markdown"
                     data-happy-desktop-ui="agent-activity-reasoning-body"
                 >
                     {renderMessageMarkdown(props.text)}
@@ -1042,7 +1036,7 @@ function AgentShellActivity(props: {
     const hasBody = props.output.trim().length > 0;
     return (
         <div
-            className="happy2-agent-activity"
+            className="happy-agent-activity"
             data-expanded={expanded ? "" : undefined}
             data-presentation="shell"
             data-tone={props.running ? "warning" : failed ? "error" : "success"}
@@ -1050,7 +1044,7 @@ function AgentShellActivity(props: {
         >
             <button
                 aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
-                className="happy2-agent-activity__header"
+                className="happy-agent-activity__header"
                 data-happy-desktop-ui="agent-activity-header"
                 disabled={!hasBody}
                 onClick={() => hasBody && setExpanded((open) => !open)}
@@ -1058,13 +1052,13 @@ function AgentShellActivity(props: {
             >
                 <span
                     aria-hidden="true"
-                    className="happy2-agent-activity__dot"
+                    className="happy-agent-activity__dot"
                     data-tone={props.running ? "warning" : failed ? "error" : "success"}
                     data-happy-desktop-ui="agent-activity-dot"
                 />
                 <span
                     aria-hidden="true"
-                    className="happy2-agent-activity__glyph"
+                    className="happy-agent-activity__glyph"
                     data-happy-desktop-ui="agent-activity-glyph"
                 >
                     {failed ? (
@@ -1074,26 +1068,26 @@ function AgentShellActivity(props: {
                     )}
                 </span>
                 <span
-                    className="happy2-agent-activity__verb"
+                    className="happy-agent-activity__verb"
                     data-happy-desktop-ui="agent-activity-verb"
                 >
                     Bash
                 </span>
                 <ScrollingText
-                    className="happy2-agent-activity__text"
+                    className="happy-agent-activity__text"
                     data-happy-desktop-ui="agent-activity-text"
                 >
                     {props.command}
                 </ScrollingText>
                 <span
-                    className="happy2-agent-activity__status"
+                    className="happy-agent-activity__status"
                     data-failed={failed ? "true" : undefined}
                     data-happy-desktop-ui="agent-activity-status"
                 >
                     {status}
                 </span>
                 {hasBody ? (
-                    <span aria-hidden="true" className="happy2-agent-activity__chevron">
+                    <span aria-hidden="true" className="happy-agent-activity__chevron">
                         <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                     </span>
                 ) : null}
@@ -1101,11 +1095,11 @@ function AgentShellActivity(props: {
             </button>
             {expanded && hasBody ? (
                 <div
-                    className="happy2-agent-activity__body"
+                    className="happy-agent-activity__body"
                     data-happy-desktop-ui="agent-activity-body"
                 >
                     <pre
-                        className="happy2-agent-activity__output"
+                        className="happy-agent-activity__output"
                         data-happy-desktop-ui="agent-activity-output"
                     >
                         {props.output}
@@ -1130,7 +1124,7 @@ function AgentLabeledActivity(props: {
 }) {
     return (
         <div
-            className="happy2-agent-activity"
+            className="happy-agent-activity"
             data-happy-desktop-ui="agent-activity-call"
             data-mono={props.mono ? "" : undefined}
             data-single-line=""
@@ -1138,18 +1132,18 @@ function AgentLabeledActivity(props: {
             data-tone="neutral"
         >
             <div
-                className="happy2-agent-activity__header"
+                className="happy-agent-activity__header"
                 data-happy-desktop-ui="agent-activity-header"
             >
                 <span
-                    className="happy2-agent-activity__verb"
+                    className="happy-agent-activity__verb"
                     data-happy-desktop-ui="agent-activity-verb"
                 >
                     <AgentActivityChangingText value={props.label} />
                 </span>
                 {props.subject !== undefined && props.subject.length > 0 ? (
                     <ScrollingText
-                        className="happy2-agent-activity__text"
+                        className="happy-agent-activity__text"
                         data-happy-desktop-ui="agent-activity-text"
                     >
                         <AgentActivityChangingText value={props.subject} />
@@ -1173,7 +1167,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
     const activity = props.activity;
     return (
         <div
-            className={["happy2-agent-activity-row", props.className].filter(Boolean).join(" ")}
+            className={["happy-agent-activity-row", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="agent-activity-row"
             data-kind={activity.kind}
             data-treatment={props.treatment ?? "detailed"}

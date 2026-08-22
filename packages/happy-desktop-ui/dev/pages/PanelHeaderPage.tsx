@@ -75,7 +75,7 @@ export function PanelHeaderPage() {
                 <div style={column}>
                     <div style={columns}>
                         <div style={workspace}>
-                            <ChannelHeader icon="inbox" title="happy2" topic="~/happy2" />
+                            <ChannelHeader icon="inbox" title="happy" topic="~/happy" />
                             <TabbedPane
                                 activeId="one"
                                 onSelect={() => {}}

@@ -1,10 +1,10 @@
 /* Settled summaries share the message body's 16px/24px type measure. */
-.happy2-turn-summary,
-.happy2-turn-summary * {
+.happy-turn-summary,
+.happy-turn-summary * {
     box-sizing: border-box;
 }
 
-.happy2-turn-summary {
+.happy-turn-summary {
     display: flex;
     flex: none;
     align-items: center;
@@ -12,7 +12,7 @@
     width: 100%;
     min-height: 32px;
     background: transparent;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-size: 16px;
     font-weight: 400;
     line-height: 24px;
@@ -30,12 +30,12 @@
  * a sentence. The row centres a 24px line, so 4px of padding lands on the 4px of
  * slack the 36px box leaves. The following status owns this boundary; tool rows
  * never change because a later sibling appeared or disappeared. */
-.happy2-turn-summary.happy2-conversation-turn-status.happy2-turn-status--after-trace {
+.happy-turn-summary.happy-conversation-turn-status.happy-turn-status--after-trace {
     min-height: 36px;
     padding-top: 4px;
 }
 
-.happy2-turn-summary__label {
+.happy-turn-summary__label {
     flex: none;
     font-variant-numeric: lining-nums tabular-nums;
 }
@@ -44,13 +44,13 @@
    full width of the transcript and is mostly empty, so anchoring the hover to
    the words themselves keeps the pointer from opening it in passing. The
    wrapper stands in for the label as a flex item and must not shrink either. */
-.happy2-turn-summary__detail {
+.happy-turn-summary__detail {
     flex: none;
 }
 
 /* The summary brings its own transcript-row padding, which the settled line
    already owns; inside this slot it is only text. */
-.happy2-turn-summary__trailing .happy2-happy-agent-activity-transcript {
+.happy-turn-summary__trailing .happy-agent-activity-transcript {
     height: auto;
     padding: 0;
 }
@@ -58,7 +58,7 @@
 /* Work that outlived the turn sits at the far end of the settled line. `auto`
    takes whatever slack the label and copy action leave, so no width is ever
    measured. */
-.happy2-turn-summary__trailing {
+.happy-turn-summary__trailing {
     display: flex;
     flex: 0 1 auto;
     justify-content: flex-end;
@@ -69,7 +69,7 @@
 /* The copy action leads the settled line. Its 20px hit box carries 2px around a
    16px glyph, so the negative margin is what puts the glyph's own left edge on
    the transcript's text column instead of the button's padding box. */
-.happy2-turn-summary__copy {
+.happy-turn-summary__copy {
     display: flex;
     flex: none;
     align-items: center;
@@ -80,22 +80,22 @@
     padding: 0;
     background: transparent;
     border: 0;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     color: inherit;
     appearance: none;
     cursor: pointer;
     transition: background-color 100ms ease;
 }
 
-.happy2-turn-summary__copy:hover {
+.happy-turn-summary__copy:hover {
     background: var(--surface-pressed);
 }
 
-.happy2-turn-summary__copy:focus-visible {
+.happy-turn-summary__copy:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
 
-.happy2-turn-summary__copy[data-copied] {
+.happy-turn-summary__copy[data-copied] {
     color: var(--success);
 }

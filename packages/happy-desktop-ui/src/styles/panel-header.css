@@ -7,12 +7,12 @@
  * the dividing line, as the tab bar does in both columns.
  */
 
-.happy2-panel-header,
-.happy2-panel-header * {
+.happy-panel-header,
+.happy-panel-header * {
     box-sizing: border-box;
 }
 
-.happy2-panel-header {
+.happy-panel-header {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -23,12 +23,12 @@
     padding: 0 16px;
     background: transparent;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
 }
 
 /* Chrome controls dock 12px from a panel edge, matching AppShell's sidebar
    collapse control. Ordinary titles and content retain the standard 16px inset. */
-.happy2-panel-header[data-edge-control] {
+.happy-panel-header[data-edge-control] {
     padding-right: 12px;
     padding-left: 12px;
 }

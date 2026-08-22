@@ -74,7 +74,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
     const menuActions = () =>
         (local.menuItems ?? []).filter((item) => item.kind === "item").length > 0;
     const hasMenu = () => Boolean(local.onMenuSelect) && menuActions();
-    // eslint-disable-next-line happy2-react/no-layout-effect -- an open header menu owns document-level outside-click and Escape listeners that are attached after commit and completely removed when it closes
+    // eslint-disable-next-line happy-react/no-layout-effect -- an open header menu owns document-level outside-click and Escape listeners that are attached after commit and completely removed when it closes
     useLayoutEffect(() => {
         if (!menuOpen) return;
         const close = (event: Event) => {
@@ -96,37 +96,34 @@ export function ChannelHeader(props: ChannelHeaderProps) {
     const titleInner = (
         <>
             <span
-                className="happy2-channel-header__icon"
+                className="happy-channel-header__icon"
                 data-happy-desktop-ui="channel-header-icon"
             >
                 <Icon name={local.icon ?? "hash"} size={16} />
             </span>
             <span
-                className="happy2-channel-header__title"
+                className="happy-channel-header__title"
                 data-happy-desktop-ui="channel-header-title"
             >
-                <span className="happy2-channel-header__title-ink">{local.title}</span>
+                <span className="happy-channel-header__title-ink">{local.title}</span>
             </span>
         </>
     );
     return (
         <header
             {...rest}
-            className={["happy2-channel-header", local.className].filter(Boolean).join(" ")}
+            className={["happy-channel-header", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="channel-header"
             ref={root}
             style={local.style}
         >
-            <div
-                className="happy2-channel-header__info"
-                data-happy-desktop-ui="channel-header-info"
-            >
+            <div className="happy-channel-header__info" data-happy-desktop-ui="channel-header-info">
                 {local.onStarToggle
                     ? ((toggle) => (
                           <button
                               aria-label={local.starLabel ?? (local.starred ? "Unstar" : "Star")}
                               aria-pressed={local.starred ? "true" : "false"}
-                              className="happy2-channel-header__star"
+                              className="happy-channel-header__star"
                               data-happy-desktop-ui="channel-header-star"
                               data-starred={local.starred ? "" : undefined}
                               onClick={() => toggle()}
@@ -140,7 +137,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                     ((open) => (
                         <button
                             aria-label={local.titleLabel ?? `Open ${local.title} details`}
-                            className="happy2-channel-header__lead happy2-channel-header__lead--button"
+                            className="happy-channel-header__lead happy-channel-header__lead--button"
                             data-happy-desktop-ui="channel-header-lead"
                             onClick={() => open()}
                             type="button"
@@ -150,7 +147,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                     ))(local.onTitleClick)
                 ) : (
                     <h2
-                        className="happy2-channel-header__lead"
+                        className="happy-channel-header__lead"
                         data-happy-desktop-ui="channel-header-lead"
                     >
                         {titleInner}
@@ -160,30 +157,27 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                     <>
                         <span
                             aria-hidden="true"
-                            className="happy2-channel-header__dot"
+                            className="happy-channel-header__dot"
                             data-happy-desktop-ui="channel-header-dot"
                         />
                         <span
-                            className="happy2-channel-header__topic"
+                            className="happy-channel-header__topic"
                             data-happy-desktop-ui="channel-header-topic"
                         >
-                            <span className="happy2-channel-header__topic-ink">{local.topic}</span>
+                            <span className="happy-channel-header__topic-ink">{local.topic}</span>
                         </span>
                     </>
                 ) : null}
             </div>
             {local.titleAccessory ? (
                 <div
-                    className="happy2-channel-header__title-accessory"
+                    className="happy-channel-header__title-accessory"
                     data-happy-desktop-ui="channel-header-title-accessory"
                 >
                     {local.titleAccessory}
                 </div>
             ) : null}
-            <div
-                className="happy2-channel-header__meta"
-                data-happy-desktop-ui="channel-header-meta"
-            >
+            <div className="happy-channel-header__meta" data-happy-desktop-ui="channel-header-meta">
                 {local.memberCount !== undefined
                     ? ((_) => {
                           const label = () =>
@@ -193,10 +187,10 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                               <>
                                   <Icon name="users" size={16} />
                                   <span
-                                      className="happy2-channel-header__member-count"
+                                      className="happy-channel-header__member-count"
                                       data-happy-desktop-ui="channel-header-member-count"
                                   >
-                                      <span className="happy2-channel-header__member-count-ink">
+                                      <span className="happy-channel-header__member-count-ink">
                                           {local.memberCount}
                                       </span>
                                   </span>
@@ -206,7 +200,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                               ((click) => (
                                   <button
                                       aria-label={label()}
-                                      className="happy2-channel-header__members happy2-channel-header__members--button"
+                                      className="happy-channel-header__members happy-channel-header__members--button"
                                       data-happy-desktop-ui="channel-header-members"
                                       onClick={() => click()}
                                       type="button"
@@ -216,7 +210,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                               ))(local.onMembersClick)
                           ) : (
                               <span
-                                  className="happy2-channel-header__members"
+                                  className="happy-channel-header__members"
                                   data-happy-desktop-ui="channel-header-members"
                               >
                                   {inner}
@@ -226,7 +220,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                     : null}
                 {local.agentCount !== undefined ? (
                     <Badge
-                        className="happy2-channel-header__agents"
+                        className="happy-channel-header__agents"
                         icon="spark"
                         label={local.agentCount === 1 ? "1 agent" : `${local.agentCount} agents`}
                         variant="accent"
@@ -234,7 +228,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                 ) : null}
                 {local.actions ? (
                     <div
-                        className="happy2-channel-header__actions"
+                        className="happy-channel-header__actions"
                         data-happy-desktop-ui="channel-header-actions"
                     >
                         {local.actions}
@@ -242,7 +236,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                 ) : null}
                 {hasMenu() ? (
                     <div
-                        className="happy2-channel-header__menu"
+                        className="happy-channel-header__menu"
                         data-happy-desktop-ui="channel-header-menu"
                     >
                         <Button
@@ -257,7 +251,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                         />
                         {menuOpen ? (
                             <div
-                                className="happy2-channel-header__menu-popover"
+                                className="happy-channel-header__menu-popover"
                                 data-happy-desktop-ui="channel-header-menu-popover"
                             >
                                 <Menu

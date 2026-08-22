@@ -42,7 +42,7 @@ jobs:
 
             - name: Build local web renderer
               env:
-                  HAPPY2_LOCAL_WEB_BUILD_ID: ${{ github.sha }}
+                  HAPPY_LOCAL_WEB_BUILD_ID: ${{ github.sha }}
               run: pnpm desktop:local:web
 
             - name: Upload GitHub Pages artifact

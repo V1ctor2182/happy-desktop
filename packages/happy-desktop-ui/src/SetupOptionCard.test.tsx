@@ -11,8 +11,8 @@ type Renderer = ReturnType<typeof createRenderer>;
 
 const fontFamily = () =>
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 /* Signed offset of an icon box's center from the center of its host box
  * (positive = right / low). Icon glyphs come from the icon font, which centers

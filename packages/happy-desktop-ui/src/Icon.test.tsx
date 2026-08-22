@@ -80,7 +80,7 @@ it("holds Icon box geometry, font, and PUA glyph across sizes", async () => {
             "flex-shrink": "0",
         });
         expect(icon.computedStyle("font-family").replaceAll('"', ""), `icon ${size} font`).toBe(
-            "happy2 Ionicons",
+            "happy Ionicons",
         );
         expect(icon.element.textContent, `icon ${size} glyph`).toBe(
             String.fromCodePoint(ioniconsGlyphs["file-tray-outline"]),
@@ -93,7 +93,7 @@ it("holds Icon box geometry, font, and PUA glyph across sizes", async () => {
     expect(fallback.element.getAttribute("data-name")).toBe("check");
     expect(fallback.element.getAttribute("data-set")).toBe("ionicons");
     const octicon = view.$('[data-testid="icon-octicon"] [data-happy-desktop-ui="icon"]');
-    expect(octicon.computedStyle("font-family").replaceAll('"', "")).toBe("happy2 Octicons");
+    expect(octicon.computedStyle("font-family").replaceAll('"', "")).toBe("happy Octicons");
     expect(octicon.element.getAttribute("data-set")).toBe("octicons");
     expect(octicon.element.getAttribute("data-name")).toBe("branch");
     expect(octicon.element.textContent).toBe(String.fromCodePoint(octiconsGlyphs["git-branch"]));

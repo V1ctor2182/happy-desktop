@@ -114,7 +114,7 @@ export function ModalOverlayPage() {
 
             <div className="specimen-grid">
                 <Specimen
-                    detail="fixed inset:0 · z-index var(--happy2-z-overlay) · 24px gutter"
+                    detail="fixed inset:0 · z-index var(--happy-z-overlay) · 24px gutter"
                     label="Anatomy"
                     number="O-02"
                     stage="app"

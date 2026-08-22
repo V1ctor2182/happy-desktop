@@ -41,26 +41,26 @@ function MediaTile(props: { item: MediaItem; onOpen?: (id: string) => void }) {
     const hasFooter = () => item().name !== undefined || item().size !== undefined;
     return (
         <button
-            className="happy2-media-gallery__tile"
+            className="happy-media-gallery__tile"
             data-kind={item().kind}
             data-media-id={item().id}
             data-happy-desktop-ui="media-tile"
             onClick={() => props.onOpen?.(item().id)}
             type="button"
         >
-            <span className="happy2-media-gallery__thumb" data-happy-desktop-ui="media-thumb">
+            <span className="happy-media-gallery__thumb" data-happy-desktop-ui="media-thumb">
                 {item().thumbnailUrl ? (
                     ((url) => (
                         <img
                             alt={item().name ?? ""}
-                            className="happy2-media-gallery__image"
+                            className="happy-media-gallery__image"
                             data-happy-desktop-ui="media-image"
                             src={url}
                         />
                     ))(item().thumbnailUrl!)
                 ) : (
                     <span
-                        className="happy2-media-gallery__glyph"
+                        className="happy-media-gallery__glyph"
                         data-happy-desktop-ui="media-glyph"
                     >
                         <Icon name={glyphIcons[item().kind]} size={20} />
@@ -69,7 +69,7 @@ function MediaTile(props: { item: MediaItem; onOpen?: (id: string) => void }) {
                 {kindLabel()
                     ? ((label) => (
                           <span
-                              className="happy2-media-gallery__kind"
+                              className="happy-media-gallery__kind"
                               data-happy-desktop-ui="media-kind"
                           >
                               <Badge label={label} variant="neutral" />
@@ -79,7 +79,7 @@ function MediaTile(props: { item: MediaItem; onOpen?: (id: string) => void }) {
                 {item().duration
                     ? ((duration) => (
                           <span
-                              className="happy2-media-gallery__duration"
+                              className="happy-media-gallery__duration"
                               data-happy-desktop-ui="media-duration"
                           >
                               {duration}
@@ -88,11 +88,11 @@ function MediaTile(props: { item: MediaItem; onOpen?: (id: string) => void }) {
                     : null}
             </span>
             {hasFooter() ? (
-                <span className="happy2-media-gallery__footer" data-happy-desktop-ui="media-footer">
+                <span className="happy-media-gallery__footer" data-happy-desktop-ui="media-footer">
                     {item().name
                         ? ((name) => (
                               <span
-                                  className="happy2-media-gallery__name"
+                                  className="happy-media-gallery__name"
                                   data-happy-desktop-ui="media-name"
                               >
                                   {name}
@@ -102,7 +102,7 @@ function MediaTile(props: { item: MediaItem; onOpen?: (id: string) => void }) {
                     {item().size
                         ? ((size) => (
                               <span
-                                  className="happy2-media-gallery__size"
+                                  className="happy-media-gallery__size"
                                   data-happy-desktop-ui="media-size"
                               >
                                   {size}
@@ -135,7 +135,7 @@ export function MediaGallery(props: MediaGalleryProps) {
     const isEmpty = () => local.items.length === 0 && local.empty !== undefined;
     return (
         <div
-            className={["happy2-media-gallery", local.className].filter(Boolean).join(" ")}
+            className={["happy-media-gallery", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="media-gallery"
             data-testid={local["data-testid"]}
             style={{
@@ -148,7 +148,7 @@ export function MediaGallery(props: MediaGalleryProps) {
                     <MediaTile key={item.id} item={item} onOpen={local.onOpen} />
                 ))
             ) : (
-                <div className="happy2-media-gallery__empty" data-happy-desktop-ui="media-empty">
+                <div className="happy-media-gallery__empty" data-happy-desktop-ui="media-empty">
                     {local.empty}
                 </div>
             )}

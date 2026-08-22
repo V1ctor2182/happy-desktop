@@ -18,7 +18,7 @@ const sizeSpecs = {
 } as const satisfies Record<TextFieldSize, unknown>;
 
 const GAP = 8;
-const FONT_FAMILY = "happy2 Figtree, system-ui, sans-serif";
+const FONT_FAMILY = "happy Figtree, system-ui, sans-serif";
 
 const sizes = ["small", "medium", "large"] as const;
 

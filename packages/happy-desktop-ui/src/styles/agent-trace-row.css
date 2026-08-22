@@ -9,12 +9,12 @@
  * hover is a flat fill so screenshots stay deterministic.
  */
 
-.happy2-agent-trace-row,
-.happy2-agent-trace-row * {
+.happy-agent-trace-row,
+.happy-agent-trace-row * {
     box-sizing: border-box;
 }
 
-.happy2-agent-trace-row {
+.happy-agent-trace-row {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -23,9 +23,9 @@
     margin: 0;
     padding: 0 8px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     color: var(--text);
     text-align: left;
@@ -33,39 +33,39 @@
     cursor: pointer;
 }
 
-.happy2-agent-trace-row:hover {
+.happy-agent-trace-row:hover {
     background: var(--surface-ripple);
 }
 
-.happy2-agent-trace-row:focus-visible {
+.happy-agent-trace-row:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
 
-.happy2-agent-trace-row__dot {
+.happy-agent-trace-row__dot {
     flex: none;
     width: 5px;
     height: 5px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--text-link);
 }
 
-.happy2-agent-trace-row[data-status="complete"] .happy2-agent-trace-row__dot {
+.happy-agent-trace-row[data-status="complete"] .happy-agent-trace-row__dot {
     background: var(--success);
 }
 
-.happy2-agent-trace-row[data-status="failed"] .happy2-agent-trace-row__dot {
+.happy-agent-trace-row[data-status="failed"] .happy-agent-trace-row__dot {
     background: var(--text-destructive);
 }
 
-.happy2-agent-trace-row__icon {
+.happy-agent-trace-row__icon {
     display: flex;
     flex: none;
     align-items: center;
     color: var(--text-secondary);
 }
 
-.happy2-agent-trace-row__title {
+.happy-agent-trace-row__title {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -77,14 +77,14 @@
 }
 
 /* The settled row reads as a link to the trace panel. */
-.happy2-agent-trace-row[data-status="complete"] .happy2-agent-trace-row__title,
-.happy2-agent-trace-row[data-status="failed"] .happy2-agent-trace-row__title {
+.happy-agent-trace-row[data-status="complete"] .happy-agent-trace-row__title,
+.happy-agent-trace-row[data-status="failed"] .happy-agent-trace-row__title {
     color: var(--text-link);
 }
 
 /* A trace link in a message header follows the timestamp's quiet mono style;
  * the surrounding Message metadata controls its hover visibility. */
-.happy2-agent-trace-row[data-variant="meta"] {
+.happy-agent-trace-row[data-variant="meta"] {
     gap: 6px;
     width: auto;
     height: 16px;
@@ -92,17 +92,17 @@
     border: 0;
     border-radius: 0;
     background: transparent;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
 }
 
-.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__dot,
-.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__icon,
-.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__detail,
-.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__count {
+.happy-agent-trace-row[data-variant="meta"] .happy-agent-trace-row__dot,
+.happy-agent-trace-row[data-variant="meta"] .happy-agent-trace-row__icon,
+.happy-agent-trace-row[data-variant="meta"] .happy-agent-trace-row__detail,
+.happy-agent-trace-row[data-variant="meta"] .happy-agent-trace-row__count {
     display: none;
 }
 
-.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__meta-stats {
+.happy-agent-trace-row[data-variant="meta"] .happy-agent-trace-row__meta-stats {
     display: flex;
     flex: none;
     align-items: center;
@@ -114,19 +114,19 @@
     color: var(--text-secondary);
 }
 
-.happy2-agent-trace-row__meta-separator {
+.happy-agent-trace-row__meta-separator {
     display: block;
     flex: none;
     align-self: center;
     width: 2px;
     height: 2px;
-    border-radius: var(--happy2-radius-pill);
+    border-radius: var(--happy-radius-pill);
     background: var(--input-placeholder);
 }
 
-.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__title,
-.happy2-agent-trace-row[data-variant="meta"][data-status="complete"] .happy2-agent-trace-row__title,
-.happy2-agent-trace-row[data-variant="meta"][data-status="failed"] .happy2-agent-trace-row__title {
+.happy-agent-trace-row[data-variant="meta"] .happy-agent-trace-row__title,
+.happy-agent-trace-row[data-variant="meta"][data-status="complete"] .happy-agent-trace-row__title,
+.happy-agent-trace-row[data-variant="meta"][data-status="failed"] .happy-agent-trace-row__title {
     color: var(--text-secondary);
     font-family: inherit;
     font-size: 11px;
@@ -134,24 +134,24 @@
     line-height: 16px;
 }
 
-.happy2-agent-trace-row__detail {
+.happy-agent-trace-row__detail {
     /* Zero flex basis: the detail absorbs only the leftover space, so the
      * title keeps its natural width and the detail truncates first. */
     flex: 1 1 0%;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 16px;
     color: var(--text-secondary);
 }
 
-.happy2-agent-trace-row__count {
+.happy-agent-trace-row__count {
     flex: none;
     margin-inline-start: auto;
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 16px;

@@ -82,7 +82,7 @@ export function ShimmerText(props: ShimmerTextProps) {
     };
     return (
         <span
-            className={["happy2-shimmer-text", local.className].filter(Boolean).join(" ")}
+            className={["happy-shimmer-text", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui={local["data-happy-desktop-ui"] ?? "shimmer-text"}
             data-paused={paused() ? "" : undefined}
             data-sweep={local.sweep ?? "lift"}
@@ -93,8 +93,8 @@ export function ShimmerText(props: ShimmerTextProps) {
                     ...local.style,
                     ...(local.durationMs === undefined
                         ? {}
-                        : { "--happy2-shimmer-duration": `${local.durationMs}ms` }),
-                    ...(paused() ? { "--happy2-shimmer-offset": `${offset()}` } : {}),
+                        : { "--happy-shimmer-duration": `${local.durationMs}ms` }),
+                    ...(paused() ? { "--happy-shimmer-offset": `${offset()}` } : {}),
                 } as CSSProperties
             }
         >

@@ -14,7 +14,7 @@ export function ComposerAttachmentRemoveButton(props: ComposerAttachmentRemoveBu
     return (
         <button
             aria-label={`Remove ${props.name}`}
-            className="happy2-composer-attachment-remove"
+            className="happy-composer-attachment-remove"
             data-happy-desktop-ui="composer-attachment-remove"
             onClick={props.onRemove}
             type="button"

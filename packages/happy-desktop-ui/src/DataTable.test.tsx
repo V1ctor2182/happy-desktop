@@ -90,8 +90,8 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
 
     const fontFamily =
         engine() === "webkit"
-            ? "happy2 Figtree, system-ui, sans-serif"
-            : '"happy2 Figtree", system-ui, sans-serif';
+            ? "happy Figtree, system-ui, sans-serif"
+            : '"happy Figtree", system-ui, sans-serif';
 
     // Root container contract: dark surface card with a hairline border + card radius.
     const root = view.$('[data-happy-desktop-ui="data-table"]');
@@ -172,7 +172,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
     );
     expect(nameLabel.textMetrics()).toMatchObject({
         font: {
-            family: "happy2 Figtree, system-ui, sans-serif",
+            family: "happy Figtree, system-ui, sans-serif",
             letterSpacing: 0.72,
             lineHeight: 16,
             size: 12,
@@ -249,7 +249,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
 
     // Selection column: 44px, checkbox 18px box centered (center-alignment case).
     const selectTd = view.$(
-        '[data-happy-desktop-ui="data-table-body"] .happy2-data-table__td--select',
+        '[data-happy-desktop-ui="data-table-body"] .happy-data-table__td--select',
     );
     expect(selectTd.bounds().width, "select column width").toBe(44);
     const checkBox = view.$(
@@ -296,7 +296,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
         "rgb(0, 122, 255)",
     );
     const bar = view.$(
-        '[data-happy-desktop-ui="data-table-select-all"] .happy2-data-table__check-bar',
+        '[data-happy-desktop-ui="data-table-select-all"] .happy-data-table__check-bar',
     );
     expect(bar.bounds().width, "indeterminate bar width").toBe(8);
     expect(bar.bounds().height, "indeterminate bar height").toBe(2);

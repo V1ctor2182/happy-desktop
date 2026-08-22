@@ -16,7 +16,7 @@
  * artwork brings its own margin. Everything below the title is unchanged.
  */
 
-.happy2-empty-state {
+.happy-empty-state {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -24,18 +24,18 @@
     justify-content: center;
     margin: 0;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: center;
 }
 
-.happy2-empty-state[data-size="panel"] {
+.happy-empty-state[data-size="panel"] {
     width: 100%;
     height: 100%;
     padding: 40px 32px;
 }
 
-.happy2-empty-state[data-size="inline"] {
+.happy-empty-state[data-size="inline"] {
     padding: 24px;
 }
 
@@ -44,7 +44,7 @@
  * optically centered (the glyph is already balanced by its own path data; the
  * medallion only needs an integer-inset box to keep it that way).
  */
-.happy2-empty-state__media {
+.happy-empty-state__media {
     display: flex;
     flex: none;
     align-items: center;
@@ -52,16 +52,16 @@
     box-sizing: border-box;
     background: var(--input-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     color: var(--text-secondary);
 }
 
-.happy2-empty-state[data-size="panel"] .happy2-empty-state__media {
+.happy-empty-state[data-size="panel"] .happy-empty-state__media {
     width: 48px;
     height: 48px;
 }
 
-.happy2-empty-state[data-size="inline"] .happy2-empty-state__media {
+.happy-empty-state[data-size="inline"] .happy-empty-state__media {
     width: 40px;
     height: 40px;
 }
@@ -78,7 +78,7 @@
  * express here: both children occupy the same box instead of sitting beside
  * each other.
  */
-.happy2-empty-state__scene {
+.happy-empty-state__scene {
     position: relative;
     display: flex;
     flex: none;
@@ -88,17 +88,17 @@
     color: var(--text-secondary);
 }
 
-.happy2-empty-state[data-size="panel"] .happy2-empty-state__scene {
+.happy-empty-state[data-size="panel"] .happy-empty-state__scene {
     width: 128px;
     height: 128px;
 }
 
-.happy2-empty-state[data-size="inline"] .happy2-empty-state__scene {
+.happy-empty-state[data-size="inline"] .happy-empty-state__scene {
     width: 96px;
     height: 96px;
 }
 
-.happy2-empty-state__art {
+.happy-empty-state__art {
     /* The canvas and the placeholder glyph occupy one box and cross-fade there;
        flexbox can only place them side by side. */
     position: absolute;
@@ -109,13 +109,13 @@
     transition: opacity 160ms ease-out;
 }
 
-.happy2-empty-state__art[data-painted="true"] {
+.happy-empty-state__art[data-painted="true"] {
     opacity: 1;
 }
 
 /* The glyph steps aside once the artwork is really painting, rather than
    showing through it. */
-.happy2-empty-state__scene:has(.happy2-empty-state__art[data-painted="true"]) .happy2-icon {
+.happy-empty-state__scene:has(.happy-empty-state__art[data-painted="true"]) .happy-icon {
     opacity: 0;
     transition: opacity 160ms ease-out;
 }
@@ -123,8 +123,8 @@
 /* Someone who asked for less movement gets no cross-fade either: the scene is a
    still frame, so it should simply be there. */
 @media (prefers-reduced-motion: reduce) {
-    .happy2-empty-state__art,
-    .happy2-empty-state__scene:has(.happy2-empty-state__art[data-painted="true"]) .happy2-icon {
+    .happy-empty-state__art,
+    .happy-empty-state__scene:has(.happy-empty-state__art[data-painted="true"]) .happy-icon {
         transition: none;
     }
 }
@@ -135,11 +135,11 @@
  * 40px would read as a hole above the title — and at the 720x480 Electron
  * minimum those 32px are the difference between fitting and being cut.
  */
-.happy2-empty-state[data-size="panel"][data-animated] {
+.happy-empty-state[data-size="panel"][data-animated] {
     padding: 24px 32px;
 }
 
-.happy2-empty-state__title {
+.happy-empty-state__title {
     max-width: 360px;
     margin: 16px 0 0;
     color: var(--text);
@@ -149,7 +149,7 @@
     letter-spacing: -0.01em;
 }
 
-.happy2-empty-state[data-size="inline"] .happy2-empty-state__title {
+.happy-empty-state[data-size="inline"] .happy-empty-state__title {
     margin-top: 12px;
     font-size: 14px;
     line-height: 18px;
@@ -158,15 +158,15 @@
 /* An animated region is mostly transparent margin at its edges, so the measured
    16/12 gap under a medallion reads as a hole under a scene. 8 and 6 put the
    optical distance back where the medallion rhythm had it. */
-.happy2-empty-state[data-size="panel"][data-animated] .happy2-empty-state__title {
+.happy-empty-state[data-size="panel"][data-animated] .happy-empty-state__title {
     margin-top: 8px;
 }
 
-.happy2-empty-state[data-size="inline"][data-animated] .happy2-empty-state__title {
+.happy-empty-state[data-size="inline"][data-animated] .happy-empty-state__title {
     margin-top: 6px;
 }
 
-.happy2-empty-state__description {
+.happy-empty-state__description {
     max-width: 320px;
     margin: 6px 0 0;
     color: var(--text-secondary);
@@ -175,18 +175,18 @@
     line-height: 18px;
 }
 
-.happy2-empty-state[data-size="inline"] .happy2-empty-state__description {
+.happy-empty-state[data-size="inline"] .happy-empty-state__description {
     max-width: 280px;
     margin-top: 4px;
 }
 
-.happy2-empty-state__actions {
+.happy-empty-state__actions {
     display: flex;
     flex: none;
     justify-content: center;
     margin: 20px 0 0;
 }
 
-.happy2-empty-state[data-size="inline"] .happy2-empty-state__actions {
+.happy-empty-state[data-size="inline"] .happy-empty-state__actions {
     margin-top: 16px;
 }

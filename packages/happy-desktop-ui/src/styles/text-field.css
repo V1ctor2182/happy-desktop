@@ -10,7 +10,7 @@
  * hint/error below. All geometry is integer on the 4px grid.
  */
 
-.happy2-text-field {
+.happy-text-field {
     display: inline-flex;
     flex-direction: column;
     gap: 6px;
@@ -19,26 +19,26 @@
     width: 240px;
     margin: 0;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-text-field * {
+.happy-text-field * {
     box-sizing: border-box;
 }
 
-.happy2-text-field[data-full-width] {
+.happy-text-field[data-full-width] {
     display: flex;
     width: 100%;
 }
 
-.happy2-text-field[data-disabled] {
+.happy-text-field[data-disabled] {
     opacity: 0.5;
 }
 
 /* ---- Label ------------------------------------------------------------- */
 
-.happy2-text-field__label {
+.happy-text-field__label {
     display: inline-flex;
     align-items: center;
     gap: 2px;
@@ -49,81 +49,81 @@
     letter-spacing: 0;
 }
 
-.happy2-text-field__required {
+.happy-text-field__required {
     color: var(--box-error-text);
 }
 
 /* ---- Control box ------------------------------------------------------- */
 
-.happy2-text-field__control {
+.happy-text-field__control {
     display: flex;
     align-items: center;
     width: 100%;
     margin: 0;
     background: var(--input-background);
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     transition: border-color 120ms ease;
 }
 
-.happy2-text-field__control[data-size="small"] {
+.happy-text-field__control[data-size="small"] {
     height: 28px;
     padding: 0 10px;
     column-gap: 8px;
 }
 
-.happy2-text-field__control[data-size="medium"] {
+.happy-text-field__control[data-size="medium"] {
     height: 36px;
     padding: 0 12px;
     column-gap: 8px;
 }
 
-.happy2-text-field__control[data-size="large"] {
+.happy-text-field__control[data-size="large"] {
     height: 44px;
     padding: 0 14px;
     column-gap: 8px;
 }
 
 /* Multiline: the box grows with the textarea, icon/text align to the top. */
-.happy2-text-field__control[data-multiline] {
+.happy-text-field__control[data-multiline] {
     height: auto;
     align-items: flex-start;
 }
 
-.happy2-text-field__control[data-multiline][data-size="small"] {
+.happy-text-field__control[data-multiline][data-size="small"] {
     padding: 8px 10px;
 }
 
-.happy2-text-field__control[data-multiline][data-size="medium"] {
+.happy-text-field__control[data-multiline][data-size="medium"] {
     padding: 8px 12px;
 }
 
-.happy2-text-field__control[data-multiline][data-size="large"] {
+.happy-text-field__control[data-multiline][data-size="large"] {
     padding: 8px 14px;
 }
 
-.happy2-text-field__control:focus-within {
+.happy-text-field__control:focus-within {
     border-color: var(--divider);
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
 
-.happy2-text-field__control[data-invalid] {
+.happy-text-field__control[data-invalid] {
     border-color: var(--box-error-border);
 }
 
 /* Invalid + focused keeps the danger identity in the ring. */
-.happy2-text-field__control[data-invalid]:focus-within {
+.happy-text-field__control[data-invalid]:focus-within {
     outline-color: var(--box-error-border);
 }
 
-.happy2-text-field[data-disabled] .happy2-text-field__control {
+.happy-text-field[data-disabled] .happy-text-field__control {
     cursor: not-allowed;
 }
 
 /* ---- Leading icon ------------------------------------------------------ */
 
-.happy2-text-field__icon {
+.happy-text-field__icon {
     display: flex;
     flex: none;
     color: var(--input-placeholder);
@@ -131,7 +131,7 @@
 
 /* ---- Input / textarea -------------------------------------------------- */
 
-.happy2-text-field__input {
+.happy-text-field__input {
     flex: 1 1 auto;
     min-width: 0;
     margin: 0;
@@ -142,26 +142,26 @@
     appearance: none;
     -webkit-appearance: none;
     color: var(--input-text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-weight: 500;
     letter-spacing: 0;
     font-synthesis: none;
     caret-color: var(--radio-active);
 }
 
-.happy2-text-field__input::placeholder {
+.happy-text-field__input::placeholder {
     color: var(--input-placeholder);
     opacity: 1;
 }
 
 /* Strip the native search decorations so geometry stays engine-agnostic. */
-.happy2-text-field__input::-webkit-search-decoration,
-.happy2-text-field__input::-webkit-search-cancel-button {
+.happy-text-field__input::-webkit-search-decoration,
+.happy-text-field__input::-webkit-search-cancel-button {
     appearance: none;
     -webkit-appearance: none;
 }
 
-.happy2-text-field[data-disabled] .happy2-text-field__input {
+.happy-text-field[data-disabled] .happy-text-field__input {
     cursor: not-allowed;
 }
 
@@ -169,31 +169,31 @@
  * Single-line lanes fill the inner box (height − 2px border) and set an equal
  * line box, so the text/caret centers on the control's optical midline.
  */
-.happy2-text-field__control[data-size="small"] input.happy2-text-field__input {
+.happy-text-field__control[data-size="small"] input.happy-text-field__input {
     height: 26px;
     font-size: 12px;
     line-height: 26px;
 }
 
-.happy2-text-field__control[data-size="medium"] input.happy2-text-field__input {
+.happy-text-field__control[data-size="medium"] input.happy-text-field__input {
     height: 34px;
     font-size: 13px;
     line-height: 34px;
 }
 
-.happy2-text-field__control[data-size="large"] input.happy2-text-field__input {
+.happy-text-field__control[data-size="large"] input.happy-text-field__input {
     height: 42px;
     font-size: 14px;
     line-height: 42px;
 }
 
 /* Multiline uses a real 20px reading line box; height is set inline from rows. */
-.happy2-text-field__textarea-scroll {
+.happy-text-field__textarea-scroll {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-textarea.happy2-text-field__input {
+textarea.happy-text-field__input {
     display: block;
     width: 100%;
     line-height: 20px;
@@ -201,31 +201,31 @@ textarea.happy2-text-field__input {
     overflow-y: auto;
 }
 
-.happy2-text-field__control[data-size="small"] textarea.happy2-text-field__input {
+.happy-text-field__control[data-size="small"] textarea.happy-text-field__input {
     font-size: 12px;
 }
 
-.happy2-text-field__control[data-size="medium"] textarea.happy2-text-field__input {
+.happy-text-field__control[data-size="medium"] textarea.happy-text-field__input {
     font-size: 13px;
 }
 
-.happy2-text-field__control[data-size="large"] textarea.happy2-text-field__input {
+.happy-text-field__control[data-size="large"] textarea.happy-text-field__input {
     font-size: 14px;
 }
 
 /* ---- Hint / error message ---------------------------------------------- */
 
-.happy2-text-field__message {
+.happy-text-field__message {
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;
     letter-spacing: 0;
 }
 
-.happy2-text-field__message[data-tone="hint"] {
+.happy-text-field__message[data-tone="hint"] {
     color: var(--text-secondary);
 }
 
-.happy2-text-field__message[data-tone="error"] {
+.happy-text-field__message[data-tone="error"] {
     color: var(--box-error-text);
 }

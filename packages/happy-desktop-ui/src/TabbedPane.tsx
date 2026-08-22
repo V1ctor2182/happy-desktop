@@ -82,26 +82,26 @@ export function TabbedPane(props: TabbedPaneProps) {
     return (
         <div
             {...rest}
-            className={["happy2-tabbed-pane", local.className].filter(Boolean).join(" ")}
+            className={["happy-tabbed-pane", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="tabbed-pane"
             data-size={local.size ?? "small"}
             style={local.style}
         >
-            <div className="happy2-tabbed-pane__bar" data-happy-desktop-ui="tabbed-pane-bar">
+            <div className="happy-tabbed-pane__bar" data-happy-desktop-ui="tabbed-pane-bar">
                 <div
-                    className="happy2-tabbed-pane__scroller"
+                    className="happy-tabbed-pane__scroller"
                     data-happy-desktop-ui="tabbed-pane-scroller"
                 >
                     {/* The strip is only as wide as the tabs. The action follows
                         this shrinkable scrollport outside its clip, so it stays
                         beside short strips and reachable beside long ones. */}
                     <div
-                        className="happy2-tabbed-pane__strip"
+                        className="happy-tabbed-pane__strip"
                         data-happy-desktop-ui="tabbed-pane-strip"
                     >
                         <Tabs
                             activeId={local.activeId}
-                            className="happy2-tabbed-pane__tabs"
+                            className="happy-tabbed-pane__tabs"
                             closeLabel={local.closeLabel}
                             closeShortcut={local.closeShortcut}
                             onClose={local.onClose}
@@ -120,14 +120,14 @@ export function TabbedPane(props: TabbedPaneProps) {
                 </div>
                 {local.actions ? (
                     <div
-                        className="happy2-tabbed-pane__actions"
+                        className="happy-tabbed-pane__actions"
                         data-happy-desktop-ui="tabbed-pane-actions"
                     >
                         {local.actions}
                     </div>
                 ) : null}
             </div>
-            <div className="happy2-tabbed-pane__body" data-happy-desktop-ui="tabbed-pane-body">
+            <div className="happy-tabbed-pane__body" data-happy-desktop-ui="tabbed-pane-body">
                 {local.children}
             </div>
         </div>

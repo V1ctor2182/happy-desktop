@@ -30,7 +30,7 @@ it("follows Happy's light and dark system palettes through shared component toke
     await view.ready();
 
     for (const theme of ["light", "dark"] as const) {
-        const scope = view.$(`[data-happy-desktop-ui="theme-scope"].happy2-theme-${theme}`);
+        const scope = view.$(`[data-happy-desktop-ui="theme-scope"].happy-theme-${theme}`);
         expect(scope.computedStyle("display")).toBe("contents");
     }
 
@@ -68,7 +68,7 @@ it("exposes Happy's direct light and dark color roles without a derived base pal
         .render(() => shell("dark"), { height: 800, width: 1280 });
     await view.ready();
 
-    const light = view.$('[data-happy-desktop-ui="theme-scope"].happy2-theme-light');
+    const light = view.$('[data-happy-desktop-ui="theme-scope"].happy-theme-light');
     expect(light.computedStyle("--text")).toBe("#000000");
     expect(light.computedStyle("--text-link")).toBe("#2baccc");
     expect(light.computedStyle("--surface")).toBe("#ffffff");
@@ -79,7 +79,7 @@ it("exposes Happy's direct light and dark color roles without a derived base pal
     expect(light.computedStyle("--button-primary-background")).toBe("#000000");
     expect(light.computedStyle("--user-message-background")).toBe("#f0eee6");
 
-    const dark = view.$('[data-happy-desktop-ui="theme-scope"].happy2-theme-dark');
+    const dark = view.$('[data-happy-desktop-ui="theme-scope"].happy-theme-dark');
     expect(dark.computedStyle("--text")).toBe("#ffffff");
     expect(dark.computedStyle("--text-link")).toBe("#2baccc");
     expect(dark.computedStyle("--surface")).toBe("#212121");

@@ -29,10 +29,10 @@ function frame(children: ReactNode, height = 560) {
     );
 }
 
-const happy2 = {
+const happy = {
     contents: { sessions: 7, worktrees: 2 },
-    location: { displayPath: "~/Developer/happy2", path: "/Users/steve/Developer/happy2" },
-    name: "happy2",
+    location: { displayPath: "~/Developer/happy", path: "/Users/steve/Developer/happy" },
+    name: "happy",
 } as const;
 
 /** The host has answered and the project states nothing: the machine decides. */
@@ -58,8 +58,8 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
-                        draft="happy2"
+                        {...happy}
+                        draft="happy"
                         onClose={() => {}}
                         onDraftChange={() => {}}
                         onSubmit={() => {}}
@@ -70,7 +70,7 @@ export function HappyAgentProjectSettingsDialogPage() {
             <Specimen detail="draft edited · commit enabled" label="Edited" number="02" stage="app">
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         draft="Happy Desktop"
                         onClose={() => {}}
                         onDraftChange={() => {}}
@@ -86,7 +86,7 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         draft="Happy Desktop"
                         onClose={() => {}}
                         onDraftChange={() => {}}
@@ -125,9 +125,9 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         archive={{}}
-                        draft="happy2"
+                        draft="happy"
                         onArchiveRequest={() => {}}
                         onClose={() => {}}
                         onDraftChange={() => {}}
@@ -144,9 +144,9 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         archive={{ confirming: true }}
-                        draft="happy2"
+                        draft="happy"
                         onArchiveCancel={() => {}}
                         onArchiveConfirm={() => {}}
                         onClose={() => {}}
@@ -164,9 +164,9 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         archive={{ confirming: true, submitting: true }}
-                        draft="happy2"
+                        draft="happy"
                         onArchiveCancel={() => {}}
                         onArchiveConfirm={() => {}}
                         onClose={() => {}}
@@ -184,12 +184,12 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         archive={{
                             confirming: true,
                             error: "The project changed before it could be archived.",
                         }}
-                        draft="happy2"
+                        draft="happy"
                         onArchiveCancel={() => {}}
                         onArchiveConfirm={() => {}}
                         onClose={() => {}}
@@ -207,8 +207,8 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        draft="happy2"
-                        name="happy2"
+                        draft="happy"
+                        name="happy"
                         onClose={() => {}}
                         onDraftChange={() => {}}
                         onSubmit={() => {}}
@@ -224,8 +224,8 @@ export function HappyAgentProjectSettingsDialogPage() {
                 {frame(
                     <HappyAgentProjectSettingsDialog
                         archive={{ confirming: true, submitting: true }}
-                        draft="happy2"
-                        name="happy2"
+                        draft="happy"
+                        name="happy"
                         onArchiveCancel={() => {}}
                         onArchiveConfirm={() => {}}
                         onClose={() => {}}
@@ -243,9 +243,9 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={computeDefault}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -265,9 +265,9 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={{ status: "loading", mode: "default", image: "" }}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -286,14 +286,14 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={{
                             status: "ready",
                             current: { type: "local" },
                             mode: "local",
                             image: "",
                         }}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -312,14 +312,14 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={{
                             status: "ready",
                             current: { type: "local" },
                             mode: "docker",
                             image: "node:22-bookworm",
                         }}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -338,7 +338,7 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={{
                             status: "ready",
                             current: {
@@ -348,7 +348,7 @@ export function HappyAgentProjectSettingsDialogPage() {
                             mode: "docker",
                             image: "europe-west4-docker.pkg.dev/happy-engineering/agents/happy-agent-toolchain-ubuntu-24-04:2026-08-02",
                         }}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -367,7 +367,7 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={{
                             status: "ready",
                             current: { type: "local" },
@@ -375,7 +375,7 @@ export function HappyAgentProjectSettingsDialogPage() {
                             image: "node:22-bookworm",
                             submitting: true,
                         }}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -394,7 +394,7 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={{
                             status: "ready",
                             current: { type: "local" },
@@ -402,7 +402,7 @@ export function HappyAgentProjectSettingsDialogPage() {
                             mode: "docker",
                             image: "node:22-bookworm",
                         }}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -421,14 +421,14 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         compute={{
                             status: "error",
                             mode: "default",
                             image: "",
                             readError: "The Happy Agent on this machine could not be reached.",
                         }}
-                        draft="happy2"
+                        draft="happy"
                         onClose={() => {}}
                         onComputeImageChange={() => {}}
                         onComputeModeChange={() => {}}
@@ -445,17 +445,17 @@ export function HappyAgentProjectSettingsDialogPage() {
                 number="19"
                 stage="app"
             >
-                <div className="happy2-theme-dark" style={{ display: "flex" }}>
+                <div className="happy-theme-dark" style={{ display: "flex" }}>
                     {frame(
                         <HappyAgentProjectSettingsDialog
-                            {...happy2}
+                            {...happy}
                             compute={{
                                 status: "ready",
                                 current: { type: "local" },
                                 mode: "docker",
                                 image: "node:22-bookworm",
                             }}
-                            draft="happy2"
+                            draft="happy"
                             onClose={() => {}}
                             onComputeImageChange={() => {}}
                             onComputeModeChange={() => {}}
@@ -473,17 +473,17 @@ export function HappyAgentProjectSettingsDialogPage() {
                 number="20"
                 stage="app"
             >
-                <div className="happy2-theme-light" style={{ display: "flex" }}>
+                <div className="happy-theme-light" style={{ display: "flex" }}>
                     {frame(
                         <HappyAgentProjectSettingsDialog
-                            {...happy2}
+                            {...happy}
                             compute={{
                                 status: "ready",
                                 current: { type: "local" },
                                 mode: "docker",
                                 image: "node:22-bookworm",
                             }}
-                            draft="happy2"
+                            draft="happy"
                             onClose={() => {}}
                             onComputeImageChange={() => {}}
                             onComputeModeChange={() => {}}
@@ -503,7 +503,7 @@ export function HappyAgentProjectSettingsDialogPage() {
             >
                 {frame(
                     <HappyAgentProjectSettingsDialog
-                        {...happy2}
+                        {...happy}
                         archive={{}}
                         compute={{
                             status: "ready",

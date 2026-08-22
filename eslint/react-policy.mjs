@@ -1,5 +1,5 @@
-const LAYOUT_EFFECT_RULE = "happy2-react/no-layout-effect";
-const LOCAL_STATE_RULE = "happy2-react/no-local-state";
+const LAYOUT_EFFECT_RULE = "happy-react/no-layout-effect";
+const LOCAL_STATE_RULE = "happy-react/no-local-state";
 const MINIMUM_REASON_LENGTH = 12;
 
 /**
@@ -9,7 +9,7 @@ const MINIMUM_REASON_LENGTH = 12;
  * express the behavior declaratively (render-time derivation, an event handler, a
  * ref callback, or a `happy-desktop-state` action). A genuine imperative measurement in a
  * reusable `happy-desktop-ui` primitive may keep it behind one documented, local
- * `eslint-disable-next-line happy2-react/no-layout-effect -- <concrete reason>`.
+ * `eslint-disable-next-line happy-react/no-layout-effect -- <concrete reason>`.
  */
 const noLayoutEffect = {
     meta: {
@@ -19,7 +19,7 @@ const noLayoutEffect = {
                 "Ban useLayoutEffect; it is an imperative DOM boundary that makes a surface un-mockable.",
         },
         messages: {
-            banned: "useLayoutEffect is an imperative DOM boundary and is banned. Drive the surface from happy-desktop-state (render derivation, event handler, or ref callback). A true imperative measurement in a happy-desktop-ui primitive may keep one `eslint-disable-next-line happy2-react/no-layout-effect -- <concrete reason>`.",
+            banned: "useLayoutEffect is an imperative DOM boundary and is banned. Drive the surface from happy-desktop-state (render derivation, event handler, or ref callback). A true imperative measurement in a happy-desktop-ui primitive may keep one `eslint-disable-next-line happy-react/no-layout-effect -- <concrete reason>`.",
         },
         schema: [],
     },
@@ -143,7 +143,7 @@ const requireReactExceptionReason = {
 };
 
 export default {
-    meta: { name: "eslint-plugin-happy2-react", version: "0.1.0" },
+    meta: { name: "eslint-plugin-happy-react", version: "0.1.0" },
     rules: {
         "no-layout-effect": noLayoutEffect,
         "no-local-state": noLocalState,

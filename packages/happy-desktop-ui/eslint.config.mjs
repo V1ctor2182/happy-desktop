@@ -11,7 +11,7 @@ import reactPolicy from "../../eslint/react-policy.mjs";
 import themePolicy from "../../eslint/theme-policy.mjs";
 
 const common = {
-    plugins: { "happy2-layout": layoutPolicy, "happy2-react": reactPolicy },
+    plugins: { "happy-layout": layoutPolicy, "happy-react": reactPolicy },
     extends: [
         js.configs.recommended,
         react.configs.flat.recommended,
@@ -47,14 +47,14 @@ const common = {
         ],
         "react/prop-types": "off",
         "react-hooks/exhaustive-deps": "error",
-        "happy2-react/no-layout-effect": "error",
-        "happy2-react/require-react-exception-reason": "error",
+        "happy-react/no-layout-effect": "error",
+        "happy-react/require-react-exception-reason": "error",
         "jsx-a11y/no-autofocus": "off",
         "jsx-a11y/no-noninteractive-element-interactions": "off",
         "jsx-a11y/no-static-element-interactions": "off",
-        "happy2-layout/require-layout-exception-reason": "error",
-        "happy2-layout/scrollport-no-spacing": "error",
-        "happy2-layout/use-flex-layout": "error",
+        "happy-layout/require-layout-exception-reason": "error",
+        "happy-layout/scrollport-no-spacing": "error",
+        "happy-layout/use-flex-layout": "error",
     },
 };
 
@@ -85,14 +85,14 @@ export default defineConfig(
         files: ["src/**/*.css"],
         language: "css/css",
         languageOptions: { tolerant: true },
-        plugins: { css, "happy2-layout": layoutPolicy, "happy2-theme": themePolicy },
+        plugins: { css, "happy-layout": layoutPolicy, "happy-theme": themePolicy },
         rules: {
-            "happy2-layout/require-layout-exception-reason": "error",
-            "happy2-layout/scrollport-no-spacing": "error",
-            "happy2-layout/use-flex-layout": "error",
-            "happy2-theme/no-direct-color": "error",
-            "happy2-theme/theme-color-variables-only": "error",
-            "happy2-theme/theme-color-variable-references-only": "error",
+            "happy-layout/require-layout-exception-reason": "error",
+            "happy-layout/scrollport-no-spacing": "error",
+            "happy-layout/use-flex-layout": "error",
+            "happy-theme/no-direct-color": "error",
+            "happy-theme/theme-color-variables-only": "error",
+            "happy-theme/theme-color-variable-references-only": "error",
         },
     },
     {
@@ -104,25 +104,25 @@ export default defineConfig(
         files: ["dev/**/*.css"],
         language: "css/css",
         languageOptions: { tolerant: true },
-        plugins: { css, "happy2-layout": layoutPolicy, "happy2-theme": themePolicy },
+        plugins: { css, "happy-layout": layoutPolicy, "happy-theme": themePolicy },
         rules: {
-            "happy2-layout/require-layout-exception-reason": "error",
-            "happy2-layout/scrollport-no-spacing": "error",
-            "happy2-layout/use-flex-layout": "error",
-            "happy2-theme/no-direct-color": "error",
-            "happy2-theme/theme-color-variables-only": "error",
+            "happy-layout/require-layout-exception-reason": "error",
+            "happy-layout/scrollport-no-spacing": "error",
+            "happy-layout/use-flex-layout": "error",
+            "happy-theme/no-direct-color": "error",
+            "happy-theme/theme-color-variables-only": "error",
         },
     },
     {
         files: ["**/*.test.tsx"],
         rules: {
-            "happy2-layout/use-flex-layout": "off",
+            "happy-layout/use-flex-layout": "off",
             "react-hooks/globals": "off",
             "react/no-children-prop": "off",
         },
     },
     {
         files: ["dev/**/*.{ts,tsx}"],
-        rules: { "happy2-layout/use-flex-layout": "off" },
+        rules: { "happy-layout/use-flex-layout": "off" },
     },
 );

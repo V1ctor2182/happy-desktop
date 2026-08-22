@@ -6,7 +6,7 @@
  * rather than a rail of repeated icons.
  */
 
-.happy2-copy-button {
+.happy-copy-button {
     display: flex;
     flex: none;
     align-items: center;
@@ -16,7 +16,7 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--happy2-radius-sm);
+    border-radius: var(--happy-radius-sm);
     background: transparent;
     color: var(--text-secondary);
     appearance: none;
@@ -25,18 +25,18 @@
     transition: opacity 100ms ease;
 }
 
-.happy2-copy-button:hover {
+.happy-copy-button:hover {
     background: var(--surface-pressed);
     color: var(--text);
 }
 
-.happy2-copy-button:focus-visible {
+.happy-copy-button:focus-visible {
     opacity: 1;
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }
 
-.happy2-copy-button[data-copied] {
+.happy-copy-button[data-copied] {
     opacity: 1;
     color: var(--success);
 }

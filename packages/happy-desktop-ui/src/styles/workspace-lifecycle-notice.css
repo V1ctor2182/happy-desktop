@@ -15,23 +15,23 @@
  * than an error in the reader's own sentence. Every value is a theme token.
  */
 
-.happy2-workspace-lifecycle,
-.happy2-workspace-lifecycle * {
+.happy-workspace-lifecycle,
+.happy-workspace-lifecycle * {
     box-sizing: border-box;
 }
 
-.happy2-workspace-lifecycle {
+.happy-workspace-lifecycle {
     display: flex;
     margin: 0;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
     text-align: left;
 }
 
 /* ---- Panel: fills the content region it is given ------------------------- */
 
-.happy2-workspace-lifecycle[data-size="panel"] {
+.happy-workspace-lifecycle[data-size="panel"] {
     flex: 1 1 auto;
     align-items: center;
     justify-content: center;
@@ -41,83 +41,83 @@
     padding: 40px 32px;
 }
 
-.happy2-workspace-lifecycle[data-size="panel"] .happy2-workspace-lifecycle__media {
+.happy-workspace-lifecycle[data-size="panel"] .happy-workspace-lifecycle__media {
     width: 40px;
     height: 40px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--input-background);
 }
 
-.happy2-workspace-lifecycle[data-size="panel"] .happy2-workspace-lifecycle__content {
+.happy-workspace-lifecycle[data-size="panel"] .happy-workspace-lifecycle__content {
     max-width: 420px;
 }
 
-.happy2-workspace-lifecycle[data-size="panel"] .happy2-workspace-lifecycle__title {
+.happy-workspace-lifecycle[data-size="panel"] .happy-workspace-lifecycle__title {
     font-size: 15px;
     line-height: 20px;
 }
 
 /* ---- Compact: one content-sized strip ------------------------------------ */
 
-.happy2-workspace-lifecycle[data-size="compact"] {
+.happy-workspace-lifecycle[data-size="compact"] {
     flex: none;
     align-items: flex-start;
     gap: 10px;
     padding: 10px 12px;
     border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border-radius: var(--happy-radius-md);
     background: var(--surface-high);
 }
 
-.happy2-workspace-lifecycle[data-size="compact"] .happy2-workspace-lifecycle__media {
+.happy-workspace-lifecycle[data-size="compact"] .happy-workspace-lifecycle__media {
     width: 18px;
     height: 18px;
 }
 
-.happy2-workspace-lifecycle[data-size="compact"] .happy2-workspace-lifecycle__title {
+.happy-workspace-lifecycle[data-size="compact"] .happy-workspace-lifecycle__title {
     font-size: 13px;
     line-height: 18px;
 }
 
-.happy2-workspace-lifecycle[data-size="compact"] .happy2-workspace-lifecycle__content {
+.happy-workspace-lifecycle[data-size="compact"] .happy-workspace-lifecycle__content {
     gap: 4px;
 }
 
 /* ---- Tone ---------------------------------------------------------------- */
 
-.happy2-workspace-lifecycle[data-tone="progress"] .happy2-workspace-lifecycle__media {
+.happy-workspace-lifecycle[data-tone="progress"] .happy-workspace-lifecycle__media {
     color: var(--text-secondary);
 }
 
-.happy2-workspace-lifecycle[data-tone="danger"] .happy2-workspace-lifecycle__media {
+.happy-workspace-lifecycle[data-tone="danger"] .happy-workspace-lifecycle__media {
     color: var(--box-error-text);
 }
 
-.happy2-workspace-lifecycle[data-tone="warning"] .happy2-workspace-lifecycle__media {
+.happy-workspace-lifecycle[data-tone="warning"] .happy-workspace-lifecycle__media {
     color: var(--box-warning-text);
 }
 
-.happy2-workspace-lifecycle[data-size="compact"][data-tone="danger"] {
+.happy-workspace-lifecycle[data-size="compact"][data-tone="danger"] {
     border-color: var(--box-error-border);
     background: var(--box-error-background);
 }
 
-.happy2-workspace-lifecycle[data-size="compact"][data-tone="warning"] {
+.happy-workspace-lifecycle[data-size="compact"][data-tone="warning"] {
     border-color: var(--box-warning-border);
     background: var(--box-warning-background);
 }
 
 /* ---- Parts --------------------------------------------------------------- */
 
-.happy2-workspace-lifecycle__media {
+.happy-workspace-lifecycle__media {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
 }
 
-.happy2-workspace-lifecycle__content {
+.happy-workspace-lifecycle__content {
     display: flex;
     flex: 0 1 auto;
     flex-direction: column;
@@ -125,13 +125,13 @@
     min-width: 0;
 }
 
-.happy2-workspace-lifecycle__title {
+.happy-workspace-lifecycle__title {
     display: block;
     color: var(--text);
     font-weight: 600;
 }
 
-.happy2-workspace-lifecycle__body {
+.happy-workspace-lifecycle__body {
     display: block;
     color: var(--text-secondary);
     font-size: 13px;
@@ -145,22 +145,22 @@
  * line breaks: a git failure is often two lines and reads as neither without
  * them.
  */
-.happy2-workspace-lifecycle__detail {
+.happy-workspace-lifecycle__detail {
     display: block;
     overflow-wrap: anywhere;
     color: var(--text);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     font-weight: 400;
     line-height: 18px;
     white-space: pre-wrap;
 }
 
-.happy2-workspace-lifecycle__path {
+.happy-workspace-lifecycle__path {
     display: block;
     overflow-wrap: anywhere;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 400;
     line-height: 16px;
@@ -175,13 +175,13 @@
  * strip, transcript, and composer at the exact moment the reader needs them to
  * stay where they were. Empty, it takes no space and shows nothing.
  */
-.happy2-workspace-lifecycle-lane {
+.happy-workspace-lifecycle-lane {
     display: flex;
     flex: none;
     padding: 8px 12px 0;
 }
 
-.happy2-workspace-lifecycle-lane[data-empty] {
+.happy-workspace-lifecycle-lane[data-empty] {
     display: none;
 }
 
@@ -190,7 +190,7 @@
  * would let a long host reason run off the right edge instead of wrapping. Here
  * it takes the lane's width and wraps inside it.
  */
-.happy2-workspace-lifecycle-lane .happy2-workspace-lifecycle {
+.happy-workspace-lifecycle-lane .happy-workspace-lifecycle {
     flex: 1 1 auto;
     min-width: 0;
 }

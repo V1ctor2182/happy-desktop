@@ -3,7 +3,7 @@ import type {
     HappyAgentNavigationOrderPersistence,
 } from "happy-desktop-state";
 
-const NAVIGATION_ORDER_KEY = "happy2.sidebar-order.v1";
+const NAVIGATION_ORDER_KEY = "happy.sidebar-order.v1";
 
 /**
  * Where the order the reader arranged the sidebar's pinned rows in is kept on

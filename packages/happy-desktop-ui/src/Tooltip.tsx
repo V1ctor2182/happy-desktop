@@ -51,7 +51,7 @@ export function Tooltip(props: TooltipProps) {
     return (
         <span
             aria-describedby={bubbleId}
-            className={["happy2-tooltip", local.className].filter(Boolean).join(" ")}
+            className={["happy-tooltip", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="tooltip"
             data-open={local.open ? "" : undefined}
             data-testid={local["data-testid"]}
@@ -59,7 +59,7 @@ export function Tooltip(props: TooltipProps) {
         >
             {local.children}
             <span
-                className="happy2-tooltip__bubble"
+                className="happy-tooltip__bubble"
                 data-happy-desktop-ui="tooltip-bubble"
                 data-placement={local.placement ?? "top"}
                 id={bubbleId}

@@ -19,59 +19,59 @@
  */
 export const PIERRE_PANE_CSS = `
     [data-code] {
-        --happy2-scrollbar-color: var(--happy2-scrollbar-rest-color, transparent);
+        --happy-scrollbar-color: var(--happy-scrollbar-rest-color, transparent);
         padding-bottom: var(--diffs-gap-block, var(--diffs-gap-fallback));
         scrollbar-gutter: auto;
     }
     [data-code]:last-of-type [data-line],
     [data-code]:last-of-type [data-no-newline] {
-        padding-inline-end: var(--happy2-code-trailing-clearance, 1ch);
+        padding-inline-end: var(--happy-code-trailing-clearance, 1ch);
     }
     [data-code]:hover {
-        --happy2-scrollbar-color: var(--happy2-scrollbar-surface-color, transparent);
+        --happy-scrollbar-color: var(--happy-scrollbar-surface-color, transparent);
     }
     [data-code][data-scrollbar-active=""] {
-        --happy2-scrollbar-color: var(--happy2-scrollbar-active-color);
+        --happy-scrollbar-color: var(--happy-scrollbar-active-color);
         transition: none;
     }
     [data-code][data-scrollbar-active="idle"] {
-        --happy2-scrollbar-color: var(--happy2-scrollbar-rest-color, transparent);
-        transition: --happy2-scrollbar-color 480ms linear;
+        --happy-scrollbar-color: var(--happy-scrollbar-rest-color, transparent);
+        transition: --happy-scrollbar-color 480ms linear;
     }
     [data-code][data-scrollbar-hover],
     [data-code][data-scrollbar-dragging] {
-        --happy2-scrollbar-color: var(--happy2-scrollbar-interaction-color);
+        --happy-scrollbar-color: var(--happy-scrollbar-interaction-color);
     }
     @supports selector(::-webkit-scrollbar) {
         [data-code]::-webkit-scrollbar {
-            width: var(--happy2-scrollbar-track);
-            height: var(--happy2-scrollbar-track);
+            width: var(--happy-scrollbar-track);
+            height: var(--happy-scrollbar-track);
         }
         [data-code]::-webkit-scrollbar-track,
         [data-code]::-webkit-scrollbar-corner {
             background: transparent;
         }
         [data-code]::-webkit-scrollbar-thumb {
-            background: var(--happy2-scrollbar-color);
+            background: var(--happy-scrollbar-color);
             background-clip: padding-box;
             transition: background-color 480ms linear;
         }
         [data-code]::-webkit-scrollbar-thumb:hover,
         [data-code]::-webkit-scrollbar-thumb:active {
-            background: var(--happy2-scrollbar-interaction-color);
+            background: var(--happy-scrollbar-interaction-color);
         }
         [data-code]::-webkit-scrollbar-thumb:vertical {
-            border-right: var(--happy2-scrollbar-edge-inset) solid transparent;
-            border-radius: calc(var(--happy2-scrollbar-ink) / 2);
+            border-right: var(--happy-scrollbar-edge-inset) solid transparent;
+            border-radius: calc(var(--happy-scrollbar-ink) / 2);
         }
         [data-code]::-webkit-scrollbar-thumb:horizontal {
-            border-bottom: var(--happy2-scrollbar-edge-inset) solid transparent;
-            border-radius: calc(var(--happy2-scrollbar-ink) / 2);
+            border-bottom: var(--happy-scrollbar-edge-inset) solid transparent;
+            border-radius: calc(var(--happy-scrollbar-ink) / 2);
         }
     }
     @supports not selector(::-webkit-scrollbar) {
         [data-code] {
-            scrollbar-color: var(--happy2-scrollbar-color) transparent;
+            scrollbar-color: var(--happy-scrollbar-color) transparent;
             scrollbar-width: thin;
         }
     }

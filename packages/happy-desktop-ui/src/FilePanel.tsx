@@ -57,13 +57,13 @@ export function FilePanel(props: FilePanelProps) {
     ]);
     return (
         <section
-            className={["happy2-file-panel", local.className].filter(Boolean).join(" ")}
+            className={["happy-file-panel", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-panel"
             data-testid={local["data-testid"]}
             style={local.style}
         >
             <Toolbar
-                className="happy2-file-panel__header"
+                className="happy-file-panel__header"
                 height={SURFACE_HEADER_HEIGHT}
                 leading={<Icon name="files" size={16} />}
                 subtitle={local.subtitle}
@@ -82,18 +82,18 @@ export function FilePanel(props: FilePanelProps) {
                 }
             />
             {local.note ? (
-                <div className="happy2-file-panel__note" data-happy-desktop-ui="file-panel-note">
+                <div className="happy-file-panel__note" data-happy-desktop-ui="file-panel-note">
                     {local.note}
                 </div>
             ) : null}
             <ScrollArea
-                className="happy2-file-panel__body"
+                className="happy-file-panel__body"
                 data-happy-desktop-ui="file-panel-body"
                 data-scrollbar-rows=""
-                viewportClassName="happy2-file-panel__body-viewport"
+                viewportClassName="happy-file-panel__body-viewport"
             >
                 <div
-                    className="happy2-file-panel__body-content"
+                    className="happy-file-panel__body-content"
                     data-happy-desktop-ui="file-panel-body-content"
                 >
                     <FileTree

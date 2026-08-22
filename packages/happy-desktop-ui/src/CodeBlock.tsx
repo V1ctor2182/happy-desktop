@@ -84,7 +84,7 @@ export function CodeBlock(props: CodeBlockProps) {
             : undefined;
     return (
         <File
-            className={["happy2-code-block", props.className].filter(Boolean).join(" ")}
+            className={["happy-code-block", props.className].filter(Boolean).join(" ")}
             file={{
                 name: props.name ?? "snippet",
                 contents: props.text,

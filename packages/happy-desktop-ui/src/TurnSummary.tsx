@@ -95,7 +95,7 @@ export function TurnSummary(props: TurnSummaryProps) {
     };
     return (
         <div
-            className={["happy2-turn-summary", local.className].filter(Boolean).join(" ")}
+            className={["happy-turn-summary", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="turn-summary"
             data-status={local.status}
             data-testid={local["data-testid"]}
@@ -104,7 +104,7 @@ export function TurnSummary(props: TurnSummaryProps) {
             {local.status === "complete" && local.copyText !== undefined ? (
                 <button
                     aria-label={copied ? "Final message copied" : "Copy final message"}
-                    className="happy2-turn-summary__copy"
+                    className="happy-turn-summary__copy"
                     data-copied={copied ? "" : undefined}
                     data-happy-desktop-ui="turn-summary-copy"
                     onClick={() => void copy()}
@@ -113,9 +113,9 @@ export function TurnSummary(props: TurnSummaryProps) {
                     <Icon name={copied ? "check" : "copy"} size={16} />
                 </button>
             ) : null}
-            <Tooltip className="happy2-turn-summary__detail" label={detail} placement="top">
+            <Tooltip className="happy-turn-summary__detail" label={detail} placement="top">
                 <span
-                    className="happy2-turn-summary__label"
+                    className="happy-turn-summary__label"
                     data-happy-desktop-ui="turn-summary-label"
                 >
                     {label}
@@ -123,7 +123,7 @@ export function TurnSummary(props: TurnSummaryProps) {
             </Tooltip>
             {local.trailing ? (
                 <span
-                    className="happy2-turn-summary__trailing"
+                    className="happy-turn-summary__trailing"
                     data-happy-desktop-ui="turn-summary-trailing"
                 >
                     {local.trailing}

@@ -8,30 +8,30 @@
  * fields a reader quotes line up with the sentence they belong to.
  */
 
-.happy2-conversation-compute,
-.happy2-conversation-compute * {
+.happy-conversation-compute,
+.happy-conversation-compute * {
     box-sizing: border-box;
 }
 
-.happy2-conversation-compute {
+.happy-conversation-compute {
     display: flex;
     flex-direction: column;
     width: 100%;
     padding: 6px 96px 6px 30px;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* A turn whose first row is a compute event sits inside the Message that owns
    the agent identity line, and that Message already supplies the transcript
    inset. */
-.happy2-message--activity-lead .happy2-conversation-compute {
+.happy-message--activity-lead .happy-conversation-compute {
     padding-right: 0;
     padding-left: 0;
 }
 
-.happy2-conversation-compute__row {
+.happy-conversation-compute__row {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -39,7 +39,7 @@
     min-width: 0;
 }
 
-.happy2-conversation-compute__icon {
+.happy-conversation-compute__icon {
     display: flex;
     flex: none;
     align-items: center;
@@ -49,7 +49,7 @@
     color: var(--text-secondary);
 }
 
-.happy2-conversation-compute__label {
+.happy-conversation-compute__label {
     flex: none;
     color: var(--text-secondary);
     font-size: 14px;
@@ -57,7 +57,7 @@
     line-height: 20px;
 }
 
-.happy2-conversation-compute__message {
+.happy-conversation-compute__message {
     min-width: 0;
     flex: 1 1 auto;
     color: var(--text-secondary);
@@ -66,10 +66,10 @@
     line-height: 20px;
 }
 
-.happy2-conversation-compute__metric {
+.happy-conversation-compute__metric {
     flex: none;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     font-variant-numeric: tabular-nums lining-nums;
     line-height: 20px;
@@ -77,18 +77,18 @@
 
 /* Ready is the one state worth a colour of its own: it is the moment the wait
    the rows above it described actually ended. */
-.happy2-conversation-compute[data-tone="done"] .happy2-conversation-compute__icon,
-.happy2-conversation-compute[data-tone="done"] .happy2-conversation-compute__label {
+.happy-conversation-compute[data-tone="done"] .happy-conversation-compute__icon,
+.happy-conversation-compute[data-tone="done"] .happy-conversation-compute__label {
     color: color-mix(in srgb, var(--success) 38%, var(--text-secondary));
 }
 
-.happy2-conversation-compute[data-tone="error"] .happy2-conversation-compute__icon,
-.happy2-conversation-compute[data-tone="error"] .happy2-conversation-compute__label,
-.happy2-conversation-compute[data-tone="error"] .happy2-conversation-compute__message {
+.happy-conversation-compute[data-tone="error"] .happy-conversation-compute__icon,
+.happy-conversation-compute[data-tone="error"] .happy-conversation-compute__label,
+.happy-conversation-compute[data-tone="error"] .happy-conversation-compute__message {
     color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
 }
 
-.happy2-conversation-compute__toggle {
+.happy-conversation-compute__toggle {
     display: flex;
     flex: none;
     align-items: center;
@@ -107,22 +107,22 @@
     cursor: pointer;
 }
 
-.happy2-conversation-compute:hover .happy2-conversation-compute__toggle,
-.happy2-conversation-compute:focus-within .happy2-conversation-compute__toggle,
-.happy2-conversation-compute__toggle[aria-expanded="true"] {
+.happy-conversation-compute:hover .happy-conversation-compute__toggle,
+.happy-conversation-compute:focus-within .happy-conversation-compute__toggle,
+.happy-conversation-compute__toggle[aria-expanded="true"] {
     opacity: 1;
 }
 
-.happy2-conversation-compute__toggle:hover {
+.happy-conversation-compute__toggle:hover {
     background: var(--surface-pressed);
 }
 
-.happy2-conversation-compute:hover .happy2-copy-button,
-.happy2-conversation-compute:focus-within .happy2-copy-button {
+.happy-conversation-compute:hover .happy-copy-button,
+.happy-conversation-compute:focus-within .happy-copy-button {
     opacity: 1;
 }
 
-.happy2-conversation-compute__details {
+.happy-conversation-compute__details {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -130,24 +130,24 @@
     padding: 4px 0 0 20px;
 }
 
-.happy2-conversation-compute__detail {
+.happy-conversation-compute__detail {
     display: flex;
     align-items: baseline;
     gap: 6px;
     min-width: 0;
 }
 
-.happy2-conversation-compute__detail-label {
+.happy-conversation-compute__detail-label {
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 500;
     line-height: 18px;
 }
 
-.happy2-conversation-compute__detail-value {
+.happy-conversation-compute__detail-value {
     overflow-wrap: anywhere;
     color: var(--text-secondary);
-    font-family: var(--happy2-font-mono);
+    font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
 }

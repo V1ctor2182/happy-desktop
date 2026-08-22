@@ -8,7 +8,7 @@
  */
 
 @font-face {
-    font-family: "happy2 Ionicons";
+    font-family: "happy Ionicons";
     font-style: normal;
     font-weight: normal;
     font-display: block;
@@ -16,14 +16,14 @@
 }
 
 @font-face {
-    font-family: "happy2 Octicons";
+    font-family: "happy Octicons";
     font-style: normal;
     font-weight: normal;
     font-display: block;
     src: url("../assets/fonts/Octicons.ttf") format("truetype");
 }
 
-.happy2-vector-icon {
+.happy-vector-icon {
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
@@ -40,10 +40,10 @@
     user-select: none;
 }
 
-.happy2-vector-icon[data-set="ionicons"] {
-    font-family: "happy2 Ionicons";
+.happy-vector-icon[data-set="ionicons"] {
+    font-family: "happy Ionicons";
 }
 
-.happy2-vector-icon[data-set="octicons"] {
-    font-family: "happy2 Octicons";
+.happy-vector-icon[data-set="octicons"] {
+    font-family: "happy Octicons";
 }

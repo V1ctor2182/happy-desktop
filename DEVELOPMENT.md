@@ -31,7 +31,7 @@ Flags, combinable:
 | `--lan`     | Portless LAN mode (`.local`), only for deliberate device testing        |
 | `--profile` | Preloads the dormant React profiler (see Profiling below)               |
 
-Set `HAPPY2_DEBUG_RENDERER_PORT` when a specific renderer CDP port is required.
+Set `HAPPY_DEBUG_RENDERER_PORT` when a specific renderer CDP port is required.
 
 Other entries:
 

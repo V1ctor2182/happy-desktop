@@ -73,7 +73,7 @@ const MarkdownImage = ({ alt, src }: MarkdownImageProps) => {
     if (withinLink)
         return (
             <span
-                className="happy2-message__md-image"
+                className="happy-message__md-image"
                 data-md-src={href}
                 data-happy-desktop-ui="message-md-image"
             >
@@ -82,7 +82,7 @@ const MarkdownImage = ({ alt, src }: MarkdownImageProps) => {
         );
     return (
         <a
-            className="happy2-message__md-link happy2-message__md-image"
+            className="happy-message__md-link happy-message__md-image"
             data-md-src={href}
             data-happy-desktop-ui="message-md-image"
             href={href}
@@ -109,7 +109,7 @@ const MarkdownLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
     if (path !== undefined && onFileOpen !== undefined && filePreviewKind(path) !== "binary")
         return (
             <button
-                className="happy2-message__md-link happy2-message__md-file"
+                className="happy-message__md-link happy-message__md-file"
                 data-happy-desktop-ui="message-md-file"
                 data-path={path}
                 onClick={() => onFileOpen(path)}
@@ -120,7 +120,7 @@ const MarkdownLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
         );
     return (
         <a
-            className="happy2-message__md-link"
+            className="happy-message__md-link"
             data-happy-desktop-ui="message-md-link"
             href={safe}
             rel="noopener noreferrer nofollow"
@@ -142,7 +142,7 @@ function appendTrailingInline(children: ReactNode, trailing: ReactNode): ReactNo
                     {finalWord[1]}
                     {finalWord[2]}
                     <span
-                        className="happy2-message__trailing-inline"
+                        className="happy-message__trailing-inline"
                         data-happy-desktop-ui="message-trailing-inline"
                     >
                         {finalWord[3]}
@@ -156,7 +156,7 @@ function appendTrailingInline(children: ReactNode, trailing: ReactNode): ReactNo
         <>
             {nodes}
             <span
-                className="happy2-message__trailing-inline"
+                className="happy-message__trailing-inline"
                 data-happy-desktop-ui="message-trailing-inline"
             >
                 {last}
@@ -183,9 +183,9 @@ const MarkdownParagraph = ({
 const MarkdownPre = ({ children, ...props }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => (
     <ScrollArea
         axes="horizontal"
-        className="happy2-message__code-block"
+        className="happy-message__code-block"
         data-happy-desktop-ui="message-code-block"
-        viewportClassName="happy2-message__code-block-viewport"
+        viewportClassName="happy-message__code-block-viewport"
     >
         <pre {...props}>{children}</pre>
     </ScrollArea>
@@ -197,9 +197,9 @@ const MarkdownTable = ({
 }: ComponentPropsWithoutRef<"table"> & ExtraProps) => (
     <ScrollArea
         axes="horizontal"
-        className="happy2-message__table-scroll"
+        className="happy-message__table-scroll"
         data-happy-desktop-ui="message-table-scroll"
-        viewportClassName="happy2-message__table-scroll-viewport"
+        viewportClassName="happy-message__table-scroll-viewport"
     >
         <table {...props}>{children}</table>
     </ScrollArea>
@@ -208,7 +208,7 @@ const MarkdownTable = ({
  * Headings render with no generated `id`. Chat bodies are untrusted and appear
  * many-to-a-page, so generated heading anchors would collide across messages.
  * The body has no in-message anchor navigation. Styling is by tag
- * (`.happy2-message__body--markdown h1…h6`), so plain elements keep the type
+ * (`.happy-message__body--markdown h1…h6`), so plain elements keep the type
  * ramp without adding global identifiers.
  */
 const headingOverride = (

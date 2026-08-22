@@ -15,8 +15,8 @@ import { createRenderer } from "./testing";
 
 const fontFamily = () =>
     server.browser === "webkit"
-        ? "happy2 Figtree, system-ui, sans-serif"
-        : '"happy2 Figtree", system-ui, sans-serif';
+        ? "happy Figtree, system-ui, sans-serif"
+        : '"happy Figtree", system-ui, sans-serif';
 
 const shortGroups: SearchResultGroup[] = [
     {
@@ -150,7 +150,7 @@ it("holds the fixed 640x461 CommandPalette frame with a real short result set", 
     ).toBe(18);
     const cap = view.$('[data-testid="cp"] [data-happy-desktop-ui="key-cap"]');
     expect(cap.element.getAttribute("aria-label")).toBe("ESC");
-    const close = view.$('[data-testid="cp"] .happy2-command-palette__close');
+    const close = view.$('[data-testid="cp"] .happy-command-palette__close');
     expect(close.element.tagName).toBe("BUTTON");
     expect(close.element.getAttribute("aria-label")).toBe("Close");
     expect(close.bounds().height).toBe(28);
@@ -497,6 +497,6 @@ it("reports the close button through onClose", async () => {
         { width: 640, height: 461 },
     );
     await view.ready();
-    (view.$(".happy2-command-palette__close").element as HTMLButtonElement).click();
+    (view.$(".happy-command-palette__close").element as HTMLButtonElement).click();
     expect(closed).toEqual([1]);
 });

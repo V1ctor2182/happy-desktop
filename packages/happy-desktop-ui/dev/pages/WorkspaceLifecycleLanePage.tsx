@@ -15,7 +15,7 @@ const FETCH_FAILURE = [
     "fatal: could not read from remote repository 'origin'",
     "Please make sure you have the correct access rights and the repository exists.",
 ].join("\n");
-const PATH = "/Users/steve/Happy/Workspaces/happy2/fix-login-redirect";
+const PATH = "/Users/steve/Happy/Workspaces/happy/fix-login-redirect";
 /** A stand-in for the tab strip and transcript the lane is mounted above. */
 function column(children: ReactNode) {
     return (
@@ -25,7 +25,7 @@ function column(children: ReactNode) {
                 flexDirection: "column",
                 width: "620px",
                 border: "1px solid var(--divider)",
-                borderRadius: "var(--happy2-radius-md)",
+                borderRadius: "var(--happy-radius-md)",
                 background: "var(--surface)",
             }}
         >
@@ -38,7 +38,7 @@ function column(children: ReactNode) {
                     padding: "0 12px",
                     borderTop: "1px solid var(--divider)",
                     color: "var(--text-secondary)",
-                    fontFamily: "var(--happy2-font-ui)",
+                    fontFamily: "var(--happy-font-ui)",
                     fontSize: "13px",
                 }}
             >

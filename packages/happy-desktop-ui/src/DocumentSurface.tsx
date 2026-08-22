@@ -75,10 +75,10 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
     };
     const body = () => {
         if (props.loading)
-            return <div className="happy2-document-surface__status">Opening document…</div>;
+            return <div className="happy-document-surface__status">Opening document…</div>;
         if (props.error !== undefined)
             return (
-                <div className="happy2-document-surface__status" data-happy2-tone="danger">
+                <div className="happy-document-surface__status" data-happy-tone="danger">
                     {props.error}
                 </div>
             );
@@ -99,19 +99,19 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
     };
     return (
         <section
-            className={["happy2-document-surface", props.className].filter(Boolean).join(" ")}
-            data-happy2-ui="document-surface"
+            className={["happy-document-surface", props.className].filter(Boolean).join(" ")}
+            data-happy-desktop-ui="document-surface"
             data-testid={props["data-testid"]}
             style={props.style}
         >
             <Toolbar
-                className="happy2-document-surface__header"
+                className="happy-document-surface__header"
                 height={SURFACE_HEADER_HEIGHT}
                 leading={
                     <input
                         aria-label="Document title"
-                        className="happy2-document-surface__title"
-                        data-happy2-ui="document-surface-title"
+                        className="happy-document-surface__title"
+                        data-happy-desktop-ui="document-surface-title"
                         defaultValue={props.title}
                         // Remount when the authoritative title changes so the
                         // uncontrolled input never mirrors props into state.
@@ -131,8 +131,8 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
                 trailing={
                     <>
                         <span
-                            className="happy2-document-surface__save"
-                            data-happy2-ui="document-surface-save"
+                            className="happy-document-surface__save"
+                            data-happy-desktop-ui="document-surface-save"
                             data-state={props.saveState}
                         >
                             {props.saveState === "error" && props.saveError
@@ -141,7 +141,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
                         </span>
                         {(props.participants ?? []).map((participant, index) => (
                             <span
-                                className="happy2-document-surface__participant"
+                                className="happy-document-surface__participant"
                                 key={`${participant.name}-${index}`}
                                 style={{ background: participant.color }}
                                 title={participant.name}
@@ -174,8 +174,8 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
             />
             <ScrollArea
                 axes="both"
-                className="happy2-document-surface__body"
-                viewportClassName="happy2-document-surface__body-viewport"
+                className="happy-document-surface__body"
+                viewportClassName="happy-document-surface__body-viewport"
             >
                 {body()}
             </ScrollArea>

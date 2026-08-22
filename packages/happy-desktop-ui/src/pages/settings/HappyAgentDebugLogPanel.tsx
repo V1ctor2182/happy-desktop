@@ -85,7 +85,7 @@ export function HappyAgentDebugLogPanel(props: HappyAgentDebugLogPanelProps) {
         scrollEndThreshold: ENTRY_GAP * 2,
         useFlushSync: false,
     });
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a full retained buffer appends without changing its item count; the virtual scroll integration must follow that new keyed row before paint only while the reader remains at the end
+    // eslint-disable-next-line happy-react/no-layout-effect -- a full retained buffer appends without changing its item count; the virtual scroll integration must follow that new keyed row before paint only while the reader remains at the end
     useLayoutEffect(() => {
         if (following.current) virtualizer.scrollToEnd();
     }, [lastEntryId, virtualizer]);
@@ -97,16 +97,14 @@ export function HappyAgentDebugLogPanel(props: HappyAgentDebugLogPanelProps) {
             title="State log"
         >
             <section
-                className={["happy2-happy-agent-debug-log", props.className]
-                    .filter(Boolean)
-                    .join(" ")}
+                className={["happy-agent-debug-log", props.className].filter(Boolean).join(" ")}
                 data-happy-desktop-ui="happy-agent-debug-log"
                 data-testid={props["data-testid"]}
                 style={props.style}
             >
-                <header className="happy2-happy-agent-debug-log__header">
-                    <span className="happy2-happy-agent-debug-log__title">Live diagnostics</span>
-                    <span className="happy2-happy-agent-debug-log__count">
+                <header className="happy-agent-debug-log__header">
+                    <span className="happy-agent-debug-log__title">Live diagnostics</span>
+                    <span className="happy-agent-debug-log__count">
                         {props.entries.length.toLocaleString("en-US")} retained
                     </span>
                     <CopyButton
@@ -117,9 +115,9 @@ export function HappyAgentDebugLogPanel(props: HappyAgentDebugLogPanelProps) {
                 </header>
                 <ScrollArea
                     axes="both"
-                    className="happy2-happy-agent-debug-log__scrollport"
+                    className="happy-agent-debug-log__scrollport"
                     data-happy-desktop-ui="happy-agent-debug-log-scrollport"
-                    viewportClassName="happy2-happy-agent-debug-log__viewport"
+                    viewportClassName="happy-agent-debug-log__viewport"
                     viewportProps={{
                         "aria-label": "Live Happy Agent debug log",
                         "aria-live": "off",
@@ -131,12 +129,9 @@ export function HappyAgentDebugLogPanel(props: HappyAgentDebugLogPanelProps) {
                     }}
                     viewportRef={scrollport}
                 >
-                    <div
-                        className="happy2-happy-agent-debug-log__content"
-                        ref={virtualizer.containerRef}
-                    >
+                    <div className="happy-agent-debug-log__content" ref={virtualizer.containerRef}>
                         {itemCount === 0 ? (
-                            <code className="happy2-happy-agent-debug-log__empty">
+                            <code className="happy-agent-debug-log__empty">
                                 Waiting for internal state events…
                             </code>
                         ) : (
@@ -147,7 +142,7 @@ export function HappyAgentDebugLogPanel(props: HappyAgentDebugLogPanelProps) {
                                     : discardedText(props.discardedEntries);
                                 return (
                                     <pre
-                                        className="happy2-happy-agent-debug-log__entry"
+                                        className="happy-agent-debug-log__entry"
                                         data-index={item.index}
                                         key={item.key}
                                         ref={virtualizer.measureElement}

@@ -216,7 +216,7 @@ export function AvatarPage() {
                         <span
                             style={{
                                 color: "var(--text-secondary)",
-                                font: "500 13px/16px var(--happy2-font-ui)",
+                                font: "500 13px/16px var(--happy-font-ui)",
                             }}
                         >
                             Codex
@@ -227,7 +227,7 @@ export function AvatarPage() {
                         <span
                             style={{
                                 color: "var(--text-secondary)",
-                                font: "500 13px/16px var(--happy2-font-ui)",
+                                font: "500 13px/16px var(--happy-font-ui)",
                             }}
                         >
                             Maya Johnson

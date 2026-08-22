@@ -18,7 +18,7 @@ function Crumb() {
                 alignItems: "center",
                 color: "var(--text-secondary)",
                 display: "inline-flex",
-                font: "700 13px var(--happy2-font-ui)",
+                font: "700 13px var(--happy-font-ui)",
                 gap: "6px",
                 whiteSpace: "nowrap",
             }}

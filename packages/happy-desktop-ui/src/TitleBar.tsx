@@ -41,7 +41,7 @@ export function WindowDragRegion(props: WindowDragRegionProps) {
         <div
             {...rest}
             aria-hidden="true"
-            className={["happy2-window-drag-region", local.className].filter(Boolean).join(" ")}
+            className={["happy-window-drag-region", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="window-drag-region"
             style={{ height: toCssDimension(local.height ?? 56), ...local.style }}
         />
@@ -54,20 +54,20 @@ export function WindowDragRegion(props: WindowDragRegionProps) {
 export function SearchField(props: SearchFieldProps) {
     return (
         <div
-            className="happy2-search-field"
+            className="happy-search-field"
             data-happy-desktop-ui="search-field"
             style={props.width === undefined ? undefined : { width: toCssDimension(props.width) }}
         >
             <span
                 aria-hidden="true"
-                className="happy2-search-field__icon"
+                className="happy-search-field__icon"
                 data-happy-desktop-ui="search-field-icon"
             >
                 <Icon name="search" size={14} />
             </span>
             <input
                 aria-label={props.placeholder ?? "Search"}
-                className="happy2-search-field__input"
+                className="happy-search-field__input"
                 data-happy-desktop-ui="search-field-input"
                 onClick={() => props.onOpen?.()}
                 onInput={(event) => {
@@ -88,7 +88,7 @@ export function SearchField(props: SearchFieldProps) {
                 type="text"
                 value={props.value}
             />
-            <KeyCap className="happy2-search-field__hint" keys={props.shortcutHint ?? "⌘K"} />
+            <KeyCap className="happy-search-field__hint" keys={props.shortcutHint ?? "⌘K"} />
         </div>
     );
 }
@@ -135,22 +135,22 @@ export function TitleBar(props: TitleBarProps) {
     const hasSearch = searchOpen !== undefined || searchChange !== undefined;
     return (
         <header
-            className="happy2-title-bar"
+            className="happy-title-bar"
             data-happy-desktop-ui="title-bar"
             data-window-controls={props.showWindowControls ? "" : undefined}
         >
-            <div className="happy2-title-bar__leading" data-happy-desktop-ui="title-bar-leading">
+            <div className="happy-title-bar__leading" data-happy-desktop-ui="title-bar-leading">
                 {props.showWindowControls ? (
                     <span
                         aria-hidden="true"
-                        className="happy2-title-bar__controls"
+                        className="happy-title-bar__controls"
                         data-happy-desktop-ui="title-bar-controls"
                     />
                 ) : null}
                 {props.leading}
             </div>
             {hasSearch ? (
-                <div className="happy2-title-bar__center" data-happy-desktop-ui="title-bar-center">
+                <div className="happy-title-bar__center" data-happy-desktop-ui="title-bar-center">
                     {searchOpen ? (
                         <SearchField
                             onOpen={searchOpen}
@@ -166,7 +166,7 @@ export function TitleBar(props: TitleBarProps) {
                     )}
                 </div>
             ) : null}
-            <div className="happy2-title-bar__trailing" data-happy-desktop-ui="title-bar-trailing">
+            <div className="happy-title-bar__trailing" data-happy-desktop-ui="title-bar-trailing">
                 {props.trailing}
             </div>
         </header>

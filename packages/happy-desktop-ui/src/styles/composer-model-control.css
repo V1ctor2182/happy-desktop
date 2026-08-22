@@ -1,12 +1,12 @@
 /* C-145 ComposerModelControl — a compact, nested configuration control that
  * is only composed into a Composer toolbar. */
 
-.happy2-composer-model-control,
-.happy2-composer-model-control * {
+.happy-composer-model-control,
+.happy-composer-model-control * {
     box-sizing: border-box;
 }
 
-.happy2-composer-model-control {
+.happy-composer-model-control {
     position: relative;
     display: flex;
     flex: 0 1 auto;
@@ -15,11 +15,11 @@
     max-width: 240px;
     min-width: 0;
     color: var(--text);
-    font-family: var(--happy2-font-ui);
+    font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
-.happy2-composer-model-control__trigger {
+.happy-composer-model-control__trigger {
     display: flex;
     flex: 0 1 auto;
     align-items: center;
@@ -44,23 +44,23 @@
     -webkit-appearance: none;
 }
 
-.happy2-composer-model-control__trigger:hover:not(:disabled) {
+.happy-composer-model-control__trigger:hover:not(:disabled) {
     background: var(--surface-ripple);
 }
 
-.happy2-composer-model-control__trigger:focus-visible,
-.happy2-composer-model-control__row:focus-visible,
-.happy2-composer-model-control__choice:focus-visible {
+.happy-composer-model-control__trigger:focus-visible,
+.happy-composer-model-control__row:focus-visible,
+.happy-composer-model-control__choice:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
-.happy2-composer-model-control__trigger:disabled {
+.happy-composer-model-control__trigger:disabled {
     cursor: not-allowed;
     opacity: 0.48;
 }
 
-.happy2-composer-model-control__summary {
+.happy-composer-model-control__summary {
     display: flex;
     flex: 0 1 auto;
     min-width: 0;
@@ -69,17 +69,17 @@
     white-space: nowrap;
 }
 
-.happy2-composer-model-control__summary > :last-child,
-.happy2-composer-model-control__row-value {
+.happy-composer-model-control__summary > :last-child,
+.happy-composer-model-control__row-value {
     color: var(--text-secondary);
 }
 
-.happy2-composer-model-control__summary > :last-child::before {
+.happy-composer-model-control__summary > :last-child::before {
     content: " ";
 }
 
-.happy2-composer-model-control__menu,
-.happy2-composer-model-control__choices {
+.happy-composer-model-control__menu,
+.happy-composer-model-control__choices {
     position: absolute;
     z-index: 30;
     background: var(--surface);
@@ -87,7 +87,7 @@
     border-radius: 14px;
 }
 
-.happy2-composer-model-control__menu {
+.happy-composer-model-control__menu {
     bottom: calc(100% + 8px);
     left: 0;
     display: flex;
@@ -96,7 +96,7 @@
     padding: 6px;
 }
 
-.happy2-composer-model-control__row {
+.happy-composer-model-control__row {
     display: flex;
     align-items: center;
     min-width: 0;
@@ -117,12 +117,12 @@
     -webkit-appearance: none;
 }
 
-.happy2-composer-model-control__row:hover,
-.happy2-composer-model-control__choice:hover {
+.happy-composer-model-control__row:hover,
+.happy-composer-model-control__choice:hover {
     background: var(--surface-pressed);
 }
 
-.happy2-composer-model-control__row-value {
+.happy-composer-model-control__row-value {
     flex: 1;
     min-width: 0;
     margin-left: 10px;
@@ -132,7 +132,7 @@
     white-space: nowrap;
 }
 
-.happy2-composer-model-control__choices {
+.happy-composer-model-control__choices {
     bottom: 0;
     right: calc(100% + 8px);
     display: flex;
@@ -144,19 +144,19 @@
     padding: 6px;
 }
 
-.happy2-composer-model-control__list {
+.happy-composer-model-control__list {
     flex: 0 1 auto;
     min-height: 0;
 }
 
-.happy2-composer-model-control__list-viewport {
+.happy-composer-model-control__list-viewport {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
 
-.happy2-composer-model-control__group {
+.happy-composer-model-control__group {
     display: flex;
     flex: 0 0 auto;
     align-items: center;
@@ -175,12 +175,12 @@
     white-space: nowrap;
 }
 
-.happy2-composer-model-control__group:first-of-type {
+.happy-composer-model-control__group:first-of-type {
     margin-top: 0;
     border-top: 0;
 }
 
-.happy2-composer-model-control__choice {
+.happy-composer-model-control__choice {
     display: flex;
     flex: 0 0 auto;
     align-items: center;

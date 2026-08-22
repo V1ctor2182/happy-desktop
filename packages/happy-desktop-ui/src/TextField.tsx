@@ -96,13 +96,13 @@ export function TextField(props: TextFieldProps) {
     const message = () => (invalid() ? local.error : local.hint);
     const rows = () => local.rows ?? 3;
     const generatedId = useId();
-    const fallbackId = `happy2-text-field-${generatedId}`;
+    const fallbackId = `happy-text-field-${generatedId}`;
     const fieldId = () => local.id ?? fallbackId;
     const messageId = () => `${fieldId()}-message`;
     const describedBy = () => (message() ? messageId() : undefined);
     return (
         <div
-            className={["happy2-text-field", local.className].filter(Boolean).join(" ")}
+            className={["happy-text-field", local.className].filter(Boolean).join(" ")}
             data-disabled={local.disabled ? "" : undefined}
             data-full-width={local.fullWidth ? "" : undefined}
             data-invalid={invalid() ? "" : undefined}
@@ -114,7 +114,7 @@ export function TextField(props: TextFieldProps) {
         >
             {local.label ? (
                 <label
-                    className="happy2-text-field__label"
+                    className="happy-text-field__label"
                     data-happy-desktop-ui="text-field-label"
                     htmlFor={fieldId()}
                 >
@@ -122,7 +122,7 @@ export function TextField(props: TextFieldProps) {
                     {local.required ? (
                         <span
                             aria-hidden="true"
-                            className="happy2-text-field__required"
+                            className="happy-text-field__required"
                             data-happy-desktop-ui="text-field-required"
                         >
                             *
@@ -132,7 +132,7 @@ export function TextField(props: TextFieldProps) {
             ) : null}
 
             <div
-                className="happy2-text-field__control"
+                className="happy-text-field__control"
                 data-invalid={invalid() ? "" : undefined}
                 data-multiline={local.multiline ? "" : undefined}
                 data-happy-desktop-ui="text-field-control"
@@ -142,7 +142,7 @@ export function TextField(props: TextFieldProps) {
                     ? ((name) => (
                           <span
                               aria-hidden="true"
-                              className="happy2-text-field__icon"
+                              className="happy-text-field__icon"
                               data-happy-desktop-ui="text-field-icon"
                           >
                               <Icon name={name} size={iconSizes[size()]} />
@@ -152,7 +152,7 @@ export function TextField(props: TextFieldProps) {
 
                 {local.multiline ? (
                     <div
-                        className="happy2-text-field__textarea-scroll"
+                        className="happy-text-field__textarea-scroll"
                         data-scrollbar-axes="vertical"
                         data-scrollbar-host=""
                         data-scrollbar-placement="gutter"
@@ -162,7 +162,7 @@ export function TextField(props: TextFieldProps) {
                             aria-label={local["aria-label"]}
                             aria-describedby={describedBy()}
                             aria-invalid={invalid() ? "true" : undefined}
-                            className="happy2-text-field__input"
+                            className="happy-text-field__input"
                             data-happy-desktop-ui="text-field-input"
                             disabled={local.disabled}
                             id={fieldId()}
@@ -185,7 +185,7 @@ export function TextField(props: TextFieldProps) {
                         aria-invalid={invalid() ? "true" : undefined}
                         autoComplete={local.autoComplete}
                         autoFocus={local.autoFocus}
-                        className="happy2-text-field__input"
+                        className="happy-text-field__input"
                         data-happy-desktop-ui="text-field-input"
                         disabled={local.disabled}
                         id={fieldId()}
@@ -205,7 +205,7 @@ export function TextField(props: TextFieldProps) {
 
             {message() ? (
                 <div
-                    className="happy2-text-field__message"
+                    className="happy-text-field__message"
                     data-happy-desktop-ui={invalid() ? "text-field-error" : "text-field-hint"}
                     data-tone={invalid() ? "error" : "hint"}
                     id={messageId()}
