@@ -1,11 +1,27 @@
-import { SetupPage } from "./SetupPage";
+import { SetupPage, type SetupPageProgress } from "./SetupPage";
 import { TextField } from "./TextField";
+
+/**
+ * The Happy Agent archive arriving, while it is arriving. Counted by the
+ * process fetching it; absent before the first byte and after the last.
+ */
+export interface LocalOnboardingDownload {
+    readonly receivedBytes: number;
+    readonly totalBytes: number;
+}
 
 export type LocalOnboardingView =
     | { readonly kind: "checking"; readonly message?: string }
     | { readonly kind: "node-missing" }
     | { readonly kind: "rig-missing"; readonly message?: string }
-    | { readonly busy: boolean; readonly kind: "daemon-download"; readonly message?: string }
+    | {
+          readonly busy: boolean;
+          readonly download?: LocalOnboardingDownload;
+          readonly kind: "daemon-download";
+          readonly message?: string;
+      }
+    /** The agent that was just fetched, being started and reached. */
+    | { readonly kind: "agent-starting"; readonly message?: string }
     | { readonly kind: "connecting" }
     | { readonly kind: "connect-failed"; readonly message: string; readonly retrying: boolean }
     | {
@@ -36,6 +52,30 @@ export interface LocalOnboardingScreenProps {
 
 /** What a reader is told to run when Happy cannot start their Rig itself. */
 const DAEMON_START_COMMAND = "rig daemon start";
+
+/**
+ * The download as the button reports it: the counted share and both sizes while
+ * an archive is on the way, and an unmeasured wait otherwise.
+ *
+ * The two ends of a download are genuinely unmeasured rather than zero and one
+ * hundred — the release is being looked up, then what arrived is being checked
+ * and unpacked — so neither is dressed up as a fraction.
+ */
+function downloadProgress(download: LocalOnboardingDownload | undefined): SetupPageProgress {
+    if (!download || download.totalBytes <= 0) return { kind: "waiting" };
+    return {
+        detail: `${byteSize(download.receivedBytes)} of ${byteSize(download.totalBytes)}`,
+        fraction: download.receivedBytes / download.totalBytes,
+        kind: "measured",
+    };
+}
+
+/** A size as someone would say it, at the one decimal a release is worth. */
+function byteSize(bytes: number): string {
+    if (bytes < 1024) return `${String(bytes)} B`;
+    if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /** Turns Rig's provider ids into something that reads like a sentence. */
 function providersPhrase(providers: readonly string[]): string {
@@ -106,7 +146,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 copy="Rig runs on Node, and Happy will not put a runtime on your machine by itself. Install Node and setup continues on its own."
                 data-testid="local-onboarding-screen"
                 scene="wand"
-                title="Node.js is required."
+                title="Node.js is required"
             />
         );
 
@@ -119,7 +159,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 }
                 data-testid="local-onboarding-screen"
                 scene="robot"
-                title="Rig is required."
+                title="Rig is required"
             />
         );
 
@@ -130,14 +170,41 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                     busy: view.busy,
                     label: view.busy ? "Downloading…" : "Download and start",
                     onSelect: props.onDaemonDownload,
+                    // Once it is running, this stage always reports itself as a
+                    // bar: the bytes when they are moving, and a sweep for the
+                    // moments either side of them. Swapping between a spinner
+                    // and a bar as the count came and went would flicker twice
+                    // during one download.
+                    ...(view.busy ? { progress: downloadProgress(view.download) } : {}),
                 }}
                 copy={
                     view.message ??
                     "Happy downloads the published release for this Mac, verifies its checksum, and keeps each version isolated before starting it."
                 }
                 data-testid="local-onboarding-screen"
-                scene="robot"
-                title="Download Happy Agent."
+                scene="owl"
+                title="Download Happy Agent"
+            />
+        );
+
+    // Deliberately the download screen again, down to the title and the owl:
+    // starting what was just fetched is the end of that same download, and
+    // nobody asked for it separately. Only the words under the bar change.
+    if (view.kind === "agent-starting")
+        return (
+            <SetupPage
+                action={{
+                    busy: true,
+                    label: "Starting…",
+                    // Unreachable while busy, and there is nothing else this
+                    // screen could ask for: the install is already running.
+                    onSelect: props.onDaemonDownload,
+                    progress: { kind: "waiting" },
+                }}
+                copy={view.message ?? "Starting Happy Agent and connecting to it."}
+                data-testid="local-onboarding-screen"
+                scene="owl"
+                title="Download Happy Agent"
             />
         );
 
@@ -151,7 +218,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 copy={`Rig runs the coding assistants you have already signed in to, and none are signed in yet. Sign in to ${providersPhrase(view.providers)} in a terminal, and Happy picks it up from there.`}
                 data-testid="local-onboarding-screen"
                 scene="owl"
-                title="No coding assistant yet."
+                title="No coding assistant yet"
             />
         );
 
@@ -170,7 +237,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 }
                 data-testid="local-onboarding-screen"
                 scene="sparkles"
-                title="Create your profile."
+                title="Create your profile"
             >
                 <div className="happy2-local-onboarding__profile-form">
                     <TextField
@@ -212,7 +279,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 copy={view.message}
                 data-testid="local-onboarding-screen"
                 scene="owl"
-                title="Happy could not reach Rig."
+                title="Happy could not reach Rig"
             />
         );
 
@@ -229,7 +296,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             }
             data-testid="local-onboarding-screen"
             scene="wand"
-            title="Open your first project."
+            title="Open your first project"
         />
     );
 }

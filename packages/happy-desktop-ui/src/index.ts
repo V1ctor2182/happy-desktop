@@ -398,6 +398,7 @@ export {
 } from "./StatTile";
 export {
     LocalOnboardingScreen,
+    type LocalOnboardingDownload,
     type LocalOnboardingScreenProps,
     type LocalOnboardingView,
 } from "./LocalOnboardingScreen";
@@ -417,7 +418,12 @@ export {
     type WelcomeSlideArt,
 } from "./WelcomeScreen";
 export { SetupChoice, type SetupChoiceOption, type SetupChoiceProps } from "./SetupChoice";
-export { SetupPage, type SetupPageAction, type SetupPageProps } from "./SetupPage";
+export {
+    SetupPage,
+    type SetupPageAction,
+    type SetupPageProgress,
+    type SetupPageProps,
+} from "./SetupPage";
 export {
     SetupOptionCard,
     type SetupOptionCardProps,

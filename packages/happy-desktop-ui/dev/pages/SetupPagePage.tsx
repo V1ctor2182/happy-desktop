@@ -55,7 +55,7 @@ export function SetupPagePage() {
                             command="rig daemon start"
                             copy="connect ENOENT /Users/you/.happy/rig/server.sock"
                             scene="owl"
-                            title="Happy could not reach Rig."
+                            title="Happy could not reach Rig"
                         />
                     </div>
                     <DimensionRule label="Command is selectable · monospace on surface-high" />
@@ -111,7 +111,7 @@ export function SetupPagePage() {
                             action={{ busy: true, label: "Check again", onSelect: noop }}
                             copy="Rig runs the coding assistants you have already signed in to, and none are signed in yet. Sign in to Codex, Claude Code or Grok in a terminal, and Happy picks it up from there."
                             scene="owl"
-                            title="No coding assistant yet."
+                            title="No coding assistant yet"
                         />
                     </div>
                     <DimensionRule label="Busy action spins in place · the page does not change" />
@@ -129,7 +129,7 @@ export function SetupPagePage() {
                         <SetupPage
                             action={{ label: "Choose a folder…", onSelect: noop }}
                             scene="wand"
-                            title="Open your first project."
+                            title="Open your first project"
                         />
                     </div>
                     <DimensionRule label="Missing fields collapse; the column stays centred" />
@@ -147,11 +147,63 @@ export function SetupPagePage() {
                         <SetupPage
                             action={{ label: "Download and start", onSelect: noop }}
                             copy="Happy downloads the published release for this Mac, verifies its checksum, and keeps each version isolated before starting it."
-                            scene="robot"
-                            title="Download Happy Agent."
+                            scene="owl"
+                            title="Download Happy Agent"
                         />
                     </div>
-                    <DimensionRule label="One native action · download status stays on the same button" />
+                    <DimensionRule label="One native action · 36px button, sized to its label" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Bytes arriving · the bar stands where the button stood, at the same height"
+                label="Measured progress"
+                number="07"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <SetupPage
+                            action={{
+                                busy: true,
+                                label: "Downloading…",
+                                onSelect: noop,
+                                progress: {
+                                    detail: "12.4 MB of 38.2 MB",
+                                    fraction: 0.32,
+                                    kind: "measured",
+                                },
+                            }}
+                            copy="Downloading Happy Agent 0.0.11…"
+                            scene="owl"
+                            title="Download Happy Agent"
+                        />
+                    </div>
+                    <DimensionRule label="280 track · 4 tall · width eased over the reported count" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Running with nothing measured yet · a sweep, because a bar at zero reads as stuck"
+                label="Unmeasured progress"
+                number="08"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <SetupPage
+                            action={{
+                                busy: true,
+                                label: "Downloading…",
+                                onSelect: noop,
+                                progress: { kind: "waiting" },
+                            }}
+                            copy="Checking what arrived and unpacking it."
+                            scene="owl"
+                            title="Download Happy Agent"
+                        />
+                    </div>
+                    <DimensionRule label="Same box · no fraction claimed, no position asserted" />
                 </div>
             </Specimen>
         </ComponentPage>

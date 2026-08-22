@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import type {
+    DesktopDaemonDownload,
     DesktopDaemonInstall,
     DesktopDaemonRestartReason,
     DesktopDaemonSnapshot,
@@ -185,14 +186,20 @@ export class DesktopDaemonController {
         }
         this.publish({
             ...this.snapshotValue,
+            download: undefined,
             error: undefined,
             message: `Downloading Happy Agent ${release.version}…`,
             operation: "downloading",
         });
-        await happyAgentReleaseDownload(release, this.paths, {
-            onStatus: (message) =>
-                this.publish({ ...this.snapshotValue, message, operation: "downloading" }),
-        });
+        try {
+            await happyAgentReleaseDownload(release, this.paths, {
+                onProgress: this.downloadReport(),
+                onStatus: (message) =>
+                    this.publish({ ...this.snapshotValue, message, operation: "downloading" }),
+            });
+        } finally {
+            this.downloadForget();
+        }
         this.publish({
             ...this.snapshotValue,
             error: undefined,
@@ -424,7 +431,7 @@ export class DesktopDaemonController {
                 ...this.snapshotValue,
                 error: undefined,
                 message: "Preparing Happy Agent…",
-                operation: "downloading",
+                operation: "installing",
             });
             try {
                 const release = this.latestRelease ?? (await happyAgentReleaseLatest());
@@ -433,14 +440,7 @@ export class DesktopDaemonController {
                 const selected =
                     installed !== undefined && !versionNewer(release.version, installed.version)
                         ? installed
-                        : await happyAgentReleaseInstall(release, this.paths, {
-                              onStatus: (message) =>
-                                  this.publish({
-                                      ...this.snapshotValue,
-                                      message,
-                                      operation: "downloading",
-                                  }),
-                          });
+                        : await this.releaseFetch(release);
                 this.publish({
                     ...this.snapshotValue,
                     availableVersion: release.version,
@@ -448,7 +448,7 @@ export class DesktopDaemonController {
                     installation: "installed",
                     installedVersion: selected.version,
                     message: `Starting Happy Agent ${selected.version}…`,
-                    operation: "downloading",
+                    operation: "installing",
                     runtime: "starting",
                     updateAvailable: false,
                 });
@@ -473,6 +473,62 @@ export class DesktopDaemonController {
                 throw error;
             }
         });
+    }
+
+    /**
+     * Fetches and installs one release, saying how far its bytes have got for as
+     * long as they are moving.
+     *
+     * This is the first install, which is the one download anybody watches: the
+     * window is being held on the setup screen until it lands, so the wait is
+     * the whole content of that screen rather than something happening beside
+     * someone's work.
+     */
+    private async releaseFetch(release: HappyAgentRelease): Promise<HappyAgentBinary> {
+        try {
+            return await happyAgentReleaseInstall(release, this.paths, {
+                onProgress: this.downloadReport(),
+                onStatus: (message) => this.publish({ ...this.snapshotValue, message }),
+            });
+        } finally {
+            this.downloadForget();
+        }
+    }
+
+    /**
+     * One archive's byte count, published at most once per whole percent.
+     *
+     * Every publish crosses to the renderer and re-derives the setup snapshot on
+     * the way, while an archive arrives in hundreds of chunks. At chunk
+     * granularity the report would cost far more than it shows, and no eye could
+     * read the difference between the two.
+     */
+    private downloadReport(): (progress: DesktopDaemonDownload) => void {
+        let published = -1;
+        return (download) => {
+            const percent =
+                download.totalBytes > 0
+                    ? Math.floor((download.receivedBytes / download.totalBytes) * 100)
+                    : 0;
+            if (percent === published) return;
+            published = percent;
+            // Whichever operation is fetching keeps its own name: a first
+            // install and a background update both report bytes, and only the
+            // caller knows which of the two this is.
+            this.publish({ ...this.snapshotValue, download });
+        };
+    }
+
+    /**
+     * Takes the count off the snapshot the moment the bytes stop.
+     *
+     * It is only ever true while an archive is in flight. Left behind, it would
+     * sit full through the unpacking and the start that follow, or stranded
+     * part-way under whatever a failure has to say.
+     */
+    private downloadForget(): void {
+        if (this.snapshotValue.download)
+            this.publish({ ...this.snapshotValue, download: undefined });
     }
 
     /**

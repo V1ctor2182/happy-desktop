@@ -348,19 +348,19 @@ const WELCOME_SLIDES: readonly WelcomeSlide[] = [
         art: { kind: "scene", name: "robot" },
         copy: "Start a session in any project and hand it real work. It keeps going while you look elsewhere.",
         id: "agents",
-        title: "Agents that stay running.",
+        title: "Agents that stay running",
     },
     {
         art: { kind: "scene", name: "wand" },
         copy: "Every change lands in your own checkout, where you can read it, run it, and undo it.",
         id: "workspaces",
-        title: "Your files, your machine.",
+        title: "Your files, your machine",
     },
     {
         art: { kind: "scene", name: "sparkles" },
         copy: "Work on your own files here, and reach the other machines you own from the same window.",
         id: "local",
-        title: "Happy runs on your machine.",
+        title: "Happy runs on your machine",
     },
 ];
 
@@ -452,24 +452,22 @@ function DesktopScreens(props: DesktopRendererProps) {
     // A restart is not gated here. It is not a state this tree can be in: the
     // tree is discarded for its duration and a new one is built afterwards, so
     // the screen for it lives above the root render rather than inside it.
-    //
-    // The unreachable band is the window's outermost row, so it moves every
-    // screen below it down rather than covering any of them.
-    return (
-        <div className="happy2-connection-frame">
-            <DesktopConnectionHeader platform={props.platform} rigs={props.rigs} />
-            <div className="happy2-connection-frame__body">{gated}</div>
-        </div>
-    );
+    return gated;
 }
 
 /**
- * The window's own line about being out of touch with the machine.
+ * The workspace's own line about being out of touch with the machine.
  *
  * It reads the Rig directory rather than any one surface, because losing the
  * machine is not a fact about a surface: every project, session, and terminal in
- * the window is equally out of reach, and saying so once at the top beats saying
- * it on each of them.
+ * the workspace is equally out of reach, and saying so once at the top beats
+ * saying it on each of them.
+ *
+ * It belongs to the workspace and settings alone. Every screen before them —
+ * the welcome, first-run setup, choosing where Happy runs, starting, failing to
+ * start, a protocol gap — is already the window's whole account of a machine
+ * that is not connected, and a band repeating it above them would be a second
+ * voice talking over the one the reader is meant to act on.
  *
  * Only a Rig that has actually dropped gets a line. `connecting` is deliberately
  * silent — that is startup, and the boot cover is already speaking for it; a
@@ -610,7 +608,7 @@ function DesktopProtocolGate(props: {
                 }`}
                 data-testid="desktop-protocol-screen"
                 scene="owl"
-                title="Happy is out of date."
+                title="Happy is out of date"
             />
         );
     }
@@ -639,7 +637,7 @@ function DesktopProtocolGate(props: {
             }`}
             data-testid="desktop-protocol-screen"
             scene="owl"
-            title="Happy Agent is out of date."
+            title="Happy Agent is out of date"
         />
     );
 }
@@ -719,27 +717,35 @@ function DesktopRuntimeContent(
             />
         );
 
+    // The workspace is mounted, so this is the first screen a dropped machine
+    // can be reported against: the band is its outermost row and moves every
+    // surface in it down rather than covering any of them.
     return (
-        <RigBoundary
-            appearance={props.appearance}
-            bridge={props.bridge}
-            {...(props.daemon ? { daemon: props.daemon } : {})}
-            debug={props.debug}
-            profiler={props.profiler}
-            browserContent={props.browserContent}
-            htmlPreview={props.htmlPreview}
-            mediaWindow={props.mediaWindow}
-            experiments={props.experiments}
-            navigationOrder={props.navigationOrder}
-            sidebarCollapse={props.sidebarCollapse}
-            platform={props.platform}
-            router={props.rigRouter}
-            rigs={props.rigs}
-            settings={props.settings}
-            titleShimmer={props.titleShimmer}
-            update={workspaceUpdate(snapshot.update, hostedUpdate)}
-            windowState={props.windowState}
-        />
+        <div className="happy2-connection-frame">
+            <DesktopConnectionHeader platform={props.platform} rigs={props.rigs} />
+            <div className="happy2-connection-frame__body">
+                <RigBoundary
+                    appearance={props.appearance}
+                    bridge={props.bridge}
+                    {...(props.daemon ? { daemon: props.daemon } : {})}
+                    debug={props.debug}
+                    profiler={props.profiler}
+                    browserContent={props.browserContent}
+                    htmlPreview={props.htmlPreview}
+                    mediaWindow={props.mediaWindow}
+                    experiments={props.experiments}
+                    navigationOrder={props.navigationOrder}
+                    sidebarCollapse={props.sidebarCollapse}
+                    platform={props.platform}
+                    router={props.rigRouter}
+                    rigs={props.rigs}
+                    settings={props.settings}
+                    titleShimmer={props.titleShimmer}
+                    update={workspaceUpdate(snapshot.update, hostedUpdate)}
+                    windowState={props.windowState}
+                />
+            </div>
+        </div>
     );
 }
 

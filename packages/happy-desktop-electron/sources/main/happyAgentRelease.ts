@@ -16,6 +16,7 @@ import {
 import { join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import type { DesktopDaemonDownload } from "../shared/desktopContract";
 import {
     executableFile,
     happyAgentBinarySelect,
@@ -140,13 +141,24 @@ export async function happyAgentReleasesList(
     return summaries;
 }
 
+/**
+ * How a caller watches one release arrive.
+ *
+ * `onStatus` is the sentence to show; `onProgress` is the archive's own byte
+ * count, reported for every chunk written. Reporting each chunk keeps this side
+ * honest — it says what has actually landed — and leaves how often to redraw to
+ * whoever is drawing it.
+ */
+export interface HappyAgentReleaseOptions {
+    readonly fetch?: typeof globalThis.fetch;
+    readonly onProgress?: (progress: DesktopDaemonDownload) => void;
+    readonly onStatus?: (message: string) => void;
+}
+
 export async function happyAgentReleaseInstall(
     release: HappyAgentRelease,
     paths: HappyDaemonPaths,
-    options: {
-        readonly fetch?: typeof globalThis.fetch;
-        readonly onStatus?: (message: string) => void;
-    } = {},
+    options: HappyAgentReleaseOptions = {},
 ): Promise<HappyAgentBinary> {
     const binary = await happyAgentReleaseDownload(release, paths, options);
     await happyAgentBinarySelect(paths, release.version);
@@ -163,10 +175,7 @@ export async function happyAgentReleaseInstall(
 export async function happyAgentReleaseDownload(
     release: HappyAgentRelease,
     paths: HappyDaemonPaths,
-    options: {
-        readonly fetch?: typeof globalThis.fetch;
-        readonly onStatus?: (message: string) => void;
-    } = {},
+    options: HappyAgentReleaseOptions = {},
 ): Promise<HappyAgentBinary> {
     await mkdir(paths.distDirectory, { mode: 0o700, recursive: true });
     await mkdir(paths.versionsDirectory, { mode: 0o700, recursive: true });
@@ -184,6 +193,7 @@ export async function happyAgentReleaseDownload(
             await releaseInstall({
                 ...release,
                 fetch: options.fetch ?? globalThis.fetch,
+                ...(options.onProgress ? { onProgress: options.onProgress } : {}),
                 paths,
             });
         }
@@ -286,6 +296,7 @@ async function releaseInstall(options: {
     readonly asset: ReleaseAsset;
     readonly archivedBinaryName: string;
     readonly fetch: typeof globalThis.fetch;
+    readonly onProgress?: (progress: DesktopDaemonDownload) => void;
     readonly paths: HappyDaemonPaths;
     readonly version: string;
 }): Promise<void> {
@@ -295,7 +306,7 @@ async function releaseInstall(options: {
     const normalizedBinaryPath = join(staging, "happy-agent");
     const finalDirectory = join(options.paths.versionsDirectory, options.version);
     try {
-        await archiveDownload(options.fetch, options.asset, archivePath);
+        await archiveDownload(options.fetch, options.asset, archivePath, options.onProgress);
         await archiveExtract(archivePath, staging, options.archivedBinaryName);
         await rm(archivePath, { force: true });
         const extracted = await lstat(stagedBinaryPath);
@@ -330,6 +341,7 @@ async function archiveDownload(
     fetch_: typeof globalThis.fetch,
     asset: ReleaseAsset,
     destination: string,
+    onProgress?: (progress: DesktopDaemonDownload) => void,
 ): Promise<void> {
     const response = await fetch_(asset.browser_download_url, {
         headers: {
@@ -356,6 +368,9 @@ async function archiveDownload(
                 return;
             }
             hash.update(chunk);
+            // Reported from the verifying pass rather than from the socket, so
+            // what is counted is what has been accepted towards the checksum.
+            onProgress?.({ receivedBytes: bytes, totalBytes: asset.size });
             callback(null, chunk);
         },
     });

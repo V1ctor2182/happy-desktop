@@ -23,6 +23,7 @@
 .happy2-setup-page__title,
 .happy2-setup-page__copy,
 .happy2-setup-page__command,
+.happy2-setup-page__progress,
 .happy2-setup-page__slot {
     box-sizing: border-box;
 }
@@ -128,4 +129,132 @@
     flex-direction: column;
     gap: 12px;
     width: 100%;
+}
+
+/*
+ * The action's progress, standing exactly where the action stood.
+ *
+ * 36px is the height of the medium button it replaces, so pressing that button
+ * swaps what the page says without moving a single line of it. The measure is
+ * narrower than the copy above on purpose: a bar as wide as a paragraph reads as
+ * a divider, and one this length is read as a quantity.
+ */
+.happy2-setup-page__progress {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 10px;
+    justify-content: center;
+    width: 280px;
+    min-height: 36px;
+    animation: happy2-setup-page-progress-in 160ms ease-out both;
+}
+
+@keyframes happy2-setup-page-progress-in {
+    from {
+        transform: translateY(4px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.happy2-setup-page__progress-track {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    width: 100%;
+    height: 4px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--surface-selected);
+}
+
+/*
+ * The fill is the full ink of the page rather than an accent: this bar is the
+ * only thing moving on the screen while it is up, and it means the same thing
+ * the primary button meant a moment ago.
+ *
+ * The width is eased because the bytes arrive in bursts. Reported honestly and
+ * drawn honestly, a fast archive would step the bar in visible jumps; a short
+ * ease turns the same truthful numbers into one continuous movement without
+ * ever showing a position the download has not reached.
+ */
+.happy2-setup-page__progress-fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--text);
+    transition: width 260ms ease-out;
+}
+
+/* Nothing is measured yet, so nothing is claimed: the fill becomes a short
+   segment travelling the empty track, which says "running" without asserting a
+   position. */
+.happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-fill {
+    position: absolute;
+    inset-block: 0;
+    width: 35%;
+    animation: happy2-setup-page-progress-sweep 1.15s ease-in-out infinite;
+    transition: none;
+}
+
+@keyframes happy2-setup-page-progress-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(286%);
+    }
+}
+
+.happy2-setup-page__progress-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 16px;
+}
+
+.happy2-setup-page__progress-label {
+    flex: none;
+    color: var(--text);
+    font-weight: 500;
+}
+
+/* Tabular figures so a count that changes several times a second changes its
+   digits rather than its width. */
+.happy2-setup-page__progress-detail {
+    overflow: hidden;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/*
+ * Reduced motion keeps every fact and drops every movement: the bar still fills
+ * to the fraction it has reached, and the unmeasured state becomes a dimmed
+ * full track — visibly not a finished download, and visibly not stalled at zero.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .happy2-setup-page__progress {
+        animation: none;
+    }
+
+    .happy2-setup-page__progress-fill {
+        transition: none;
+    }
+
+    .happy2-setup-page__progress[data-state="waiting"] .happy2-setup-page__progress-fill {
+        width: 100%;
+        animation: none;
+        opacity: 0.4;
+    }
 }

@@ -113,10 +113,12 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
         },
         daemonDownload() {
             if (snapshot.pending) return;
-            attempt(
-                bridge.daemonDownload().then(() => bridge.runtimeRetry()),
-                "Happy could not download Happy Agent.",
-            );
+            // Only the install is asked for here. Connecting to what it puts on
+            // the machine belongs to the shell, which does it the moment the
+            // agent lands rather than after a round trip back out to this
+            // window — the wait for that round trip was long enough to show the
+            // failure the install had already fixed.
+            attempt(bridge.daemonDownload(), "Happy could not download Happy Agent.");
         },
         projectChoose() {
             attempt(bridge.onboardingProjectChoose(), "Happy could not open a project.");
@@ -167,9 +169,12 @@ export function localOnboardingView(
         case "daemonDownload":
             return {
                 busy,
+                ...(onboarding.download ? { download: onboarding.download } : {}),
                 kind: "daemon-download",
                 ...(message ? { message } : {}),
             };
+        case "daemonStarting":
+            return { kind: "agent-starting", ...(message ? { message } : {}) };
         case "connecting":
             return { kind: "connecting" };
         case "connectFailed":

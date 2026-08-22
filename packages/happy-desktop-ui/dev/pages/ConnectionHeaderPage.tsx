@@ -79,7 +79,7 @@ export function ConnectionHeaderPage() {
             </Specimen>
 
             <Specimen
-                detail="As the window's top edge · 78px kept clear for the macOS traffic lights, and the band is the drag lane"
+                detail="As the window's top edge · 78px kept clear for the macOS traffic lights, mirrored on the right so the line stays on the window's centre, and the band is the drag lane"
                 label="Window controls"
                 number="04"
                 stage="chrome"
@@ -93,7 +93,7 @@ export function ConnectionHeaderPage() {
                         />
                         <div style={body}>The app, below the window chrome</div>
                     </div>
-                    <DimensionRule label="78px reservation · same as every other first row" />
+                    <DimensionRule label="78px reservation both sides · line centred on the window" />
                 </div>
             </Specimen>
 

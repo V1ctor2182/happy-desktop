@@ -179,15 +179,43 @@ export type DesktopDaemonInstall =
           readonly message: string;
       };
 
+/**
+ * A Happy Agent release archive, while its bytes are arriving.
+ *
+ * Both numbers are counted rather than estimated. The release manifest declares
+ * the archive's exact size — the download already refuses anything that does not
+ * match it — and the same pass that hashes each chunk on its way to disk tallies
+ * it, so this is a report of what has happened rather than a prediction.
+ *
+ * It exists only while an archive is genuinely being fetched. Before the first
+ * byte the size is not yet known, and after the last one the work that remains
+ * is verifying and unpacking, which take no measurable time and have no honest
+ * fraction; a bar that idled at either end would be inventing one.
+ */
+export interface DesktopDaemonDownload {
+    readonly receivedBytes: number;
+    readonly totalBytes: number;
+}
+
 /** The machine-local Happy Agent installation and the daemon currently serving it. */
 export interface DesktopDaemonSnapshot {
     readonly availableVersion?: string;
+    /** The archive on its way here, while `operation` is `downloading`. */
+    readonly download?: DesktopDaemonDownload;
     readonly error?: string;
     readonly installation: "missing" | "installed";
     readonly installedVersion?: string;
     readonly managed: boolean;
     readonly message?: string;
-    readonly operation: "idle" | "checking" | "downloading" | "upgrading";
+    /**
+     * What the controller is doing. `installing` is the first install alone —
+     * putting an agent on a machine that has none and starting it — and is kept
+     * apart from `downloading` because the two are watched by different people
+     * for different reasons: the first holds the setup screen and is the only
+     * thing that person is waiting for, while the second happens quietly beside
+     * somebody's work and must never take a screen.
+     */
+    readonly operation: "idle" | "checking" | "downloading" | "installing" | "upgrading";
     readonly runtime: "stopped" | "starting" | "ready";
     readonly updateAvailable: boolean;
     /**
@@ -327,6 +355,17 @@ export type LocalOnboardingStage =
     | "rigMissing"
     /** Happy Agent is not installed yet; the renderer may ask the shell to download it. */
     | "daemonDownload"
+    /**
+     * The agent that was just fetched is being started, and Happy is reaching it
+     * for the first time.
+     *
+     * It is the tail of `daemonDownload` rather than a step of its own: nobody
+     * asked for it, there is nothing to decide, and it is shown on the same
+     * screen. It exists because the alternative was reporting the connection
+     * Happy had not made yet as a connection that had failed — with the reason
+     * the machine gave before the agent was installed, which by then was untrue.
+     */
+    | "daemonStarting"
     /** `rig` exists; the normal user daemon is being started or connected to. */
     | "connecting"
     /** The daemon could not be reached; the desktop runtime carries the reason. */
@@ -393,6 +432,13 @@ export interface LocalOnboardingSnapshot {
     readonly projectPath?: string;
     /** True while this process is doing the current stage's work. */
     readonly busy: boolean;
+    /**
+     * The Happy Agent archive arriving right now, at `daemonDownload` and only
+     * there. Setup is the one place a first download is worth watching — it is
+     * the whole reason the window is being held — so the counted bytes are
+     * carried here rather than left for the screen to guess at from a sentence.
+     */
+    readonly download?: DesktopDaemonDownload;
     /** Displayable detail for the current stage: why it failed, or what to do. */
     readonly message?: string;
     /**

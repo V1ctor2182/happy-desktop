@@ -4,6 +4,26 @@ import { Button } from "./Button";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
 import { WindowDragRegion } from "./TitleBar";
 
+/**
+ * How far a running action has got, for the few that can say.
+ *
+ * Most of setup's actions are a request and an answer with nothing in between,
+ * and those keep the spinner. This is for the one kind that takes long enough to
+ * be watched — bytes arriving — and it is deliberately not a general "percent
+ * complete": `waiting` is the honest state for work that is running but has
+ * nothing measured yet, and it is a state every such action passes through both
+ * before and after the part that counts.
+ */
+export type SetupPageProgress =
+    | { readonly kind: "waiting" }
+    | {
+          readonly kind: "measured";
+          /** What has arrived, in the flow's own words, beside the label. */
+          readonly detail?: string;
+          /** The share provably done, 0 to 1. */
+          readonly fraction: number;
+      };
+
 /** The one thing this page is asking for, if it is asking for anything. */
 export interface SetupPageAction {
     readonly label: string;
@@ -15,6 +35,13 @@ export interface SetupPageAction {
      * error the person is still reading.
      */
     readonly busy?: boolean;
+    /**
+     * Reported instead of the spinner while this action is busy, when the flow
+     * has something measurable to report. The button gives way to the bar in
+     * place, at the same height, so pressing it changes what the page says
+     * rather than where anything sits.
+     */
+    readonly progress?: SetupPageProgress;
     onSelect(): void;
 }
 
@@ -127,19 +154,75 @@ export function SetupPage(props: SetupPageProps) {
                     </div>
                 )}
                 {local.action
-                    ? ((action) => (
-                          <Button
-                              disabled={action.disabled}
-                              fullWidth
-                              loading={action.busy}
-                              onClick={action.onSelect}
-                              size="large"
-                          >
-                              {action.label}
-                          </Button>
-                      ))(local.action)
+                    ? ((action) =>
+                          action.busy && action.progress ? (
+                              <SetupPageProgressBar
+                                  label={action.label}
+                                  progress={action.progress}
+                              />
+                          ) : (
+                              <Button
+                                  disabled={action.disabled}
+                                  loading={action.busy}
+                                  onClick={action.onSelect}
+                              >
+                                  {action.label}
+                              </Button>
+                          ))(local.action)
                     : null}
             </div>
+        </div>
+    );
+}
+
+/**
+ * The action's own progress, in the place the action was.
+ *
+ * A bar rather than a spinner because a download has a length: a spinner says
+ * only that something is happening, which someone watching a first install
+ * already knows and is not what they are waiting to learn. It occupies the same
+ * height as the button it replaces, so the page does not move when it appears.
+ *
+ * `waiting` is drawn as a sweep across the empty track instead of an empty bar.
+ * A bar sitting at zero looks stuck, and the two moments this state covers —
+ * before the first byte, and while what arrived is being checked and unpacked —
+ * are exactly when someone is most likely to think it has died.
+ */
+function SetupPageProgressBar(props: { label: string; progress: SetupPageProgress }) {
+    const measured = props.progress.kind === "measured" ? props.progress : undefined;
+    const fraction = measured ? Math.min(1, Math.max(0, measured.fraction)) : 0;
+    return (
+        <div
+            className="happy2-setup-page__progress"
+            data-happy-desktop-ui="setup-page-progress"
+            data-state={props.progress.kind}
+        >
+            <span
+                aria-label={props.label}
+                aria-valuemax={100}
+                aria-valuemin={0}
+                // Absent while nothing is measured, which is what tells a screen
+                // reader this is indeterminate rather than stalled at zero.
+                aria-valuenow={measured ? Math.round(fraction * 100) : undefined}
+                className="happy2-setup-page__progress-track"
+                data-happy-desktop-ui="setup-page-progress-track"
+                role="progressbar"
+            >
+                <span
+                    className="happy2-setup-page__progress-fill"
+                    data-happy-desktop-ui="setup-page-progress-fill"
+                    style={measured ? { width: `${String(fraction * 100)}%` } : undefined}
+                />
+            </span>
+            <span
+                className="happy2-setup-page__progress-line"
+                data-happy-desktop-ui="setup-page-progress-line"
+            >
+                <span className="happy2-setup-page__progress-label">{props.label}</span>
+                {measured?.detail === undefined ? null : (
+                    <span className="happy2-setup-page__progress-detail">{measured.detail}</span>
+                )}
+            </span>
         </div>
     );
 }

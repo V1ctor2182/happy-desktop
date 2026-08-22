@@ -123,7 +123,11 @@ function daemonProject(snapshot: DesktopDaemonSnapshot): AppRigDaemonSnapshot {
         managed: snapshot.managed,
         ...(snapshot.readyVersion ? { readyVersion: snapshot.readyVersion } : {}),
         install: snapshot.install,
-        operation: snapshot.operation,
+        // The settings surface has no first install to describe — it exists only
+        // once there is a working agent to open settings against — so the one
+        // operation it cannot be looking at is reported as what it is from that
+        // surface's point of view: bytes arriving.
+        operation: snapshot.operation === "installing" ? "downloading" : snapshot.operation,
         runtime: snapshot.runtime,
         updateAvailable: snapshot.updateAvailable,
         versions: snapshot.versions,

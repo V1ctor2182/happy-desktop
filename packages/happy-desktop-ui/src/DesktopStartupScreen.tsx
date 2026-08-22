@@ -46,7 +46,7 @@ export function DesktopStartupScreen(props: DesktopStartupScreenProps) {
                 copy={props.error ?? "Happy could not start."}
                 data-testid="desktop-startup-screen"
                 scene="owl"
-                title="Happy couldn't start."
+                title="Happy couldn't start"
             />
         );
 
@@ -67,7 +67,7 @@ export function DesktopStartupScreen(props: DesktopStartupScreenProps) {
             copy="Happy runs on this machine, and can connect to others you own."
             data-testid="desktop-startup-screen"
             scene="sparkles"
-            title="Happy runs on this machine."
+            title="Happy runs on this machine"
         />
     );
 }

@@ -251,8 +251,36 @@ export class LocalOnboarding implements Disposable {
      * rather than left standing over a step that has since moved on.
      */
     private messageAwaitsFreshness = false;
-    /** The global `rig` path a connection retry has already been asked for. */
+    /**
+     * What a connection retry has already been asked for: the agent version
+     * Happy installed, or — where Happy manages no agent — the global `rig` path
+     * that appeared. Either way it is the thing whose arrival made another
+     * attempt worth making, so one arrival buys exactly one attempt.
+     */
     private retryRequestedFor?: string;
+    /** What the daemon last said about whether this machine holds an agent. */
+    private daemonInstallation?: "missing" | "installed";
+    /**
+     * The agent version this run of setup put on the machine, if it put one
+     * there at all.
+     *
+     * An agent that was already here when Happy started is not this: the
+     * difference decides whether a failing connection is worth one more attempt.
+     * Something that has just arrived changes the machine the last attempt
+     * failed against; something that was here all along does not, and retrying
+     * against it would be attempting the same thing twice and calling it setup.
+     */
+    private agentInstalledHere?: string;
+    /**
+     * A connection Happy itself started, while it is running.
+     *
+     * The runtime deliberately keeps a failure on screen while it retries, which
+     * is right for a person who pressed Try again and wrong for this: Happy
+     * retries here because it has just removed the reason for the failure, so
+     * the failure is stale from the moment the attempt begins. It is set before
+     * the attempt is made, so no snapshot in between reports the old reason.
+     */
+    private connecting = false;
     private runtimeKey?: string;
     /** Durable work runs one at a time, so two clicks cannot interleave writes. */
     private durableQueue: Promise<void> = Promise.resolve();
@@ -553,7 +581,8 @@ export class LocalOnboarding implements Disposable {
             )
                 void this.probeRun();
         }
-        if (!this.options.daemon) this.connectionNudge(runtime);
+        this.agentInstallWatch();
+        this.connectionNudge(runtime);
         this.freshnessSynchronize(runtime);
         this.publish();
     }
@@ -600,20 +629,61 @@ export class LocalOnboarding implements Disposable {
     }
 
     /**
-     * Asks the runtime to connect once per newly discovered `rig` command. A
-     * daemon that refuses is a truthful failure the person is shown, not
-     * something to attempt again on every state change until it gives in.
+     * Notices an agent arriving on this machine while setup is watching.
+     *
+     * Only the change is recorded, never the state: an agent that was already
+     * installed when Happy started has always been there as far as this run is
+     * concerned, and the whole point of the record is to tell that apart from
+     * one Happy has just put down.
+     */
+    private agentInstallWatch(): void {
+        const daemon = this.options.daemon?.get();
+        if (!daemon) return;
+        const previous = this.daemonInstallation;
+        this.daemonInstallation = daemon.installation;
+        if (previous === "missing" && daemon.installation === "installed")
+            this.agentInstalledHere = daemon.installedVersion;
+    }
+
+    /**
+     * Asks the runtime to connect once per arrival that makes connecting worth
+     * trying again: the agent Happy installed, or the `rig` command that turned
+     * up on a machine Happy manages no agent for.
+     *
+     * Once per arrival, and never on a timer. A daemon that refuses is a
+     * truthful failure the person is shown, not something to attempt again on
+     * every state change until it gives in.
+     *
+     * The install case is why this runs at all here rather than being left to
+     * the window: the agent has only just been put on the machine, and a round
+     * trip out to a renderer and back is long enough to paint the failure that
+     * install has already fixed.
      */
     private connectionNudge(runtime: DesktopRuntimeSnapshot): void {
-        const command = this.probed?.rigCommand;
-        if (!command) {
+        const daemon = this.options.daemon?.get();
+        // The install starts the agent itself and says so meanwhile. Attempting
+        // a connection across that would race the daemon's own reload and spend
+        // this arrival's one attempt on a machine that is still mid-install.
+        if (daemon?.operation === "installing") return;
+        const arrival = this.options.daemon ? this.agentInstalledHere : this.probed?.rigCommand;
+        if (!arrival) {
             this.retryRequestedFor = undefined;
             return;
         }
         if (runtime.phase !== "error") return;
-        if (this.retryRequestedFor === command) return;
-        this.retryRequestedFor = command;
-        void this.options.runtime.retry().catch(() => undefined);
+        if (this.retryRequestedFor === arrival) return;
+        this.retryRequestedFor = arrival;
+        this.connecting = true;
+        void this.options.runtime
+            .retry()
+            .catch(() => undefined)
+            .finally(() => {
+                // However it went, the runtime's own snapshot now answers for
+                // it: ready, or a failure that is genuinely about the machine as
+                // it stands rather than as it stood before the install.
+                this.connecting = false;
+                this.publish();
+            });
     }
 
     /**
@@ -723,12 +793,20 @@ export class LocalOnboarding implements Disposable {
         const message = this.messageFor(stage, runtime);
         const providers = stage === "providersMissing" ? [] : undefined;
         const retrying = runtime.phase === "error" && runtime.retrying === true;
+        // Only the first install is watched here. A background update fetched
+        // for a machine that already works is not a step of setting one up, and
+        // this snapshot has no business reporting it.
+        const download = stage === "daemonDownload" ? daemon?.download : undefined;
         return {
             busy:
                 this.busy ||
                 stage === "checking" ||
                 stage === "examining" ||
-                (stage === "daemonDownload" && daemon?.operation === "downloading"),
+                // Nothing to press and nothing to decide: this stage is the
+                // install seeing itself through.
+                stage === "daemonStarting" ||
+                (stage === "daemonDownload" && daemon?.operation === "installing"),
+            ...(download ? { download } : {}),
             freshness: this.freshness,
             ...(message ? { message } : {}),
             ...(providers ? { providers } : {}),
@@ -759,6 +837,11 @@ export class LocalOnboarding implements Disposable {
             // which this already says.
             if (facts.daemon.installation === "missing") return "daemonDownload";
             if (!facts.ready) {
+                // The agent is here because Happy has just put it here. Starting
+                // it and reaching it for the first time are the rest of that
+                // install rather than a connection that failed, and they are
+                // reported on the screen the person is already watching.
+                if (this.agentStarting(facts.daemon)) return "daemonStarting";
                 const runtime = this.options.runtime.get();
                 return runtime.phase === "error" ? "connectFailed" : "connecting";
             }
@@ -768,6 +851,7 @@ export class LocalOnboarding implements Disposable {
             if (!facts.node) return "nodeMissing";
             if (!facts.rig) return "rigMissing";
             const runtime = this.options.runtime.get();
+            if (this.connecting) return "connecting";
             if (runtime.phase !== "error") return "connecting";
             // A daemon that refuses only because no coding assistant is signed in
             // is not a broken daemon. Telling someone their Rig is unreachable
@@ -789,6 +873,20 @@ export class LocalOnboarding implements Disposable {
         }
     }
 
+    /**
+     * Whether what is happening is the tail of an install Happy performed: the
+     * agent being started by that install, or the first connection to it.
+     *
+     * Both are things Happy is doing, not things that have gone wrong, and
+     * neither is over until the runtime says so.
+     */
+    private agentStarting(daemon: DesktopDaemonSnapshot): boolean {
+        if (daemon.operation === "installing") return true;
+        // With an agent Happy manages, the only connection it starts by itself
+        // is the one that follows an install it just performed.
+        return this.connecting && this.retryRequestedFor === this.agentInstalledHere;
+    }
+
     private messageFor(
         stage: LocalOnboardingSnapshot["stage"],
         runtime: DesktopRuntimeSnapshot,
@@ -797,6 +895,14 @@ export class LocalOnboarding implements Disposable {
         if (stage === "daemonDownload") {
             const daemon = this.options.daemon?.get();
             return daemon?.error ?? daemon?.message;
+        }
+        if (stage === "daemonStarting") {
+            const daemon = this.options.daemon?.get();
+            // The install narrates its own half. Once it has finished, what is
+            // left is this window reaching an agent that is already running, and
+            // the screen says that better than the daemon's last line about
+            // itself would.
+            return daemon?.operation === "installing" ? daemon.message : undefined;
         }
         if (stage === "checking") return this.probeMessage;
         if (stage === "connectFailed" && runtime.phase === "error") return runtime.message;

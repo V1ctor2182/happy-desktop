@@ -69,11 +69,16 @@
  * reservation is padding rather than a margin so the band's own background
  * still runs edge to edge behind the lights.
  *
- * It is draggable for the same reason: it has taken the strip the window was
- * dragged by, so it has to be that strip now.
+ * The same 78px is kept on the right, where nothing is drawn, purely so the
+ * centre of what is left is the centre of the window. Reserving on one side
+ * only would push the line half the reservation to the right of centre, which
+ * is exactly far enough to read as a mistake rather than as a choice.
+ *
+ * It is draggable for the same reason it is inset: it has taken the strip the
+ * window was dragged by, so it has to be that strip now.
  */
 .happy2-connection-header[data-window-controls] {
-    padding-left: 78px;
+    padding-inline: 78px;
     -webkit-app-region: drag;
     app-region: drag;
 }
