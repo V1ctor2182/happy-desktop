@@ -139,6 +139,7 @@ import {
     commandShortcut,
 } from "happy-desktop-ui";
 import { openExternalLink } from "./externalLink";
+import { reactFrameSubscribe } from "./reactFrameSubscribe";
 import { BlueprintView } from "./views/BlueprintView";
 
 export interface AppRigUpdate {
@@ -1698,7 +1699,7 @@ interface RigWorkspaceSurfaceProps {
  */
 function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const workspace = useSyncExternalStore(
-        props.workspace.subscribe,
+        reactFrameSubscribe(props.workspace),
         props.workspace.get,
         props.workspace.get,
     );
@@ -3569,7 +3570,7 @@ function RigWindowDialogs(props: {
     workspace: RigWorkspaceStore;
 }) {
     const workspace = useSyncExternalStore(
-        props.workspace.subscribe,
+        reactFrameSubscribe(props.workspace),
         props.workspace.get,
         props.workspace.get,
     );
