@@ -45,6 +45,7 @@ export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppHappyAg
                     reason: "install",
                     version: snapshot.readyVersion,
                     waitingFor: [],
+                    waitingPeak: 0,
                 },
             });
             void bridge.daemonInstall().catch(fail);
@@ -69,6 +70,7 @@ export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppHappyAg
                     reason: "restart",
                     version: snapshot.installedVersion,
                     waitingFor: [],
+                    waitingPeak: 0,
                 },
             });
             void bridge.daemonRestart().catch(fail);

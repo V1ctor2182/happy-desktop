@@ -118,6 +118,9 @@ export interface AppHappyAgentDrainComponent {
 /** Why the daemon is being taken down and brought back. */
 export type AppHappyAgentDaemonRestartReason = "install" | "restart";
 
+/** The steps a restart runs through, in the order it runs them. */
+export type AppHappyAgentDaemonRestartStep = "draining" | "stopping" | "starting" | "reconnecting";
+
 /**
  * Where a deliberate agent restart has got to. Every fact here is the daemon's
  * own report of itself, so a surface showing it states rather than estimates.
@@ -130,6 +133,11 @@ export type AppHappyAgentDaemonInstall =
           readonly reason: AppHappyAgentDaemonRestartReason;
           readonly version: string;
           readonly waitingFor: readonly AppHappyAgentDrainComponent[];
+          /**
+           * The most open work this drain has held at once, which the share
+           * already finished is measured against.
+           */
+          readonly waitingPeak: number;
           /** The drain has run long enough to be worth offering a way out of. */
           readonly killable: boolean;
       }
@@ -155,6 +163,8 @@ export type AppHappyAgentDaemonInstall =
           readonly reason: AppHappyAgentDaemonRestartReason;
           readonly version: string;
           readonly message: string;
+          /** The step that was running when it failed. */
+          readonly failedAt: AppHappyAgentDaemonRestartStep;
       };
 
 /** The managed Happy Agent installation projected into General settings. */

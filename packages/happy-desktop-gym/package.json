@@ -24,7 +24,7 @@
         "lint": "oxlint ."
     },
     "dependencies": {
-        "@slopus/happy-agent-client": "0.0.22"
+        "@slopus/happy-agent-client": "0.0.24"
     },
     "devDependencies": {
         "@fontsource-variable/jetbrains-mono": "^5.2.8",

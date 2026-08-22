@@ -363,6 +363,12 @@ export {
     type SegmentedControlSegment,
     type SegmentedControlSize,
 } from "./SegmentedControl";
+export {
+    SegmentedProgress,
+    type SegmentedProgressProps,
+    type SegmentedProgressSegment,
+    type SegmentedProgressState,
+} from "./SegmentedProgress";
 export { Banner, type BannerAction, type BannerProps, type BannerTone } from "./Banner";
 export {
     EmptyState,

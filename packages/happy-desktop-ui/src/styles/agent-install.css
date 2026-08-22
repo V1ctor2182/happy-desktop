@@ -8,16 +8,27 @@
  * action row keeps a button's height whether or not a button is in it. Only the
  * words change between steps.
  *
- * The chips are a centred wrap of quiet pills rather than a table or a progress
- * bar. The number of them is the information — a reader is being told "these are
- * still working, nobody is being cut off" — and the component caps the list so
- * the wrap stays inside the two rows reserved for it.
+ * The bar under the sentence is the sequence, not a duration: three segments
+ * for the three things that happen to somebody's work, with only the drain
+ * carrying a position because only the drain has counts behind it.
+ *
+ * The chips are a centred wrap of quiet pills rather than a table. The number of
+ * them is the information — a reader is being told "these are still working,
+ * nobody is being cut off" — and the component caps the list so the wrap stays
+ * inside the two rows reserved for it.
  */
 
 /* Two lines held from the start: the sentence changes with the daemon's counts,
    and a line appearing or leaving would move everything under it. */
 .happy-agent-install .happy-setup-page__copy {
     min-height: 48px;
+}
+
+/* The copy's own measure: the bar is read with the sentence above it, and one
+   run out to the full body width would read as a rule across the page. */
+.happy-agent-install__progress {
+    max-width: 400px;
+    align-self: center;
 }
 
 .happy-agent-install__waiting {

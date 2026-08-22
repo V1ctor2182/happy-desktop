@@ -1625,6 +1625,41 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         await resync(true);
                         reopen = true;
                         break;
+                    } else if (update.kind === "daemon_started") {
+                        reportDebug({
+                            detail: debugDetail({
+                                cursor: update.cursor,
+                                daemonId: update.daemonId,
+                                replaced: update.replaced,
+                            }),
+                            level: update.replaced ? "warning" : "info",
+                            message: update.replaced
+                                ? "A different Happy Agent process is answering; reconciling"
+                                : "Managed update feed named its Happy Agent process",
+                            source: "sse",
+                        });
+                        // A replacement carries none of the previous process's
+                        // journal, so everything applied so far is only as good
+                        // as a snapshot taken again.
+                        if (update.replaced) {
+                            publishConnection("reconnecting");
+                            await resync(true);
+                            reopen = true;
+                            break;
+                        }
+                    } else if (update.kind === "draining") {
+                        // Reported rather than acted on: a draining agent still
+                        // answers and still streams, and the feed says so itself
+                        // when it finally stops.
+                        reportDebug({
+                            detail: debugDetail({
+                                cursor: update.cursor,
+                                daemonId: update.daemonId ?? null,
+                            }),
+                            level: "info",
+                            message: "Happy Agent stopped admitting new work",
+                            source: "sse",
+                        });
                     } else if (update.kind === "disconnected") {
                         reportDebug({
                             detail: debugDetail({ cursor: update.cursor ?? null }),

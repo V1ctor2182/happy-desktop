@@ -3,6 +3,7 @@ import type {
     DesktopDaemonDownload,
     DesktopDaemonInstall,
     DesktopDaemonRestartReason,
+    DesktopDaemonRestartStep,
     DesktopDaemonSnapshot,
     DesktopDaemonVersion,
     DesktopRuntimeSnapshot,
@@ -295,8 +296,15 @@ export class DesktopDaemonController {
                 throw new Error("No Happy Agent update has been downloaded.");
             const selected = version ?? (await happyAgentBinarySelected(this.paths))?.version;
             if (selected === undefined) throw new Error("Happy Agent is not installed.");
-            const publishStep = (install: DesktopDaemonInstall): void =>
+            // The step the sequence is on, kept because a failure has to say
+            // where it stopped and the error itself does not know. It starts on
+            // the first step: everything before the drain is preparation for it,
+            // and a restart that never got that far got nowhere.
+            let step: DesktopDaemonRestartStep = "draining";
+            const publishStep = (install: DesktopDaemonInstall): void => {
+                if (install.phase !== "idle" && install.phase !== "error") step = install.phase;
                 this.publish({ ...this.snapshotValue, install });
+            };
             const killController = new AbortController();
             this.killController = killController;
             try {
@@ -314,6 +322,7 @@ export class DesktopDaemonController {
                         reason,
                         version: selected,
                         waitingFor: [],
+                        waitingPeak: 0,
                     },
                     operation: "upgrading",
                 });
@@ -360,7 +369,7 @@ export class DesktopDaemonController {
                 this.publish({
                     ...this.snapshotValue,
                     error: message,
-                    install: { message, phase: "error", reason, version: selected },
+                    install: { failedAt: step, message, phase: "error", reason, version: selected },
                     operation: "idle",
                 });
                 throw error;

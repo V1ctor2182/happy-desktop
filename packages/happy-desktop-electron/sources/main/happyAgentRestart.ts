@@ -65,10 +65,24 @@ export async function happyAgentRestartRun(options: HappyAgentRestartOptions): P
     const version = options.binary.version;
     const client = await daemonClientOpen(options.paths);
     if (client !== undefined) {
-        options.onStep({ killable: false, phase: "draining", reason, version, waitingFor: [] });
+        options.onStep({
+            killable: false,
+            phase: "draining",
+            reason,
+            version,
+            waitingFor: [],
+            waitingPeak: 0,
+        });
         await client.drain();
-        await drainAwait(client, options.killSignal, (waitingFor, killable) =>
-            options.onStep({ killable, phase: "draining", reason, version, waitingFor }),
+        await drainAwait(client, options.killSignal, (waitingFor, waitingPeak, killable) =>
+            options.onStep({
+                killable,
+                phase: "draining",
+                reason,
+                version,
+                waitingFor,
+                waitingPeak,
+            }),
         );
         const killed = options.killSignal.aborted;
         options.onStep({ killed, phase: "stopping", reason, version });
@@ -128,15 +142,23 @@ async function daemonClientOpen(
  *
  * Whether the wait may be cut short is decided here rather than in the window,
  * because this is what knows when the drain actually started, and it is
- * recomputed on every poll instead of by a timer of its own.
+ * recomputed on every poll instead of by a timer of its own. The same goes for
+ * the most work the drain has held: a drain admits nothing new, so this is the
+ * denominator the window shows progress against, and only the loop that has seen
+ * every report can name it.
  */
 async function drainAwait(
     client: HappyAgentDaemonClient,
     killSignal: AbortSignal,
-    onWaiting: (waitingFor: readonly DesktopDrainComponent[], killable: boolean) => void,
+    onWaiting: (
+        waitingFor: readonly DesktopDrainComponent[],
+        waitingPeak: number,
+        killable: boolean,
+    ) => void,
 ): Promise<void> {
     const started = Date.now();
     const deadline = started + DRAIN_TIMEOUT_MS;
+    let peak = 0;
     for (;;) {
         if (killSignal.aborted) return;
         const health = await client.health().catch(() => undefined);
@@ -145,7 +167,12 @@ async function drainAwait(
         if (health === undefined) return;
         const waitingFor = health.drainWaitingFor ?? [];
         if (waitingFor.length === 0) return;
-        onWaiting(waitingFor.map(drainComponentProject), Date.now() - started >= KILLABLE_AFTER_MS);
+        peak = Math.max(peak, waitingCount(waitingFor));
+        onWaiting(
+            waitingFor.map(drainComponentProject),
+            peak,
+            Date.now() - started >= KILLABLE_AFTER_MS,
+        );
         if (Date.now() >= deadline) {
             throw new Error(
                 `Happy Agent was still finishing ${waitingSummary(waitingFor)} after 15 minutes.`,
@@ -168,6 +195,11 @@ function drainComponentProject(component: DrainWaitingFor): DesktopDrainComponen
             : {}),
         ...(component.truncated ? { truncated: true } : {}),
     };
+}
+
+/** Every operation the daemon is still holding open, across its components. */
+function waitingCount(waitingFor: readonly DrainWaitingFor[]): number {
+    return waitingFor.reduce((total, component) => total + component.count, 0);
 }
 
 function waitingSummary(waitingFor: readonly DrainWaitingFor[]): string {

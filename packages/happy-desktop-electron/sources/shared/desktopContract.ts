@@ -123,13 +123,17 @@ export interface DesktopDrainComponent {
     readonly truncated?: boolean;
 }
 
+/** The steps a restart runs through, in the order it runs them. */
+export type DesktopDaemonRestartStep = "draining" | "stopping" | "starting" | "reconnecting";
+
 /**
  * Where a deliberate agent restart has got to.
  *
  * The daemon owns every one of these facts: it publishes its own drain mode and
- * what is still finishing, so the screen reports rather than estimates. There is
- * no percentage here because the daemon does not know one either — what it knows
- * is which components are still open and how many operations hold them.
+ * what is still finishing, so the screen reports rather than estimates. The one
+ * quantity here is the drain's, and it is a count of open work rather than a
+ * prediction — the daemon knows what it is still holding and how much it was
+ * holding at the worst, and nothing beyond that is claimed.
  */
 export type DesktopDaemonInstall =
     /**
@@ -145,6 +149,15 @@ export type DesktopDaemonInstall =
           readonly reason: DesktopDaemonRestartReason;
           readonly version: string;
           readonly waitingFor: readonly DesktopDrainComponent[];
+          /**
+           * The most open work this drain has been holding at once.
+           *
+           * The screen shows how far the drain has got as the share of this that
+           * has since finished, so it is counted here — by the one place that
+           * has watched the drain from its first report — rather than guessed
+           * from whatever the window happened to see first.
+           */
+          readonly waitingPeak: number;
           /**
            * The wait has run long enough to be worth offering a way out of.
            *
@@ -179,6 +192,11 @@ export type DesktopDaemonInstall =
           readonly reason: DesktopDaemonRestartReason;
           readonly version: string;
           readonly message: string;
+          /**
+           * The step that was running when it failed. The sequence knows this;
+           * the message alone would leave the screen guessing where it stopped.
+           */
+          readonly failedAt: DesktopDaemonRestartStep;
       };
 
 /**

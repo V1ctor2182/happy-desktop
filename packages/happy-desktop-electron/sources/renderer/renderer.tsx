@@ -570,6 +570,7 @@ function agentInstallView(install: AppHappyAgentDaemonInstall): AgentInstallView
                 reason: install.reason,
                 version: install.version,
                 waitingFor: install.waitingFor,
+                waitingPeak: install.waitingPeak,
             };
         case "stopping":
             return {
@@ -583,6 +584,7 @@ function agentInstallView(install: AppHappyAgentDaemonInstall): AgentInstallView
             return { kind: install.phase, reason: install.reason, version: install.version };
         case "error":
             return {
+                failedAt: install.failedAt,
                 kind: "error",
                 message: install.message,
                 reason: install.reason,

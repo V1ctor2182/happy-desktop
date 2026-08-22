@@ -20,7 +20,7 @@ export function AgentInstallScreenPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Taking the machine's Happy Agent down and bringing it back, as the one thing the window is doing — for a new version or for the version already running. Every state is the same SetupPage frame, held still: one scene for the whole restart, two lines reserved for the copy, two rows reserved for the drain chips, and a button row reserved whether or not a button is in it, so a step advancing rewrites the words and moves nothing. Nothing here is a percentage, because the daemon reports open work rather than progress. There is no success state — the restart finishing is this screen ending."
+            summary="Taking the machine's Happy Agent down and bringing it back, as the one thing the window is doing — for a new version or for the version already running. Every state is the same SetupPage frame, held still: one scene for the whole restart, two lines reserved for the copy, a three-segment bar, two rows reserved for the drain chips, and a button row reserved whether or not a button is in it, so a step advancing rewrites the words and moves nothing. The bar names the three parts of a restart — work finishing, the agent going away, something coming back — and only the drain fills in proportion, against the most work it was holding, because it is the only step the daemon puts a number on. There is no success state — the restart finishing is this screen ending."
             title="Agent install screen"
         >
             <Specimen
@@ -40,15 +40,16 @@ export function AgentInstallScreenPage() {
                                 reason: "install",
                                 version: "0.4.2",
                                 waitingFor: [],
+                                waitingPeak: 0,
                             }}
                         />
                     </div>
-                    <DimensionRule label="No chips until the daemon names something" />
+                    <DimensionRule label="No chips, and no share to fill: the drain segment sweeps" />
                 </div>
             </Specimen>
 
             <Specimen
-                detail="Three agents still working, each named by the stage it is finishing"
+                detail="Three of the five operations the drain was holding are still open"
                 label="Draining · agents"
                 number="02"
                 stage="surface"
@@ -74,10 +75,11 @@ export function AgentInstallScreenPage() {
                                         name: "agents",
                                     },
                                 ],
+                                waitingPeak: 5,
                             }}
                         />
                     </div>
-                    <DimensionRule label="Chips wrap · 420 max · 6 gap" />
+                    <DimensionRule label="Chips wrap · 420 max · 6 gap · drain segment at 2/5" />
                 </div>
             </Specimen>
 
@@ -108,6 +110,7 @@ export function AgentInstallScreenPage() {
                                         truncated: true,
                                     },
                                 ],
+                                waitingPeak: 9,
                             }}
                         />
                     </div>
@@ -132,6 +135,7 @@ export function AgentInstallScreenPage() {
                                 reason: "install",
                                 version: "0.4.2",
                                 waitingFor: [{ count: 4, name: "storage" }],
+                                waitingPeak: 6,
                             }}
                         />
                     </div>
@@ -224,6 +228,7 @@ export function AgentInstallScreenPage() {
                             onDismiss={noop}
                             onKill={noop}
                             view={{
+                                failedAt: "stopping",
                                 kind: "error",
                                 message: "Happy Agent accepted the shutdown but did not exit.",
                                 reason: "install",
@@ -261,6 +266,7 @@ export function AgentInstallScreenPage() {
                         onDismiss={noop}
                         onKill={noop}
                         view={{
+                            failedAt: "starting",
                             kind: "error",
                             message: "The new Happy Agent did not answer after starting.",
                             reason: "restart",

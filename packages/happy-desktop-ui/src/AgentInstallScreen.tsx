@@ -1,5 +1,6 @@
 import { Box } from "./Box";
 import { Button } from "./Button";
+import { SegmentedProgress, type SegmentedProgressSegment } from "./SegmentedProgress";
 import { SetupPage } from "./SetupPage";
 
 /** One agent the daemon is still waiting on, and the stage it is finishing. */
@@ -23,12 +24,22 @@ export interface AgentInstallDrainComponent {
  */
 export type AgentInstallReason = "install" | "restart";
 
+/** The steps a restart runs through, in the order it runs them. */
+export type AgentInstallStep = "draining" | "stopping" | "starting" | "reconnecting";
+
 export type AgentInstallView =
     | {
           readonly kind: "draining";
           readonly reason: AgentInstallReason;
           readonly version: string;
           readonly waitingFor: readonly AgentInstallDrainComponent[];
+          /**
+           * The most work this drain has ever been holding at once, which is
+           * what the share already finished is measured against. It comes from
+           * whatever has been watching the drain since it began rather than
+           * from the first report this screen happened to be mounted for.
+           */
+          readonly waitingPeak: number;
           /** Offers the way out of a wait that has gone on long enough. */
           readonly killable: boolean;
       }
@@ -49,6 +60,8 @@ export type AgentInstallView =
           readonly reason: AgentInstallReason;
           readonly version: string;
           readonly message: string;
+          /** The step the restart stopped on, so the bar stops where it stopped. */
+          readonly failedAt: AgentInstallStep;
       };
 
 export interface AgentInstallScreenProps {
@@ -89,6 +102,36 @@ const STAGE_WORDS: Record<AgentInstallDrainAgent["stage"], string> = {
  */
 const AGENTS_SHOWN = 5;
 
+/** Every step of a restart, in the order they happen. */
+const INSTALL_STEPS: readonly AgentInstallStep[] = [
+    "draining",
+    "stopping",
+    "starting",
+    "reconnecting",
+];
+
+/**
+ * The three parts of a restart worth telling apart, and the steps each covers.
+ *
+ * These are the three answers to "what is happening to my work": it is still
+ * finishing, the agent is going away, and something is coming back. Reconnecting
+ * belongs to the last of them — the agent is already up, and the window catching
+ * up to it is not a stage anyone is waiting on separately.
+ *
+ * Named the way the titles are named. `drain` is the daemon's word for the first
+ * of these and says nothing to whoever is watching it; what they are being told
+ * is that their work is being allowed to finish.
+ */
+const INSTALL_SECTIONS: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly steps: readonly AgentInstallStep[];
+}[] = [
+    { id: "drain", label: "Finishing work", steps: ["draining"] },
+    { id: "shutdown", label: "Shutting down", steps: ["stopping"] },
+    { id: "start", label: "Starting", steps: ["starting", "reconnecting"] },
+];
+
 /**
  * Installing a new Happy Agent, as the one thing this window is doing.
  *
@@ -98,9 +141,16 @@ const AGENTS_SHOWN = 5;
  * the local machine's agent — a Happy Agent on another machine is restarted by whoever
  * owns it and never takes this window.
  *
- * Nothing here is a percentage or an estimate. The daemon says which of its
- * components still hold work open and how many operations each one is holding,
- * and this states that. When it says nothing is waiting, the wait is over.
+ * Nothing here is an estimate. The daemon says which of its components still
+ * hold work open and how many operations each one is holding, and this states
+ * that. When it says nothing is waiting, the wait is over.
+ *
+ * The bar says which of the three parts of a restart is running: work finishing,
+ * the agent going away, something coming back. Those are three different answers
+ * to the only question anyone watching this has, and one undivided bar gives
+ * none of them. Only the drain fills in proportion, against the most work it was
+ * holding, because it is the only step with a quantity behind it; the other two
+ * sweep rather than invent a position.
  *
  * Every phase is one frame that never moves. The whole sequence runs on its own
  * in front of someone who cannot do anything about it, so the parts that change
@@ -149,6 +199,12 @@ export function AgentInstallScreen(props: AgentInstallScreenProps) {
             scene="snail"
             title={installTitle(view)}
         >
+            <SegmentedProgress
+                className="happy-agent-install__progress"
+                data-testid="agent-install-progress"
+                label="Restart progress"
+                segments={installSegments(view)}
+            />
             <Box className="happy-agent-install__waiting">
                 {agents.slice(0, AGENTS_SHOWN).map((agent) => (
                     <span className="happy-agent-install__agent" key={agent.id}>
@@ -166,6 +222,54 @@ export function AgentInstallScreen(props: AgentInstallScreenProps) {
             </Box>
         </SetupPage>
     );
+}
+
+/**
+ * The restart as three segments: where it has got to, and how far into the one
+ * part of it that can be counted.
+ *
+ * The bar is the sequence rather than a duration. Only the drain knows a
+ * quantity — the daemon says how much work it is still holding — so only that
+ * segment ever reports a position; the other two say "this is the step running"
+ * and nothing more, because nothing more is known about them.
+ */
+function installSegments(view: AgentInstallView): readonly SegmentedProgressSegment[] {
+    const step = view.kind === "error" ? view.failedAt : view.kind;
+    const reached = INSTALL_STEPS.indexOf(step);
+    return INSTALL_SECTIONS.map((section) => {
+        const live = section.steps.includes(step);
+        const through = Math.max(...section.steps.map((one) => INSTALL_STEPS.indexOf(one)));
+        const state = live
+            ? view.kind === "error"
+                ? "failed"
+                : "running"
+            : reached > through
+              ? "done"
+              : "pending";
+        const fraction =
+            state === "running" && view.kind === "draining" ? drainFraction(view) : undefined;
+        return {
+            id: section.id,
+            label: section.label,
+            state,
+            ...(fraction === undefined ? {} : { fraction }),
+        };
+    });
+}
+
+/**
+ * How much of the drain is behind us, or nothing while that is unknowable.
+ *
+ * The daemon reports open work rather than progress, so this is the share of
+ * the work the drain has been holding that it has since let go of. Before the
+ * first report there is no denominator and none is invented: an unmeasured
+ * drain sweeps instead, which is the honest drawing of "waiting, amount
+ * unknown".
+ */
+function drainFraction(view: Extract<AgentInstallView, { kind: "draining" }>): number | undefined {
+    if (view.waitingPeak <= 0) return undefined;
+    const remaining = view.waitingFor.reduce((total, one) => total + one.count, 0);
+    return Math.min(1, Math.max(0, (view.waitingPeak - remaining) / view.waitingPeak));
 }
 
 /** Every agent the daemon named, across the components holding them. */
