@@ -1,12 +1,17 @@
 <div align="center">
 
-<p><img src="./.github/logo.png" alt="Happy" width="160" /></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/.github/logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="/.github/logo-light.png">
+  <img src="/.github/logo-dark.png" width="160" alt="Happy">
+</picture>
 
-<h3>A desktop home for working with agents.</h3>
+<h3>Any team. Any model. One harness.</h3>
 
 <p>
-  Happy is a macOS app built around the agent daemon on your own machine —
-  one place to run, watch, and steer real work.
+  Happy integrates models, teams, and compute into one secure, open-source
+  harness — accessible from terminal, desktop, and mobile, deployable
+  anywhere, and adaptable to your team.
 </p>
 
 </div>
@@ -14,14 +19,45 @@
 ## What Happy is
 
 Happy is a macOS desktop workspace for doing serious work with coding agents.
-It connects to the local Happy Agent (Happy Agent) daemon and turns that connection
-into a complete working environment: your projects and workspaces in the
-sidebar, durable agent conversations in the middle, and the files, terminals,
-and previews the work actually touches beside them.
+It connects to the local Happy Agent daemon and turns that connection into a
+complete working environment: your projects and workspaces in the sidebar,
+durable agent conversations in the middle, and the files, terminals, and
+previews the work actually touches beside them.
 
 Sessions are not chat windows. A conversation streams live while the agent
 works, survives restarts, and keeps its full history, so you can leave a task
 running, come back later, and pick up exactly where it left off.
+
+## Natively multiplayer
+
+Bring your team into one session with every agent. Anyone can share context,
+steer the conversation, approve decisions, and take over in real time — the
+session is a shared place to work, not a private transcript.
+
+## One harness. Every agent.
+
+Let Claude plan, Codex build, and Grok review — or run them side by side and
+compare. Happy detects the subscriptions already on your machine and mixes
+every agent in one harness, so the context stays together across every
+handoff instead of being scattered across vendor apps.
+
+## Yours to run. Yours to change.
+
+Happy is open source and built to be changed. Run it on your hardware, in
+your cloud, or in ours — then change Happy to fit your team's needs. The app
+is an Electron shell around your normal local Happy Agent daemon, speaking
+the same `happy-agent-client` protocol whether the renderer runs in the
+desktop shell or in a browser during development.
+
+## Secure and compliant
+
+No telemetry. No hosted account, and no third-party servers by default. Your
+projects stay ordinary directories on your machine, and Happy runs safely
+inside corporate networks without leaking data: every connection between
+agents, teammates, and mobile clients is end-to-end encrypted. When a session
+uses a hosted model, that provider receives only the prompts and context sent
+to it under its own terms; Happy does not upload the rest of your workspace
+to a second service.
 
 ## How you work in it
 
@@ -40,18 +76,7 @@ running, come back later, and pick up exactly where it left off.
 - **Notes and visibility.** Keep notes alongside the work, and see what agents
   and their processes are doing at any moment.
 
-## Local by design
-
-Happy has no hosted account, no central service, and no telemetry. The app is
-an Electron shell that starts or attaches to your normal local Happy Agent daemon and
-talks to it over an authenticated local boundary — the same
-`happy-agent-client` protocol throughout, whether the renderer runs in the
-desktop shell or in a browser during development.
-
-Your projects stay ordinary directories on your machine. When a session uses a
-hosted model, that provider receives the prompts and context sent to it under
-its own terms; Happy does not upload the rest of your workspace to a second
-service.
+## Packages
 
 | Package                  | Responsibility                                         |
 | ------------------------ | ------------------------------------------------------ |
