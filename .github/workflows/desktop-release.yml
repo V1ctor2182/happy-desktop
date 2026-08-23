@@ -1,20 +1,101 @@
 name: Release macOS desktop
+run-name: Release macOS desktop v${{ inputs.version }}
 
 on:
-    push:
-        tags:
-            - "v*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: Stable semantic version without the leading v
+                required: true
+                type: string
+            release_notes:
+                description: Markdown changelog to include in the GitHub Release
+                required: true
+                type: string
 
 permissions:
-    contents: write
+    contents: read
 
 concurrency:
-    group: desktop-release-${{ github.ref }}
+    group: release-macos-desktop
     cancel-in-progress: false
 
+env:
+    RELEASE_TAG: v${{ inputs.version }}
+    RELEASE_VERSION: ${{ inputs.version }}
+
 jobs:
+    verify:
+        name: Verify release inputs and source
+        runs-on: macos-14
+        timeout-minutes: 60
+
+        steps:
+            - name: Check out source
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+              with:
+                  fetch-depth: 0
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+
+            - name: Verify release inputs
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  RELEASE_NOTES: ${{ inputs.release_notes }}
+              run: |
+                  if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+                    echo "Desktop releases must be dispatched from main." >&2
+                    exit 1
+                  fi
+                  if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    echo "Version must be stable semantic and must not include the leading v." >&2
+                    exit 1
+                  fi
+                  if [[ -z "${RELEASE_NOTES//[[:space:]]/}" ]]; then
+                    echo "Release notes must not be blank." >&2
+                    exit 1
+                  fi
+                  git fetch origin main --tags
+                  if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+                    echo "Desktop releases must start from the current main branch." >&2
+                    exit 1
+                  fi
+                  ROOT_VERSION="$(node -p "require('./package.json').version")"
+                  DESKTOP_VERSION="$(node -p "require('./packages/happy-desktop-electron/package.json').version")"
+                  if [[ "$RELEASE_VERSION" != "$ROOT_VERSION" ]]; then
+                    echo "Requested version $RELEASE_VERSION does not match root package version $ROOT_VERSION." >&2
+                    exit 1
+                  fi
+                  if [[ "$DESKTOP_VERSION" != "$ROOT_VERSION" ]]; then
+                    echo "Desktop package version $DESKTOP_VERSION does not match root package version $ROOT_VERSION." >&2
+                    exit 1
+                  fi
+                  if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
+                    echo "Tag $RELEASE_TAG already exists." >&2
+                    exit 1
+                  fi
+                  if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+                    echo "Release $RELEASE_TAG already exists." >&2
+                    exit 1
+                  fi
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Test application
+              run: pnpm test
+
     build:
         name: Build macOS ${{ matrix.arch }}
+        needs: verify
         strategy:
             fail-fast: false
             matrix:
@@ -48,15 +129,8 @@ jobs:
                   node-version: "24"
                   cache: pnpm
 
-            - name: Verify release identity
-              env:
-                  RELEASE_TAG: ${{ github.ref_name }}
+            - name: Verify signing configuration
               run: |
-                  ROOT_VERSION="$(node -p "require('./package.json').version")"
-                  DESKTOP_VERSION="$(node -p "require('./packages/happy-desktop-electron/package.json').version")"
-                  printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
-                  test "$RELEASE_TAG" = "v$ROOT_VERSION"
-                  test "$DESKTOP_VERSION" = "$ROOT_VERSION"
                   test -n "$CSC_LINK"
                   test -n "$CSC_KEY_PASSWORD"
                   test -n "$APPLE_NOTARY_KEY_P8_BASE64"
@@ -115,15 +189,21 @@ jobs:
                   path: packages/happy-desktop-electron/release/local-web-site
                   if-no-files-found: error
 
-    release:
+    publish:
         name: Publish GitHub Release
-        needs: build
+        needs:
+            - verify
+            - build
         runs-on: ubuntu-latest
         timeout-minutes: 15
+        permissions:
+            contents: write
 
         steps:
-            - name: Check out source
+            - name: Check out the verified commit
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+              with:
+                  fetch-depth: 0
 
             - name: Download signed artifacts
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -132,41 +212,50 @@ jobs:
                   path: packages/happy-desktop-electron/release
                   merge-multiple: true
 
-            - name: Create architecture-aware updater manifests
-              env:
-                  RELEASE_VERSION: ${{ github.ref_name }}
-              run: |
-                  RELEASE_VERSION="${RELEASE_VERSION#v}" \
-                    node scripts/create-mac-update-manifest.mjs standard
-                  RELEASE_VERSION="${RELEASE_VERSION#v}" \
-                    node scripts/create-mac-update-manifest.mjs local-web
-
-            - name: Publish release assets
+            - name: Confirm the release target
+              shell: bash
               env:
                   GH_TOKEN: ${{ github.token }}
-                  RELEASE_TAG: ${{ github.ref_name }}
               run: |
-                  if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-                    gh release upload "$RELEASE_TAG" \
-                      packages/happy-desktop-electron/release/standard/*.dmg \
-                      packages/happy-desktop-electron/release/standard/*.zip \
-                      packages/happy-desktop-electron/release/standard/*.blockmap \
-                      packages/happy-desktop-electron/release/standard/*-mac.yml \
-                      packages/happy-desktop-electron/release/local-web/*.dmg \
-                      packages/happy-desktop-electron/release/local-web/*.zip \
-                      packages/happy-desktop-electron/release/local-web/*.blockmap \
-                      packages/happy-desktop-electron/release/local-web/*-mac.yml \
-                      --clobber
-                  else
-                    gh release create "$RELEASE_TAG" \
-                      packages/happy-desktop-electron/release/standard/*.dmg \
-                      packages/happy-desktop-electron/release/standard/*.zip \
-                      packages/happy-desktop-electron/release/standard/*.blockmap \
-                      packages/happy-desktop-electron/release/standard/*-mac.yml \
-                      packages/happy-desktop-electron/release/local-web/*.dmg \
-                      packages/happy-desktop-electron/release/local-web/*.zip \
-                      packages/happy-desktop-electron/release/local-web/*.blockmap \
-                      packages/happy-desktop-electron/release/local-web/*-mac.yml \
-                      --generate-notes \
-                      --title "Happy $RELEASE_TAG"
+                  git fetch origin main --tags
+                  if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+                    echo "The verified commit is no longer on main." >&2
+                    exit 1
                   fi
+                  if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
+                    echo "Tag $RELEASE_TAG was created while this release was building." >&2
+                    exit 1
+                  fi
+                  if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+                    echo "Release $RELEASE_TAG was created while this release was building." >&2
+                    exit 1
+                  fi
+
+            - name: Create architecture-aware updater manifests
+              run: |
+                  node scripts/create-mac-update-manifest.mjs standard
+                  node scripts/create-mac-update-manifest.mjs local-web
+
+            - name: Create tag and GitHub release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  RELEASE_NOTES: ${{ inputs.release_notes }}
+              run: |
+                  mkdir -p .release
+                  printf '%s\n' "$RELEASE_NOTES" > .release/notes.md
+                  gh release create "$RELEASE_TAG" \
+                    --draft \
+                    --target "$GITHUB_SHA" \
+                    --title "Happy $RELEASE_TAG" \
+                    --notes-file .release/notes.md \
+                    packages/happy-desktop-electron/release/standard/*.dmg \
+                    packages/happy-desktop-electron/release/standard/*.zip \
+                    packages/happy-desktop-electron/release/standard/*.blockmap \
+                    packages/happy-desktop-electron/release/standard/*-mac.yml \
+                    packages/happy-desktop-electron/release/local-web/*.dmg \
+                    packages/happy-desktop-electron/release/local-web/*.zip \
+                    packages/happy-desktop-electron/release/local-web/*.blockmap \
+                    packages/happy-desktop-electron/release/local-web/*-mac.yml
+                  gh release edit "$RELEASE_TAG" --draft=false --latest
+                  RELEASE_URL="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
+                  printf 'Published [Happy %s](%s).\n' "$RELEASE_TAG" "$RELEASE_URL" >> "$GITHUB_STEP_SUMMARY"
