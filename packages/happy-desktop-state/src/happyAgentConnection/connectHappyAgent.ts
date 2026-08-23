@@ -70,6 +70,12 @@ const SNAPSHOT_RESPONSE_TIMEOUT_MS = 60_000;
 const MUTATION_RESPONSE_TIMEOUT_MS = 60_000;
 const SEND_ATTEMPTS = 3;
 const INITIAL_SEND_RETRY_MS = 250;
+/**
+ * Draft text is optimistic, so it is projected immediately while persistence
+ * waits for a short pause in typing. Emptying a draft stays immediate: submit
+ * relies on that clear entering the agent mutation lane before the message.
+ */
+const DRAFT_SAVE_DEBOUNCE_MS = 300;
 
 function debugDetail(value: unknown): string {
     try {
@@ -136,6 +142,18 @@ interface RecentEvent {
     receivedAt: number;
 }
 
+interface DraftSave {
+    readonly draft: AgentDraftSnapshot;
+    readonly mutationId: string;
+    readonly previousDraft: AgentDraftSnapshot;
+    readonly revision: number;
+    readonly updatedAt: number;
+}
+
+interface PendingDraftSave extends DraftSave {
+    readonly timer: ReturnType<typeof setTimeout>;
+}
+
 export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgentConnection {
     const client = options.client ?? new HappyAgentClient(options);
     const endpoint = options.endpoint.toString();
@@ -150,6 +168,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const agentDrafts = new Map<string, AgentDraftSnapshot>();
     const agentModes = new Map<string, MessageMode | null>();
     const draftRevisions = new Map<string, number>();
+    const pendingDraftSaves = new Map<string, PendingDraftSave>();
+    const draftSaveCancel = (sessionId: string): void => {
+        const pending = pendingDraftSaves.get(sessionId);
+        if (pending === undefined) return;
+        clearTimeout(pending.timer);
+        pendingDraftSaves.delete(sessionId);
+    };
     /**
      * Agents named here and not yet created on the daemon. Opening one is an
      * ordinary thing to do — a workspace hands the reader its first session
@@ -467,6 +492,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             (draft.updatedAt === null || draft.updatedAt < current.updatedAt)
         ) {
             return false;
+        }
+        const pending = pendingDraftSaves.get(agentId);
+        if (
+            pending !== undefined &&
+            draft.updatedAt !== null &&
+            draft.updatedAt >= pending.updatedAt
+        ) {
+            draftSaveCancel(agentId);
+            if (draftRevisions.get(agentId) === pending.revision) draftRevisions.delete(agentId);
         }
         replaceDraft(agentId, draft);
         return true;
@@ -1811,6 +1845,52 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         return mutationId;
     };
 
+    const draftSave = (sessionId: string, save: DraftSave): string =>
+        mutation(
+            "set_draft",
+            save.mutationId,
+            () =>
+                client.saveAgentDraft(
+                    sessionId,
+                    {
+                        draft: save.draft.value,
+                        mutationId: save.mutationId,
+                        updatedAt: save.updatedAt,
+                    },
+                    { signal: rootController.signal },
+                ),
+            ({ draft: saved }) => {
+                if (draftRevisions.get(sessionId) !== save.revision) return;
+                draftRevisions.delete(sessionId);
+                replaceDraft(sessionId, saved);
+            },
+            () => {
+                if (draftRevisions.get(sessionId) !== save.revision) return;
+                draftRevisions.delete(sessionId);
+                replaceDraft(sessionId, save.previousDraft);
+            },
+            sessionId,
+            `agent:${sessionId}`,
+        );
+
+    const draftSaveSchedule = (sessionId: string, save: DraftSave): void => {
+        draftSaveCancel(sessionId);
+        const timer = setTimeout(() => {
+            const pending = pendingDraftSaves.get(sessionId);
+            if (pending?.mutationId !== save.mutationId) return;
+            pendingDraftSaves.delete(sessionId);
+            draftSave(sessionId, pending);
+        }, DRAFT_SAVE_DEBOUNCE_MS);
+        pendingDraftSaves.set(sessionId, { ...save, timer });
+    };
+
+    const draftSaveFlush = (sessionId: string): void => {
+        const pending = pendingDraftSaves.get(sessionId);
+        if (pending === undefined) return;
+        draftSaveCancel(sessionId);
+        draftSave(sessionId, pending);
+    };
+
     const saveMode = (
         sessionId: string,
         action: Extract<
@@ -1825,6 +1905,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             reportMutationFailure(action, mutationId, new Error("The agent is not loaded."));
             return mutationId;
         }
+        // Preserve the agent lane's existing text-then-mode ordering when a
+        // selection changes during the debounce window.
+        draftSaveFlush(sessionId);
         const previousMode = intendedModes.get(sessionId);
         const previousDraft =
             agentDrafts.get(sessionId) ?? ({ value: null, updatedAt: null } as const);
@@ -2229,6 +2312,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     agentModes.delete(sessionId);
                     agentDrafts.delete(sessionId);
                     draftRevisions.delete(sessionId);
+                    draftSaveCancel(sessionId);
                     groupsStore.setState((state) => ({
                         workspaces: state.workspaces.map((candidate) =>
                             candidate.id === workspaceId
@@ -2481,32 +2565,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             const revision = (draftRevisions.get(sessionId) ?? 0) + 1;
             draftRevisions.set(sessionId, revision);
             replaceDraft(sessionId, draft);
-            return mutation(
-                "set_draft",
-                mutationId,
-                () =>
-                    client.saveAgentDraft(
-                        sessionId,
-                        {
-                            draft: draft.value,
-                            mutationId,
-                            updatedAt,
-                        },
-                        { signal: rootController.signal },
-                    ),
-                ({ draft: saved }) => {
-                    if (draftRevisions.get(sessionId) !== revision) return;
-                    draftRevisions.delete(sessionId);
-                    replaceDraft(sessionId, saved);
-                },
-                () => {
-                    if (draftRevisions.get(sessionId) !== revision) return;
-                    draftRevisions.delete(sessionId);
-                    replaceDraft(sessionId, previousDraft);
-                },
-                sessionId,
-                `agent:${sessionId}`,
-            );
+            const save = { draft, mutationId, previousDraft, revision, updatedAt };
+            if (value.draft !== null && value.draft.length > 0) {
+                draftSaveSchedule(sessionId, save);
+                return mutationId;
+            }
+            draftSaveCancel(sessionId);
+            return draftSave(sessionId, save);
         },
         switchModel(sessionId, selection) {
             const value = typeof selection === "string" ? { modelId: selection } : selection;
@@ -2697,6 +2762,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             updatesAttemptController?.abort();
             retryWake?.();
             retryWake = undefined;
+            for (const pending of pendingDraftSaves.values()) clearTimeout(pending.timer);
+            pendingDraftSaves.clear();
             publishConnection("closed");
             groupSubscribers.clear();
             for (const entry of sessions.values()) entry.subscribers.clear();
