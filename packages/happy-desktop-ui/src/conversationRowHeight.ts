@@ -157,9 +157,11 @@ const MEDIA_FALLBACK_H = 180;
 const ATTACHMENT_CARD_HEIGHT = 64;
 const ATTACHMENT_CARD_GAP = 4;
 /** Collapsed `.happy-agent-activity-row` heights, by activity kind. */
-const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
+const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40, agentMessage: 32 } as const;
 /** Expanded reasoning: outer/header/gap chrome around its Markdown body. */
 const REASONING_ACTIVITY_CHROME = 44;
+/** The same chrome on an agent message, which rests on the tighter tool rhythm. */
+const AGENT_MESSAGE_ACTIVITY_CHROME = 36;
 /** Expanded shell row: outer/header/body chrome around pre-wrapped 12/18 output. */
 const SHELL_ACTIVITY_CHROME = 60;
 const SHELL_ACTIVITY_OUTPUT_INSET = 36;
@@ -277,7 +279,7 @@ export function messageBodyMeasure(
 }
 /** Fixed collapsed height of an activity row, or `undefined` for a richer kind. */
 export function conversationActivityHeight(kind: string): number | undefined {
-    return kind === "tool" || kind === "labeled" || kind === "reasoning"
+    return kind === "tool" || kind === "labeled" || kind === "reasoning" || kind === "agentMessage"
         ? ACTIVITY_HEIGHT[kind]
         : undefined;
 }
@@ -487,7 +489,14 @@ export function conversationRowHeight(
                 : entry.activity.kind === "reasoning" && expanded
                   ? REASONING_ACTIVITY_CHROME +
                     markdownBodyHeight(entry.activity.text, width - activityInset - 16, cache?.text)
-                  : conversationActivityHeight(entry.activity.kind);
+                  : entry.activity.kind === "agentMessage" && expanded
+                    ? AGENT_MESSAGE_ACTIVITY_CHROME +
+                      markdownBodyHeight(
+                          entry.activity.text,
+                          width - activityInset - 16,
+                          cache?.text,
+                      )
+                    : conversationActivityHeight(entry.activity.kind);
         return rowHeightCached(
             cache,
             entry,

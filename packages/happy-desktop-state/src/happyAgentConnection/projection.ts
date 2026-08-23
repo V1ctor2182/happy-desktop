@@ -249,6 +249,10 @@ function projectQuestionElement(question: Question): Extract<ChatElement, { kind
 }
 
 export function projectElements(input: SessionProjectionInput): readonly ChatElement[] {
+    const reader: TranscriptReader = {
+        agentId: input.agent.id,
+        parentAgentId: input.agent.parentAgentId,
+    };
     const messagesByRun = new Map<string, TranscriptMessage[]>();
     const pending: TranscriptMessage[] = [];
     for (const entry of input.messages) {
@@ -286,7 +290,8 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             // everything else this loop does.
             if (!messagesOrdered(messages)) messages.sort(compareMessages);
             for (const entry of messages)
-                for (const element of projectMessage(entry, run.id, run.status)) push(element);
+                for (const element of projectMessage(entry, run.id, run.status, reader))
+                    push(element);
         }
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
@@ -296,7 +301,12 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     }
     if (!messagesOrdered(pending)) pending.sort(compareMessages);
     for (const entry of pending)
-        for (const element of projectMessage(entry, `pending:${entry.message.id}`, "running"))
+        for (const element of projectMessage(
+            entry,
+            `pending:${entry.message.id}`,
+            "running",
+            reader,
+        ))
             push(element);
     if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
     return elements;
@@ -310,14 +320,19 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
 function runProduced(elements: readonly ChatElement[], from: number, runId: string): boolean {
     for (let index = from; index < elements.length; index += 1) {
         const element = elements[index]!;
-        if (
-            element.runId === runId &&
-            element.kind !== "user_message" &&
-            element.kind !== "inference"
-        )
+        if (element.runId === runId && !chatElementRequest(element) && element.kind !== "inference")
             return true;
     }
     return false;
+}
+
+/**
+ * Whether an element is something asking this agent to work — the owner's own
+ * message, or one another agent addressed to it — rather than a step of the
+ * work itself. A run that has only these to show for itself is still waiting.
+ */
+export function chatElementRequest(element: ChatElement): boolean {
+    return element.kind === "user_message" || element.kind === "inbound_agent_message";
 }
 
 export function projectGroups(
@@ -565,32 +580,84 @@ function projectSubagents(
 interface MessageElements {
     readonly runId: string;
     readonly runStatus: Run["status"];
+    readonly reader: TranscriptReader;
     readonly elements: readonly ChatElement[];
 }
+
+/**
+ * Whose transcript a message is being read in. A message another agent sent
+ * reads differently on each side of the relationship, so the two identities the
+ * relation is decided from travel with the projection — as the two values they
+ * are rather than as the agent object, which is replaced on every status tick
+ * and would defeat the memory below.
+ */
+interface TranscriptReader {
+    readonly agentId: string;
+    readonly parentAgentId: string | null;
+}
+
 const messageElements = new WeakMap<Message, MessageElements>();
 
 function projectMessage(
     entry: TranscriptMessage,
     runId: string,
     runStatus: Run["status"],
+    reader: TranscriptReader,
 ): readonly ChatElement[] {
     const cached = messageElements.get(entry.message);
-    if (cached !== undefined && cached.runId === runId && cached.runStatus === runStatus)
+    if (
+        cached !== undefined &&
+        cached.runId === runId &&
+        cached.runStatus === runStatus &&
+        cached.reader.agentId === reader.agentId &&
+        cached.reader.parentAgentId === reader.parentAgentId
+    )
         return cached.elements;
-    const elements = messageElementsProject(entry, runId, runStatus);
-    messageElements.set(entry.message, { runId, runStatus, elements });
+    const elements = messageElementsProject(entry, runId, runStatus, reader);
+    messageElements.set(entry.message, { runId, runStatus, reader, elements });
     return elements;
+}
+
+/** Everything a message says as one block of text, in the order it says it. */
+function messageText(message: Message): string {
+    return message.content
+        .filter((block): block is Extract<MessageBlock, { type: "text" }> => block.type === "text")
+        .map((block) => block.text)
+        .join("\n");
+}
+
+/**
+ * The sender stamped on a message, placed relative to the agent reading it. A
+ * message with no stamp was typed by the owner and has no sending agent at all.
+ */
+function senderAgentOf(
+    message: Message,
+    reader: TranscriptReader,
+): Extract<ChatElement, { kind: "user_message" }>["senderAgent"] {
+    const agentId = message.metadata.senderAgentId;
+    if (agentId === undefined) return undefined;
+    return {
+        agentId,
+        relation:
+            agentId === reader.agentId
+                ? "self"
+                : agentId === reader.parentAgentId
+                  ? "parent"
+                  : "other",
+    };
 }
 
 function messageElementsProject(
     entry: TranscriptMessage,
     runId: string,
     runStatus: Run["status"],
+    reader: TranscriptReader,
 ): readonly ChatElement[] {
     const { message } = entry;
     const elementId = message.id;
     const base = { groupId: runId, runId, createdAt: message.createdAt };
     if (message.role === "user") {
+        const senderAgent = senderAgentOf(message, reader);
         return [
             {
                 ...base,
@@ -598,17 +665,12 @@ function messageElementsProject(
                 kind: "user_message",
                 messageId: message.id,
                 identity: null,
+                ...(senderAgent === undefined ? {} : { senderAgent }),
                 delivery:
                     message.status === "pending" && message.delivery === "steer"
                         ? "pending_steering"
                         : "sent",
-                text: message.content
-                    .filter(
-                        (block): block is Extract<MessageBlock, { type: "text" }> =>
-                            block.type === "text",
-                    )
-                    .map((block) => block.text)
-                    .join("\n"),
+                text: messageText(message),
                 attachments: message.content
                     .filter(
                         (block): block is Extract<MessageBlock, { type: "image" }> =>
@@ -617,6 +679,28 @@ function messageElementsProject(
                     .map((block) => ({ data: block.data, mediaType: block.mimeType })),
             },
         ];
+    }
+
+    /*
+     * A message another agent sent this one arrives in the agent role: the
+     * words are an agent's. It is still inbound work rather than this agent's
+     * output, so it leaves the agent lane here instead of being projected as
+     * text this agent said.
+     */
+    if (message.role === "agent") {
+        const senderAgent = senderAgentOf(message, reader);
+        if (senderAgent !== undefined && senderAgent.relation !== "self")
+            return [
+                {
+                    ...base,
+                    id: `message:${elementId}`,
+                    kind: "inbound_agent_message",
+                    messageId: message.id,
+                    agentId: senderAgent.agentId,
+                    relation: senderAgent.relation,
+                    text: messageText(message),
+                },
+            ];
     }
 
     const elements: ChatElement[] = [];

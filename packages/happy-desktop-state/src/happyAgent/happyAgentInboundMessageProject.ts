@@ -35,12 +35,11 @@ export function happyAgentInboundMessageOmit(input: {
 
     /*
      * A message another agent addressed to this one arrives here too, wrapped
-     * in an addressing envelope written for the receiving model. `UserMessage`
-     * carries structured provenance, but the transcript projection currently
-     * drops it when building `ChatElement`, so this client has no
-     * marker separating that envelope from a message the owner typed. It
-     * therefore renders normally, envelope and all, until the protocol exposes
-     * the signal.
+     * in an addressing envelope written for the receiving model. That one is
+     * content rather than transport: it is what the turn below it answers, and
+     * the sender Happy Agent stamps on it tells the transcript projection
+     * whether it reads as dialogue from this agent's parent or as one
+     * collaborator's activity row. Either way it keeps a row.
      */
     return false;
 }

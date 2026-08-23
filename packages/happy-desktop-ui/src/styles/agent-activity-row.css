@@ -1,7 +1,7 @@
 /*
- * AgentActivityRow: one glanceable row per tool call, reasoning block, or shell
- * run, expanding into its detail. Layout is flexbox throughout; colors and type
- * come only from theme roles.
+ * AgentActivityRow: one glanceable row per tool call, reasoning block, shell
+ * run, or message from another agent, expanding into its detail. Layout is
+ * flexbox throughout; colors and type come only from theme roles.
  */
 
 .happy-agent-activity-row {
@@ -326,7 +326,10 @@
     color: var(--text-destructive);
 }
 
-.happy-agent-activity__reasoning {
+/* Compact prose bodies: the model's own thinking, and a message another agent
+   sent it. Both read as quiet secondary text under their one-line summary. */
+.happy-agent-activity__reasoning,
+.happy-agent-activity__message {
     gap: 0;
     font-size: 12px;
     line-height: 18px;
@@ -350,7 +353,8 @@
 /* Tool calls remain compact single lines, but each owns 6px above and below so
  * a run scans as distinct actions rather than one dense paragraph. */
 .happy-agent-activity-row[data-kind="tool"],
-.happy-agent-activity-row[data-kind="labeled"] {
+.happy-agent-activity-row[data-kind="labeled"],
+.happy-agent-activity-row[data-kind="agentMessage"] {
     padding-top: 6px;
     padding-bottom: 6px;
 }
@@ -369,10 +373,42 @@
 }
 
 .happy-agent-activity-row[data-kind="tool"] .happy-agent-activity__header,
-.happy-agent-activity-row[data-kind="labeled"] .happy-agent-activity__header {
+.happy-agent-activity-row[data-kind="labeled"] .happy-agent-activity__header,
+.happy-agent-activity-row[data-kind="agentMessage"] .happy-agent-activity__header {
     flex-wrap: nowrap;
     gap: 6px;
     padding: 0;
+    cursor: default;
+}
+
+/*
+ * A message from another agent is one step of the turn, so its resting line is
+ * a tool row's: same rhythm, same quiet verb, same measure. What differs is its
+ * subject, which is a name rather than a command — so it is set in the UI face
+ * and takes only the width the name needs. The disclosure then sits with the
+ * name instead of at the row's trailing edge, which is the one position that
+ * moves: a row leading its turn is inset by the Message around it, and a plain
+ * row by its own padding, and the two put a trailing chevron 30px apart.
+ */
+.happy-agent-activity[data-presentation="agent-message"] .happy-agent-activity__verb {
+    flex: none;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.happy-agent-activity[data-presentation="agent-message"] .happy-agent-activity__text {
+    flex: 0 1 auto;
+    font-family: var(--happy-font-ui);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text);
+}
+
+.happy-agent-activity[data-presentation="agent-message"] .happy-agent-activity__header {
+    cursor: pointer;
+}
+
+.happy-agent-activity[data-presentation="agent-message"] .happy-agent-activity__header:disabled {
     cursor: default;
 }
 
@@ -458,7 +494,8 @@
     padding-right: 30px;
 }
 
-.happy-agent-activity-row[data-treatment="focused"][data-kind="tool"]
+.happy-agent-activity-row[data-treatment="focused"][data-kind="tool"] .happy-agent-activity__header,
+.happy-agent-activity-row[data-treatment="focused"][data-kind="agentMessage"]
     .happy-agent-activity__header {
     position: relative;
 }
@@ -468,7 +505,9 @@
  * the row, not another column. Its surface veil turns the would-be "|" into a
  * soft fade while the subject and every sibling keep exactly the same box.
  */
-.happy-agent-activity-row[data-treatment="focused"][data-kind="tool"] .happy-agent-activity__time {
+.happy-agent-activity-row[data-treatment="focused"][data-kind="tool"] .happy-agent-activity__time,
+.happy-agent-activity-row[data-treatment="focused"][data-kind="agentMessage"]
+    .happy-agent-activity__time {
     position: absolute;
     top: 0;
     right: 0;

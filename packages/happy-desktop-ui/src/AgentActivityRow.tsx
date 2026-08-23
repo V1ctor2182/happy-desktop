@@ -1048,6 +1048,80 @@ function AgentReasoningActivity(props: {
     );
 }
 
+/**
+ * A message one agent sent another: who it came from on the row, and the
+ * message itself behind it. The addressing envelope Happy Agent wrote for the
+ * receiving model is part of the text and is shown with it rather than trimmed.
+ */
+function AgentMessageActivity(props: {
+    agentId: string;
+    agentName?: string;
+    text: string;
+    defaultExpanded?: boolean;
+    expanded?: boolean;
+    onExpandedChange?: (expanded: boolean) => void;
+    time?: string;
+}) {
+    const [expanded, setExpanded] = useExpansion(
+        props.defaultExpanded ?? false,
+        props.expanded,
+        props.onExpandedChange,
+    );
+    const hasBody = props.text.trim().length > 0;
+    return (
+        <div
+            className="happy-agent-activity"
+            data-expanded={expanded ? "" : undefined}
+            data-presentation="agent-message"
+            data-tone="neutral"
+            data-happy-desktop-ui="agent-activity-message"
+        >
+            <button
+                aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
+                className="happy-agent-activity__header"
+                data-happy-desktop-ui="agent-activity-header"
+                disabled={!hasBody}
+                onClick={() => hasBody && setExpanded(!expanded)}
+                type="button"
+            >
+                <span
+                    aria-hidden="true"
+                    className="happy-agent-activity__glyph"
+                    data-happy-desktop-ui="agent-activity-glyph"
+                >
+                    <Icon name="agents" size={12} />
+                </span>
+                <span
+                    className="happy-agent-activity__verb"
+                    data-happy-desktop-ui="agent-activity-verb"
+                >
+                    Message
+                </span>
+                <ScrollingText
+                    className="happy-agent-activity__text"
+                    data-happy-desktop-ui="agent-activity-text"
+                >
+                    from {props.agentName ?? props.agentId}
+                </ScrollingText>
+                {hasBody ? (
+                    <span aria-hidden="true" className="happy-agent-activity__chevron">
+                        <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
+                    </span>
+                ) : null}
+                <AgentActivityTime time={props.time} />
+            </button>
+            {expanded && hasBody ? (
+                <div
+                    className="happy-agent-activity__body happy-agent-activity__message happy-message__body--markdown"
+                    data-happy-desktop-ui="agent-activity-message-body"
+                >
+                    {renderMessageMarkdown(props.text)}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 /** A shell-mode run: the command line, its exit state, and its captured output. */
 function AgentShellActivity(props: {
     command: string;
@@ -1195,11 +1269,12 @@ function AgentLabeledActivity(props: {
 
 /**
  * AgentActivityRow — the one glanceable row for everything an agent does inside
- * a conversation: a tool call, a reasoning block, or a shell run. Each variant
- * shows a status dot, a verb, and its subject on a single line and expands to
- * the detail on demand, so a long working turn stays readable without hiding
- * what happened. Presentational only: the caller supplies the projected
- * activity and the surface decides which rows to show at all.
+ * a conversation: a tool call, a reasoning block, a shell run, or a message
+ * another agent sent it. Each variant shows its mark, a verb, and its subject on
+ * a single line and expands to the detail on demand, so a long working turn
+ * stays readable without hiding what happened. Presentational only: the caller
+ * supplies the projected activity and the surface decides which rows to show at
+ * all.
  */
 export function AgentActivityRow(props: AgentActivityRowProps) {
     const activity = props.activity;
@@ -1231,6 +1306,16 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     mono={activity.mono}
                     status={activity.status}
                     subject={activity.subject}
+                    time={props.time}
+                />
+            ) : activity.kind === "agentMessage" ? (
+                <AgentMessageActivity
+                    agentId={activity.agentId}
+                    {...(activity.agentName === undefined ? {} : { agentName: activity.agentName })}
+                    defaultExpanded={props.defaultExpanded}
+                    expanded={props.expanded}
+                    onExpandedChange={props.onExpandedChange}
+                    text={activity.text}
                     time={props.time}
                 />
             ) : activity.kind === "reasoning" ? (

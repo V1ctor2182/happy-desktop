@@ -1,6 +1,6 @@
 export { ChatStore } from "./ChatStore.js";
 export { connectHappyAgent } from "./connectHappyAgent.js";
-export { projectNumericIdentity } from "./projection.js";
+export { chatElementRequest, projectNumericIdentity } from "./projection.js";
 export {
     CHECKING_SERVER_COMPATIBILITY,
     MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,

@@ -207,6 +207,21 @@ export interface ConversationToolCall {
 export type ConversationActivity =
     | { readonly kind: "tool"; readonly tool: ConversationToolCall }
     | { readonly kind: "reasoning"; readonly text: string; readonly streaming: boolean }
+    /**
+     * A message another agent addressed to this one. It arrives in the user
+     * slot and steers the run exactly as the reader's own message would, but it
+     * is two agents talking rather than dialogue with the person, so it takes
+     * one activity row instead of a chat bubble that is not the reader's.
+     */
+    | {
+          readonly kind: "agentMessage";
+          /** The sending agent, exactly as Happy Agent identified it. */
+          readonly agentId: string;
+          /** That agent's title, when this session knows the agent by one. */
+          readonly agentName?: string;
+          /** The message as it arrived, addressing envelope included. */
+          readonly text: string;
+      }
     | {
           readonly kind: "shell";
           readonly command: string;

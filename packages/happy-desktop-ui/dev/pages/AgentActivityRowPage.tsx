@@ -198,9 +198,60 @@ export function AgentActivityRowPage() {
                     />
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="a collaborator's message collapsed to one line, and expanded onto the message it delivered · an unnamed sender falls back to its agent id"
+                label="Agent message"
+                number="06"
+                stage="surface"
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        width: "720px",
+                    }}
+                >
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "v2eibi1k9zgwde56wwuhrbku",
+                            agentName: "Retry policy rewrite",
+                            text: AGENT_MESSAGE_TEXT,
+                        }}
+                    />
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "v2eibi1k9zgwde56wwuhrbku",
+                            agentName: "Retry policy rewrite",
+                            text: AGENT_MESSAGE_TEXT,
+                        }}
+                        defaultExpanded
+                    />
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "v2eibi1k9zgwde56wwuhrbku",
+                            text: AGENT_MESSAGE_TEXT,
+                        }}
+                    />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }
+
+/** One collaborator's delivered message, envelope and all, as Happy Agent writes it. */
+const AGENT_MESSAGE_TEXT = [
+    "Message from agent v2eibi1k9zgwde56wwuhrbku:",
+    "",
+    "Read-only findings (no edits/tests).",
+    "",
+    "The retry budget is spent before the first backoff, so a failed call retries",
+    "immediately three times and then reports the original error.",
+].join("\n");
 
 /** A command far wider than a 420px row, so the scroll and its fade are visible. */
 const longExecTool: ConversationToolCall = {

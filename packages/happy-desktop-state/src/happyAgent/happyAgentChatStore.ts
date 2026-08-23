@@ -6,12 +6,13 @@ import {
     type ConversationEntry,
     type ConversationRequestSubmission,
 } from "../conversation/conversationEntry.js";
-import type {
-    ChatElement,
-    MutationRejectedDelta,
-    HappyAgentConnection,
-    SessionState,
-    SessionUsage,
+import {
+    chatElementRequest,
+    type ChatElement,
+    type MutationRejectedDelta,
+    type HappyAgentConnection,
+    type SessionState,
+    type SessionUsage,
 } from "../happyAgentConnection/index.js";
 import { UserError } from "../types.js";
 import {
@@ -69,7 +70,7 @@ function waitingForModelProject(
     const activeGroup = session.activeGroup;
     if (activeGroup !== undefined) {
         const activeElement = elements.find(
-            (element) => element.groupId === activeGroup.groupId && element.kind !== "user_message",
+            (element) => element.groupId === activeGroup.groupId && !chatElementRequest(element),
         );
         return activeElement?.kind === "inference";
     }
@@ -78,7 +79,7 @@ function waitingForModelProject(
     const produced = elements.some(
         (element) =>
             element.runId === activeTurn.runId &&
-            element.kind !== "user_message" &&
+            !chatElementRequest(element) &&
             element.kind !== "inference" &&
             element.kind !== "group_end",
     );

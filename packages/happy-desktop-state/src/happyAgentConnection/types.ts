@@ -88,6 +88,38 @@ export interface UserMessageElement extends BaseChatElement {
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
     source?: "notification";
+    /**
+     * The agent that put this message in the user slot, when one did, and where
+     * it stands relative to the agent whose transcript this is. Happy Agent
+     * stamps the sender on every message it generates on an agent's behalf, so
+     * the relation is settled here — once, against this session's own parent —
+     * rather than left to every surface to work out from two identities.
+     */
+    senderAgent?: {
+        readonly agentId: string;
+        /** This agent driving itself, the agent that manages it, or any other. */
+        readonly relation: "self" | "parent" | "other";
+    };
+}
+
+/**
+ * A message another agent addressed to this one.
+ *
+ * Happy Agent delivers it in the agent role, because the words come from an
+ * agent rather than from a person — but it is inbound work for this agent, not
+ * this agent's own output, and rendering it as such attributed a collaborator's
+ * report to the agent that received it. It is separated here, once, on the
+ * sender Happy Agent stamps on the message.
+ */
+export interface InboundAgentMessageElement extends BaseChatElement {
+    kind: "inbound_agent_message";
+    messageId: string;
+    /** The agent that sent it, as Happy Agent identified it. */
+    agentId: string;
+    /** The agent that manages this one, or any other agent talking to it. */
+    relation: "parent" | "other";
+    /** The message as it arrived, addressing envelope included. */
+    text: string;
 }
 
 export interface SystemNoticeElement extends BaseChatElement {
@@ -270,6 +302,7 @@ export interface GroupEndElement extends BaseChatElement {
 
 export type ChatElement =
     | UserMessageElement
+    | InboundAgentMessageElement
     | SystemNoticeElement
     | InferenceElement
     | AgentTextElement
