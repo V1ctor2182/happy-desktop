@@ -218,8 +218,8 @@
 }
 
 /* Download, launch, discovery, and verification rewrite one retained frame.
-   The normal copy fits two lines; reserving both from the first paint keeps the
-   status region and the owl on the same coordinates as those words change. */
+   The subscription copy fits three lines; reserving them from the first paint
+   keeps the status region and the owl on the same coordinates as words change. */
 .happy-local-onboarding__machine-setup .happy-setup-page__body {
     gap: 16px;
 }
@@ -233,7 +233,7 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    min-height: 48px;
+    min-height: 72px;
 }
 
 /* Both lifecycle layers occupy this one reserved region during the handoff.
@@ -280,7 +280,9 @@
     flex: none;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    height: 44px;
 }
 
 .happy-local-onboarding__machine-status[data-view="assistants"]

@@ -192,24 +192,19 @@ function assistantAuthenticationEntry(assistant: LocalOnboardingAssistant): Setu
             assistant.authentication === "valid"
                 ? "found"
                 : assistant.authentication === "checking"
-                  ? "signed-out"
+                  ? "checking"
                   : "missing",
     };
 }
 
-/**
- * The same column on the screen Happy Agent's refusal raises, where a found
- * command means something more specific: it is here, and nobody has signed in
- * to it. So the line stops being a location and becomes the one instruction on
- * the screen.
- */
-const UNDETECTED_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSISTANTS).map(
+/** The stable, dimmed three-vendor row shown before authentication resolves. */
+const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSISTANTS).map(
     ([id, assistant]) => ({
         detail: "Checking credentials…",
         id,
         mark: assistant.mark,
         name: assistant.name,
-        status: "signed-out",
+        status: "checking",
     }),
 );
 
@@ -244,6 +239,7 @@ function machineSetupProject(view: LocalOnboardingView): MachineSetupProjection 
         };
     if (view.kind === "examining")
         return {
+            assistants: CHECKING_ASSISTANTS,
             copy: "Happy is looking for existing Claude, Codex, and Grok subscriptions on this machine.",
             hasValidAuthentication: false,
             label: "Preparing authentication checks…",
@@ -302,12 +298,15 @@ function MachineSetupStatus(props: {
                 data-happy-desktop-ui="local-onboarding-machine-assistants"
             >
                 <SetupAssistants
-                    assistants={props.projection.assistants ?? UNDETECTED_ASSISTANTS}
+                    assistants={props.projection.assistants ?? CHECKING_ASSISTANTS}
                     data-testid={showAssistants ? "local-onboarding-assistants" : undefined}
                 />
-                {props.projection.ready ? (
-                    <div className="happy-local-onboarding__machine-actions">
-                        {props.projection.hasValidAuthentication ? (
+                <div
+                    aria-hidden={!props.projection.ready}
+                    className="happy-local-onboarding__machine-actions"
+                >
+                    {props.projection.ready ? (
+                        props.projection.hasValidAuthentication ? (
                             <Button onClick={props.onContinue} size="large" width={240}>
                                 Continue
                             </Button>
@@ -315,9 +314,9 @@ function MachineSetupStatus(props: {
                             <Button onClick={props.onSkip} size="large" width={240}>
                                 Skip
                             </Button>
-                        )}
-                    </div>
-                ) : null}
+                        )
+                    ) : null}
+                </div>
             </div>
         </div>
     );

@@ -276,9 +276,31 @@ export function SetupPagePage() {
             </Specimen>
 
             <Specimen
-                detail="same retained geometry · progress fades out · daemon checks occupy the reserved region without moving the owl, title, or copy"
-                label="Authentication checking"
+                detail="subscription search begins with all three vendor columns already mounted and a reserved empty action slot"
+                label="Subscription discovery"
                 number="11"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{ kind: "examining" }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="same retained vendor columns · daemon checks update their labels in place without moving the owl, title, copy, or action slot"
+                label="Authentication checking"
+                number="12"
                 stage="surface"
             >
                 <div style={frame}>
@@ -322,7 +344,7 @@ export function SetupPagePage() {
             <Specimen
                 detail="authentication-level daemon results only · no quota inference · Continue appears after every check settles"
                 label="Authentication verified"
-                number="12"
+                number="13"
                 stage="surface"
             >
                 <div style={frame}>
@@ -366,7 +388,7 @@ export function SetupPagePage() {
             <Specimen
                 detail="no valid local sign-in · Continue stays absent · Skip becomes the sole primary action"
                 label="Authentication unavailable"
-                number="13"
+                number="14"
                 stage="surface"
             >
                 <div style={frame}>

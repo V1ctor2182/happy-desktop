@@ -36,6 +36,7 @@
     gap: 8px;
     min-width: 0;
     text-align: center;
+    transition: opacity 180ms ease;
 }
 
 .happy-setup-assistants__mark {
@@ -78,10 +79,17 @@
  * the only thing here anybody can act on, so its line is the only one at full
  * ink — read as an instruction rather than as a location.
  */
+.happy-setup-assistants__item[data-status="checking"],
 .happy-setup-assistants__item[data-status="missing"] {
     opacity: 0.45;
 }
 
 .happy-setup-assistants__item[data-status="signed-out"] .happy-setup-assistants__detail {
     color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-setup-assistants__item {
+        transition: none;
+    }
 }

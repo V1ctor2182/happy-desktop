@@ -8,15 +8,13 @@ export interface SetupAssistantEntry {
     /** Whose mark goes above the name. Codex is OpenAI's, so it is named that. */
     readonly mark: AssistantMarkName;
     /**
-     * `found` is on this machine, `signed-out` is on it but unusable, `missing`
-     * is not here at all.
+     * `checking` is still being verified, `found` is usable, `signed-out` is
+     * installed but unusable, and `missing` is not here at all.
      *
-     * The first two are the same discovery read under different light: the shell
-     * only ever answers whether the command exists, and it becomes `signed-out`
-     * when the screen also carries HappyAgent's refusal to run any of them. The caller
-     * decides which, because the caller is the one that knows.
+     * The caller owns that product truth. This component uses it only to keep
+     * the same three columns in place while their emphasis changes.
      */
-    readonly status: "found" | "signed-out" | "missing";
+    readonly status: "checking" | "found" | "signed-out" | "missing";
     /** Where it is, or what to do about it, in one line under the name. */
     readonly detail: string;
     /**
