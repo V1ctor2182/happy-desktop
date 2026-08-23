@@ -1,7 +1,7 @@
 /*
  * C-161 SplashScreen — the mark on the workspace surface while the app resolves.
  *
- * It fills its host and centers a 64px mark on both axes. The surface is the one
+ * It fills its host and centers a 32px mark on both axes. The surface is the one
  * the workspace and the onboarding card share, so the crossfade out of this
  * screen changes what is on the surface, never the surface itself.
  *
@@ -34,13 +34,12 @@
 .happy-splash-screen__mark {
     display: block;
     flex: none;
-    width: 64px;
-    height: 64px;
+    width: 32px;
+    height: 32px;
     object-fit: contain;
-    /* Grayscale + faded: this screen means "still waking up", not the brand
-       mark in its own right, so the orange mark is deliberately muted here. */
-    filter: grayscale(1);
-    opacity: 0.35;
+    /* Faded: this screen means "still waking up", not the brand mark in its
+       own right, so the theme-selected mark is deliberately muted here. */
+    opacity: 0.3;
 }
 
 .happy-splash-screen__note {

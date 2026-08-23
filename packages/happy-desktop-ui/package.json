@@ -46,7 +46,9 @@
         "react-dom": "19.2.7",
         "react-markdown": "^10.1.0",
         "remark-gfm": "^4.0.1",
+        "remark-parse": "^11.0.0",
         "thumbhash": "^0.1.1",
+        "unified": "^11.0.5",
         "y-protocols": "^1.0.7",
         "yjs": "^13.6.31",
         "zustand": "5.0.14"

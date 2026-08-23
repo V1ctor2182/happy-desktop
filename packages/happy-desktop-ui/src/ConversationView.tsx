@@ -1,10 +1,11 @@
 import { type CSSProperties, type ReactNode, useState, useSyncExternalStore } from "react";
-import type {
-    ComposerSnapshot,
-    ConversationAuthor,
-    ConversationEntry,
-    ConversationRequestSubmission,
-    ConversationToolCall,
+import {
+    entryKey,
+    type ComposerSnapshot,
+    type ConversationAuthor,
+    type ConversationEntry,
+    type ConversationRequestSubmission,
+    type ConversationToolCall,
 } from "happy-desktop-state";
 import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
@@ -28,7 +29,6 @@ import {
     conversationWorkingStatusStartsGroup,
 } from "./conversationMessageGrouped";
 import {
-    CHAT_MEASURE,
     contentWidth,
     conversationRowHeight,
     conversationRowHeightCacheCreate,
@@ -300,10 +300,9 @@ export function ConversationView(props: ConversationViewProps) {
         messageTextLayoutFontGenerationGet,
     );
     /*
-     * One measurement cache per conversation, kept for as long as this view is
-     * mounted: leaving a conversation and coming back must find that same cache
-     * with the measurements it already has, rather than re-measuring a transcript
-     * it just left. This Map and its values are component-lifetime memo caches,
+     * One row-layout cache per conversation, kept for as long as this view is
+     * mounted: leaving a conversation and coming back reuses prepared text
+     * layout instead of recomputing the whole transcript. This Map and its values are component-lifetime memo caches,
      * not product state: retaining a calculation never drives another render.
      * The row estimator needs the active cache while rendering, so lazy state
      * initialization gives the registry one stable owner without reading or
@@ -312,6 +311,21 @@ export function ConversationView(props: ConversationViewProps) {
     const [rowHeightCaches] = useState(() => new Map<string, ConversationRowHeightCache>());
     const conversationCacheKey =
         props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
+    const [rowExpansion, setRowExpansion] = useState(() => new Map<string, boolean>());
+    const rowExpansionKey = (entry: ConversationEntry) =>
+        `${conversationCacheKey}:${entryKey(entry)}`;
+    const rowExpanded = (entry: ConversationEntry) =>
+        rowExpansion.get(rowExpansionKey(entry)) ??
+        (entry.kind === "agentActivity" && entry.activity.kind === "shell");
+    const rowExpandedChange = (entry: ConversationEntry, expanded: boolean) => {
+        const key = rowExpansionKey(entry);
+        setRowExpansion((current) => {
+            if (current.get(key) === expanded) return current;
+            const next = new Map(current);
+            next.set(key, expanded);
+            return next;
+        });
+    };
     const cachedRowHeights = rowHeightCaches.get(conversationCacheKey);
     const rowHeightCache = cachedRowHeights ?? conversationRowHeightCacheCreate();
     if (cachedRowHeights === undefined) rowHeightCaches.set(conversationCacheKey, rowHeightCache);
@@ -484,11 +498,26 @@ export function ConversationView(props: ConversationViewProps) {
                 </ScrollArea>
             ) : (
                 <MessageList
+                    estimateDependencies={[
+                        props.entries,
+                        props.viewerId,
+                        props.activityTreatment,
+                        statusVisible,
+                        workingStatusStartsGroup,
+                        props.activityControl !== undefined,
+                        activityClosesTurnStatus,
+                        rowExpansion,
+                    ]}
                     estimateRowSize={(index, width) =>
                         conversationRowHeight(
                             transcript,
                             index,
                             {
+                                activityTreatment: props.activityTreatment,
+                                expanded:
+                                    transcript[index] === undefined
+                                        ? false
+                                        : rowExpanded(transcript[index]),
                                 surface: "conversation",
                                 viewerId: props.viewerId,
                                 width,
@@ -521,15 +550,9 @@ export function ConversationView(props: ConversationViewProps) {
                             ) : null}
                         </>
                     }
-                    footerHeight={
+                    footerHeight={(width) =>
                         workingStatusHeight +
-                        // A running turn already owns the line the summary
-                        // shares, so only a settled turn's summary adds a row.
-                        // A pane too narrow to hold both wraps the summary and
-                        // is one row taller than this; the footer mounts at the
-                        // bottom of every conversation and is measured there, so
-                        // that case corrects itself rather than needing a width.
-                        (props.activityControl && !statusVisible && !activityClosesTurnStatus
+                        (props.activityControl && !activityClosesTurnStatus
                             ? HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT
                             : 0) +
                         queued.reduce(
@@ -539,9 +562,14 @@ export function ConversationView(props: ConversationViewProps) {
                                     queued,
                                     index,
                                     {
+                                        activityTreatment: props.activityTreatment,
+                                        expanded:
+                                            queued[index] === undefined
+                                                ? false
+                                                : rowExpanded(queued[index]),
                                         surface: "conversation",
                                         viewerId: props.viewerId,
-                                        width: CHAT_MEASURE,
+                                        width,
                                     },
                                     rowHeightCache,
                                 ) ?? 0),
@@ -619,6 +647,9 @@ export function ConversationView(props: ConversationViewProps) {
                                 onAttachmentOpen={props.onAttachmentOpen}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onRequestSelectionChange={props.onRequestSelectionChange}
+                                onRowExpandedChange={(expanded) =>
+                                    rowExpandedChange(entry, expanded)
+                                }
                                 requestSelection={
                                     entry.kind === "request"
                                         ? props.requestSelections?.get(entry.request.requestId)
@@ -641,6 +672,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     submission?.status === "failed" ? submission.error : undefined
                                 }
                                 requestPending={submission?.status === "pending"}
+                                rowExpanded={rowExpanded(entry)}
                                 viewerId={props.viewerId}
                             />
                         );

@@ -1,4 +1,4 @@
-import { entryKey, type ConversationEntry } from "happy-desktop-state";
+import { entryKey, type ConversationEntry, type ConversationRequest } from "happy-desktop-state";
 import {
     conversationAgentRowStartsGroup,
     conversationEntryPrecedesActivity,
@@ -13,7 +13,11 @@ import {
     markdownBodyHeight,
     messageTextLayoutCacheCreate,
     messageTextLayoutCacheRefresh,
+    monoOutputTextHeight,
+    monoTextNaturalWidth,
     noticeTextHeight,
+    uiTextHeight,
+    uiTextNaturalWidth,
     type MessageTextLayoutCache,
 } from "./messageTextLayout";
 import { SYSTEM_NOTIFICATION_HEIGHT } from "./systemNotification";
@@ -29,9 +33,9 @@ import { SYSTEM_NOTIFICATION_HEIGHT } from "./systemNotification";
  * out with Pretext, an activity row is a known constant, and an image box is
  * arithmetic on its intrinsic dimensions.
  *
- * Rows still measure themselves once mounted — this is a truthful estimate, not
- * a replacement for measurement — so a kind this model cannot resolve returns
- * `undefined` and falls back to the list's running average rather than guessing.
+ * This model is the row's geometry; mounted rows are never observed or measured.
+ * A kind that deliberately has no detailed model returns `undefined` and takes
+ * the list's fixed fallback height.
  *
  * Every constant mirrors `styles/message.css`, `styles/conversation.css`,
  * `styles/chat-conversation.css`, and `styles/agent-activity-row.css`. They are
@@ -46,6 +50,10 @@ export type ConversationRowContext = {
     readonly surface: ConversationSurface;
     /** Identity of the reader, so their own messages take the own geometry. */
     readonly viewerId?: string;
+    /** Activity-row chrome used by the owning conversation surface. */
+    readonly activityTreatment?: "detailed" | "focused";
+    /** Explicit disclosure state supplied by the UI owner; never inferred from a row. */
+    readonly expanded?: boolean;
 };
 type CachedRowHeight = { readonly value: number | undefined };
 type Dictionary<T> = Record<string, T | undefined>;
@@ -60,7 +68,7 @@ export interface ConversationRowHeightCache {
     /** Prepared text and final text-layout results owned by this conversation. */
     readonly text: MessageTextLayoutCache;
 }
-/** Creates the virtually unbounded measurement cache owned by one conversation. */
+/** Creates the virtually unbounded row-layout cache owned by one conversation. */
 export function conversationRowHeightCacheCreate(): ConversationRowHeightCache {
     return {
         rows: dictionaryCreate(),
@@ -126,6 +134,8 @@ const BUBBLE_CAP = 0.76;
 const BUBBLE_PADDING = 24;
 /** The transparent-until-hover time that shares an own message's bubble line. */
 const ASIDE_TIME_GAP = 8;
+/** Inline grouped-message metadata: NBSP plus `.happy-message__hover-meta` padding. */
+const GROUPED_TRAILING_META_PADDING = 8;
 /** `.happy-message__media` — top margin, inter-tile gap, and its own cap. */
 const MEDIA_GAP = 4;
 const MEDIA_MARGIN = 8;
@@ -148,6 +158,12 @@ const ATTACHMENT_CARD_HEIGHT = 64;
 const ATTACHMENT_CARD_GAP = 4;
 /** Collapsed `.happy-agent-activity-row` heights, by activity kind. */
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
+/** Expanded reasoning: outer/header/gap chrome around its Markdown body. */
+const REASONING_ACTIVITY_CHROME = 44;
+/** Expanded shell row: outer/header/body chrome around pre-wrapped 12/18 output. */
+const SHELL_ACTIVITY_CHROME = 60;
+const SHELL_ACTIVITY_OUTPUT_INSET = 36;
+const ACTIVITY_ROW_INSET = { detailed: 126, focused: 60 } as const;
 /** Tool-first Message: 16px top inset + 20px identity row, then no lower chrome. */
 const ACTIVITY_LEAD_CHROME = 36;
 /**
@@ -170,6 +186,24 @@ const STEERING_LINE_CHROME = 20;
 const STEERING_QUOTE_MEASURE = 560;
 const STEERING_QUOTE_INSET = 40;
 const STEERING_QUOTE_MARGIN = 16;
+/** Transcript request chrome from happy-agent-chat.css / approval-card.css. */
+const USER_INPUT_HORIZONTAL_MARGIN = 32;
+const USER_INPUT_LEGEND_HORIZONTAL_PADDING = 24;
+const USER_INPUT_OPTION_HORIZONTAL_CHROME = 51;
+const USER_INPUT_QUESTION_LEGEND_CHROME = 30;
+const USER_INPUT_QUESTION_GAP = 8;
+const USER_INPUT_OPTION_GAP = 2;
+const USER_INPUT_OPTION_VERTICAL_PADDING = 8;
+const USER_INPUT_FOOTER_HEIGHT = 36;
+const APPROVAL_CARD_FIXED_CHROME = 153;
+const APPROVAL_CARD_EXPANDED_DETAILS = 98;
+const APPROVAL_CARD_MAX_WIDTH = 680;
+/** Compute detail flex row: transcript insets, left detail inset, and row/column gaps. */
+const COMPUTE_DETAIL_INSET = 146;
+const COMPUTE_DETAIL_COLUMN_GAP = 16;
+const COMPUTE_DETAIL_ROW_GAP = 4;
+const COMPUTE_DETAIL_LABEL_GAP = 6;
+const COMPUTE_DETAIL_TOP = 4;
 
 /** The list's content measure, after the shared readable maximum. */
 export function contentWidth(width: number): number {
@@ -207,9 +241,8 @@ export function messageMediaSingleBox(image: {
 /**
  * Painted height of a message's image grid. A lone photo reserves the exact box
  * `messageMediaSingleBox` computes; a 2–4 tile grid is two square columns. An own
- * message's grid shrinks to fit its content instead of stretching, so its tile
- * width is not knowable here — the stretched width is used as the floor and the
- * row's measurement corrects it.
+ * message's grid uses the same capped content measure, so this arithmetic is
+ * also the height the virtual row reserves.
  */
 function mediaHeight(
     images: readonly { readonly width?: number; readonly height?: number }[],
@@ -242,7 +275,7 @@ export function messageBodyMeasure(
     const aside = asideTimeWidth(time, cache);
     return Math.min(column * BUBBLE_CAP, column - ASIDE_TIME_GAP - aside) - BUBBLE_PADDING;
 }
-/** Collapsed height of an activity row, or `undefined` when it renders expanded. */
+/** Fixed collapsed height of an activity row, or `undefined` for a richer kind. */
 export function conversationActivityHeight(kind: string): number | undefined {
     return kind === "tool" || kind === "labeled" || kind === "reasoning"
         ? ACTIVITY_HEIGHT[kind]
@@ -309,13 +342,121 @@ export function messageRowHeight(input: {
         (input.grouped ? tight : leading) + (input.grouped && input.metaAccessory ? META_ROW : 0);
     if (!input.bodyVisible) return chrome;
     const measure = messageBodyMeasure(input.width, input.treatment, input.time, input.textCache);
-    return chrome + markdownBodyHeight(input.body, measure, input.textCache);
+    /* Grouped incoming/agent rows append their hover time to the final word in
+       one non-wrapping inline run. Include that run in the text model: at a
+       narrow width it can move the final word and timestamp onto the next line. */
+    const trailingExtraWidth =
+        input.grouped && input.treatment !== "own" && input.time
+            ? GROUPED_TRAILING_META_PADDING +
+              uiTextNaturalWidth("\u00a0", 16, input.textCache) +
+              asideTimeWidth(input.time, input.textCache)
+            : 0;
+    return chrome + markdownBodyHeight(input.body, measure, input.textCache, trailingExtraWidth);
+}
+
+/** Height of the structured question form or its compact answered history. */
+function userInputRequestHeight(
+    request: Extract<ConversationRequest, { kind: "userInput" }>,
+    width: number,
+    cache?: MessageTextLayoutCache,
+): number {
+    const contentWidth = width - USER_INPUT_HORIZONTAL_MARGIN;
+    const promptMeasure = contentWidth - USER_INPUT_LEGEND_HORIZONTAL_PADDING;
+    const optionMeasure = contentWidth - USER_INPUT_OPTION_HORIZONTAL_CHROME;
+    let total = 0;
+    for (const [questionIndex, question] of request.questions.entries()) {
+        if (questionIndex > 0) total += USER_INPUT_QUESTION_GAP;
+        total +=
+            USER_INPUT_QUESTION_LEGEND_CHROME +
+            uiTextHeight(question.question, 15, 22, promptMeasure, cache);
+        if (request.status === "answered") {
+            const answers = request.answers[question.id] ?? [];
+            const shown = answers.length > 0 ? answers : [""];
+            for (const [answerIndex, answer] of shown.entries()) {
+                if (answerIndex > 0) total += USER_INPUT_OPTION_GAP;
+                const option = question.options.find((candidate) => candidate.label === answer);
+                total += 10 + uiTextHeight(answer || "No answer", 14, 20, optionMeasure, cache);
+                if (option?.description)
+                    total += uiTextHeight(option.description, 12, 16, optionMeasure, cache);
+            }
+            continue;
+        }
+        for (const [optionIndex, option] of question.options.entries()) {
+            if (optionIndex > 0) total += USER_INPUT_OPTION_GAP;
+            const contentHeight =
+                uiTextHeight(option.label, 14, 19, optionMeasure, cache) +
+                (option.description
+                    ? uiTextHeight(option.description, 12, 16, optionMeasure, cache)
+                    : 0);
+            total += Math.max(32, USER_INPUT_OPTION_VERTICAL_PADDING + contentHeight);
+        }
+    }
+    return total + (request.status === "pending" ? USER_INPUT_FOOTER_HEIGHT : 0);
+}
+
+/** Pending permission gate in its default collapsed transcript state. */
+function permissionRequestHeight(
+    request: Exclude<ConversationRequest, { kind: "userInput" }>,
+    width: number,
+    expanded: boolean,
+    cache?: MessageTextLayoutCache,
+): number {
+    const measure = Math.min(width, APPROVAL_CARD_MAX_WIDTH) - 32;
+    return (
+        APPROVAL_CARD_FIXED_CHROME +
+        (expanded ? APPROVAL_CARD_EXPANDED_DETAILS : 0) +
+        uiTextHeight(request.review.action, 15, 20, measure, cache) +
+        uiTextHeight(request.review.reason, 13, 18, measure, cache)
+    );
+}
+function computeElapsedLabel(elapsedMs: number): string {
+    const seconds = Math.round(elapsedMs / 1_000);
+    if (seconds < 60) return `${String(seconds)}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${String(minutes)}m ${String(seconds % 60)}s`;
+}
+function computeNoticeHeight(
+    entry: Extract<ConversationEntry, { kind: "notice"; variant: "compute" }>,
+    width: number,
+    expanded: boolean,
+    cache?: MessageTextLayoutCache,
+): number {
+    if (!expanded) return 32;
+    const details = [
+        { label: "Provider", value: entry.provider },
+        { label: "Phase", value: entry.phase },
+        { label: "Instance", value: entry.instanceId },
+        ...(entry.elapsedMs === undefined
+            ? []
+            : [{ label: "Elapsed", value: computeElapsedLabel(entry.elapsedMs) }]),
+    ];
+    const available = Math.max(1, width - COMPUTE_DETAIL_INSET);
+    const rows: { height: number; width: number }[] = [];
+    for (const detail of details) {
+        const labelWidth = uiTextNaturalWidth(detail.label, 12, cache, 500);
+        const naturalWidth =
+            labelWidth + COMPUTE_DETAIL_LABEL_GAP + monoTextNaturalWidth(detail.value, 12, cache);
+        const previous = rows.at(-1);
+        if (previous && previous.width + COMPUTE_DETAIL_COLUMN_GAP + naturalWidth <= available) {
+            previous.width += COMPUTE_DETAIL_COLUMN_GAP + naturalWidth;
+            continue;
+        }
+        const valueMeasure = available - labelWidth - COMPUTE_DETAIL_LABEL_GAP;
+        rows.push({
+            height: Math.max(18, monoOutputTextHeight(detail.value, valueMeasure, cache)),
+            width: naturalWidth,
+        });
+    }
+    return (
+        32 +
+        COMPUTE_DETAIL_TOP +
+        rows.reduce((total, row) => total + row.height, 0) +
+        Math.max(0, rows.length - 1) * COMPUTE_DETAIL_ROW_GAP
+    );
 }
 /**
- * Height of one row, or `undefined` when the entry's kind genuinely cannot be
- * resolved without laying it out: a shell activity renders its output expanded,
- * an error card owns its own bubble measure, and every request prompt wraps flex
- * options against their own label widths.
+ * Height of one row, or `undefined` when a future entry kind has no explicit
+ * model yet and should take MessageList's fixed fallback.
  */
 export function conversationRowHeight(
     entries: readonly ConversationEntry[],
@@ -327,19 +468,36 @@ export function conversationRowHeight(
     if (!entry) return undefined;
     const width = contentWidth(context.width);
     if (entry.kind === "agentActivity") {
-        const activityHeight = conversationActivityHeight(entry.activity.kind);
         const startsGroup =
-            context.surface === "conversation" &&
-            conversationAgentRowStartsGroup(entries, index) &&
-            activityHeight !== undefined;
+            context.surface === "conversation" && conversationAgentRowStartsGroup(entries, index);
+        const expanded = context.expanded ?? entry.activity.kind === "shell";
+        const activityInset = startsGroup
+            ? AGENT_INSET
+            : ACTIVITY_ROW_INSET[context.activityTreatment ?? "detailed"];
+        const activityHeight =
+            entry.activity.kind === "shell"
+                ? expanded && entry.activity.output.trim().length > 0
+                    ? SHELL_ACTIVITY_CHROME +
+                      monoOutputTextHeight(
+                          entry.activity.output,
+                          width - activityInset - SHELL_ACTIVITY_OUTPUT_INSET,
+                          cache?.text,
+                      )
+                    : ACTIVITY_HEIGHT.reasoning
+                : entry.activity.kind === "reasoning" && expanded
+                  ? REASONING_ACTIVITY_CHROME +
+                    markdownBodyHeight(entry.activity.text, width - activityInset - 16, cache?.text)
+                  : conversationActivityHeight(entry.activity.kind);
         return rowHeightCached(
             cache,
             entry,
-            `activity:${context.surface}:${startsGroup ? "lead" : "plain"}`,
+            `activity:${context.surface}:${context.activityTreatment ?? "detailed"}:${String(width)}:${expanded ? "expanded" : "collapsed"}:${startsGroup ? "lead" : "plain"}`,
             () =>
-                startsGroup
-                    ? ACTIVITY_LEAD_CHROME + ACTIVITY_LEAD_RUN_SEPARATION + activityHeight
-                    : activityHeight,
+                activityHeight === undefined
+                    ? undefined
+                    : startsGroup
+                      ? ACTIVITY_LEAD_CHROME + ACTIVITY_LEAD_RUN_SEPARATION + activityHeight
+                      : activityHeight,
         );
     }
     /* A settled footer owns the clearance above it when prior activity exists. */
@@ -369,15 +527,15 @@ export function conversationRowHeight(
         );
     }
     if (entry.kind === "notice") {
-        /* A compute row owns its own measure: its detail disclosure is local to
-           the row, and the provider sentence beside the label wraps against
-           whatever the metrics and controls leave it. */
         if (entry.variant === "compute")
-            return rowHeightCached(cache, entry, "notice:compute", () => undefined);
+            return rowHeightCached(
+                cache,
+                entry,
+                `notice:compute:${String(width)}:${context.expanded ? "expanded" : "collapsed"}`,
+                () => computeNoticeHeight(entry, width, context.expanded ?? false, cache?.text),
+            );
         if (entry.variant === "divider")
             return rowHeightCached(cache, entry, "notice:divider", () => DIVIDER_HEIGHT);
-        if (entry.level === "error")
-            return rowHeightCached(cache, entry, "notice:error", () => undefined);
         /* A notice that opens its turn wears the same identity header a
            tool-first row does, and therefore the same chrome above it. */
         const lead =
@@ -387,11 +545,25 @@ export function conversationRowHeight(
         return rowHeightCached(
             cache,
             entry,
-            `notice:${String(width)}:${String(lead)}`,
+            `notice:${entry.level}:${String(width)}:${String(lead)}`,
             () => lead + SYSTEM_NOTIFICATION_HEIGHT,
         );
     }
-    if (entry.kind === "request") return undefined;
+    if (entry.kind === "request")
+        return rowHeightCached(
+            cache,
+            entry,
+            `request:${String(width)}:${context.expanded ? "expanded" : "collapsed"}`,
+            () =>
+                entry.request.kind === "userInput"
+                    ? userInputRequestHeight(entry.request, width, cache?.text)
+                    : permissionRequestHeight(
+                          entry.request,
+                          width,
+                          context.expanded ?? false,
+                          cache?.text,
+                      ),
+        );
     const message = entry.message;
     const agent = message.sender?.kind === "agent";
     const own = message.sender !== undefined && message.sender.id === context.viewerId;
@@ -435,7 +607,7 @@ export function conversationRowHeight(
             metaAccessory: !own && traceCollapsible,
             surface: context.surface,
             textCache: cache?.text,
-            time: own ? messageTimeSample(message.createdAt) : "",
+            time: messageTimeSample(message.createdAt),
             treatment,
             width,
         });
@@ -469,6 +641,7 @@ export function conversationRowHeight(
                 (hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
                 cards * ATTACHMENT_CARD_HEIGHT +
                 (cards - 1) * ATTACHMENT_CARD_GAP;
+        if (!own && !grouped && entry.contextNote) height += 21;
         return height;
     });
 }

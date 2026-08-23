@@ -177,7 +177,7 @@ it("opens a row action menu on right click and reports the row with the selected
     expect(view.container.querySelector('[data-happy-desktop-ui="sidebar-item-menu"]')).toBeNull();
 });
 
-it("renders the Happy logo to the left of the product title", async () => {
+it("renders the Happy logo without a product title", async () => {
     const view = createRenderer().render(
         () => (
             <Sidebar
@@ -195,23 +195,20 @@ it("renders the Happy logo to the left of the product title", async () => {
     const logo = view.$('[data-happy-desktop-ui="sidebar-brand-logo"]');
     const logoImage = logo.element as HTMLImageElement;
     await logoImage.decode();
-    // The lockup rides one pixel low of the header's box centre: the logo is a
-    // solid disc filling its box, so matching the box exactly reads as high.
-    expect(logo.bounds()).toEqual({ x: 16, y: 19, width: 20, height: 20 });
-    expect(logo.computedStyles(["display", "height", "object-fit", "width"])).toEqual({
+    expect(logo.bounds()).toEqual({ x: 16, y: 22, width: 12, height: 12 });
+    expect(logo.computedStyles(["display", "height", "object-fit", "opacity", "width"])).toEqual({
         display: "block",
-        height: "20px",
+        height: "12px",
         "object-fit": "contain",
-        width: "20px",
+        opacity: "0.55",
+        width: "12px",
     });
     expect(logoImage.naturalWidth).toBe(1024);
     expect(logoImage.getAttribute("alt")).toBe("");
     expect(logoImage.getAttribute("aria-hidden")).toBe("true");
     expect((await logo.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
-    const title = view.$('[data-happy-desktop-ui="sidebar-title"]');
-    expect(title.bounds().x - (logo.bounds().x + logo.bounds().width)).toBe(5);
-    expect(title.element.textContent).toBe("Happy");
+    expect(view.container.querySelector('[data-happy-desktop-ui="sidebar-title"]')).toBeNull();
 
     await view.screenshot("Sidebar.brand.test");
 }, 120_000);

@@ -11,7 +11,7 @@ export function SplashScreenPage() {
             title="Splash screen"
         >
             <Specimen
-                detail="Fills its host · 64px mark centered on both axes · grayscale and faded · workspace surface"
+                detail="Fills its host · 32px mark centered on both axes · theme color at 30% opacity · workspace surface"
                 label="Starting"
                 number="01"
                 stage="surface"
@@ -20,7 +20,7 @@ export function SplashScreenPage() {
                     <div style={{ width: "640px", height: "400px" }}>
                         <SplashScreen />
                     </div>
-                    <DimensionRule label="640 × 400 host · mark 64 × 64" />
+                    <DimensionRule label="640 × 400 host · mark 32 × 32" />
                 </div>
             </Specimen>
 
@@ -34,7 +34,7 @@ export function SplashScreenPage() {
                     <div style={{ width: "280px", height: "240px" }}>
                         <SplashScreen label="Happy Place" />
                     </div>
-                    <DimensionRule label="280 × 240 host · mark stays 64 × 64" />
+                    <DimensionRule label="280 × 240 host · mark stays 32 × 32" />
                 </div>
             </Specimen>
 
@@ -48,7 +48,7 @@ export function SplashScreenPage() {
                     <div style={{ width: "640px", height: "400px" }}>
                         <SplashScreen note="Still starting Happy Agent…" />
                     </div>
-                    <DimensionRule label="640 × 400 host · mark 64 × 64 · note centered below" />
+                    <DimensionRule label="640 × 400 host · mark 32 × 32 · note centered below" />
                 </div>
             </Specimen>
         </ComponentPage>

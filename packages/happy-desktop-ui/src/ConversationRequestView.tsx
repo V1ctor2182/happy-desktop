@@ -24,6 +24,10 @@ export type ConversationRequestViewProps = {
     error?: UserError;
     /** Renders the gate body expanded from the first paint (blueprint/tests). */
     defaultExpanded?: boolean;
+    /** Controlled gate disclosure state for a virtualized transcript row. */
+    expanded?: boolean;
+    /** Reports gate disclosure changes so modeled row geometry can rebuild. */
+    onExpandedChange?: (expanded: boolean) => void;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -63,7 +67,9 @@ export function ConversationRequestView(props: ConversationRequestViewProps) {
             className={props.className}
             data-testid={props["data-testid"]}
             defaultExpanded={props.defaultExpanded}
+            expanded={props.expanded}
             onDecide={props.onDecide}
+            onExpandedChange={props.onExpandedChange}
             pending={props.pending}
             request={request}
             style={props.style}
@@ -78,13 +84,20 @@ function ConversationGate(props: {
     onDecide?: (requestId: string, decision: ConversationRequestDecision) => void;
     pending?: boolean;
     defaultExpanded?: boolean;
+    expanded?: boolean;
+    onExpandedChange?: (expanded: boolean) => void;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
 }) {
     // Expansion is this card's own presentation, not product state: it must not
     // survive in a store, and collapsing one gate never affects another.
-    const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
+    const [ownExpanded, setOwnExpanded] = useState(props.defaultExpanded ?? false);
+    const expanded = props.expanded ?? ownExpanded;
+    const setExpanded = (next: boolean) => {
+        if (props.expanded === undefined) setOwnExpanded(next);
+        props.onExpandedChange?.(next);
+    };
     const request = props.request;
     return (
         <ApprovalCard

@@ -83,11 +83,11 @@ export function WelcomeScreenPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="First-run welcome deck: a 160px hero, a title, a short slogan, a row of dot controls and one primary action, centred on the workspace surface. It advances itself every 15s and wraps; a dot or an arrow key restarts the clock, and a reader who asked for reduced motion never sees it move. Two overlays sit outside that column and cannot move it: the transparent 56px window-drag lane along the top, invisible here, and the appearance switcher 24px in from the bottom-right corner."
+            summary="First-run welcome deck: a 160px hero, a title, a short slogan, a row of dot controls and one primary action, centred on the workspace surface. It advances itself every 15s and wraps; a dot or an arrow key restarts the clock, and a reader who asked for reduced motion never sees it move. Two overlays sit outside that column and cannot move it: the transparent 56px window-drag lane along the top and the appearance switcher 24px in from the bottom-right corner."
             title="Welcome screen"
         >
             <Specimen
-                detail="opens on the logo slide · 160px mark, 32px title, 400px slogan measure, 20px dot controls, 44px action · the deck advances by itself, so this specimen is a moment rather than a still"
+                detail="opens on the logo slide · solid workspace surface, 120px mark in a 160px stage, 32px title, 400px slogan measure, 20px dot controls, 44px action · the optional night-sky component remains available but is not enabled here"
                 label="First slide"
                 number="01"
                 stage="surface"
@@ -103,7 +103,7 @@ export function WelcomeScreenPage() {
             </Specimen>
 
             <Specimen
-                detail="the same deck rotated so it opens mid-slideshow on a Lottie slide · the scene occupies the same 160px stage the mark does, so the words start at the same y"
+                detail="the same deck rotated so it opens mid-slideshow on a Lottie slide · the scene and the smaller mark share the same 160px stage, so the words start at the same y"
                 label="Mid-slideshow scene"
                 number="02"
                 stage="surface"

@@ -27,6 +27,7 @@
 :root,
 .happy-theme-light {
     color-scheme: light;
+    --happy-brand-logo-source: url("./assets/brand/logo-black.png");
 
     /* File tabs, their mode bars, and the path rows below them are one piece
        of chrome. Keep the containing row and its inset controls on one shared
@@ -307,6 +308,7 @@
 @media (prefers-color-scheme: dark) {
     :root {
         color-scheme: dark;
+        --happy-brand-logo-source: url("./assets/brand/logo-white.png");
         --text: #ffffff;
         --text-destructive: #f48fb1;
         --text-secondary: #cac4d0;
@@ -475,6 +477,7 @@
 /* Explicit preview/test override. */
 .happy-theme-dark {
     color-scheme: dark;
+    --happy-brand-logo-source: url("./assets/brand/logo-white.png");
     --text: #ffffff;
     --text-destructive: #f48fb1;
     --text-secondary: #cac4d0;

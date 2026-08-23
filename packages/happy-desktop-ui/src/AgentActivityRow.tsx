@@ -49,6 +49,10 @@ export type AgentActivityRowProps = {
     onFileOpen?: (path: string) => void;
     /** Start expanded (blueprint/tests). Otherwise rich bodies collapse by default. */
     defaultExpanded?: boolean;
+    /** Controlled disclosure state for a virtualized transcript row. */
+    expanded?: boolean;
+    /** Reports disclosure changes so an owner can rebuild modeled row geometry. */
+    onExpandedChange?: (expanded: boolean) => void;
     /**
      * Local conversation tool rows: one neutral line aligned with agent text, with
      * no inline result or expand affordance.
@@ -69,6 +73,22 @@ const EXEC_HEAD_TAIL = 5;
 const JSON_BUDGET = 4096;
 /** MCP result-row budget: dim child rows shown before an overflow note (A3). */
 const MCP_RESULT_ROWS = 5;
+
+function useExpansion(
+    defaultExpanded: boolean,
+    expanded: boolean | undefined,
+    onExpandedChange: ((expanded: boolean) => void) | undefined,
+) {
+    const [ownExpanded, setOwnExpanded] = useState(defaultExpanded);
+    const value = expanded ?? ownExpanded;
+    return [
+        value,
+        (next: boolean) => {
+            if (expanded === undefined) setOwnExpanded(next);
+            onExpandedChange?.(next);
+        },
+    ] as const;
+}
 
 function AgentActivityTime(props: { time?: string }) {
     return props.time ? (
@@ -507,6 +527,8 @@ function PermissionReviewRow(props: { review: ConversationActivityReview }) {
 function AgentToolActivity(props: {
     tool: ConversationToolCall;
     defaultExpanded?: boolean;
+    expanded?: boolean;
+    onExpandedChange?: (expanded: boolean) => void;
     motion?: ActivityMotion;
     treatment?: ActivityTreatment;
     onSelect?: (tool: ConversationToolCall) => void;
@@ -516,7 +538,11 @@ function AgentToolActivity(props: {
 }) {
     const { tool } = props;
     const presentation = tool.presentation;
-    const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
+    const [expanded, setExpanded] = useExpansion(
+        props.defaultExpanded ?? false,
+        props.expanded,
+        props.onExpandedChange,
+    );
     const singleLine = props.singleLine ?? false;
     const running = tool.status === "running";
     const motion = props.motion ?? "typewriter";
@@ -798,7 +824,7 @@ function AgentToolActivity(props: {
                         className="happy-agent-activity__header"
                         data-happy-desktop-ui="agent-activity-header"
                         disabled={!hasBody}
-                        onClick={() => hasBody && setExpanded((open) => !open)}
+                        onClick={() => hasBody && setExpanded(!expanded)}
                         type="button"
                     >
                         {header}
@@ -962,9 +988,15 @@ function AgentReasoningActivity(props: {
     text: string;
     streaming: boolean;
     defaultExpanded?: boolean;
+    expanded?: boolean;
+    onExpandedChange?: (expanded: boolean) => void;
     time?: string;
 }) {
-    const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
+    const [expanded, setExpanded] = useExpansion(
+        props.defaultExpanded ?? false,
+        props.expanded,
+        props.onExpandedChange,
+    );
     const summary = props.text.split("\n").find((line) => line.trim().length > 0) ?? "";
     return (
         <div
@@ -978,7 +1010,7 @@ function AgentReasoningActivity(props: {
                 aria-expanded={expanded ? "true" : "false"}
                 className="happy-agent-activity__header"
                 data-happy-desktop-ui="agent-activity-header"
-                onClick={() => setExpanded((open) => !open)}
+                onClick={() => setExpanded(!expanded)}
                 type="button"
             >
                 <span
@@ -1024,9 +1056,15 @@ function AgentShellActivity(props: {
     running: boolean;
     timedOut: boolean;
     defaultExpanded?: boolean;
+    expanded?: boolean;
+    onExpandedChange?: (expanded: boolean) => void;
     time?: string;
 }) {
-    const [expanded, setExpanded] = useState(props.defaultExpanded ?? true);
+    const [expanded, setExpanded] = useExpansion(
+        props.defaultExpanded ?? true,
+        props.expanded,
+        props.onExpandedChange,
+    );
     const failed = !props.running && (props.timedOut || (props.exitCode ?? 0) !== 0);
     const status = props.running
         ? "Running"
@@ -1047,7 +1085,7 @@ function AgentShellActivity(props: {
                 className="happy-agent-activity__header"
                 data-happy-desktop-ui="agent-activity-header"
                 disabled={!hasBody}
-                onClick={() => hasBody && setExpanded((open) => !open)}
+                onClick={() => hasBody && setExpanded(!expanded)}
                 type="button"
             >
                 <span
@@ -1177,7 +1215,9 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
             {activity.kind === "tool" ? (
                 <AgentToolActivity
                     defaultExpanded={props.defaultExpanded}
+                    expanded={props.expanded}
                     motion={props.motion}
+                    onExpandedChange={props.onExpandedChange}
                     treatment={props.treatment}
                     onSelect={props.onToolSelect}
                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
@@ -1196,6 +1236,8 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
             ) : activity.kind === "reasoning" ? (
                 <AgentReasoningActivity
                     defaultExpanded={props.defaultExpanded}
+                    expanded={props.expanded}
+                    onExpandedChange={props.onExpandedChange}
                     streaming={activity.streaming}
                     text={activity.text}
                     time={props.time}
@@ -1204,7 +1246,9 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                 <AgentShellActivity
                     command={activity.command}
                     defaultExpanded={props.defaultExpanded}
+                    expanded={props.expanded}
                     exitCode={activity.exitCode}
+                    onExpandedChange={props.onExpandedChange}
                     output={activity.output}
                     running={activity.running}
                     timedOut={activity.timedOut}

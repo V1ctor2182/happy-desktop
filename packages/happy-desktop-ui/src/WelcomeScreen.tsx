@@ -7,10 +7,11 @@ import {
     type CSSProperties,
     type KeyboardEvent,
 } from "react";
-import { happyLogoUrl } from "./assets";
+import { happyLogoBlackUrl } from "./assets";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { NightSkyShader, type NightSkyShaderMotion } from "./NightSkyShader";
 import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
 /*
  * The same triple the settings surface offers, deliberately reused rather than
@@ -36,6 +37,12 @@ export interface WelcomeSlide {
     readonly copy: string;
 }
 
+export type WelcomeScreenBackdrop = {
+    readonly kind: "night-sky";
+    /** `still` is the deterministic Blueprint and reduced-motion presentation. */
+    readonly motion?: NightSkyShaderMotion;
+};
+
 export interface WelcomeScreenProps {
     readonly className?: string;
     readonly "data-testid"?: string;
@@ -44,6 +51,8 @@ export interface WelcomeScreenProps {
     readonly slides: readonly WelcomeSlide[];
     /** Primary action label. Defaults to "Go Happy". */
     readonly actionLabel?: string;
+    /** Optional decorative scenery behind the welcome deck. */
+    readonly backdrop?: WelcomeScreenBackdrop;
     onAction(): void;
     /** Which appearance this window is on. */
     readonly appearance: HappyAgentAppearanceChoice;
@@ -118,6 +127,10 @@ const APPEARANCE_CYCLE: Record<
  * pinned to the window's top edge rather than scrolling away with the content
  * at the minimum window height.
  *
+ * The optional night sky is also outside that flow: one full-window decorative
+ * WebGL canvas below every control. It is transparent and quietest behind the
+ * central copy, so the chosen light or dark appearance remains authoritative.
+ *
  * The appearance switcher in the opposite corner is out of that flow for the
  * same reason and one more: it exists on a screen whose whole argument is that
  * nothing moves under the pointer, so it must not be able to take a pixel from
@@ -134,6 +147,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "style",
         "slides",
         "actionLabel",
+        "backdrop",
         "onAction",
         "appearance",
         "onAppearanceChange",
@@ -212,6 +226,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         <div
             className={["happy-welcome-screen", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="welcome-screen"
+            data-backdrop={local.backdrop?.kind}
             data-motion={reducedMotion ? "reduced" : "full"}
             data-testid={local["data-testid"]}
             style={local.style}
@@ -221,6 +236,12 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                 It is rendered here rather than beside the screen because this
                 root is what establishes its positioning context. */}
             <WindowDragRegion />
+            {local.backdrop?.kind === "night-sky" ? (
+                <NightSkyShader
+                    className="happy-welcome-screen__backdrop"
+                    motion={local.backdrop.motion}
+                />
+            ) : null}
             <ScrollArea
                 className="happy-welcome-screen__view"
                 data-happy-desktop-ui="welcome-view"
@@ -379,9 +400,9 @@ function welcomeArt(slide: WelcomeSlide) {
             <img
                 alt=""
                 aria-hidden="true"
-                className="happy-welcome-screen__mark"
+                className="happy-brand-logo happy-welcome-screen__mark"
                 data-happy-desktop-ui="welcome-mark"
-                src={happyLogoUrl}
+                src={happyLogoBlackUrl}
             />
         );
     return (

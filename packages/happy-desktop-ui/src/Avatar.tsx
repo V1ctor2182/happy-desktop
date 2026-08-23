@@ -11,6 +11,8 @@ export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
      * `imageUrl` still wins over it.
      */
     icon?: IconName;
+    /** Uses the Happy brand image selected by the surrounding theme. */
+    imageTheme?: "brand";
     imageUrl?: string;
     initials: string;
     online?: boolean;
@@ -26,6 +28,7 @@ export function Avatar(props: AvatarProps) {
         "children",
         "className",
         "icon",
+        "imageTheme",
         "imageUrl",
         "initials",
         "online",
@@ -52,7 +55,12 @@ export function Avatar(props: AvatarProps) {
         >
             {local.imageUrl ? (
                 <img
-                    className="happy-avatar__image"
+                    className={[
+                        "happy-avatar__image",
+                        local.imageTheme === "brand" ? "happy-brand-logo" : undefined,
+                    ]
+                        .filter(Boolean)
+                        .join(" ")}
                     data-happy-desktop-ui="avatar-image"
                     src={local.imageUrl}
                     alt=""

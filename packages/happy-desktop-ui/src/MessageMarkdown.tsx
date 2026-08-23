@@ -8,15 +8,11 @@ import {
     type ReactNode,
 } from "react";
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { filePreviewKind } from "./FilePreview";
 import { markdownDocumentLinkPath } from "./MarkdownDocument";
+import { MESSAGE_MARKDOWN_REMARK_PLUGINS } from "./messageMarkdownAst";
 import { ScrollArea } from "./Scrollbar";
 
-// This list is part of the renderer configuration, not message state. A fresh
-// array here makes react-markdown reparse unchanged streamed messages on every
-// parent notification.
-const MESSAGE_MARKDOWN_REMARK_PLUGINS = [remarkGfm];
 // Keep unchanged streamed message bodies from re-running react-markdown's
 // parser when an unrelated conversation notification reaches the parent.
 const MemoMarkdown = memo(Markdown);
@@ -99,7 +95,13 @@ const MarkdownImage = ({ alt, src }: MarkdownImageProps) => {
  * A linked image becomes labelled content of this anchor instead of a nested
  * interactive element.
  */
-const MarkdownLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraProps) => {
+const MarkdownLink = ({
+    children,
+    className,
+    href,
+    node: _node,
+    ...props
+}: ComponentPropsWithoutRef<"a"> & ExtraProps) => {
     const safe = safeHref(href);
     const onFileOpen = useContext(MarkdownFileOpenContext);
     const path = safe === undefined ? markdownDocumentLinkPath(href) : undefined;
@@ -108,19 +110,23 @@ const MarkdownLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
     // that would open on "no preview".
     if (path !== undefined && onFileOpen !== undefined && filePreviewKind(path) !== "binary")
         return (
-            <button
+            <a
                 className="happy-message__md-link happy-message__md-file"
                 data-happy-desktop-ui="message-md-file"
                 data-path={path}
-                onClick={() => onFileOpen(path)}
-                type="button"
+                href={path}
+                onClick={(event) => {
+                    event.preventDefault();
+                    onFileOpen(path);
+                }}
             >
                 <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>
-            </button>
+            </a>
         );
     return (
         <a
-            className="happy-message__md-link"
+            {...props}
+            className={["happy-message__md-link", className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="message-md-link"
             href={safe}
             rel="noopener noreferrer nofollow"
@@ -185,6 +191,7 @@ const MarkdownPre = ({ children, ...props }: ComponentPropsWithoutRef<"pre"> & E
         axes="horizontal"
         className="happy-message__code-block"
         data-happy-desktop-ui="message-code-block"
+        placement="overlay"
         viewportClassName="happy-message__code-block-viewport"
     >
         <pre {...props}>{children}</pre>
@@ -199,11 +206,19 @@ const MarkdownTable = ({
         axes="horizontal"
         className="happy-message__table-scroll"
         data-happy-desktop-ui="message-table-scroll"
+        placement="overlay"
         viewportClassName="happy-message__table-scroll-viewport"
     >
         <table {...props}>{children}</table>
     </ScrollArea>
 );
+/** Footnote references stay in normal inline flow so their AST label uses the
+ * same line box and font metrics as the surrounding paragraph. */
+const MarkdownSup = ({
+    children,
+    node: _node,
+    ...props
+}: ComponentPropsWithoutRef<"sup"> & ExtraProps) => <span {...props}>{children}</span>;
 /**
  * Headings render with no generated `id`. Chat bodies are untrusted and appear
  * many-to-a-page, so generated heading anchors would collide across messages.
@@ -223,6 +238,7 @@ const markdownComponents: Components = {
     img: MarkdownImage,
     p: MarkdownParagraph,
     pre: MarkdownPre,
+    sup: MarkdownSup,
     table: MarkdownTable,
     h1: headingOverride("h1"),
     h2: headingOverride("h2"),
@@ -255,6 +271,7 @@ export function renderMessageMarkdown(
                 <MemoMarkdown
                     components={markdownComponents}
                     remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
+                    skipHtml
                 >
                     {text}
                 </MemoMarkdown>

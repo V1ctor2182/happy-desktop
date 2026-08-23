@@ -5,12 +5,13 @@
  */
 
 .happy-agent-activity-row {
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     width: 100%;
 }
 
-.happy-agent-activity {
+.happy-agent-activity-row .happy-agent-activity {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -326,6 +327,7 @@
 }
 
 .happy-agent-activity__reasoning {
+    gap: 0;
     font-size: 12px;
     line-height: 18px;
     color: var(--text-secondary);

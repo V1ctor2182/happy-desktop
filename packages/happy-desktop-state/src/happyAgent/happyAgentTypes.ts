@@ -628,22 +628,6 @@ export interface HappyAgentMenusSnapshot {
 }
 
 /**
- * One transcript row's measured geometry, as the reading position needs it. A
- * restored position is a pixel offset into a list whose rows have wildly
- * different heights, so the offset only means anything alongside the heights it
- * was measured against.
- */
-export interface HappyAgentScrollMeasurement {
-    /** A row's render key, which is whatever the transcript keyed that row by. */
-    readonly key: string | number | bigint;
-    readonly index: number;
-    readonly start: number;
-    readonly end: number;
-    readonly size: number;
-    readonly lane: number;
-}
-
-/**
  * Where a conversation is being read. `following` distinguishes a reader parked
  * at the newest message — who should stay there as more arrives — from one who
  * has scrolled up to a fixed point and expects to find it again.
@@ -651,9 +635,8 @@ export interface HappyAgentScrollMeasurement {
 export interface HappyAgentScrollPosition {
     readonly scrollTop: number;
     readonly following: boolean;
-    /** Effective centered row measure associated with `measurements`. */
+    /** Effective centered row width associated with `scrollTop`. */
     readonly rowWidth?: number;
-    readonly measurements?: readonly HappyAgentScrollMeasurement[];
 }
 
 /** One physical child of a checkout directory. Symlinks are file-like leaves. */

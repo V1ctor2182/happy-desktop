@@ -6,7 +6,7 @@ import { userEvent } from "vitest/browser";
 import { FileAttachment } from "./FileAttachment";
 import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, MessageList, SystemNotice } from "./Message";
-import { happyLogoUrl } from "./assets";
+import { happyLogoBlackUrl } from "./assets";
 import { createRenderer, type RenderedElement } from "./testing";
 /* Fixtures render on the app surface color so screenshots are representative. */
 function stage(testid: string, children: ReactNode) {
@@ -1024,7 +1024,7 @@ it("makes the avatar and author name a profile affordance without shifting geome
     expect(groupedRoot.element.querySelector('[data-happy-desktop-ui="avatar"]')).toBeNull();
     await view.screenshot("Message.identity.test");
 });
-it("uses the Happy star as Happy’s compact inline agent avatar", async () => {
+it("uses the Happy logo as Happy’s compact inline agent avatar", async () => {
     const view = createRenderer().render(
         () =>
             stage(
@@ -1039,7 +1039,7 @@ it("uses the Happy star as Happy’s compact inline agent avatar", async () => {
     expect(avatar.element.getAttribute("data-size")).toBe("xs");
     expect(avatar.computedStyle("background-color")).toBe("rgba(0, 0, 0, 0)");
     const image = view.$('[data-testid="happy-agent"] [data-happy-desktop-ui="avatar-image"]');
-    expect((image.element as HTMLImageElement).src).toBe(happyLogoUrl);
+    expect((image.element as HTMLImageElement).src).toBe(happyLogoBlackUrl);
     /* Agent rows carry no meta margin-left, so the author name starts at the
        row's own 30px agent padding-left (see message.css's
        `:not([data-agent]):not([data-own]) .happy-message__meta` comment). */

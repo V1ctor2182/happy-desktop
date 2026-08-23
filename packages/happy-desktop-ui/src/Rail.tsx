@@ -6,7 +6,7 @@ import {
     type HTMLAttributes,
     type ReactNode,
 } from "react";
-import { happyLogoUrl } from "./assets";
+import { happyLogoBlackUrl } from "./assets";
 import { CountBadge } from "./Badge";
 import { Icon, type IconName } from "./Icon";
 import { Menu, type MenuItem } from "./Menu";
@@ -113,10 +113,10 @@ export function Rail(props: RailProps) {
                     <img
                         alt=""
                         aria-hidden="true"
-                        className="happy-rail__brand-image"
+                        className="happy-brand-logo happy-rail__brand-image"
                         data-happy-desktop-ui="rail-brand-image"
                         draggable={false}
-                        src={happyLogoUrl}
+                        src={happyLogoBlackUrl}
                     />
                 )}
             </div>

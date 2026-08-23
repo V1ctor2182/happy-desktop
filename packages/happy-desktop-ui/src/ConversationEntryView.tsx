@@ -71,6 +71,10 @@ export type ConversationEntryViewProps = {
     requestError?: UserError;
     /** Renders rich activity bodies expanded from the first paint (blueprint/tests). */
     activityDefaultExpanded?: boolean;
+    /** Controlled disclosure state for this transcript row. */
+    rowExpanded?: boolean;
+    /** Reports disclosure changes to the owning row-geometry model. */
+    onRowExpandedChange?: (expanded: boolean) => void;
     /** Motion profile for live activity rows; see `AgentActivityRow`. */
     activityMotion?: ActivityMotion;
     /** Content/chrome policy for activity rows; independent of motion. */
@@ -206,7 +210,9 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 activity={entry.activity}
                 data-testid={props["data-testid"]}
                 defaultExpanded={props.activityDefaultExpanded}
+                expanded={props.rowExpanded}
                 motion={props.activityMotion}
+                onExpandedChange={props.onRowExpandedChange}
                 treatment={props.activityTreatment}
                 onToolSelect={
                     entry.activity.kind === "tool"
@@ -298,9 +304,11 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     className={props.className}
                     data-testid={props["data-testid"]}
                     defaultExpanded={props.activityDefaultExpanded}
+                    expanded={props.rowExpanded}
                     {...(entry.elapsedMs === undefined ? {} : { elapsedMs: entry.elapsedMs })}
                     instanceId={entry.instanceId}
                     message={entry.message}
+                    onExpandedChange={props.onRowExpandedChange}
                     {...(entry.percent === undefined ? {} : { percent: entry.percent })}
                     phase={entry.phase}
                     provider={entry.provider}
@@ -367,6 +375,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 data-testid={props["data-testid"]}
                 defaultExpanded={props.activityDefaultExpanded}
                 error={props.requestError}
+                expanded={props.rowExpanded}
                 {...(props.onRequestAnswer ? { onAnswer: props.onRequestAnswer } : {})}
                 {...(props.onRequestSelectionChange
                     ? { onSelectionChange: props.onRequestSelectionChange }
@@ -374,6 +383,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 {...(props.requestSelection ? { selection: props.requestSelection } : {})}
                 {...(props.onRequestDecide ? { onDecide: props.onRequestDecide } : {})}
                 pending={props.requestPending}
+                onExpandedChange={props.onRowExpandedChange}
                 request={entry.request}
                 style={props.style}
             />

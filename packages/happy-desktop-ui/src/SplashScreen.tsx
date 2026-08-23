@@ -1,6 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
-import { happyLogoUrl } from "./assets";
+import { happyLogoBlackUrl } from "./assets";
 
 export interface SplashScreenProps {
     readonly className?: string;
@@ -19,9 +19,9 @@ export interface SplashScreenProps {
 /**
  * C-161 SplashScreen — what the window holds while the app decides what to show:
  * the workspace surface with the Happy mark centered on it, and nothing else by
- * default. The mark renders muted (grayscale, faded) rather than in the brand
- * orange, because this screen means "still waking up", not "here is the Happy
- * brand" — a bright mark reads as a deliberate splash and fights the crossfade
+ * default. The mark renders muted rather than at full strength, because this
+ * screen means "still waking up", not "here is the Happy brand" — a strong
+ * mark reads as a deliberate splash and fights the crossfade
  * it is about to lose. It carries no spinner, because it is on screen only as
  * long as the first probe takes and anything more would flash; the optional
  * `note` exists for the one case that isn't instant — a slow local Happy Agent start —
@@ -48,9 +48,9 @@ export function SplashScreen(props: SplashScreenProps) {
             <div className="happy-splash-screen__body">
                 <img
                     alt={local.label ?? "Happy"}
-                    className="happy-splash-screen__mark"
+                    className="happy-brand-logo happy-splash-screen__mark"
                     data-happy-desktop-ui="splash-screen-mark"
-                    src={happyLogoUrl}
+                    src={happyLogoBlackUrl}
                 />
                 {local.note !== undefined ? (
                     <div

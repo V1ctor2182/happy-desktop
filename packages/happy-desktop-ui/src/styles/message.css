@@ -212,9 +212,8 @@
    a fact about. It takes the author line's own inset so the two read as one
    identity block, and it stays quiet enough not to compete with the message.
    Unlike the hover metadata it never appears or disappears under the pointer.
-   `conversationRowHeight` cannot model it, because the note is not on the entry
-   projection it reads; a row carrying one is corrected by its own measurement
-   on mount. */
+   Its fixed 16px line plus 5px close is part of `conversationRowHeight`, so the
+   virtual row reserves it before rendering. */
 .happy-message__context-note {
     display: block;
     overflow: hidden;
@@ -638,17 +637,21 @@
 .happy-message__body--markdown table {
     min-width: 100%;
     border-collapse: collapse;
+    border-spacing: 0;
+    outline: 1px solid var(--divider);
+    outline-offset: -1px;
     font-size: 16px;
     line-height: 24px;
 }
 
 .happy-message__body--markdown th,
 .happy-message__body--markdown td {
-    border: 1px solid var(--divider);
+    border: 0;
     padding: 8px 12px;
+    box-shadow: inset -1px -1px var(--divider);
     text-align: left;
     vertical-align: top;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
 }
 
 .happy-message__body--markdown th {
@@ -677,7 +680,51 @@
 }
 
 .happy-message__body--markdown li + li {
+    margin-top: 0;
+    padding-top: 6px;
+}
+
+/* Remark can put paragraphs and nested lists inside one list item. Reset their
+   user-agent margins so the AST model owns the same deterministic 6px stack in
+   every engine. */
+.happy-message__body--markdown li > * {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.happy-message__body--markdown li > * + * {
     margin-top: 6px;
+}
+
+.happy-message__body--markdown .task-list-item {
+    list-style: none;
+}
+
+.happy-message__body--markdown .task-list-item > input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    margin: 0 6px 0 0;
+    vertical-align: -1px;
+}
+
+/* remark-rehype collects GFM definitions into one final section. Its generated
+   accessibility label is not a visual heading; the ordered definitions use the
+   same explicit list geometry as authored Markdown. */
+.happy-message__body--markdown [data-footnotes] > h2 {
+    display: none;
+}
+
+.happy-message__body--markdown [data-footnotes] > ol {
+    margin: 0;
+}
+
+.happy-message__body--markdown [data-footnote-ref],
+.happy-message__body--markdown [data-footnote-backref] {
+    display: inline-flex;
+    font: inherit;
+    line-height: inherit;
+    vertical-align: baseline;
+    white-space: nowrap;
 }
 
 /* Links carry no accent — the original view underlines them in the body text
@@ -695,8 +742,8 @@
     opacity: 0.8;
 }
 
-/* A link to a workspace file is a real button so it reads as an in-app action
-   to assistive technology, but it sits in the text flow as a link does. */
+/* A workspace file remains a real inline link; Happy intercepts its navigation
+   and opens the file in the product viewer. */
 .happy-message__md-file {
     display: inline;
     margin: 0;
@@ -709,11 +756,13 @@
 
 /* Inline code: mono, a touch smaller than the body, on a subtle raised fill. */
 .happy-message__body--markdown code {
+    display: inline;
     font-family: var(--happy-font-mono);
     font-size: 14px;
+    line-height: 18px;
     background: var(--surface-pressed);
     border-radius: 4px;
-    padding: 1px 5px;
+    padding: 0 5px;
     color: var(--text);
 }
 
@@ -739,6 +788,7 @@
 
 .happy-message__body--markdown pre code {
     display: block;
+    margin: 0;
     background: transparent;
     border-radius: 0;
     padding: 16px;
@@ -752,6 +802,16 @@
     border-left: 2px solid var(--surface-selected);
     padding-left: 10px;
     color: var(--text-secondary);
+}
+
+/* Nested quote blocks follow the same explicit block rhythm as the body. */
+.happy-message__body--markdown blockquote > * {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.happy-message__body--markdown blockquote > * + * {
+    margin-top: 8px;
 }
 
 .happy-message__body--markdown hr {
@@ -975,7 +1035,7 @@
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
-    /* TanStack and the semantic drag anchor are the scroll authorities. */
+    /* TanStack's row model and the semantic reader anchor own scroll geometry. */
     overflow-anchor: none;
     font-family: var(--happy-font-ui);
     font-synthesis: none;

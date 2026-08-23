@@ -16,6 +16,10 @@ export interface ConversationComputeEventProps {
     readonly message: string;
     /** Start with the detail list open (blueprint/tests). */
     readonly defaultExpanded?: boolean;
+    /** Controlled disclosure state for a virtualized transcript row. */
+    readonly expanded?: boolean;
+    /** Reports disclosure changes so an owner can rebuild modeled row geometry. */
+    readonly onExpandedChange?: (expanded: boolean) => void;
     /** Materialization progress, when the provider reports one. */
     readonly percent?: number;
     /** The provider's step name inside the lifecycle, such as `pulling_image`. */
@@ -75,7 +79,12 @@ function elapsedLabel(elapsedMs: number): string {
  * provider. Nothing here is derived from anything but the values Happy Agent published.
  */
 export function ConversationComputeEvent(props: ConversationComputeEventProps) {
-    const [open, setOpen] = useState(props.defaultExpanded ?? false);
+    const [ownOpen, setOwnOpen] = useState(props.defaultExpanded ?? false);
+    const open = props.expanded ?? ownOpen;
+    const setOpen = (next: boolean) => {
+        if (props.expanded === undefined) setOwnOpen(next);
+        props.onExpandedChange?.(next);
+    };
     const state = STATES[props.state];
     const progress =
         props.percent === undefined ? undefined : `${String(Math.round(props.percent))}%`;

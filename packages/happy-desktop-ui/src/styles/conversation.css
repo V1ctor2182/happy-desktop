@@ -132,6 +132,12 @@
     padding-left: 49px;
 }
 
+/* A live status and its external work have deterministic model geometry: when
+   both exist, the 24px activity summary always owns the next flex line. */
+.happy-agent-working-status[data-active] + .happy-conversation__activity-entry {
+    flex-basis: 100%;
+}
+
 .happy-conversation
     .happy-message[data-agent].happy-conversation__resumed:not([data-own])
     .happy-message__gutter {

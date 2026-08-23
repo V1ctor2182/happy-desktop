@@ -1,6 +1,6 @@
 import "./styles.css";
 
-export { happyLogoUrl } from "./assets";
+export { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
 export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";
@@ -20,6 +20,11 @@ export {
 export { CodeHighlightWorkers } from "./CodeHighlightWorkers";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
 export { SplashCover, type SplashCoverProps } from "./SplashCover";
+export {
+    NightSkyShader,
+    type NightSkyShaderMotion,
+    type NightSkyShaderProps,
+} from "./NightSkyShader";
 export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
 export {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
@@ -445,6 +450,7 @@ export {
 export { ConnectionHeader, type ConnectionHeaderProps } from "./ConnectionHeader";
 export {
     WelcomeScreen,
+    type WelcomeScreenBackdrop,
     type WelcomeScreenProps,
     type WelcomeSlide,
     type WelcomeSlideArt,

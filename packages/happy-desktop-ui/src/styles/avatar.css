@@ -121,7 +121,7 @@
 }
 
 /* A supplied avatar image owns the entire mark. This is especially important
- * for Happy's transparent star, whose silhouette must not inherit a tile. */
+ * for Happy's theme-selected logo, whose silhouette must not inherit a tile. */
 .happy-avatar[data-image] {
     background: transparent;
 }

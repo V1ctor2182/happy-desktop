@@ -252,7 +252,7 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
         height: 560,
     });
 
-    /* The Happy star is the default 32px brand mark. It occupies
+    /* The Happy logo is the default 32px brand mark. It occupies
      * the former R slot without restoring any text glyph. */
     const brandImage = view.$(
         '[data-testid="rail-main"] [data-happy-desktop-ui="rail-brand-image"]',

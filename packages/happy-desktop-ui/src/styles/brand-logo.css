@@ -1,0 +1,6 @@
+/* The black file is the HTML fallback. Replacing its rendered content through
+ * the inherited theme value also respects explicit nested ThemeScope overrides,
+ * which a prefers-color-scheme source on a picture element cannot do. */
+.happy-brand-logo {
+    content: var(--happy-brand-logo-source);
+}

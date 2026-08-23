@@ -16,7 +16,7 @@ import { compactCount, changeCountLabel } from "./countText";
 import { haptic } from "./haptics";
 import { CountBadge, KeyCap } from "./Badge";
 import { Button } from "./Button";
-import { happyLogoUrl } from "./assets";
+import { happyLogoBlackUrl } from "./assets";
 import { Icon, type IconName } from "./Icon";
 import {
     commandShortcut,
@@ -267,8 +267,7 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     /** Agent-authored menu content between the pinned actions and project sections. */
     bodyAccessory?: ReactNode;
     /**
-     * Renders the product lockup — the logo and the word "Happy" — instead of a
-     * custom title row.
+     * Renders the product logo instead of a custom title row.
      */
     brand?: boolean;
     composeLabel?: string;
@@ -1935,22 +1934,14 @@ export function Sidebar(props: SidebarProps) {
                 ) : (
                     <div className="happy-sidebar__heading" data-happy-desktop-ui="sidebar-heading">
                         {local.brand ? (
-                            <span className="happy-sidebar__title-row happy-sidebar__title-row--brand">
-                                <img
-                                    alt=""
-                                    aria-hidden="true"
-                                    className="happy-sidebar__brand-logo"
-                                    data-happy-desktop-ui="sidebar-brand-logo"
-                                    draggable={false}
-                                    src={happyLogoUrl}
-                                />
-                                <span
-                                    className="happy-sidebar__title happy-sidebar__title--brand"
-                                    data-happy-desktop-ui="sidebar-title"
-                                >
-                                    Happy
-                                </span>
-                            </span>
+                            <img
+                                alt=""
+                                aria-hidden="true"
+                                className="happy-brand-logo happy-sidebar__brand-logo"
+                                data-happy-desktop-ui="sidebar-brand-logo"
+                                draggable={false}
+                                src={happyLogoBlackUrl}
+                            />
                         ) : local.title !== undefined ? (
                             <span className="happy-sidebar__title-row">
                                 <span
