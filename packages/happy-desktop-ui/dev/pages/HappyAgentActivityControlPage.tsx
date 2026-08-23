@@ -95,24 +95,24 @@ export function HappyAgentActivityControlPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The live-work summary that closes the working-status line: quiet secondary type at the far end of the running turn, dropped whole onto its own line when the pane is too narrow, and absent when no agent or terminal remains active."
+            summary="The live-work summary that shares one stable line with the working status, remains there by itself when the parent turn stops, and disappears only when no agent or terminal remains active."
             title="HappyAgentActivityControl"
         >
             <Specimen
-                detail="active agents and a background terminal end the turn's own status line — one loader, one line"
+                detail="active agents and a background terminal end the turn's own status line — one loader and one line"
                 label="On the status line"
                 number="01"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     <TranscriptStage agents={2} terminals={1} width={720} />
-                    <DimensionRule label="720 px wide · one 32 px status line" />
+                    <DimensionRule label="720 px wide · one 36 px status line" />
                 </div>
             </Specimen>
 
             <Specimen
-                detail="too narrow for both, so the summary wraps whole and starts on the clock's column"
-                label="Wrapped"
+                detail="a constrained pane keeps the status and activity on one line and truncates their text in place"
+                label="Compact"
                 number="02"
                 stage="surface"
             >
@@ -120,8 +120,8 @@ export function HappyAgentActivityControlPage() {
             </Specimen>
 
             <Specimen
-                detail="one long-running terminal outlives its turn, so it closes the settled “Completed in” line instead of opening a row beneath it"
-                label="Settled turn"
+                detail="one long-running terminal outlives its parent turn, so the stable activity line remains with only the terminal count"
+                label="No active turn"
                 number="03"
                 stage="surface"
             >

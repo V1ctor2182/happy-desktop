@@ -85,12 +85,6 @@ export type ConversationEntryViewProps = {
     onTraceToggle?: (turnId: string) => void;
     /** That turn's intermediate entries are currently listed. */
     traceOpen?: boolean;
-    /**
-     * Held at the far end of this entry's settled turn-status line. The owner
-     * supplies it for the last settled turn only, so work still running after
-     * the agent stopped closes that line instead of opening a row beneath it.
-     */
-    trailing?: ReactNode;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -268,7 +262,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 finalContextTokens={entry.finalContextTokens}
                 reason={entry.reason}
                 status={entry.status}
-                {...(props.trailing ? { trailing: props.trailing } : {})}
                 {...(props.activityAuthor ? {} : { style: props.style })}
             />
         );

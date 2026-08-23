@@ -366,28 +366,20 @@ export function ConversationView(props: ConversationViewProps) {
             wait={props.workingWait}
         />
     );
-    /*
-     * External work closes whichever line reports the turn it outlived: the
-     * live status while the agent runs, and the settled "Completed in" row
-     * once it stops. Only a transcript that ends in neither leaves the summary
-     * a row of its own.
-     */
-    const lastEntry = transcript.at(-1);
-    const activityClosesTurnStatus =
-        props.activityControl !== undefined && !statusVisible && lastEntry?.kind === "turnStatus";
     /**
      * The live turn and its external work share one line: the status keeps the
-     * left, the activity summary sits at the far right, and when the two no
-     * longer fit the summary wraps whole onto the next line. It is a wrapping
-     * flex line, so nothing here measures text.
+     * left and the activity summary sits at the far right. When no parent turn
+     * is active, the same line remains with only the external-work summary, so
+     * a terminal or subagent never jumps into the settled "Completed in" row.
      */
     const workingStatusLine = (
         <div
             className="happy-conversation__status-line"
+            data-active-turn={statusVisible ? "" : undefined}
             data-happy-desktop-ui="conversation-status-line"
         >
             {workingStatus}
-            {props.activityControl && !activityClosesTurnStatus ? (
+            {props.activityControl ? (
                 <div
                     className="happy-conversation__activity-entry"
                     data-happy-desktop-ui="conversation-activity-entry"
@@ -503,7 +495,6 @@ export function ConversationView(props: ConversationViewProps) {
                         statusVisible,
                         workingStatusStartsGroup,
                         props.activityControl !== undefined,
-                        activityClosesTurnStatus,
                         rowExpansion,
                     ]}
                     estimateRowSize={(index, width) =>
@@ -549,10 +540,12 @@ export function ConversationView(props: ConversationViewProps) {
                         </>
                     }
                     footerHeight={(width) =>
-                        workingStatusHeight +
-                        (props.activityControl && !activityClosesTurnStatus
-                            ? HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT
-                            : 0) +
+                        Math.max(
+                            workingStatusHeight,
+                            props.activityControl
+                                ? HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT
+                                : 0,
+                        ) +
                         queued.reduce(
                             (total, entry, index) =>
                                 total +
@@ -658,9 +651,6 @@ export function ConversationView(props: ConversationViewProps) {
                                 now={props.now}
                                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                                 onTraceToggle={props.onTraceToggle}
-                                {...(activityClosesTurnStatus && index === transcript.length - 1
-                                    ? { trailing: props.activityControl }
-                                    : {})}
                                 /* Either kind of row can be the one a turn hung
                                    its control on: the answer when the turn is
                                    folded up, the row its work starts on when it

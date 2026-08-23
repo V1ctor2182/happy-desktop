@@ -48,24 +48,6 @@
     flex: none;
 }
 
-/* The summary brings its own transcript-row padding, which the settled line
-   already owns; inside this slot it is only text. */
-.happy-turn-summary__trailing .happy-agent-activity-transcript {
-    height: auto;
-    padding: 0;
-}
-
-/* Work that outlived the turn sits at the far end of the settled line. `auto`
-   takes whatever slack the label and copy action leave, so no width is ever
-   measured. */
-.happy-turn-summary__trailing {
-    display: flex;
-    flex: 0 1 auto;
-    justify-content: flex-end;
-    min-width: 0;
-    margin-left: auto;
-}
-
 /* The copy action leads the settled line. Its 20px hit box carries 2px around a
    16px glyph, so the negative margin is what puts the glyph's own left edge on
    the transcript's text column instead of the button's padding box. */

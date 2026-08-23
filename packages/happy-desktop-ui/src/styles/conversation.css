@@ -86,16 +86,19 @@
     padding-bottom: 4px;
 }
 
-/* The live turn and its external work are one wrapping line. The status takes
-   whatever room it needs and grows into the rest, which carries the activity
-   summary to the far end; when the two stop fitting, the summary wraps whole
-   onto the next line and starts at the left. Nothing measures text. */
+/* The live turn and its external work are one stable line. The status takes
+   whatever room remains and carries the activity summary to the far end; both
+   sides truncate in place instead of turning terminals or subagents into a
+   second row. */
 .happy-conversation__status-line {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     width: 100%;
     min-width: 0;
+}
+
+.happy-conversation__status-line[data-active-turn] {
+    gap: 16px;
 }
 
 .happy-conversation__status-line > .happy-agent-working-status {
@@ -121,21 +124,21 @@
 
 .happy-conversation__activity-entry {
     display: flex;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     min-width: 0;
-    /* The status carries the running turn's 4px clearance as a margin, so the
-       summary takes the same one and the two texts share a line box. */
-    margin-top: 4px;
-    /* Alone or wrapped, the summary starts on the status clock's column: the
-       30px row inset, the 3px + 7px + 3px braille loader column, and the 6px
-       the clock already sits past it. */
+    /* Alone, the summary starts on the status clock's column: the 30px row
+       inset, the 3px + 7px + 3px braille loader column, and the 6px the clock
+       already sits past it. */
     padding-left: 49px;
 }
 
-/* A live status and its external work have deterministic model geometry: when
-   both exist, the 24px activity summary always owns the next flex line. */
-.happy-agent-working-status[data-active] + .happy-conversation__activity-entry {
-    flex-basis: 100%;
+/* The clock-column inset belongs only to the external-work-only state. Beside
+   a live status, the parent line's gap separates the two visible children. The
+   status carries the running turn's 4px clearance as a margin, so the summary
+   takes the same one and the two texts share a line box. */
+.happy-conversation__status-line[data-active-turn] > .happy-conversation__activity-entry {
+    margin-top: 4px;
+    padding-left: 0;
 }
 
 .happy-conversation
