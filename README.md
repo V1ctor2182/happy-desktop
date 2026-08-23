@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="/.github/logo-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="/.github/logo-light.png">
-  <img src="/.github/logo-dark.png" width="160" alt="Happy">
+  <img src="/.github/logo-dark.png" width="160" height="160" alt="Happy">
 </picture>
 
 <h3>Any team. Any model. One harness.</h3>
@@ -13,6 +13,8 @@
   harness — accessible from terminal, desktop, and mobile, deployable
   anywhere, and adaptable to your team.
 </p>
+
+[🖥️ **Download for macOS**](https://github.com/slopus/happy-desktop/releases/latest) • [📱 **iOS App**](https://apps.apple.com/us/app/happy-claude-code-client/id6748571505) • [🤖 **Android App**](https://play.google.com/store/apps/details?id=com.ex3ndr.happy) • [🌐 **Web App**](https://app.happy.engineering) • [📚 **Documentation**](https://happy.engineering/docs/) • [💬 **Discord**](https://discord.gg/fX9WBAhyfD)
 
 </div>
 
@@ -71,6 +73,19 @@ relays carry ciphertext they cannot read. That is what makes Happy safe to
 run inside a corporate network: the only party that ever sees your prompts
 is the model provider you chose, under its own terms.
 
+## How to use it
+
+Download the desktop app and open it — that is the whole setup. Happy
+downloads and starts its agent runtime on its own, finds the Claude, Codex,
+and Grok sign-ins already on your machine, and asks you to point it at a
+folder you work in. From there, just work: open a project, start a session,
+and ask for what you want.
+
+When you want company, invite people. Share a session with a teammate and
+you are both inside the same conversation — steering, approving, and taking
+over in real time — or grab the [mobile app](https://apps.apple.com/us/app/happy-claude-code-client/id6748571505)
+and take your own sessions with you.
+
 ## How you work in it
 
 - **Projects, workspaces, and sessions.** Navigate everything the daemon knows
@@ -87,25 +102,3 @@ is the model provider you chose, under its own terms.
   see what your work is costing as it happens.
 - **Notes and visibility.** Keep notes alongside the work, and see what agents
   and their processes are doing at any moment.
-
-## Packages
-
-| Package                  | Responsibility                                         |
-| ------------------------ | ------------------------------------------------------ |
-| `happy-desktop-state`    | Framework-independent product state and agent protocol |
-| `happy-desktop-ui`       | Reusable components and the component blueprint        |
-| `happy-desktop-app`      | Application composition and routing                    |
-| `happy-desktop-electron` | macOS shell and the local daemon boundary              |
-| `happy-desktop-web`      | Browser development entry                              |
-| `happy-desktop-gym`      | Rendering and desktop verification utilities           |
-
-## Developing
-
-```sh
-pnpm install
-pnpm dev
-```
-
-That is the whole loop for most changes. Everything else — browser mode, the
-component blueprint, profiling, and validation — is in
-[DEVELOPMENT.md](./DEVELOPMENT.md).
