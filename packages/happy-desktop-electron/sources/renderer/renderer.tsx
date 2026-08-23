@@ -360,9 +360,9 @@ function DesktopOnboardingGate(props: {
 const WELCOME_SLIDES: readonly WelcomeSlide[] = [
     {
         art: { kind: "logo" },
-        copy: "Claude Code, Codex, Grok, Kimi, GLM—and whatever comes next—for your whole team. The same harness in the terminal, on desktop, and on mobile.",
+        copy: "Happy integrates models, teams, and compute into one secure, open-source harness—accessible from terminal, desktop, and mobile, deployable anywhere, and adaptable to your team.",
         id: "happy",
-        title: "One harness, everywhere.",
+        title: "Any team. Any model. One harness.",
     },
     {
         art: { kind: "scene", name: "alien-monster" },
