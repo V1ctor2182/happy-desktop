@@ -18,48 +18,58 @@
 
 https://github.com/user-attachments/assets/d193098c-4c60-440b-b91e-274a76d923d5
 
-## What Happy is
+## Why Happy
 
-Happy is a macOS desktop workspace for doing serious work with coding agents.
-It connects to the local Happy Agent daemon and turns that connection into a
-complete working environment: your projects and workspaces in the sidebar,
-durable agent conversations in the middle, and the files, terminals, and
-previews the work actually touches beside them.
+Serious work with coding agents outgrows a terminal tab fast. Sessions die
+with the window that held them. Every vendor's agent lives in its own app
+with its own tools, its own permissions, and its own idea of a session, so
+switching models means abandoning context. Your teammates can't see what
+your agent is doing, let alone step in. And the moment the work matters,
+someone asks where the code is going and who can read it.
 
-Sessions are not chat windows. A conversation streams live while the agent
-works, survives restarts, and keeps its full history, so you can leave a task
-running, come back later, and pick up exactly where it left off.
+Happy exists to remove those walls. One harness runs every agent you already
+pay for, keeps every session alive and durable, lets your whole team work
+inside the same conversation, and never ships your work anywhere you didn't
+point it. This repository is the macOS app — the place where that harness
+becomes a full working environment: conversations beside the files, diffs,
+terminals, and previews the work actually touches.
 
 ## Natively multiplayer
 
-Bring your team into one session with every agent. Anyone can share context,
-steer the conversation, approve decisions, and take over in real time — the
-session is a shared place to work, not a private transcript.
+An agent session shouldn't be a private transcript. Bring your team into one
+session with every agent: anyone can share context, steer the conversation,
+approve decisions, and take over in real time. Start a task at your desk,
+check it from your phone, hand it to a teammate — it's the same session, the
+same permission boundary, the same history, on every device.
 
 ## One harness. Every agent.
 
-Let Claude plan, Codex build, and Grok review — or run them side by side and
-compare. Happy detects the subscriptions already on your machine and mixes
-every agent in one harness, so the context stays together across every
-handoff instead of being scattered across vendor apps.
+The best model for planning isn't the best model for building or reviewing,
+and you shouldn't have to abandon your context to switch. Let Claude plan,
+Codex build, and Grok review — or run them side by side and compare. Each
+model still gets its native prompts and tools, so nothing is dumbed down to
+a lowest common denominator, but the session, the permissions, and the
+context stay together across every handoff. Happy adds no account of its
+own; it uses the sign-ins already on your machine.
 
 ## Yours to run. Yours to change.
 
-Happy is open source and built to be changed. Run it on your hardware, in
-your cloud, or in ours — then change Happy to fit your team's needs. The app
-is an Electron shell around your normal local Happy Agent daemon, speaking
-the same `happy-agent-client` protocol whether the renderer runs in the
-desktop shell or in a browser during development.
+A tool this close to your code has to answer to you, not to a vendor's
+roadmap. Happy is open source end to end: run it on your hardware, in your
+cloud, or in ours, and change it to fit how your team actually works. Happy
+adopts itself to build itself — the pressure of daily use is the product
+roadmap.
 
 ## Secure and compliant
 
-No telemetry. No hosted account, and no third-party servers by default. Your
-projects stay ordinary directories on your machine, and Happy runs safely
-inside corporate networks without leaking data: every connection between
-agents, teammates, and mobile clients is end-to-end encrypted. When a session
-uses a hosted model, that provider receives only the prompts and context sent
-to it under its own terms; Happy does not upload the rest of your workspace
-to a second service.
+You can't bring an agent into real work if you can't say where the data
+goes. With Happy the answer is short: nowhere you didn't send it. No
+telemetry, no hosted account, no third-party servers by default. Your
+projects stay ordinary directories on your machine, and everything that
+travels between agents, teammates, and devices is end-to-end encrypted —
+relays carry ciphertext they cannot read. That is what makes Happy safe to
+run inside a corporate network: the only party that ever sees your prompts
+is the model provider you chose, under its own terms.
 
 ## How you work in it
 
