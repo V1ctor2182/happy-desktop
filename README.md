@@ -16,6 +16,8 @@
 
 </div>
 
+https://github.com/user-attachments/assets/d193098c-4c60-440b-b91e-274a76d923d5
+
 ## What Happy is
 
 Happy is a macOS desktop workspace for doing serious work with coding agents.
