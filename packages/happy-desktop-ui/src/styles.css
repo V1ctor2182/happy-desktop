@@ -97,6 +97,7 @@
 @import "./styles/welcome-screen.css";
 @import "./styles/split-column.css";
 @import "./styles/setup-page.css";
+@import "./styles/qr-code.css";
 @import "./styles/segmented-progress.css";
 @import "./styles/setup-choice.css";
 @import "./styles/setup-assistants.css";

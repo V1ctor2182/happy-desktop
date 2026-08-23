@@ -1,5 +1,10 @@
 import type { LocalOnboardingAssistant, LocalOnboardingView } from "happy-desktop-ui";
-import { HappyAgentClient } from "happy-desktop-state";
+import {
+    HappyAgentClient,
+    happyMobileOnboardingStoreCreate,
+    type HappyMobileOnboardingSnapshot,
+    type HappyMobileOnboardingStore,
+} from "happy-desktop-state";
 import type {
     DesktopDaemonSnapshot,
     DesktopRuntimeSnapshot,
@@ -32,6 +37,8 @@ export interface LocalOnboardingViewSnapshot {
     readonly failure?: string;
     readonly profileName: string;
     readonly profileEmail: string;
+    /** The optional mobile step, materialized only before the first project. */
+    readonly happyMobile?: HappyMobileOnboardingSnapshot;
 }
 
 export interface LocalOnboardingStore {
@@ -45,11 +52,16 @@ export interface LocalOnboardingStore {
     profileNameUpdate(value: string): void;
     profileEmailUpdate(value: string): void;
     profileCreate(): void;
+    happyMobileConnect(): void;
+    happyMobileSkip(): void;
 }
 
 export interface LocalOnboardingStoreOptions {
     /** True when the welcome was acknowledged before this window opened. */
     readonly agentSetupActive?: boolean;
+    /** True after this app installation explicitly dismissed mobile pairing. */
+    readonly happyMobileSkipped?: boolean;
+    readonly onHappyMobileSkip?: () => void;
 }
 
 const downloadRetryMinimumMs = 3_000;
@@ -92,8 +104,12 @@ export function localOnboardingStoreCreate(
     let daemonEventReceived = false;
     let runtimeEventReceived = false;
     let verificationAbort: AbortController | undefined;
+    let happyMobileStore: HappyMobileOnboardingStore | undefined;
+    let happyMobileUnsubscribe: (() => void) | undefined;
+    let happyMobileKey: string | undefined;
     let inFlight = 0;
     let agentSetupActive = options.agentSetupActive === true;
+    let happyMobileSkipped = options.happyMobileSkipped === true;
 
     const publish = (next: LocalOnboardingViewSnapshot) => {
         snapshot = next;
@@ -260,6 +276,54 @@ export function localOnboardingStoreCreate(
         downloadSynchronize();
         startSynchronize();
         providerAuthenticationSynchronize();
+        happyMobileSynchronize();
+    }
+
+    const happyMobileStop = () => {
+        happyMobileUnsubscribe?.();
+        happyMobileUnsubscribe = undefined;
+        happyMobileStore = undefined;
+        happyMobileKey = undefined;
+        if (snapshot.happyMobile) publish({ ...snapshot, happyMobile: undefined });
+    };
+
+    function happyMobileSynchronize() {
+        const onboarding = snapshot.onboarding;
+        const runtime = snapshot.runtime;
+        if (
+            listeners.size === 0 ||
+            !onboarding ||
+            onboarding.stage === "inactive" ||
+            onboarding.stage === "complete" ||
+            runtime?.phase !== "ready" ||
+            runtime.mode !== "local"
+        ) {
+            happyMobileStop();
+            return;
+        }
+        const key = `${String(runtime.connectionId)}|${runtime.activeTarget.happyAgentHttpUrl}`;
+        if (happyMobileKey === key) return;
+
+        happyMobileStop();
+        const store = happyMobileOnboardingStoreCreate({
+            client: new HappyAgentClient({
+                endpoint: runtime.activeTarget.happyAgentHttpUrl,
+                token: "happy-local-capability",
+            }),
+            initialSkipped: happyMobileSkipped,
+            onOutput(output) {
+                if (output.type !== "happyMobileSkipped") return;
+                happyMobileSkipped = true;
+                options.onHappyMobileSkip?.();
+            },
+        });
+        happyMobileKey = key;
+        happyMobileStore = store;
+        publish({ ...snapshot, happyMobile: store.get() });
+        happyMobileUnsubscribe = store.subscribe(() => {
+            if (happyMobileStore !== store) return;
+            publish({ ...snapshot, happyMobile: store.get() });
+        });
     }
 
     function providerAuthenticationSynchronize() {
@@ -396,6 +460,7 @@ export function localOnboardingStoreCreate(
                         });
                     },
                 );
+                setupSynchronize();
             }
             return () => {
                 listeners.delete(listener);
@@ -408,6 +473,7 @@ export function localOnboardingStoreCreate(
                 runtimeUnsubscribe = undefined;
                 verificationAbort?.abort();
                 verificationAbort = undefined;
+                happyMobileStop();
                 downloadRetryStop();
                 startRetryStop();
             };
@@ -441,6 +507,12 @@ export function localOnboardingStoreCreate(
                 }),
                 "Happy could not create that profile.",
             );
+        },
+        happyMobileConnect() {
+            happyMobileStore?.happyMobileConnect();
+        },
+        happyMobileSkip() {
+            happyMobileStore?.happyMobileSkip();
         },
     };
 }
@@ -500,8 +572,34 @@ export function localOnboardingView(
             };
         case "examining":
             return { kind: "examining" };
-        case "project":
-            return { busy, kind: "project", ...(message ? { message } : {}) };
+        case "project": {
+            const mobile = snapshot.happyMobile;
+            if (!mobile || mobile.status === "checking") return { kind: "happy-mobile-checking" };
+            switch (mobile.status) {
+                case "offer":
+                    return {
+                        busy: mobile.pending,
+                        kind: "happy-mobile-offer",
+                        ...(mobile.message ? { message: mobile.message } : {}),
+                    };
+                case "pairing":
+                    return {
+                        data: mobile.data,
+                        expiresAt: mobile.expiresAt,
+                        kind: "happy-mobile-pairing",
+                    };
+                case "failed":
+                    return {
+                        busy: mobile.pending,
+                        kind: "happy-mobile-failed",
+                        message: mobile.message,
+                    };
+                case "configured":
+                case "disabled":
+                case "skipped":
+                    return { busy, kind: "project", ...(message ? { message } : {}) };
+            }
+        }
         case "complete":
             return undefined;
     }

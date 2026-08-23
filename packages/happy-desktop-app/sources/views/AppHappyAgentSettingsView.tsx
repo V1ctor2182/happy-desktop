@@ -23,6 +23,7 @@ import {
     happyAgentThinkingLabel,
     experimentsStoreNoop,
     happyAgentAvailabilityProject,
+    happyAgentIntegrationStoreNoop,
     happyAgentProfileStoreNoop,
     happyAgentProviderUsageStoreNoop,
     happyAgentProvidersStoreNoop,
@@ -34,6 +35,7 @@ import {
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
     HappyAgentInstructionsSettings,
+    HappyAgentMobileSettings,
     HappyAgentProviderSettings,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
@@ -49,13 +51,14 @@ import { hostHappyAgent, type AppHappyAgentDirectoryStore } from "../AppHappyAge
 /** The categories the local settings window offers, in the order they are listed. */
 export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
-    { icon: "code", id: "debug", label: "Dev Tools" },
     { icon: "users", id: "profile", label: "Profile" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "globe", id: "providers", label: "Providers" },
     // Usage sits after Providers because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
     { icon: "zap", id: "usage", label: "Usage" },
+    { icon: "mobile", id: "mobile-access", label: "Mobile Access" },
+    { icon: "code", id: "debug", label: "Dev Tools" },
 ];
 
 export const HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY = "general";
@@ -238,6 +241,7 @@ export interface AppHappyAgentProfilerStore {
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     debug: "Inspect live state, Happy and Happy Agent debugger endpoints, and renderer profiles",
     general: "How this window looks and what a new session starts with",
+    "mobile-access": "This Happy Agent's connection to Happy Mobile",
     profile: "Who this machine is when it authors work",
     instructions: "Machine-wide agent guidance and permission-review policy",
     providers: "Every model provider this Happy Agent daemon knows about",
@@ -346,6 +350,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         profileStore.get,
         profileStore.get,
     );
+    const happyIntegrationStore =
+        (props.section === "mobile-access" ? host?.session?.happyIntegration?.() : undefined) ??
+        happyAgentIntegrationStoreNoop;
+    const happyIntegration = useSyncExternalStore(
+        happyIntegrationStore.subscribe,
+        happyIntegrationStore.get,
+        happyIntegrationStore.get,
+    );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
     const instructionsStore = host?.session?.instructions;
@@ -444,7 +456,36 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             windowControls={props.platform === "desktop"}
             windowFullScreen={windowState.fullScreen}
         >
-            {props.section === "debug" ? (
+            {props.section === "mobile-access" ? (
+                <HappyAgentMobileSettings
+                    configured={happyIntegration.configured}
+                    disconnecting={happyIntegration.disconnecting}
+                    onDisconnect={() => {
+                        if (happyAgentOnline()) happyIntegrationStore.happyIntegrationDisconnect();
+                    }}
+                    onPair={() => {
+                        if (happyAgentOnline()) happyIntegrationStore.happyIntegrationPair();
+                    }}
+                    onPairingCancel={() => {
+                        if (happyAgentOnline())
+                            happyIntegrationStore.happyIntegrationPairingCancel();
+                    }}
+                    pairingCanceling={happyIntegration.pairingCanceling}
+                    pairingData={happyIntegration.pairing?.data}
+                    pairingExpiresAt={happyIntegration.pairing?.expiresAt}
+                    pairingStarting={happyIntegration.pairingStarting}
+                    status={happyIntegration.status}
+                    {...(happyIntegration.error ? { error: happyIntegration.error.message } : {})}
+                    {...(happyIntegration.disconnectError
+                        ? { disconnectError: happyIntegration.disconnectError.message }
+                        : {})}
+                    {...(happyIntegration.pairingError
+                        ? { pairingError: happyIntegration.pairingError.message }
+                        : {})}
+                    {...(happyIntegration.message ? { message: happyIntegration.message } : {})}
+                    {...(unavailable === undefined ? {} : { unavailable })}
+                />
+            ) : props.section === "debug" ? (
                 <>
                     <HappyAgentDebugLogPanel
                         discardedEntries={debugLog.discardedEntries}

@@ -87,6 +87,10 @@ import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
+import {
+    desktopHappyMobileOnboardingSkip,
+    desktopHappyMobileOnboardingSkipped,
+} from "./desktopHappyMobileOnboarding";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
 import { DesktopBootGate, desktopBootForget } from "./DesktopBootGate";
@@ -337,6 +341,8 @@ function DesktopOnboardingGate(props: {
             appearance={appearance.mode}
             onAssistantsContinue={() => props.store.assistantsContinue()}
             onConnectRetry={() => props.store.connectRetry()}
+            onHappyMobileConnect={() => props.store.happyMobileConnect()}
+            onHappyMobileSkip={() => props.store.happyMobileSkip()}
             onProfileCreate={() => props.store.profileCreate()}
             onProfileEmailChange={(value) => props.store.profileEmailUpdate(value)}
             onProfileNameChange={(value) => props.store.profileNameUpdate(value)}
@@ -959,6 +965,8 @@ if (mediaPreviewBridge) {
         // its store is created once here beside the runtime store.
         const onboardingStore = localOnboardingStoreCreate(desktopBridge, {
             agentSetupActive: welcome.get().welcomeAcknowledged,
+            happyMobileSkipped: desktopHappyMobileOnboardingSkipped(),
+            onHappyMobileSkip: desktopHappyMobileOnboardingSkip,
         });
         // The local router outlives any single daemon connection, so it is created
         // here and the session store navigates through it when a conversation it

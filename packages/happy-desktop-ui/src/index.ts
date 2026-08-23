@@ -94,6 +94,7 @@ export {
 export { Box, type BoxProps } from "./Box";
 export { DevBuildMenu, type DevBuildMenuProps } from "./DevBuildMenu";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
+export { QRCode, type QRCodeProps } from "./QRCode";
 export { ChannelHeader, type ChannelHeaderProps, type ChannelMember } from "./ChannelHeader";
 export { PanelHeader, type PanelHeaderProps } from "./PanelHeader";
 export { AudienceToggle, type AudienceToggleProps, type AudienceValue } from "./AudienceToggle";
@@ -533,6 +534,11 @@ export {
     type HappyAgentGeneralSettingsProps,
     type HappyAgentScrollbarVisibilityChoice,
 } from "./pages/settings/HappyAgentGeneralSettings";
+export {
+    HappyAgentMobileSettings,
+    type HappyAgentMobileSettingsProps,
+    type HappyAgentMobileStatus,
+} from "./pages/settings/HappyAgentMobileSettings";
 export {
     HappyAgentDebugSettings,
     type HappyAgentDebugSettingsProps,

@@ -256,6 +256,8 @@ export function SetupPagePage() {
                             appearance="dark"
                             onAssistantsContinue={noop}
                             onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
                             onProfileCreate={noop}
                             onProfileEmailChange={noop}
                             onProfileNameChange={noop}
@@ -287,6 +289,8 @@ export function SetupPagePage() {
                             appearance="dark"
                             onAssistantsContinue={noop}
                             onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
                             onProfileCreate={noop}
                             onProfileEmailChange={noop}
                             onProfileNameChange={noop}
@@ -309,6 +313,8 @@ export function SetupPagePage() {
                             appearance="dark"
                             onAssistantsContinue={noop}
                             onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
                             onProfileCreate={noop}
                             onProfileEmailChange={noop}
                             onProfileNameChange={noop}
@@ -353,6 +359,8 @@ export function SetupPagePage() {
                             appearance="dark"
                             onAssistantsContinue={noop}
                             onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
                             onProfileCreate={noop}
                             onProfileEmailChange={noop}
                             onProfileNameChange={noop}
@@ -397,6 +405,8 @@ export function SetupPagePage() {
                             appearance="dark"
                             onAssistantsContinue={noop}
                             onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
                             onProfileCreate={noop}
                             onProfileEmailChange={noop}
                             onProfileNameChange={noop}
@@ -424,6 +434,87 @@ export function SetupPagePage() {
                                 ],
                                 complete: true,
                                 kind: "provider-authentication",
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="optional final onboarding decision · one clear connection action and a permanent Skip"
+                label="Happy Mobile offer"
+                number="15"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{ busy: false, kind: "happy-mobile-offer" }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="daemon-supplied opaque data only · crisp QR · realtime approval wait · no manual refresh"
+                label="Happy Mobile pairing"
+                number="16"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{
+                                data: "happy://terminal?eyJ2IjoxLCJwYWlyaW5nSWQiOiJibHVlcHJpbnQtcGFpcmluZyIsIm5vbmNlIjoiaGFwcHktbW9iaWxlIn0",
+                                expiresAt: 1_900_000_000_000,
+                                kind: "happy-mobile-pairing",
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="pairing failure remains optional · retry is local to this step · Skip is still available"
+                label="Happy Mobile failure"
+                number="17"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{
+                                busy: false,
+                                kind: "happy-mobile-failed",
+                                message:
+                                    "The pairing code expired before Happy Mobile approved it.",
                             }}
                         />
                     </ThemeScope>

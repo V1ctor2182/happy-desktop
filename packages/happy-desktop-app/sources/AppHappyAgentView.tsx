@@ -16,6 +16,7 @@ import type {
     HappyAgentFileScope,
     HappyAgentFileViewMode,
     HappyAgentHost,
+    HappyAgentIntegrationStore,
     HappyAgentGroupId,
     HappyAgentMenusSnapshot,
     HappyAgentModelStore,
@@ -230,6 +231,8 @@ export interface AppHappyAgentSession {
     readonly host: HappyAgentHost;
     /** This Happy Agent's own model catalog, read by the settings window's pickers. */
     readonly models: HappyAgentModelStore;
+    /** This Happy Agent installation's live Happy Mobile integration. */
+    readonly happyIntegration?: () => HappyAgentIntegrationStore;
     readonly workspace: HappyAgentWorkspaceStore;
     /**
      * Every question this Happy Agent's agents are waiting on. Absent when the machine

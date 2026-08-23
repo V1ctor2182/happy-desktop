@@ -4,6 +4,7 @@ import {
     HappyAgentDebugSettings,
     HappyAgentGeneralSettings,
     HappyAgentInstructionsSettings,
+    HappyAgentMobileSettings,
     HappyAgentProviderSettings,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
@@ -19,11 +20,12 @@ export const componentNumber = "P-012";
 
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
-    { icon: "code", id: "debug", label: "Dev Tools" },
     { icon: "users", id: "profile", label: "Profile" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "globe", id: "providers", label: "Providers" },
     { icon: "zap", id: "usage", label: "Usage" },
+    { icon: "mobile", id: "mobile-access", label: "Mobile Access" },
+    { icon: "code", id: "debug", label: "Dev Tools" },
 ];
 
 const usageDescription = "How much of each provider account's plan this machine has spent";
@@ -433,9 +435,55 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
+                detail="Happy category: configured and connected, with the installation-wide unlink action"
+                label="Happy Agent settings — Mobile Access"
+                number="01a"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="mobile-access"
+                    categories={categories}
+                    description="This Happy Agent's connection to Happy Mobile"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Mobile Access"
+                >
+                    <HappyAgentMobileSettings
+                        configured
+                        onDisconnect={noop}
+                        onPair={noop}
+                        onPairingCancel={noop}
+                        status="connected"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Mobile pairing: the unconfigured installation is waiting for a phone to scan its authorization"
+                label="Happy Agent settings — Mobile Access pairing"
+                number="01b"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="mobile-access"
+                    categories={categories}
+                    description="This Happy Agent's connection to Happy Mobile"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Mobile Access"
+                >
+                    <HappyAgentMobileSettings
+                        configured={false}
+                        onDisconnect={noop}
+                        onPair={noop}
+                        onPairingCancel={noop}
+                        pairingData="happy://pair?authorization=blueprint-happy-mobile"
+                        pairingExpiresAt={1_700_003_600_000}
+                        status="pairing"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
                 detail="Live debugger controls and a bounded raw renderer profile with React attribution"
                 label="Happy Agent settings — Dev Tools"
-                number="01a"
+                number="01c"
             >
                 <HappyAgentSettingsShell
                     activeCategoryId="debug"

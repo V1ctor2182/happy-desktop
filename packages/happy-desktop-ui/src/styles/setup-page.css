@@ -34,6 +34,40 @@
     box-sizing: border-box;
 }
 
+.happy-local-onboarding__mobile .happy-setup-page__body {
+    gap: 16px;
+}
+
+.happy-local-onboarding__mobile-actions,
+.happy-local-onboarding__mobile-pairing-body,
+.happy-local-onboarding__mobile-waiting {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.happy-local-onboarding__mobile-actions,
+.happy-local-onboarding__mobile-pairing-body {
+    flex-direction: column;
+    width: 100%;
+}
+
+.happy-local-onboarding__mobile-actions {
+    gap: 4px;
+}
+
+.happy-local-onboarding__mobile-pairing-body {
+    gap: 12px;
+}
+
+.happy-local-onboarding__mobile-waiting {
+    gap: 8px;
+    color: color-mix(in srgb, var(--button-primary-tint) 78%, transparent);
+    font-size: 13px;
+    line-height: 20px;
+}
+
 .happy-local-onboarding__profile-form {
     display: flex;
     flex-direction: column;

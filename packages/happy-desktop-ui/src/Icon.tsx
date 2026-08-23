@@ -41,6 +41,7 @@ export type IconName =
     | "lock"
     | "eye"
     | "link"
+    | "mobile"
     | "smile"
     | "paperclip"
     | "mic"
@@ -161,6 +162,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     lock: { set: "ionicons", name: "lock-closed-outline" },
     eye: { set: "ionicons", name: "eye-outline" },
     link: { set: "ionicons", name: "link-outline" },
+    mobile: { set: "ionicons", name: "phone-portrait-outline" },
     smile: { set: "ionicons", name: "happy-outline" },
     paperclip: { set: "ionicons", name: "attach-outline" },
     mic: { set: "ionicons", name: "mic-outline" },

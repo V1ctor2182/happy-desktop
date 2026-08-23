@@ -1,7 +1,9 @@
 import { type AssistantMarkName } from "./AssistantMark";
 import { Button } from "./Button";
+import { QRCode } from "./QRCode";
 import { SetupAssistants, type SetupAssistantEntry } from "./SetupAssistants";
 import { SetupPage, SetupProgress, type SetupPageProgress } from "./SetupPage";
+import { Spinner } from "./Spinner";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
 
@@ -62,6 +64,22 @@ export type LocalOnboardingView =
           readonly message?: string;
           readonly name: string;
       }
+    | { readonly kind: "happy-mobile-checking" }
+    | {
+          readonly busy: boolean;
+          readonly kind: "happy-mobile-offer";
+          readonly message?: string;
+      }
+    | {
+          readonly data: string;
+          readonly expiresAt: number;
+          readonly kind: "happy-mobile-pairing";
+      }
+    | {
+          readonly busy: boolean;
+          readonly kind: "happy-mobile-failed";
+          readonly message: string;
+      }
     | { readonly kind: "project"; readonly busy: boolean; readonly message?: string };
 
 export interface LocalOnboardingScreenProps {
@@ -69,6 +87,8 @@ export interface LocalOnboardingScreenProps {
     readonly view: LocalOnboardingView;
     onAssistantsContinue(): void;
     onConnectRetry(): void;
+    onHappyMobileConnect(): void;
+    onHappyMobileSkip(): void;
     onProjectChoose(): void;
     onProfileNameChange(value: string): void;
     onProfileEmailChange(value: string): void;
@@ -137,6 +157,12 @@ function byteSize(bytes: number): string {
     if (bytes < 1024) return `${String(bytes)} B`;
     if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 1024))} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function pairingExpiration(expiresAt: number): string {
+    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(
+        expiresAt,
+    );
 }
 
 /**
@@ -324,7 +350,8 @@ function MachineSetupStatus(props: {
 
 /**
  * First-run setup for this machine, as one machine-setup surface followed by
- * the profile and project decisions it discovers are still owed.
+ * the profile, optional mobile connection, and project decisions it discovers
+ * are still owed.
  *
  * Every state is one `SetupPage`: a picture of what is happening, a sentence
  * naming it, a line explaining it, and at most one thing to do. Download,
@@ -340,11 +367,21 @@ function MachineSetupStatus(props: {
 export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     const { view } = props;
     // Download, start, discovery, and verification are one machine-setup
-    // surface. Only a profile or project decision begins another page.
-    const transitionKey =
-        view.kind === "profile-required" || view.kind === "project"
-            ? view.kind
-            : "local-agent-setup";
+    // surface. Profile, mobile pairing, and project decisions begin their own
+    // pages after that machine work.
+    const transitionKey = (() => {
+        switch (view.kind) {
+            case "profile-required":
+            case "project":
+            case "happy-mobile-checking":
+            case "happy-mobile-offer":
+            case "happy-mobile-pairing":
+            case "happy-mobile-failed":
+                return view.kind;
+            default:
+                return "local-agent-setup";
+        }
+    })();
     const frame = {
         backdrop: { appearance: props.appearance, kind: "sky" },
         transitionKey,
@@ -389,6 +426,101 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 scene="wand"
                 title="Node.js is required"
             />
+        );
+
+    if (view.kind === "happy-mobile-checking")
+        return (
+            <SetupPage
+                {...frame}
+                copy="Reading this Happy Agent's mobile connection."
+                data-testid="local-onboarding-screen"
+                scene="snail"
+                title="Checking Happy Mobile…"
+            />
+        );
+
+    if (view.kind === "happy-mobile-offer")
+        return (
+            <SetupPage
+                {...frame}
+                className="happy-local-onboarding__mobile"
+                copy={
+                    view.message ??
+                    "Pair Happy Mobile to follow sessions, reply, and approve requests when you're away from your desk."
+                }
+                data-testid="local-onboarding-screen"
+                scene="alien-monster"
+                title="Take Happy with you"
+            >
+                <div className="happy-local-onboarding__mobile-actions">
+                    <Button
+                        loading={view.busy}
+                        onClick={props.onHappyMobileConnect}
+                        size="large"
+                        width={240}
+                    >
+                        Connect Happy Mobile
+                    </Button>
+                    <Button onClick={props.onHappyMobileSkip} size="medium" variant="ghost">
+                        Skip
+                    </Button>
+                </div>
+            </SetupPage>
+        );
+
+    if (view.kind === "happy-mobile-pairing")
+        return (
+            <SetupPage
+                {...frame}
+                className="happy-local-onboarding__mobile happy-local-onboarding__mobile-pairing"
+                copy="Open Happy Mobile, choose Pair Desktop, then scan this code. Happy continues automatically when your phone approves."
+                data-testid="local-onboarding-screen"
+                title="Scan with Happy Mobile"
+            >
+                <div className="happy-local-onboarding__mobile-pairing-body">
+                    <QRCode
+                        data={view.data}
+                        data-testid="happy-mobile-pairing-qr"
+                        label="QR code to pair Happy Mobile"
+                        size={240}
+                    />
+                    <div className="happy-local-onboarding__mobile-waiting">
+                        <Spinner label="Pairing in progress" size={16} tone="inverse" />
+                        <span>
+                            Waiting for your phone · expires {pairingExpiration(view.expiresAt)}
+                        </span>
+                    </div>
+                    <Button onClick={props.onHappyMobileSkip} size="medium" variant="ghost">
+                        Skip
+                    </Button>
+                </div>
+            </SetupPage>
+        );
+
+    if (view.kind === "happy-mobile-failed")
+        return (
+            <SetupPage
+                {...frame}
+                className="happy-local-onboarding__mobile"
+                copy={view.message}
+                data-testid="local-onboarding-screen"
+                scene="owl"
+                title="Happy Mobile didn't connect"
+            >
+                <div className="happy-local-onboarding__mobile-actions">
+                    <Button
+                        loading={view.busy}
+                        onClick={props.onHappyMobileConnect}
+                        size="large"
+                        width={240}
+                    >
+                        Try again
+                    </Button>
+                    <Button onClick={props.onHappyMobileSkip} size="medium" variant="ghost">
+                        Skip
+                    </Button>
+                </div>
+            </SetupPage>
         );
 
     if (view.kind === "profile-required")

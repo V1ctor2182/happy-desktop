@@ -16,6 +16,7 @@ import {
     type HappyAgentDebugLogInput,
     type HappyAgentDebugLogStore,
     type HappyAgentHost,
+    type HappyAgentIntegrationStore,
     type HappyAgentInstructionsStore,
     type HappyAgentModelPreferencePersistence,
     type HappyAgentModelStore,
@@ -89,6 +90,7 @@ export interface HappyAgentSession {
     readonly debugLog: HappyAgentDebugLogStore;
     readonly host: HappyAgentHost;
     readonly models: HappyAgentModelStore;
+    readonly happyIntegration: () => HappyAgentIntegrationStore;
     readonly profile: () => HappyAgentProfileStore | undefined;
     readonly providerUsage: HappyAgentProviderUsageStore | undefined;
     readonly providers: HappyAgentProvidersStore;
@@ -318,6 +320,7 @@ export function happyAgentConnectionOpen(input: {
                     connection: streamConnectionStoreCreate(agentConnection),
                     debugLog,
                     host: input.host,
+                    happyIntegration: () => client.happyIntegration(),
                     models: client.models,
                     profile: () => client.profile(),
                     providerUsage: client.providerUsage(),
