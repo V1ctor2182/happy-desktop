@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="/.github/logotype-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="/.github/logotype-light.png">
-  <img src="/.github/logotype-dark.png" width="400" alt="Happy">
+  <img src="/.github/logotype-dark.png" width="400" height="106" alt="Happy">
 </picture>
 
 <h3>Any team. Any model. One harness.</h3>
