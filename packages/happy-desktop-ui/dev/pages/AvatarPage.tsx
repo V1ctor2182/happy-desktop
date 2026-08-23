@@ -1,4 +1,5 @@
 import { Avatar, type AvatarSize, type ToneName } from "../../src/Avatar";
+import { happyLogoBlackUrl } from "../../src/assets";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -132,24 +133,40 @@ export function AvatarPage() {
             <Specimen
                 number="05"
                 label="Image variant"
-                detail="Image covers the box and inherits the shape radius"
+                detail="Portrait images cover the box and inherit its radius · the Happy brand mark has no avatar rounding and keeps 1px internal padding"
                 stage="app"
             >
-                <div style={row}>
-                    {SIZES.map((entry) => (
-                        <div key={entry.size} style={cell}>
-                            <Avatar
-                                imageUrl={FIXTURE_IMAGE}
-                                initials={entry.initials}
-                                size={entry.size}
-                                online={entry.size === "md"}
-                            />
-                            <DimensionRule label={entry.size} />
+                <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                    <div style={row}>
+                        {SIZES.map((entry) => (
+                            <div key={entry.size} style={cell}>
+                                <Avatar
+                                    imageUrl={FIXTURE_IMAGE}
+                                    initials={entry.initials}
+                                    size={entry.size}
+                                    online={entry.size === "md"}
+                                />
+                                <DimensionRule label={entry.size} />
+                            </div>
+                        ))}
+                        <div style={cell}>
+                            <Avatar imageUrl={FIXTURE_IMAGE} initials="AI" size="lg" type="agent" />
+                            <DimensionRule label="agent lg" />
                         </div>
-                    ))}
-                    <div style={cell}>
-                        <Avatar imageUrl={FIXTURE_IMAGE} initials="AI" size="lg" type="agent" />
-                        <DimensionRule label="agent lg" />
+                    </div>
+                    <div style={row}>
+                        {SIZES.map((entry) => (
+                            <div key={entry.size} style={cell}>
+                                <Avatar
+                                    imageTheme="brand"
+                                    imageUrl={happyLogoBlackUrl}
+                                    initials="H"
+                                    size={entry.size}
+                                    type="agent"
+                                />
+                                <DimensionRule label={`brand ${entry.size}`} />
+                            </div>
+                        ))}
                     </div>
                 </div>
             </Specimen>

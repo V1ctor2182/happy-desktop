@@ -45,6 +45,7 @@ export function Avatar(props: AvatarProps) {
             {...rest}
             className={["happy-avatar", local.className].filter(Boolean).join(" ")}
             data-image={local.imageUrl ? "" : undefined}
+            data-image-theme={local.imageTheme}
             data-happy-desktop-ui="avatar"
             data-size={size()}
             data-tone={tone()}

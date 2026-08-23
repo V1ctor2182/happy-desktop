@@ -205,7 +205,7 @@
     overflow: auto;
 }
 
-.happy-conversation__loading {
+.happy-conversation__loading > .happy-conversation__empty-viewport {
     align-items: center;
     justify-content: center;
 }
