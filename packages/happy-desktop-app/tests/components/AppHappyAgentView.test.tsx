@@ -200,14 +200,12 @@ function view(
 it("heads the local sidebar with the shared brand mark, not a local-only title", () => {
     const { container } = view();
 
-    // Local renders the same brand heading the cloud surface does, so the two
-    // modes stay one component rendered twice rather than a local variant.
+    // Local renders the same mark-only brand heading the cloud surface does, so
+    // the two modes stay one component rendered twice rather than a local variant.
     const logo = container.querySelector('[data-happy-desktop-ui="sidebar-brand-logo"]');
     expect(logo).not.toBeNull();
     expect(logo?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector('[data-happy-desktop-ui="sidebar-title"]')?.textContent).toBe(
-        "Happy",
-    );
+    expect(container.querySelector('[data-happy-desktop-ui="sidebar-title"]')).toBeNull();
 
     // The plain title row and its chevron affordance are gone.
     expect(container.textContent).not.toContain("Local");
