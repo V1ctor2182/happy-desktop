@@ -1,9 +1,9 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="/.github/logo-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="/.github/logo-light.png">
-  <img src="/.github/logo-dark.png" width="160" height="160" alt="Happy">
+  <source media="(prefers-color-scheme: dark)" srcset="/.github/logotype-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="/.github/logotype-light.png">
+  <img src="/.github/logotype-dark.png" width="400" alt="Happy">
 </picture>
 
 <h3>Any team. Any model. One harness.</h3>
