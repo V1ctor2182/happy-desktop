@@ -22,7 +22,6 @@ import {
 } from "./happyAgentBinaryPaths";
 import {
     happyAgentReleaseDownload,
-    happyAgentReleaseInstall,
     happyAgentReleaseLatest,
     happyAgentReleasesList,
     happyAgentReleaseVersion,
@@ -204,7 +203,10 @@ export class DesktopDaemonController {
         this.publish({
             ...this.snapshotValue,
             error: undefined,
-            message: `Happy Agent ${release.version} is ready to install.`,
+            message:
+                this.snapshotValue.installation === "missing"
+                    ? `Happy Agent ${release.version} is ready to start.`
+                    : `Happy Agent ${release.version} is ready to install.`,
             operation: "idle",
             versions: await this.versionsProject(),
             ...(await this.readyVersionRead()),
@@ -409,8 +411,9 @@ export class DesktopDaemonController {
     }
 
     /**
-     * The downloaded version worth installing: newer than the one running, and
-     * already on this machine. Anything else is not an offer anyone can accept.
+     * The downloaded version worth selecting: the newest one on this machine
+     * when nothing is running yet, or one newer than the selected version.
+     * Anything else is not an offer anyone can accept.
      *
      * "Nothing" is an answer, and it is returned as one. Every caller spreads
      * this over the current snapshot, so answering absence with an empty object
@@ -426,51 +429,69 @@ export class DesktopDaemonController {
             undefined,
         );
         if (newest === undefined) return { readyVersion: undefined };
-        // An unknown selection cannot be compared against, and a copy on disk
-        // that might be the one already running is not an upgrade.
-        if (selected === undefined || !versionNewer(newest, selected.version))
+        if (selected !== undefined && !versionNewer(newest, selected.version))
             return { readyVersion: undefined };
         return { readyVersion: newest };
     }
 
-    /**
-     * Puts Happy Agent on a machine that has none and starts it.
-     *
-     * First-run setup only, and the one move onto a version that is not a
-     * restart: there is no daemon yet, so there is no work to drain and nobody
-     * to interrupt. Setup already owns the window and reports this in place;
-     * raising the restart screen over it would be covering a screen with a
-     * screen. Every later move onto a version goes through `restartCore`.
-     */
+    /** Downloads the first Happy Agent release without selecting or starting it. */
     download(): Promise<void> {
         return this.serial(async () => {
             if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
+            if (this.snapshotValue.installation !== "missing")
+                throw new Error("Happy Agent is already installed.");
+            const release = await this.stageOrFail(async () => {
+                const found = this.latestRelease ?? (await happyAgentReleaseLatest());
+                this.latestRelease = found;
+                await this.stage(found);
+                return found;
+            });
+            this.publish({
+                ...this.snapshotValue,
+                availableVersion: release.version,
+                error: undefined,
+                message: `Happy Agent ${release.version} is ready to start.`,
+                operation: "idle",
+                readyVersion: release.version,
+                updateAvailable: false,
+            });
+        });
+    }
+
+    /**
+     * Selects and starts the release first-run setup already downloaded.
+     *
+     * There is no running daemon to drain, so this is deliberately not the
+     * ordinary install/restart path. It performs no network work: absence of a
+     * verified downloaded version is a refusal rather than a reason to fetch.
+     */
+    start(): Promise<void> {
+        return this.serial(async () => {
+            if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
+            if (this.snapshotValue.installation !== "missing")
+                throw new Error("Happy Agent is already installed.");
+            const version = this.snapshotValue.readyVersion;
+            if (version === undefined) throw new Error("Happy Agent is still downloading.");
             this.publish({
                 ...this.snapshotValue,
                 error: undefined,
-                message: "Preparing Happy Agent…",
+                message: `Starting Happy Agent ${version}…`,
                 operation: "installing",
+                runtime: "starting",
             });
             try {
-                const release = this.latestRelease ?? (await happyAgentReleaseLatest());
-                this.latestRelease = release;
-                const installed = await happyAgentBinarySelected(this.paths);
-                const selected =
-                    installed !== undefined && !versionNewer(release.version, installed.version)
-                        ? installed
-                        : await this.releaseFetch(release);
+                await happyAgentBinarySelect(this.paths, version);
+                const path = happyAgentBinaryPath(this.paths, version);
                 this.publish({
                     ...this.snapshotValue,
-                    availableVersion: release.version,
                     error: undefined,
                     installation: "installed",
-                    installedVersion: selected.version,
-                    message: `Starting Happy Agent ${selected.version}…`,
+                    installedVersion: version,
                     operation: "installing",
                     runtime: "starting",
                     updateAvailable: false,
                 });
-                await daemonCommandRun(selected.path, "reload", await this.launchEnvironmentRead());
+                await daemonCommandRun(path, "reload", await this.launchEnvironmentRead());
                 this.publish({
                     ...this.snapshotValue,
                     error: undefined,
@@ -478,6 +499,7 @@ export class DesktopDaemonController {
                     operation: "idle",
                     runtime: "ready",
                     versions: await this.versionsProject(),
+                    ...(await this.readyVersionRead()),
                 });
             } catch (error) {
                 const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
@@ -491,26 +513,6 @@ export class DesktopDaemonController {
                 throw error;
             }
         });
-    }
-
-    /**
-     * Fetches and installs one release, saying how far its bytes have got for as
-     * long as they are moving.
-     *
-     * This is the first install, which is the one download anybody watches: the
-     * window is being held on the setup screen until it lands, so the wait is
-     * the whole content of that screen rather than something happening beside
-     * someone's work.
-     */
-    private async releaseFetch(release: HappyAgentRelease): Promise<HappyAgentBinary> {
-        try {
-            return await happyAgentReleaseInstall(release, this.paths, {
-                onProgress: this.downloadReport(),
-                onStatus: (message) => this.publish({ ...this.snapshotValue, message }),
-            });
-        } finally {
-            this.downloadForget();
-        }
     }
 
     /**

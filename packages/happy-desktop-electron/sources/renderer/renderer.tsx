@@ -316,24 +316,27 @@ function DesktopOnboardingGate(props: {
     if (!snapshot.onboarding) return null;
     const view = localOnboardingView(snapshot);
     if (!view) return <>{props.children}</>;
-    // Only ever in front of setup that is genuinely still owed. A machine that
-    // is already working has nothing to introduce, so an unacknowledged welcome
-    // there stays unacknowledged rather than interrupting someone mid-flight.
+    // The welcome is only the deck. Entering setup acknowledges it and enables
+    // the renderer-owned automatic download and launch; every machine operation
+    // appears on the one setup surface that follows.
     if (!welcome.welcomeAcknowledged)
         return (
             <WelcomeScreen
                 appearance={appearance.mode}
                 backdrop={{ kind: "sky" }}
-                onAction={() => props.welcome.welcomeAcknowledge()}
+                onAction={() => {
+                    props.store.agentSetupBegin();
+                    props.welcome.welcomeAcknowledge();
+                }}
                 onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
                 slides={WELCOME_SLIDES}
             />
         );
     return (
         <LocalOnboardingScreen
+            appearance={appearance.mode}
             onAssistantsContinue={() => props.store.assistantsContinue()}
             onConnectRetry={() => props.store.connectRetry()}
-            onDaemonDownload={() => props.store.daemonDownload()}
             onProfileCreate={() => props.store.profileCreate()}
             onProfileEmailChange={(value) => props.store.profileEmailUpdate(value)}
             onProfileNameChange={(value) => props.store.profileNameUpdate(value)}
@@ -949,9 +952,14 @@ if (mediaPreviewBridge) {
     };
     const start = (config: DesktopConfig): void => {
         const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
+        // Whether this machine's owner has been welcomed. Acknowledging this
+        // deck enters machine setup; it does not wait for machine work to finish.
+        const welcome = welcomeStoreCreate(desktopWelcomePersistence());
         // First-run setup outlives every daemon connection this window makes, so
         // its store is created once here beside the runtime store.
-        const onboardingStore = localOnboardingStoreCreate(desktopBridge);
+        const onboardingStore = localOnboardingStoreCreate(desktopBridge, {
+            agentSetupActive: welcome.get().welcomeAcknowledged,
+        });
         // The local router outlives any single daemon connection, so it is created
         // here and the session store navigates through it when a conversation it
         // created should be opened.
@@ -1028,10 +1036,6 @@ if (mediaPreviewBridge) {
         // the product default in memory and writes only after the reader changes
         // the switch, so untouched installations follow future defaults.
         const titleShimmer = titleShimmerStoreCreate(preferences.titleShimmerPersistence);
-        // Whether this machine's owner has been welcomed. Kept beside the two
-        // above because it answers the same kind of question: what this
-        // installation shows, rather than anything a Happy Agent knows.
-        const welcome = welcomeStoreCreate(desktopWelcomePersistence());
         // Every Happy Agent in this window, each with its own product stores. The router is
         // told to resolve its address again whenever the set of connected Happy Agents
         // changes, so a machine that connects after the URL already named it opens

@@ -20,6 +20,7 @@ import {
 import alienMonsterUrl from "./assets/animations/alien-monster.json?url";
 import closedLockUrl from "./assets/animations/closed-lock.json?url";
 import confettiBallUrl from "./assets/animations/confetti-ball.json?url";
+import disguisedFaceUrl from "./assets/animations/disguised-face.json?url";
 import hatchingChickUrl from "./assets/animations/hatching-chick.json?url";
 import llamaUrl from "./assets/animations/llama.json?url";
 import owlUrl from "./assets/animations/owl.json?url";
@@ -37,6 +38,7 @@ import wandUrl from "./assets/animations/wand.json?url";
  * - `alien-monster` — people and agents are together in one live session.
  * - `closed-lock` — access is secured.
  * - `confetti-ball` — one milestone has just completed.
+ * - `disguised-face` — this machine's identity is being defined.
  * - `hatching-chick` — something new has been created.
  * - `llama` — several models are being combined on one job.
  * - `owl` — we are looking, and there is nothing found yet (search).
@@ -53,6 +55,7 @@ export type LottieSceneName =
     | "alien-monster"
     | "closed-lock"
     | "confetti-ball"
+    | "disguised-face"
     | "hatching-chick"
     | "llama"
     | "owl"
@@ -75,6 +78,7 @@ const SOURCES: Record<LottieSceneName, string> = {
     "alien-monster": alienMonsterUrl,
     "closed-lock": closedLockUrl,
     "confetti-ball": confettiBallUrl,
+    "disguised-face": disguisedFaceUrl,
     "hatching-chick": hatchingChickUrl,
     llama: llamaUrl,
     owl: owlUrl,
@@ -116,7 +120,7 @@ export type LottieSceneProps = {
  * and no React render per frame. All scenes share one worker.
  *
  * It never loops. The scene plays once when the state it illustrates appears,
- * and then holds its last frame — which for all eleven animations is the pose
+ * and then holds its last frame — which for all twelve animations is the pose
  * they were drawn to return to, so the held picture is a picture worth holding.
  * After that it only moves when a reader asks: a click or tap, a fresh hover
  * entry, or Enter/Space while it has keyboard focus. A replay is refused while

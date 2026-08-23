@@ -46,67 +46,6 @@
     inset: 0;
 }
 
-/*
- * The picture is wider than it is tall and the window is any shape at all, so it
- * covers rather than fits: a letterboxed edge would read as a bug in a window
- * that has no border. `50% 40%` keeps the horizon and the bright bank of cloud
- * low in frame at every aspect ratio, which is where the column wants them —
- * the words sit against the plain part of the sky rather than against cumulus.
- */
-.happy-welcome-screen__sky {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: 50% 40%;
-}
-
-/*
- * Legibility, not decoration. Both skies carry white copy. The light painting
- * gets a restrained black veil through its centre instead of the previous white
- * haze, preserving its saturated blue while separating the words from cloud.
- * The dark painting keeps the stronger near-black centre it needs around its
- * illuminated horizon. Explicit appearance choices win; `system` follows the
- * same media query that selects the picture.
- *
- * It is an ellipse rather than a flat wash so the sky keeps its full strength
- * out at the corners, where nothing is written and the art is the whole point.
- */
-.happy-welcome-screen__scrim {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-        ellipse 76% 64% at 50% 46%,
-        color-mix(in srgb, var(--button-primary-background) 32%, transparent) 0%,
-        color-mix(in srgb, var(--button-primary-background) 16%, transparent) 46%,
-        color-mix(in srgb, var(--button-primary-background) 4%, transparent) 78%,
-        transparent 100%
-    );
-}
-
-.happy-welcome-screen[data-appearance="dark"] .happy-welcome-screen__scrim {
-    background: radial-gradient(
-        ellipse 76% 64% at 50% 46%,
-        color-mix(in srgb, var(--surface) 86%, transparent) 0%,
-        color-mix(in srgb, var(--surface) 62%, transparent) 46%,
-        color-mix(in srgb, var(--surface) 18%, transparent) 78%,
-        transparent 100%
-    );
-}
-
-@media (prefers-color-scheme: dark) {
-    .happy-welcome-screen[data-appearance="system"] .happy-welcome-screen__scrim {
-        background: radial-gradient(
-            ellipse 76% 64% at 50% 46%,
-            color-mix(in srgb, var(--surface) 86%, transparent) 0%,
-            color-mix(in srgb, var(--surface) 62%, transparent) 46%,
-            color-mix(in srgb, var(--surface) 18%, transparent) 78%,
-            transparent 100%
-        );
-    }
-}
-
 .happy-welcome-screen > .happy-window-drag-region {
     z-index: 2;
 }

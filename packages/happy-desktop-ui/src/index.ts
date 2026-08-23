@@ -433,6 +433,7 @@ export {
 } from "./StatTile";
 export {
     LocalOnboardingScreen,
+    type LocalOnboardingAgentSetupPhase,
     type LocalOnboardingAssistant,
     type LocalOnboardingAssistantId,
     type LocalOnboardingDownload,
@@ -464,9 +465,11 @@ export {
 export { AssistantMark, type AssistantMarkName, type AssistantMarkProps } from "./AssistantMark";
 export {
     SetupPage,
+    SetupProgress,
     type SetupPageAction,
     type SetupPageProgress,
     type SetupPageProps,
+    type SetupProgressProps,
 } from "./SetupPage";
 export {
     SetupOptionCard,

@@ -317,6 +317,7 @@ function loginShellResolve(environment: NodeJS.ProcessEnv, configuredShell?: str
 function minimalShellEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     return {
         HOME: environment.HOME,
+        HAPPY_HOME_DIR: environment.HAPPY_HOME_DIR,
         LOGNAME: environment.LOGNAME,
         PATH: environment.PATH,
         SHELL: environment.SHELL,

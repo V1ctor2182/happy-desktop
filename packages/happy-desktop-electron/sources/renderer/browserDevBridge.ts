@@ -124,6 +124,9 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         daemonRestart: async () => {
             throw new Error("Happy Agent is restarted from the Electron desktop window.");
         },
+        daemonStart: async () => {
+            throw new Error("Happy Agent is started from the Electron desktop window.");
+        },
         daemonSubscribe: () => () => undefined,
         daemonUpgrade: async () => {
             throw new Error("Happy Agent updates are available in the Electron desktop window.");

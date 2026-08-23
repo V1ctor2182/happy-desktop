@@ -24,7 +24,13 @@
 .happy-setup-page__copy,
 .happy-setup-page__command,
 .happy-setup-page__progress,
-.happy-setup-page__slot {
+.happy-setup-page__progress-track,
+.happy-setup-page__progress-fill,
+.happy-setup-page__progress-line,
+.happy-setup-page__slot,
+.happy-local-onboarding__machine-status,
+.happy-local-onboarding__machine-progress,
+.happy-local-onboarding__machine-assistants {
     box-sizing: border-box;
 }
 
@@ -34,6 +40,7 @@
     gap: 16px;
     width: 100%;
     max-width: 400px;
+    margin-bottom: 24px;
     align-self: center;
 }
 
@@ -51,7 +58,13 @@
     font-synthesis: none;
 }
 
+.happy-setup-page > .happy-window-drag-region {
+    z-index: 2;
+}
+
 .happy-setup-page__scroll {
+    position: relative;
+    z-index: 1;
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;
@@ -74,6 +87,67 @@
     width: 100%;
     max-width: 560px;
     padding: 40px;
+}
+
+/* The sky remains one stable full-window layer while a stage changes. Only the
+   content remounts and dissolves into place, so a background shared by two
+   adjacent setup states never flashes or moves. */
+.happy-setup-page[data-transition] .happy-setup-page__body {
+    animation: happy-setup-page-crossfade-in 320ms ease both;
+}
+
+@keyframes happy-setup-page-crossfade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* First-run pages use the same photographic treatment as the welcome deck:
+   white words and one white primary action in either appearance. Functional
+   wells such as commands and text inputs retain their themed surfaces. */
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__title,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__copy,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-line,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-label,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-detail,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__mark,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__name,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__detail,
+.happy-setup-page[data-backdrop="sky"] .happy-text-field__label {
+    color: var(--button-primary-tint);
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-track {
+    background: color-mix(in srgb, var(--button-primary-tint) 28%, transparent);
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-fill,
+.happy-setup-page[data-backdrop="sky"]
+    .happy-setup-page__progress[data-state="waiting"]
+    .happy-setup-page__progress-track::after {
+    background: var(--button-primary-tint);
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="primary"] {
+    background: var(--button-primary-tint);
+    color: var(--button-primary-background);
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="ghost"] {
+    color: color-mix(in srgb, white 78%, transparent);
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="ghost"]:hover:not(:disabled) {
+    background: color-mix(in srgb, white 12%, transparent);
+    color: white;
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="primary"]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--button-primary-background) 8%, var(--button-primary-tint));
 }
 
 /* Fixed square whether the art arrives or not: the scene renders nothing until
@@ -141,6 +215,85 @@
     flex-direction: column;
     gap: 12px;
     width: 100%;
+}
+
+/* Download, launch, discovery, and verification rewrite one retained frame.
+   The normal copy fits two lines; reserving both from the first paint keeps the
+   status region and the owl on the same coordinates as those words change. */
+.happy-local-onboarding__machine-setup .happy-setup-page__body {
+    gap: 16px;
+}
+
+.happy-local-onboarding__machine-setup .happy-setup-page__title {
+    white-space: nowrap;
+}
+
+.happy-local-onboarding__machine-setup .happy-setup-page__copy {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+}
+
+/* Both lifecycle layers occupy this one reserved region during the handoff.
+   Keeping the region fixed means neither the progress line nor the harness row
+   can move the title, copy, or surrounding column when it becomes active. */
+.happy-local-onboarding__machine-setup .happy-setup-page__slot,
+.happy-local-onboarding__machine-status {
+    position: relative;
+    flex: none;
+    width: 100%;
+    height: 216px;
+}
+
+.happy-local-onboarding__machine-progress,
+.happy-local-onboarding__machine-assistants {
+    /* Crossfade layers must share the exact reserved status rectangle while both are painted. */
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    transition: opacity 180ms ease;
+}
+
+.happy-local-onboarding__machine-progress {
+    opacity: 1;
+}
+
+.happy-local-onboarding__machine-progress .happy-setup-page__progress {
+    width: 400px;
+}
+
+.happy-local-onboarding__machine-assistants {
+    gap: 48px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.happy-local-onboarding__machine-actions {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.happy-local-onboarding__machine-status[data-view="assistants"]
+    .happy-local-onboarding__machine-progress {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.happy-local-onboarding__machine-status[data-view="assistants"]
+    .happy-local-onboarding__machine-assistants {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 120ms;
 }
 
 /*
@@ -281,8 +434,17 @@
  * full track — visibly not a finished download, and visibly not stalled at zero.
  */
 @media (prefers-reduced-motion: reduce) {
+    .happy-setup-page[data-transition] .happy-setup-page__body {
+        animation-duration: 1ms;
+    }
+
     .happy-setup-page__progress {
         animation: none;
+    }
+
+    .happy-local-onboarding__machine-progress,
+    .happy-local-onboarding__machine-assistants {
+        transition: none;
     }
 
     .happy-setup-page__progress-fill {

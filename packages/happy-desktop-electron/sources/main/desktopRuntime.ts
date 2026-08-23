@@ -587,9 +587,10 @@ async function connectedHappyAgentOnboardingResolve(
         const state = await client.getOnboarding({
             signal: AbortSignal.timeout(onboardingRequestTimeoutMs),
         });
-        if (!state.steps.providers.done) return { state: "provider_setup" };
-        if (!state.steps.profile.done) return { state: "profile_required" };
-        return { state: "complete" };
+        const profileDone = state.steps.profile.done;
+        if (!state.steps.providers.done) return { profileDone, state: "provider_setup" };
+        if (!profileDone) return { profileDone, state: "profile_required" };
+        return { profileDone, state: "complete" };
     } catch (error) {
         return happyAgentUnreachableState(error);
     }

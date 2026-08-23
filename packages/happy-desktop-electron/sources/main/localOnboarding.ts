@@ -18,7 +18,11 @@ const recordVersion = 3;
 const LOCAL_ASSISTANT_IDS: readonly LocalAssistantId[] = ["claude", "codex", "grok"];
 
 export type LocalHappyAgentOnboardingState =
-    | { readonly state: "complete" | "profile_required" | "provider_setup" }
+    | {
+          /** Whether provider setup is the only gate in front of the profile. */
+          readonly profileDone: boolean;
+          readonly state: "complete" | "profile_required" | "provider_setup";
+      }
     | { readonly message: string; readonly state: "happy_agent_unreachable" };
 
 export interface LocalHappyAgentProfile {
@@ -315,6 +319,13 @@ export class LocalOnboarding implements Disposable {
      * screen that has been read.
      */
     private assistantsAcknowledged = false;
+    /**
+     * The person chose to leave the provider-authentication report, either
+     * after its daemon checks completed or through Skip. This is deliberately
+     * an in-memory presentation decision: it neither changes provider config
+     * nor claims credentials became valid.
+     */
+    private providerSetupAcknowledged = false;
     private runtimeKey?: string;
     /** Durable work runs one at a time, so two clicks cannot interleave writes. */
     private durableQueue: Promise<void> = Promise.resolve();
@@ -370,8 +381,9 @@ export class LocalOnboarding implements Disposable {
      * news either way.
      */
     assistantsContinue(): void {
-        if (this.assistantsAcknowledged) return;
+        if (this.assistantsAcknowledged && this.providerSetupAcknowledged) return;
         this.assistantsAcknowledged = true;
+        this.providerSetupAcknowledged = true;
         this.publish();
     }
 
@@ -1004,7 +1016,12 @@ export class LocalOnboarding implements Disposable {
                 case "complete":
                     return this.freshness === "fresh" ? "project" : "complete";
                 case "provider_setup":
-                    return "providersMissing";
+                    if (!this.providerSetupAcknowledged) return "providersMissing";
+                    return onboarding.profileDone
+                        ? this.freshness === "fresh"
+                            ? "project"
+                            : "complete"
+                        : "profileRequired";
                 case "profile_required":
                     return "profileRequired";
                 case "happy_agent_unreachable":

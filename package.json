@@ -16,6 +16,7 @@
         "dev:desktop:electron": "node scripts/dev-desktop.mjs",
         "dev:profile": "node scripts/dev-desktop.mjs --profile",
         "dev:sandbox": "node scripts/dev-desktop-sandbox.mjs",
+        "dev:sandbox:subscriptions": "node scripts/dev-desktop-sandbox.mjs --real-home --name=subscriptions",
         "desktop:assets": "node scripts/create-mac-icon.mjs",
         "desktop:update-manifest": "node scripts/create-mac-update-manifest.mjs standard",
         "desktop:mac:release": "node scripts/build-mac-apps.mjs",

@@ -10,7 +10,8 @@ first, the other four on the same day the vocabulary was widened.
 re-drawn, re-timed, or otherwise modified. `cat-face.json`, `closed-lock.json`,
 `confetti-ball.json`, `fox.json`, `hatching-chick.json`, `llama.json`,
 `party.json`, and `unicorn.json` were supplied by the project owner on 22
-August 2026; their upstream sources are not recorded in the files.
+August 2026. `disguised-face.json` was supplied by the project owner on 23
+August 2026. Their upstream sources are not recorded in the files.
 
 | File                  | SHA-256                                                            | Format                                        | Size              |
 | --------------------- | ------------------------------------------------------------------ | --------------------------------------------- | ----------------- |
@@ -18,6 +19,7 @@ August 2026; their upstream sources are not recorded in the files.
 | `cat-face.json`       | `21d629ce58ad92bf140bfb7f5534e553232376a56c6bdddd0e527523a89c4d90` | Lottie 5.5.2, 512×512, 60fps, 180f, 17 layers | 367 KB / 66 KB gz |
 | `closed-lock.json`    | `f6087f51de1ccc7dea5cfb9853292bc14271e86e9390a8fbc9514b31b32a0ad8` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 146 KB / 14 KB gz |
 | `confetti-ball.json`  | `65e82eafe12ac295ce747336f8453e3c500d3c130f77db97581431bf1c7d9fc5` | Lottie 5.5.2, 512×512, 60fps, 180f, 41 layers | 193 KB / 20 KB gz |
+| `disguised-face.json` | `2f4aa4452a5b785882bee5435a26774443b1a8232bfaa79136c22f2f4a2fa0d1` | Lottie 5.5.2, 512×512, 60fps, 180f, 17 layers | 281 KB / 41 KB gz |
 | `fox.json`            | `7206bf1b9c34fd7d149e79747b48f7c9a1f51fd42ca92f4f344dee53eed0cd70` | Lottie 5.5.2, 512×512, 60fps, 180f, 20 layers | 368 KB / 38 KB gz |
 | `hatching-chick.json` | `1a693cca609409e3bf79c3c997801346bc083fd9ef2e6fa90689a1288be901dd` | Lottie 5.5.2, 512×512, 60fps, 180f, 3 layers  | 309 KB / 25 KB gz |
 | `llama.json`          | `ff16ee4b8a19a782b5e5b12dbe103d145410f16b8801af5723b6636c56a0a0ff` | Lottie 5.5.2, 512×512, 60fps, 180f, 27 layers | 462 KB / 60 KB gz |
@@ -49,9 +51,9 @@ Contributors`. That is a
   vouch for the copy: where the artwork originally came from before it entered
   that repository has not been established here.
 - **Licence for `cat-face.json`, `closed-lock.json`, `confetti-ball.json`,
-  `fox.json`, `hatching-chick.json`, `llama.json`, `party.json`, and
-  `unicorn.json`** not recorded in the supplied files. Their upstream licensing
-  has not been independently established here.
+  `disguised-face.json`, `fox.json`, `hatching-chick.json`, `llama.json`,
+  `party.json`, and `unicorn.json`** not recorded in the supplied files. Their
+  upstream licensing has not been independently established here.
 
 ### Why they were not converted to `.lottie` containers
 
@@ -62,11 +64,10 @@ Plain JSON stays diffable and needs no tooling.
 
 ## What each one means
 
-Sixteen animations were inspected frame by frame in a real renderer. They are
-glossy 3D emoji: 👾 game, 🐱 cat face, 🔒 closed lock, 🎊 confetti ball, 🦊 fox,
-🐣 hatching chick, 🦙 llama, 🦄 unicorn, 🦉 owl, 🎉 party, 🍿 popcorn, 🤖 robot,
-🐌 snail, ✨ sparkles, 🗿 stone, 🪄 wand. Eleven carry a meaning Happy actually
-needs, and each is used
+The complete source set is seventeen glossy 3D emoji: 👾 game, 🐱 cat face, 🔒
+closed lock, 🎊 confetti ball, 🥸 disguised face, 🦊 fox, 🐣 hatching chick, 🦙
+llama, 🦄 unicorn, 🦉 owl, 🎉 party, 🍿 popcorn, 🤖 robot, 🐌 snail, ✨ sparkles,
+🗿 stone, 🪄 wand. Twelve carry a meaning Happy actually needs, and each is used
 for that one meaning and nothing else:
 
 - 👾 **alien monster** — _people and agents are together in one live session._
@@ -76,6 +77,9 @@ for that one meaning and nothing else:
   private boundary has been established, not a warning or an access error.
 - 🎊 **confetti ball** — _one milestone has just completed._ It marks the
   specific completion rather than a group celebration.
+- 🥸 **disguised face** — _this machine's identity is being defined._ It belongs
+  to profile creation, where the person names the identity Happy Agent will use
+  for authored work and messages.
 - 🐣 **hatching chick** — _something new has been created._ It belongs to the
   first successful appearance of a new project, session, or document.
 - 🦙 **llama** — _several models are being combined on one job._ One harness

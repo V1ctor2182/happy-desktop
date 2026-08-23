@@ -7,11 +7,12 @@ import {
     type CSSProperties,
     type KeyboardEvent,
 } from "react";
-import { happyLogoBlackUrl, happyLogoWhiteUrl, welcomeSkyDarkUrl, welcomeSkyUrl } from "./assets";
+import { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
 import { NightSkyShader, type NightSkyShaderMotion } from "./NightSkyShader";
+import { OnboardingSky } from "./OnboardingSky";
 import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
 /*
  * The same triple the settings surface offers, deliberately reused rather than
@@ -253,26 +254,10 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                 with the surface token and has to follow the appearance the
                 window is on. */}
             {local.backdrop?.kind === "sky" ? (
-                <div
-                    aria-hidden="true"
+                <OnboardingSky
+                    appearance={local.appearance}
                     className="happy-welcome-screen__backdrop"
-                    data-happy-desktop-ui="welcome-backdrop"
-                >
-                    <picture>
-                        {local.appearance === "system" ? (
-                            <source
-                                media="(prefers-color-scheme: dark)"
-                                srcSet={welcomeSkyDarkUrl}
-                            />
-                        ) : null}
-                        <img
-                            alt=""
-                            className="happy-welcome-screen__sky"
-                            src={local.appearance === "dark" ? welcomeSkyDarkUrl : welcomeSkyUrl}
-                        />
-                    </picture>
-                    <span className="happy-welcome-screen__scrim" />
-                </div>
+                />
             ) : null}
             <ScrollArea
                 className="happy-welcome-screen__view"

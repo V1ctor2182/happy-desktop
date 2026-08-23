@@ -4,21 +4,24 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:
 import { join, resolve } from "node:path";
 
 /*
- * Runs the desktop against a throwaway home directory instead of the real one,
- * so first-run setup can be replayed as often as you like without touching the
- * Happy Agent you actually work in.
+ * Runs the desktop against a throwaway Happy installation so first-run setup
+ * can be replayed as often as you like without touching the Happy Agent you
+ * actually work in. The ordinary mode also replaces HOME. `--real-home` keeps
+ * HOME intact so subscription discovery can exercise the credentials already
+ * used by Claude, Codex, and Grok on this machine.
  *
- * One lever reaches the daemon, and it is deliberate. `localHappyAgent.ts` runs
- * the discovery command in a login shell with `minimalShellEnvironment`, which
- * keeps HOME, LOGNAME, PATH, SHELL, TMPDIR, and USER and drops everything else —
- * so pointing `HAPPY_HOME_DIR` at a sandbox would be thrown away before the
- * shell ever saw it. HOME survives, and it is enough:
+ * One lever reaches the daemon in ordinary mode, and it is deliberate:
  *
  *   HOME  moves ~/.happy/agent (the daemon's own state and its socket),
  *         ~/.happy/dist (the agent Happy installs), ~/.happy/desktop (the
  *         desktop's config), and ~/.happy/notes. Because the socket is derived
  *         from HOME rather than from TMPDIR, moving HOME is what makes this a
  *         different daemon rather than the global one wearing a new hat.
+ *
+ * `--real-home` uses the narrower HAPPY_HOME_DIR lever instead. The desktop
+ * carries that one through its login-shell discovery specifically so the
+ * sandbox daemon and downloaded distribution move while provider credential
+ * paths still resolve from the real HOME.
  *
  * A sandbox HOME also means a sandbox shell profile, and the app reads the
  * machine's Node and coding assistants out of the user's real login shell on
@@ -30,18 +33,23 @@ import { join, resolve } from "node:path";
 
 const workspace = resolve(import.meta.dirname, "..");
 
-const options = { name: "default", noNode: false, reset: false };
+const options = { name: "default", noNode: false, realHome: false, reset: false };
 for (const argument of process.argv.slice(2)) {
     if (argument === "--reset") options.reset = true;
     else if (argument === "--no-node") options.noNode = true;
+    else if (argument === "--real-home") options.realHome = true;
     else if (argument.startsWith("--name=")) options.name = argument.slice("--name=".length);
     else {
         console.error(`Unknown option: ${argument}`);
         console.error(
-            "Usage: node scripts/dev-desktop-sandbox.mjs [--reset] [--no-node] [--name=x]",
+            "Usage: node scripts/dev-desktop-sandbox.mjs [--reset] [--no-node] [--real-home] [--name=x]",
         );
         process.exit(2);
     }
+}
+if (options.realHome && options.noNode) {
+    console.error("--real-home and --no-node cannot be combined.");
+    process.exit(2);
 }
 
 /*
@@ -75,6 +83,7 @@ if (running) {
 }
 
 const home = join(workspace, ".happy-sandbox", options.name);
+const happyHome = join(home, ".happy");
 const temporary = join(home, "tmp");
 
 // macOS refuses a unix socket path over 104 bytes, and the daemon's is
@@ -99,7 +108,7 @@ if (options.reset) {
     for (const agent of sandboxAgentBinaries(home)) {
         try {
             execFileSync(agent, ["stop"], {
-                env: { ...process.env, HOME: home, TMPDIR: temporary },
+                env: sandboxEnvironment(),
                 stdio: "ignore",
             });
         } catch {
@@ -124,6 +133,18 @@ function sandboxAgentBinaries(sandboxHome) {
         .filter((path) => existsSync(path));
 }
 
+function sandboxEnvironment() {
+    const environment = { ...process.env, TMPDIR: temporary };
+    delete environment.HAPPY_AGENT_SERVER_SOCKET_PATH;
+    delete environment.HAPPY_AGENT_SERVER_TOKEN_PATH;
+    if (options.realHome) environment.HAPPY_HOME_DIR = happyHome;
+    else {
+        environment.HOME = home;
+        delete environment.HAPPY_HOME_DIR;
+    }
+    return environment;
+}
+
 mkdirSync(temporary, { recursive: true });
 
 if (options.noNode) {
@@ -139,8 +160,9 @@ if (options.noNode) {
 }
 
 console.log("Happy Desktop development: Electron, sandboxed");
-console.log(`  home    ${home}`);
-console.log(`  socket  ${socketPath}`);
+console.log(`  home        ${options.realHome ? process.env.HOME : home}`);
+console.log(`  happy home  ${happyHome}`);
+console.log(`  socket      ${socketPath}`);
 if (options.noNode) console.log("  node    hidden from the login shell");
 
 const portless = join(workspace, "node_modules", ".bin", "portless");
@@ -149,9 +171,7 @@ if (process.env.PORT) portlessArguments.push("--app-port", process.env.PORT);
 portlessArguments.push("pnpm", "--filter", "happy-desktop-electron", "dev:electron");
 
 const portlessEnvironment = {
-    ...process.env,
-    HOME: home,
-    TMPDIR: temporary,
+    ...sandboxEnvironment(),
     PORTLESS_LAN: "0",
     PORTLESS_TLD: "localhost",
 };

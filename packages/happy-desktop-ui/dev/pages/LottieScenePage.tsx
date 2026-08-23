@@ -23,7 +23,7 @@ export function LottieScenePage() {
             title="LottieScene"
         >
             <Specimen
-                detail="The eleven shipped animations at the panel size, each holding its final frame. Alien monster: people and agents share one live session. Closed lock: access is secured. Confetti ball: a milestone just completed. Hatching chick: something new was created. Llama: several models are combined on one job. Owl: we are looking and nothing is found yet. Party: a group shares a celebration. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Wand: the missing thing is one you can make here."
+                detail="The twelve shipped animations at the panel size, each holding its final frame. Alien monster: people and agents share one live session. Closed lock: access is secured. Confetti ball: a milestone just completed. Disguised face: this machine's identity is being defined. Hatching chick: something new was created. Llama: several models are combined on one job. Owl: we are looking and nothing is found yet. Party: a group shares a celebration. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Wand: the missing thing is one you can make here."
                 label="The vocabulary"
                 number="01"
                 stage="surface"
@@ -45,6 +45,12 @@ export function LottieScenePage() {
                         name="confetti-ball"
                         play="on-demand"
                         replayLabel="Play the confetti ball again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="disguised-face"
+                        play="on-demand"
+                        replayLabel="Play the disguised face again"
                         size={128}
                     />
                     <LottieScene

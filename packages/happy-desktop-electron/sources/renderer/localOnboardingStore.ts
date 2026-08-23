@@ -1,12 +1,31 @@
 import type { LocalOnboardingAssistant, LocalOnboardingView } from "happy-desktop-ui";
+import { HappyAgentClient } from "happy-desktop-state";
 import type {
+    DesktopDaemonSnapshot,
+    DesktopRuntimeSnapshot,
     HappyDesktopBridge,
     LocalAssistantState,
     LocalOnboardingSnapshot,
 } from "../shared/desktopContract";
 
+type ProviderAuthenticationResult = "checking" | "valid" | "invalid" | "error";
+
+interface ProviderAuthenticationSnapshot {
+    readonly claude?: ProviderAuthenticationResult;
+    readonly codex?: ProviderAuthenticationResult;
+    readonly complete: boolean;
+    readonly grok?: ProviderAuthenticationResult;
+    readonly key?: string;
+}
+
 export interface LocalOnboardingViewSnapshot {
     readonly onboarding?: LocalOnboardingSnapshot;
+    readonly daemon?: DesktopDaemonSnapshot;
+    readonly runtime?: DesktopRuntimeSnapshot;
+    /** Authentication-level daemon checks for the binaries the shell found. */
+    readonly providerAuthentication: ProviderAuthenticationSnapshot;
+    /** The renderer has asked the verified first release to start. */
+    readonly agentStarting: boolean;
     /** True while a request this window made is still in flight. */
     readonly pending: boolean;
     /** Why the last request could not be delivered, until another is made. */
@@ -19,7 +38,8 @@ export interface LocalOnboardingStore {
     get(): LocalOnboardingViewSnapshot;
     subscribe(listener: () => void): () => void;
     connectRetry(): void;
-    daemonDownload(): void;
+    /** Enters machine setup and allows its automatic download and launch to begin. */
+    agentSetupBegin(): void;
     projectChoose(): void;
     assistantsContinue(): void;
     profileNameUpdate(value: string): void;
@@ -27,26 +47,53 @@ export interface LocalOnboardingStore {
     profileCreate(): void;
 }
 
+export interface LocalOnboardingStoreOptions {
+    /** True when the welcome was acknowledged before this window opened. */
+    readonly agentSetupActive?: boolean;
+}
+
+const downloadRetryMinimumMs = 3_000;
+const downloadRetryMaximumMs = 30_000;
+const startRetryMinimumMs = 3_000;
+const startRetryMaximumMs = 30_000;
+
 /**
  * The window's view of first-run setup: one coarse bridge subscription for the
  * durable stage.
  *
- * Nothing here decides anything. The stage, the install process, the folder
- * picker, and the daemon all belong to the main process; this store forwards
- * intent and keeps the screen current. What it does own is this window's side of
- * a request: an operation the shell refused is reported on screen rather than
- * dropped.
+ * The shell exposes daemon state and two narrow capabilities; this surface owns
+ * the first-run policy that uses them. Once the welcome hands the window to
+ * machine setup, it begins and retries the harmless download, then starts the
+ * verified release as soon as it is ready. Native work, durable stages, and
+ * validation remain in the shell.
  */
-export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnboardingStore {
+export function localOnboardingStoreCreate(
+    bridge: HappyDesktopBridge,
+    options: LocalOnboardingStoreOptions = {},
+): LocalOnboardingStore {
     const listeners = new Set<() => void>();
     let snapshot: LocalOnboardingViewSnapshot = {
+        agentStarting: false,
         pending: false,
         profileEmail: "",
         profileName: "",
+        providerAuthentication: { complete: false },
     };
     let bridgeUnsubscribe: (() => void) | undefined;
+    let daemonUnsubscribe: (() => void) | undefined;
+    let runtimeUnsubscribe: (() => void) | undefined;
+    let downloadInFlight = false;
+    let downloadRetry: ReturnType<typeof setTimeout> | undefined;
+    let downloadRetryMs = downloadRetryMinimumMs;
+    let startInFlight = false;
+    let startRetry: ReturnType<typeof setTimeout> | undefined;
+    let startRetryMs = startRetryMinimumMs;
     let eventReceived = false;
+    let daemonEventReceived = false;
+    let runtimeEventReceived = false;
+    let verificationAbort: AbortController | undefined;
     let inFlight = 0;
+    let agentSetupActive = options.agentSetupActive === true;
 
     const publish = (next: LocalOnboardingViewSnapshot) => {
         snapshot = next;
@@ -58,6 +105,23 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
             ...snapshot,
             onboarding: next,
         });
+        setupSynchronize();
+    };
+    const daemonSet = (next: DesktopDaemonSnapshot) => {
+        if (Object.is(snapshot.daemon, next)) return;
+        publish({
+            ...snapshot,
+            daemon: next,
+        });
+        setupSynchronize();
+    };
+    const runtimeSet = (next: DesktopRuntimeSnapshot) => {
+        if (Object.is(snapshot.runtime, next)) return;
+        publish({
+            ...snapshot,
+            runtime: next,
+        });
+        setupSynchronize();
     };
     /**
      * Sends one request and reports what happened to it. A bridge call that
@@ -84,6 +148,201 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
         );
     };
 
+    const downloadRetryStop = () => {
+        if (!downloadRetry) return;
+        clearTimeout(downloadRetry);
+        downloadRetry = undefined;
+    };
+    const downloadBegin = () => {
+        if (downloadInFlight) return;
+        downloadRetryStop();
+        downloadInFlight = true;
+        if (snapshot.failure) publish({ ...snapshot, failure: undefined });
+        void bridge
+            .daemonDownload()
+            .catch((error: unknown) => {
+                publish({
+                    ...snapshot,
+                    failure: `Happy could not download Happy Agent. ${errorMessage(error)}`,
+                });
+            })
+            .finally(() => {
+                downloadInFlight = false;
+                setupSynchronize();
+            });
+    };
+    function downloadSynchronize() {
+        const onboarding = snapshot.onboarding;
+        const daemon = snapshot.daemon;
+        if (
+            listeners.size === 0 ||
+            !agentSetupActive ||
+            onboarding?.stage !== "daemonDownload" ||
+            !daemon ||
+            daemon.installation !== "missing" ||
+            daemon.readyVersion !== undefined
+        ) {
+            downloadRetryStop();
+            downloadRetryMs = downloadRetryMinimumMs;
+            return;
+        }
+        if (
+            downloadInFlight ||
+            daemon.operation === "downloading" ||
+            daemon.operation === "installing" ||
+            downloadRetry
+        )
+            return;
+        if (daemon.error || snapshot.failure) {
+            const delay = downloadRetryMs;
+            downloadRetryMs = Math.min(downloadRetryMaximumMs, downloadRetryMs * 2);
+            downloadRetry = setTimeout(() => {
+                downloadRetry = undefined;
+                downloadBegin();
+            }, delay);
+            return;
+        }
+        downloadBegin();
+    }
+
+    const startRetryStop = () => {
+        if (!startRetry) return;
+        clearTimeout(startRetry);
+        startRetry = undefined;
+    };
+    const startBegin = () => {
+        if (startInFlight) return;
+        startRetryStop();
+        startInFlight = true;
+        publish({ ...snapshot, agentStarting: true, failure: undefined });
+        void bridge
+            .daemonStart()
+            .catch((error: unknown) => {
+                publish({
+                    ...snapshot,
+                    failure: `Happy could not start Happy Agent. ${errorMessage(error)}`,
+                });
+            })
+            .finally(() => {
+                startInFlight = false;
+                publish({ ...snapshot, agentStarting: false });
+                setupSynchronize();
+            });
+    };
+    function startSynchronize() {
+        const onboarding = snapshot.onboarding;
+        const daemon = snapshot.daemon;
+        if (
+            listeners.size === 0 ||
+            !agentSetupActive ||
+            onboarding?.stage !== "daemonDownload" ||
+            !daemon ||
+            daemon.installation !== "missing" ||
+            daemon.readyVersion === undefined
+        ) {
+            startRetryStop();
+            startRetryMs = startRetryMinimumMs;
+            return;
+        }
+        if (startInFlight || daemon.operation === "installing" || startRetry) return;
+        if (daemon.error || snapshot.failure) {
+            const delay = startRetryMs;
+            startRetryMs = Math.min(startRetryMaximumMs, startRetryMs * 2);
+            startRetry = setTimeout(() => {
+                startRetry = undefined;
+                startBegin();
+            }, delay);
+            return;
+        }
+        startBegin();
+    }
+    function setupSynchronize() {
+        downloadSynchronize();
+        startSynchronize();
+        providerAuthenticationSynchronize();
+    }
+
+    function providerAuthenticationSynchronize() {
+        const onboarding = snapshot.onboarding;
+        const runtime = snapshot.runtime;
+        if (
+            listeners.size === 0 ||
+            (onboarding?.stage !== "providersMissing" && onboarding?.stage !== "assistantsFound") ||
+            runtime?.phase !== "ready" ||
+            runtime.mode !== "local"
+        ) {
+            verificationAbort?.abort();
+            verificationAbort = undefined;
+            return;
+        }
+        const assistants = onboarding.assistants ?? [];
+        const binaries = assistants.filter((assistant) => assistant.status === "found");
+        const key = `${String(runtime.connectionId)}|${assistants
+            .map((assistant) => `${assistant.id}:${assistant.status}`)
+            .join(",")}`;
+        if (snapshot.providerAuthentication.key === key) return;
+
+        verificationAbort?.abort();
+        const abort = new AbortController();
+        verificationAbort = abort;
+        publish({
+            ...snapshot,
+            providerAuthentication: {
+                claude: binaryAuthenticationInitial(assistants, "claude"),
+                codex: binaryAuthenticationInitial(assistants, "codex"),
+                complete: binaries.length === 0,
+                grok: binaryAuthenticationInitial(assistants, "grok"),
+                key,
+            },
+        });
+        if (binaries.length === 0) return;
+
+        const client = new HappyAgentClient({
+            endpoint: runtime.activeTarget.happyAgentHttpUrl,
+            token: "happy-local-capability",
+        });
+        void client
+            .scanProviders({ signal: abort.signal })
+            // Scanning refreshes daemon discovery, but a failed scan does not
+            // answer whether an already configured provider authenticates.
+            .catch(() => undefined)
+            .then(() =>
+                Promise.all(
+                    binaries.map(async (assistant) => {
+                        try {
+                            const result = await client.verifyProvider(
+                                assistant.id,
+                                { level: "authentication" },
+                                { signal: abort.signal },
+                            );
+                            return {
+                                id: assistant.id,
+                                result:
+                                    result.status === "passed" &&
+                                    result.performedLevel === "authentication"
+                                        ? ("valid" as const)
+                                        : ("invalid" as const),
+                            };
+                        } catch {
+                            return { id: assistant.id, result: "error" as const };
+                        }
+                    }),
+                ),
+            )
+            .then((results) => {
+                if (
+                    abort.signal.aborted ||
+                    snapshot.providerAuthentication.key !== key ||
+                    listeners.size === 0
+                )
+                    return;
+                publish({
+                    ...snapshot,
+                    providerAuthentication: authenticationResultsProject(key, results),
+                });
+            });
+    }
+
     return {
         get: () => snapshot,
         subscribe(listener) {
@@ -93,6 +352,16 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
                 bridgeUnsubscribe = bridge.onboardingSubscribe((next) => {
                     eventReceived = true;
                     onboardingSet(next);
+                });
+                daemonEventReceived = false;
+                daemonUnsubscribe = bridge.daemonSubscribe((next) => {
+                    daemonEventReceived = true;
+                    daemonSet(next);
+                });
+                runtimeEventReceived = false;
+                runtimeUnsubscribe = bridge.subscribe((next) => {
+                    runtimeEventReceived = true;
+                    runtimeSet(next);
                 });
                 void bridge.onboardingGet().then(
                     (initial) => {
@@ -105,25 +374,51 @@ export function localOnboardingStoreCreate(bridge: HappyDesktopBridge): LocalOnb
                         });
                     },
                 );
+                void bridge.daemonGet().then(
+                    (initial) => {
+                        if (!daemonEventReceived) daemonSet(initial);
+                    },
+                    (error: unknown) => {
+                        publish({
+                            ...snapshot,
+                            failure: `Happy could not read Happy Agent download state. ${errorMessage(error)}`,
+                        });
+                    },
+                );
+                void bridge.runtimeGet().then(
+                    (initial) => {
+                        if (!runtimeEventReceived) runtimeSet(initial);
+                    },
+                    (error: unknown) => {
+                        publish({
+                            ...snapshot,
+                            failure: `Happy could not read Happy Agent connection state. ${errorMessage(error)}`,
+                        });
+                    },
+                );
             }
             return () => {
                 listeners.delete(listener);
                 if (listeners.size > 0) return;
                 bridgeUnsubscribe?.();
                 bridgeUnsubscribe = undefined;
+                daemonUnsubscribe?.();
+                daemonUnsubscribe = undefined;
+                runtimeUnsubscribe?.();
+                runtimeUnsubscribe = undefined;
+                verificationAbort?.abort();
+                verificationAbort = undefined;
+                downloadRetryStop();
+                startRetryStop();
             };
         },
         connectRetry() {
             attempt(bridge.runtimeRetry(), "Happy could not ask Happy Agent to start again.");
         },
-        daemonDownload() {
-            if (snapshot.pending) return;
-            // Only the install is asked for here. Connecting to what it puts on
-            // the machine belongs to the shell, which does it the moment the
-            // agent lands rather than after a round trip back out to this
-            // window — the wait for that round trip was long enough to show the
-            // failure the install had already fixed.
-            attempt(bridge.daemonDownload(), "Happy could not download Happy Agent.");
+        agentSetupBegin() {
+            if (agentSetupActive) return;
+            agentSetupActive = true;
+            setupSynchronize();
         },
         projectChoose() {
             attempt(bridge.onboardingProjectChoose(), "Happy could not open a project.");
@@ -170,14 +465,13 @@ export function localOnboardingView(
         case "nodeMissing":
             return { kind: "node-missing" };
         case "daemonDownload":
+            return agentSetupProject(snapshot.daemon, snapshot.agentStarting, message);
+        case "daemonStarting":
             return {
-                busy,
-                ...(onboarding.download ? { download: onboarding.download } : {}),
-                kind: "daemon-download",
+                kind: "agent-setup",
+                phase: { kind: "starting" },
                 ...(message ? { message } : {}),
             };
-        case "daemonStarting":
-            return { kind: "agent-starting", ...(message ? { message } : {}) };
         case "connecting":
             return { kind: "connecting" };
         case "connectFailed":
@@ -187,15 +481,14 @@ export function localOnboardingView(
                 retrying: onboarding.retrying === true,
             };
         case "providersMissing":
-            return {
-                assistants: assistantsProject(onboarding.assistants),
-                kind: "providers-missing",
-                retrying: onboarding.retrying === true,
-            };
         case "assistantsFound":
             return {
-                assistants: assistantsProject(onboarding.assistants),
-                kind: "assistants-found",
+                assistants: assistantsProject(
+                    onboarding.assistants,
+                    snapshot.providerAuthentication,
+                ),
+                complete: snapshot.providerAuthentication.complete,
+                kind: "provider-authentication",
             };
         case "profileRequired":
             return {
@@ -215,15 +508,98 @@ export function localOnboardingView(
     return undefined;
 }
 
+function agentSetupProject(
+    daemon: DesktopDaemonSnapshot | undefined,
+    starting: boolean,
+    message: string | undefined,
+): LocalOnboardingView {
+    const phase = (() => {
+        if (starting || daemon?.operation === "installing") return { kind: "starting" } as const;
+        if (daemon?.readyVersion) return { kind: "ready", version: daemon.readyVersion } as const;
+        if (daemon?.operation === "downloading")
+            return {
+                ...(daemon.download ? { download: daemon.download } : {}),
+                kind: "downloading",
+            } as const;
+        if (daemon?.error) return { kind: "retrying", message: daemon.error } as const;
+        return { kind: "preparing" } as const;
+    })();
+    return {
+        kind: "agent-setup",
+        phase,
+        ...(message ? { message } : {}),
+    };
+}
+
 /** The shell's answer about the three assistants, as the screen takes it. */
 function assistantsProject(
     assistants: readonly LocalAssistantState[] | undefined,
+    authentication: ProviderAuthenticationSnapshot,
 ): readonly LocalOnboardingAssistant[] {
     return (assistants ?? []).map((assistant) => ({
+        authentication:
+            assistant.status === "missing"
+                ? "unavailable"
+                : (authenticationFor(authentication, assistant.id) ?? "checking"),
         ...(assistant.command ? { command: assistant.command } : {}),
         id: assistant.id,
         status: assistant.status,
     }));
+}
+
+function binaryAuthenticationInitial(
+    assistants: readonly LocalAssistantState[],
+    id: LocalAssistantState["id"],
+): ProviderAuthenticationResult | undefined {
+    return assistants.some((assistant) => assistant.id === id && assistant.status === "found")
+        ? "checking"
+        : undefined;
+}
+
+function authenticationFor(
+    authentication: ProviderAuthenticationSnapshot,
+    id: LocalAssistantState["id"],
+): ProviderAuthenticationResult | undefined {
+    switch (id) {
+        case "claude":
+            return authentication.claude;
+        case "codex":
+            return authentication.codex;
+        case "grok":
+            return authentication.grok;
+    }
+}
+
+function authenticationResultsProject(
+    key: string,
+    results: readonly {
+        readonly id: LocalAssistantState["id"];
+        readonly result: Exclude<ProviderAuthenticationResult, "checking">;
+    }[],
+): ProviderAuthenticationSnapshot {
+    let claude: ProviderAuthenticationResult | undefined;
+    let codex: ProviderAuthenticationResult | undefined;
+    let grok: ProviderAuthenticationResult | undefined;
+    for (const result of results) {
+        switch (result.id) {
+            case "claude":
+                claude = result.result;
+                break;
+            case "codex":
+                codex = result.result;
+                break;
+            case "grok":
+                grok = result.result;
+                break;
+        }
+    }
+    return {
+        ...(claude ? { claude } : {}),
+        ...(codex ? { codex } : {}),
+        complete: true,
+        ...(grok ? { grok } : {}),
+        key,
+    };
 }
 
 function errorMessage(error: unknown): string {

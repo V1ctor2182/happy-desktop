@@ -1419,6 +1419,10 @@ void app
             desktopDaemonSenderRequire(event.sender);
             return daemonController.download();
         });
+        ipcMain.handle(desktopIpc.daemonStart, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return daemonController.start();
+        });
         ipcMain.handle(desktopIpc.daemonUpgrade, (event) => {
             desktopDaemonSenderRequire(event.sender);
             return daemonController.upgrade();

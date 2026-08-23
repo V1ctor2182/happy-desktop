@@ -25,11 +25,11 @@ Wi-Fi and serves an `https://…localhost` URL.
 
 Flags, combinable:
 
-| Flag        | Effect                                                                  |
-| ----------- | ----------------------------------------------------------------------- |
+| Flag        | Effect                                                                          |
+| ----------- | ------------------------------------------------------------------------------- |
 | `--debug`   | Starts main-process, renderer, and Happy Agent inspectors and prints their URLs |
-| `--lan`     | Portless LAN mode (`.local`), only for deliberate device testing        |
-| `--profile` | Preloads the dormant React profiler (see Profiling below)               |
+| `--lan`     | Portless LAN mode (`.local`), only for deliberate device testing                |
+| `--profile` | Preloads the dormant React profiler (see Profiling below)                       |
 
 Set `HAPPY_DEBUG_RENDERER_PORT` when a specific renderer CDP port is required.
 
@@ -43,13 +43,22 @@ pnpm blueprint    # the happy-desktop-ui component blueprint
 ## First-run sandbox
 
 ```sh
-pnpm dev:sandbox [--reset] [--no-happy-agent] [--name=x]
+pnpm dev:sandbox [--reset] [--no-node] [--name=x]
 ```
 
 Runs the desktop against a throwaway home directory so onboarding can be
 replayed as often as needed without touching the Happy Agent you actually work in.
-`--reset` wipes the sandbox, `--no-happy-agent` simulates a machine where Happy Agent is not
-installed, `--name=x` keeps several sandboxes apart.
+`--reset` wipes the sandbox, `--no-node` simulates a machine without a discoverable Node runtime,
+and `--name=x` keeps several sandboxes apart.
+
+To test subscription discovery against the Claude, Codex, and Grok authentication
+in your real home while keeping Happy Agent itself isolated:
+
+```sh
+pnpm dev:sandbox:subscriptions --reset
+```
+
+This leaves `HOME` unchanged and redirects only `HAPPY_HOME_DIR` into the sandbox.
 
 ## Profiling
 

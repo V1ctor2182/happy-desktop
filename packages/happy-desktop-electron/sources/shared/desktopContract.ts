@@ -228,12 +228,10 @@ export interface DesktopDaemonSnapshot {
     readonly managed: boolean;
     readonly message?: string;
     /**
-     * What the controller is doing. `installing` is the first install alone —
-     * putting an agent on a machine that has none and starting it — and is kept
-     * apart from `downloading` because the two are watched by different people
-     * for different reasons: the first holds the setup screen and is the only
-     * thing that person is waiting for, while the second happens quietly beside
-     * somebody's work and must never take a screen.
+     * What the controller is doing. `installing` is the first start alone —
+     * selecting a verified release on a machine that has none and launching it.
+     * It is kept apart from `downloading` because fetching bytes is harmless and
+     * automatic, while selecting and running them follows the person's action.
      */
     readonly operation: "idle" | "checking" | "downloading" | "installing" | "upgrading";
     readonly runtime: "stopped" | "starting" | "ready";
@@ -245,9 +243,10 @@ export interface DesktopDaemonSnapshot {
      */
     readonly versions: readonly DesktopDaemonVersion[];
     /**
-     * The downloaded version waiting to be installed, once one is held here and
-     * is newer than the running daemon. Its presence is the whole condition for
-     * offering the install: the bytes are already on this machine.
+     * The downloaded version waiting to be selected: the first version on a
+     * machine with no agent, or one newer than the running daemon. Its presence
+     * is the whole condition for offering start/install: the verified bytes are
+     * already on this machine.
      */
     readonly readyVersion?: string;
     /** A restart the person asked for, while it is happening. */
@@ -371,7 +370,7 @@ export type LocalOnboardingStage =
     | "checking"
     /** No Node runtime; Happy cannot install one, so the person is asked to. */
     | "nodeMissing"
-    /** Happy Agent is not installed yet; the renderer may ask the shell to download it. */
+    /** Happy Agent is not installed yet; the renderer downloads and starts it automatically. */
     | "daemonDownload"
     /**
      * The agent that was just fetched is being started, and Happy is reaching it
@@ -672,8 +671,11 @@ export interface HappyDesktopBridge {
     daemonInstallKill(): Promise<void>;
     /** Drains and restarts the local daemon on the version it is already running. */
     daemonRestart(): Promise<void>;
+    /** Downloads and verifies the first Happy Agent release without running it. */
     daemonDownload(): Promise<void>;
     daemonGet(): Promise<DesktopDaemonSnapshot>;
+    /** Starts the verified first Happy Agent release already downloaded here. */
+    daemonStart(): Promise<void>;
     daemonSubscribe(listener: (snapshot: DesktopDaemonSnapshot) => void): () => void;
     daemonUpgrade(): Promise<void>;
     /** Installs one exact version if needed, then runs the daemon on it. */
@@ -710,7 +712,7 @@ export interface HappyDesktopBridge {
      * already receive in a snapshot.
      */
     onboardingProjectChoose(): Promise<void>;
-    /** Passes the report of what this machine has, and lets setup continue. */
+    /** Leaves provider authentication setup after its report, or skips it while it runs. */
     onboardingAssistantsContinue(): Promise<void>;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
     runtimeReset(): Promise<void>;
@@ -769,6 +771,7 @@ export const desktopIpc = {
     daemonInstallKill: "happy:daemon:install-kill",
     daemonRestart: "happy:daemon:restart",
     daemonGet: "happy:daemon:get",
+    daemonStart: "happy:daemon:start",
     daemonUpgrade: "happy:daemon:upgrade",
     daemonVersionSelect: "happy:daemon:version-select",
     debugAllStart: "happy:debug:all-start",

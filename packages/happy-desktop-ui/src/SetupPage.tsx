@@ -1,8 +1,11 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
+import type { Dimension } from "./dimensions";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { OnboardingSky } from "./OnboardingSky";
 import { ScrollArea } from "./Scrollbar";
+import type { ThemeMode } from "./ThemeScope";
 import { WindowDragRegion } from "./TitleBar";
 
 /**
@@ -29,6 +32,8 @@ export type SetupPageProgress =
 export interface SetupPageAction {
     readonly label: string;
     readonly disabled?: boolean;
+    /** Omit for the standard full-width action; set for a compact centred action. */
+    readonly width?: Dimension;
     /**
      * This action is running. The spinner goes on the button and the page keeps
      * everything else exactly where it was: an attempt started from here is not
@@ -50,6 +55,13 @@ export interface SetupPageProps {
     readonly className?: string;
     readonly "data-testid"?: string;
     readonly style?: CSSProperties;
+    /** Optional first-run scenery. Other setup-shaped system screens stay plain. */
+    readonly backdrop?: { readonly appearance: ThemeMode; readonly kind: "sky" };
+    /**
+     * Stable identity of the setup stage. Changing it dissolves the new page
+     * content into the retained frame; updates within one stage stay still.
+     */
+    readonly transitionKey?: string;
     /**
      * The animation that says what is happening. Omitted by a page whose body is
      * already its own picture — the install terminal, or the two-panel fork.
@@ -100,6 +112,8 @@ export function SetupPage(props: SetupPageProps) {
         "className",
         "data-testid",
         "style",
+        "backdrop",
+        "transitionKey",
         "scene",
         "title",
         "copy",
@@ -111,16 +125,24 @@ export function SetupPage(props: SetupPageProps) {
         <div
             className={["happy-setup-page", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="setup-page"
+            data-appearance={local.backdrop?.appearance}
+            data-backdrop={local.backdrop?.kind}
+            data-transition={local.transitionKey === undefined ? undefined : ""}
             data-testid={local["data-testid"]}
             style={local.style}
         >
+            {local.backdrop ? <OnboardingSky appearance={local.backdrop.appearance} /> : null}
             <WindowDragRegion />
             <ScrollArea
                 axes="both"
                 className="happy-setup-page__scroll"
                 viewportClassName="happy-setup-page__scroll-viewport"
             >
-                <div className="happy-setup-page__body" data-happy-desktop-ui="setup-page-body">
+                <div
+                    className="happy-setup-page__body"
+                    data-happy-desktop-ui="setup-page-body"
+                    key={local.transitionKey}
+                >
                     {local.scene ? (
                         <span
                             className="happy-setup-page__stage"
@@ -168,17 +190,16 @@ export function SetupPage(props: SetupPageProps) {
                     {local.action
                         ? ((action) =>
                               action.busy && action.progress ? (
-                                  <SetupPageProgressBar
-                                      label={action.label}
-                                      progress={action.progress}
-                                  />
+                                  <SetupProgress label={action.label} progress={action.progress} />
                               ) : (
                                   <Button
                                       disabled={action.disabled}
-                                      fullWidth
                                       loading={action.busy}
                                       onClick={action.onSelect}
                                       size="large"
+                                      {...(action.width === undefined
+                                          ? { fullWidth: true }
+                                          : { width: action.width })}
                                   >
                                       {action.label}
                                   </Button>
@@ -203,7 +224,12 @@ export function SetupPage(props: SetupPageProps) {
  * before the first byte, and while what arrived is being checked and unpacked —
  * are exactly when someone is most likely to think it has died.
  */
-function SetupPageProgressBar(props: { label: string; progress: SetupPageProgress }) {
+export interface SetupProgressProps {
+    readonly label: string;
+    readonly progress: SetupPageProgress;
+}
+
+export function SetupProgress(props: SetupProgressProps) {
     const measured = props.progress.kind === "measured" ? props.progress : undefined;
     const fraction = measured ? Math.min(1, Math.max(0, measured.fraction)) : 0;
     return (

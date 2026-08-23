@@ -1,5 +1,7 @@
 import { SetupChoice } from "../../src/SetupChoice";
+import { LocalOnboardingScreen } from "../../src/LocalOnboardingScreen";
 import { SetupPage } from "../../src/SetupPage";
+import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -204,6 +206,205 @@ export function SetupPagePage() {
                         />
                     </div>
                     <DimensionRule label="Same box · no fraction claimed, no position asserted" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="First-run setup · one shared sky, white content, appearance-paired paintings"
+                label="Onboarding sky"
+                number="09"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <ThemeScope mode="light">
+                            <SetupPage
+                                action={{ label: "Continue", onSelect: noop }}
+                                backdrop={{ appearance: "light", kind: "sky" }}
+                                copy="Happy Agent is running and ready for the next step."
+                                scene="sparkles"
+                                title="Happy Agent is ready"
+                                transitionKey="ready"
+                            />
+                        </ThemeScope>
+                    </div>
+                    <div style={frame}>
+                        <ThemeScope mode="dark">
+                            <SetupPage
+                                action={{ label: "Continue", onSelect: noop }}
+                                backdrop={{ appearance: "dark", kind: "sky" }}
+                                copy="Happy Agent is running and ready for the next step."
+                                scene="sparkles"
+                                title="Happy Agent is ready"
+                                transitionKey="ready"
+                            />
+                        </ThemeScope>
+                    </div>
+                    <DimensionRule label="Same crop and contrast treatment as Welcome · 320ms stage dissolve" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="second onboarding screen · automatic verified download · no action required and no machine progress on the welcome deck"
+                label="Preparing the first agent"
+                number="10"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{
+                                kind: "agent-setup",
+                                phase: {
+                                    download: {
+                                        receivedBytes: 12.4 * 1024 * 1024,
+                                        totalBytes: 38.2 * 1024 * 1024,
+                                    },
+                                    kind: "downloading",
+                                },
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="same retained geometry · progress fades out · daemon checks occupy the reserved region without moving the owl, title, or copy"
+                label="Authentication checking"
+                number="11"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{
+                                assistants: [
+                                    {
+                                        authentication: "checking",
+                                        command: "/opt/homebrew/bin/claude",
+                                        id: "claude",
+                                        status: "found",
+                                    },
+                                    {
+                                        authentication: "checking",
+                                        command: "/opt/homebrew/bin/codex",
+                                        id: "codex",
+                                        status: "found",
+                                    },
+                                    {
+                                        authentication: "unavailable",
+                                        id: "grok",
+                                        status: "missing",
+                                    },
+                                ],
+                                complete: false,
+                                kind: "provider-authentication",
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="authentication-level daemon results only · no quota inference · Continue appears after every check settles"
+                label="Authentication verified"
+                number="12"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{
+                                assistants: [
+                                    {
+                                        authentication: "valid",
+                                        command: "/opt/homebrew/bin/claude",
+                                        id: "claude",
+                                        status: "found",
+                                    },
+                                    {
+                                        authentication: "invalid",
+                                        command: "/opt/homebrew/bin/codex",
+                                        id: "codex",
+                                        status: "found",
+                                    },
+                                    {
+                                        authentication: "unavailable",
+                                        id: "grok",
+                                        status: "missing",
+                                    },
+                                ],
+                                complete: true,
+                                kind: "provider-authentication",
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="no valid local sign-in · Continue stays absent · Skip becomes the sole primary action"
+                label="Authentication unavailable"
+                number="13"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onProfileCreate={noop}
+                            onProfileEmailChange={noop}
+                            onProfileNameChange={noop}
+                            onProjectChoose={noop}
+                            view={{
+                                assistants: [
+                                    {
+                                        authentication: "invalid",
+                                        command: "/opt/homebrew/bin/claude",
+                                        id: "claude",
+                                        status: "found",
+                                    },
+                                    {
+                                        authentication: "invalid",
+                                        command: "/opt/homebrew/bin/codex",
+                                        id: "codex",
+                                        status: "found",
+                                    },
+                                    {
+                                        authentication: "invalid",
+                                        command: "/opt/homebrew/bin/grok",
+                                        id: "grok",
+                                        status: "found",
+                                    },
+                                ],
+                                complete: true,
+                                kind: "provider-authentication",
+                            }}
+                        />
+                    </ThemeScope>
                 </div>
             </Specimen>
         </ComponentPage>
