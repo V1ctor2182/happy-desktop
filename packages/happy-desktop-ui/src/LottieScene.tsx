@@ -17,7 +17,13 @@ import {
     reducedMotionSubscribe,
     scenePixelRatio,
 } from "./lottie/dotLottieRuntime";
+import alienMonsterUrl from "./assets/animations/alien-monster.json?url";
+import closedLockUrl from "./assets/animations/closed-lock.json?url";
+import confettiBallUrl from "./assets/animations/confetti-ball.json?url";
+import hatchingChickUrl from "./assets/animations/hatching-chick.json?url";
+import llamaUrl from "./assets/animations/llama.json?url";
 import owlUrl from "./assets/animations/owl.json?url";
+import partyUrl from "./assets/animations/party.json?url";
 import robotUrl from "./assets/animations/robot.json?url";
 import snailUrl from "./assets/animations/snail.json?url";
 import sparklesUrl from "./assets/animations/sparkles.json?url";
@@ -28,7 +34,13 @@ import wandUrl from "./assets/animations/wand.json?url";
  * of the design system, not a slot a product screen can point at arbitrary art,
  * and every name here carries exactly one meaning:
  *
+ * - `alien-monster` — people and agents are together in one live session.
+ * - `closed-lock` — access is secured.
+ * - `confetti-ball` — one milestone has just completed.
+ * - `hatching-chick` — something new has been created.
+ * - `llama` — several models are being combined on one job.
  * - `owl` — we are looking, and there is nothing found yet (search).
+ * - `party` — a group is celebrating a shared completion.
  * - `robot` — an agent is ready to work, and waiting to be told what to do.
  * - `snail` — something is being read right now, and it is taking a moment.
  * - `sparkles` — the absence is the good outcome; there is nothing left to do.
@@ -37,7 +49,18 @@ import wandUrl from "./assets/animations/wand.json?url";
  * See `assets/animations/PROVENANCE.md` for where they came from and what was
  * turned down.
  */
-export type LottieSceneName = "owl" | "robot" | "snail" | "sparkles" | "wand";
+export type LottieSceneName =
+    | "alien-monster"
+    | "closed-lock"
+    | "confetti-ball"
+    | "hatching-chick"
+    | "llama"
+    | "owl"
+    | "party"
+    | "robot"
+    | "snail"
+    | "sparkles"
+    | "wand";
 
 /**
  * When the one play happens. `on-appear` is the product default: the scene
@@ -49,7 +72,13 @@ export type LottieSceneName = "owl" | "robot" | "snail" | "sparkles" | "wand";
 export type LottieScenePlay = "on-appear" | "on-demand";
 
 const SOURCES: Record<LottieSceneName, string> = {
+    "alien-monster": alienMonsterUrl,
+    "closed-lock": closedLockUrl,
+    "confetti-ball": confettiBallUrl,
+    "hatching-chick": hatchingChickUrl,
+    llama: llamaUrl,
     owl: owlUrl,
+    party: partyUrl,
     robot: robotUrl,
     snail: snailUrl,
     sparkles: sparklesUrl,
@@ -87,7 +116,7 @@ export type LottieSceneProps = {
  * and no React render per frame. All scenes share one worker.
  *
  * It never loops. The scene plays once when the state it illustrates appears,
- * and then holds its last frame — which for all five animations is the pose
+ * and then holds its last frame — which for all eleven animations is the pose
  * they were drawn to return to, so the held picture is a picture worth holding.
  * After that it only moves when a reader asks: a click or tap, a fresh hover
  * entry, or Enter/Space while it has keyboard focus. A replay is refused while

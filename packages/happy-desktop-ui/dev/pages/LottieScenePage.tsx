@@ -23,16 +23,52 @@ export function LottieScenePage() {
             title="LottieScene"
         >
             <Specimen
-                detail="The five shipped animations at the panel size, each holding its final frame. Owl: we are looking and nothing is found yet. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Wand: the missing thing is one you can make here."
+                detail="The eleven shipped animations at the panel size, each holding its final frame. Alien monster: people and agents share one live session. Closed lock: access is secured. Confetti ball: a milestone just completed. Hatching chick: something new was created. Llama: several models are combined on one job. Owl: we are looking and nothing is found yet. Party: a group shares a celebration. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Wand: the missing thing is one you can make here."
                 label="The vocabulary"
                 number="01"
                 stage="surface"
             >
-                <div style={{ alignItems: "center", display: "flex", gap: 16 }}>
+                <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: 16 }}>
+                    <LottieScene
+                        name="alien-monster"
+                        play="on-demand"
+                        replayLabel="Play the alien monster again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="closed-lock"
+                        play="on-demand"
+                        replayLabel="Play the closed lock again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="confetti-ball"
+                        play="on-demand"
+                        replayLabel="Play the confetti ball again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="hatching-chick"
+                        play="on-demand"
+                        replayLabel="Play the hatching chick again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="llama"
+                        play="on-demand"
+                        replayLabel="Play the llama again"
+                        size={128}
+                    />
                     <LottieScene
                         name="owl"
                         play="on-demand"
                         replayLabel="Play the owl again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="party"
+                        play="on-demand"
+                        replayLabel="Play the party again"
                         size={128}
                     />
                     <LottieScene

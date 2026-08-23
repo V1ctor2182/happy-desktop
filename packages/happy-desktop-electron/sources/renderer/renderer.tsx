@@ -323,6 +323,7 @@ function DesktopOnboardingGate(props: {
         return (
             <WelcomeScreen
                 appearance={appearance.mode}
+                backdrop={{ kind: "sky" }}
                 onAction={() => props.welcome.welcomeAcknowledge()}
                 onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
                 slides={WELCOME_SLIDES}
@@ -348,34 +349,44 @@ function DesktopOnboardingGate(props: {
  * The words live here rather than in the component because they are the product
  * talking, not a layout: `WelcomeScreen` owns the centred column, the slideshow,
  * and the button, and this is the only place that decides what any of it means.
- * The first slide is the mark and the name, so the very first thing on screen is
- * what the app is called; the rest each take one of the shipped animations and
- * say one true thing about what Happy does with it.
+ * The order is the value hierarchy, not a feature tour. The mark names the
+ * category and carries the whole summary: one harness for the whole team,
+ * available in the terminal, on desktop, and on mobile. The next two slides
+ * make the differentiators concrete — the team inside the live session first,
+ * then every agent mixed in one harness. Open source and being yours to change
+ * explain who controls the product; the final security slide closes with how
+ * that control protects a corporate deployment and its mobile clients.
  */
 const WELCOME_SLIDES: readonly WelcomeSlide[] = [
     {
         art: { kind: "logo" },
-        copy: "A desktop home for the agents you work with, and the code they work on.",
+        copy: "Claude Code, Codex, Grok, Kimi, GLM—and whatever comes next—for your whole team. The same harness in the terminal, on desktop, and on mobile.",
         id: "happy",
-        title: "Happy",
+        title: "One harness, everywhere.",
     },
     {
-        art: { kind: "scene", name: "robot" },
-        copy: "Start a session in any project and hand it real work. It keeps going while you look elsewhere.",
-        id: "agents",
-        title: "Agents that stay running",
+        art: { kind: "scene", name: "alien-monster" },
+        copy: "Bring your team into one session with every agent. Anyone can share context, steer the conversation, approve decisions, and take over in real time.",
+        id: "team",
+        title: "Natively multiplayer",
+    },
+    {
+        art: { kind: "scene", name: "llama" },
+        copy: "Let Claude plan, Codex build, and Grok review—or run them side by side and compare. The context stays together across every handoff.",
+        id: "mix",
+        title: "One harness. Every agent.",
     },
     {
         art: { kind: "scene", name: "wand" },
-        copy: "Every change lands in your own checkout, where you can read it, run it, and undo it.",
-        id: "workspaces",
-        title: "Your files, your machine",
+        copy: "Happy is open source and built to be changed. Run it on your hardware, in your cloud, or in ours—then change Happy to fit your team’s needs.",
+        id: "open",
+        title: "Yours to run. Yours to change.",
     },
     {
-        art: { kind: "scene", name: "sparkles" },
-        copy: "Work on your own files here, and reach the other machines you own from the same window.",
-        id: "local",
-        title: "Happy runs on your machine",
+        art: { kind: "scene", name: "closed-lock" },
+        copy: "No telemetry. No third-party servers by default. Run Happy safely inside corporate networks without leaking data. Every connection between agents, teammates, and mobile clients is end-to-end encrypted.",
+        id: "security",
+        title: "Secure and compliant",
     },
 ];
 

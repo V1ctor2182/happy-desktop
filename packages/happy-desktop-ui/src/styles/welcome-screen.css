@@ -46,6 +46,67 @@
     inset: 0;
 }
 
+/*
+ * The picture is wider than it is tall and the window is any shape at all, so it
+ * covers rather than fits: a letterboxed edge would read as a bug in a window
+ * that has no border. `50% 40%` keeps the horizon and the bright bank of cloud
+ * low in frame at every aspect ratio, which is where the column wants them —
+ * the words sit against the plain part of the sky rather than against cumulus.
+ */
+.happy-welcome-screen__sky {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 40%;
+}
+
+/*
+ * Legibility, not decoration. Both skies carry white copy. The light painting
+ * gets a restrained black veil through its centre instead of the previous white
+ * haze, preserving its saturated blue while separating the words from cloud.
+ * The dark painting keeps the stronger near-black centre it needs around its
+ * illuminated horizon. Explicit appearance choices win; `system` follows the
+ * same media query that selects the picture.
+ *
+ * It is an ellipse rather than a flat wash so the sky keeps its full strength
+ * out at the corners, where nothing is written and the art is the whole point.
+ */
+.happy-welcome-screen__scrim {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        ellipse 76% 64% at 50% 46%,
+        color-mix(in srgb, var(--button-primary-background) 32%, transparent) 0%,
+        color-mix(in srgb, var(--button-primary-background) 16%, transparent) 46%,
+        color-mix(in srgb, var(--button-primary-background) 4%, transparent) 78%,
+        transparent 100%
+    );
+}
+
+.happy-welcome-screen[data-appearance="dark"] .happy-welcome-screen__scrim {
+    background: radial-gradient(
+        ellipse 76% 64% at 50% 46%,
+        color-mix(in srgb, var(--surface) 86%, transparent) 0%,
+        color-mix(in srgb, var(--surface) 62%, transparent) 46%,
+        color-mix(in srgb, var(--surface) 18%, transparent) 78%,
+        transparent 100%
+    );
+}
+
+@media (prefers-color-scheme: dark) {
+    .happy-welcome-screen[data-appearance="system"] .happy-welcome-screen__scrim {
+        background: radial-gradient(
+            ellipse 76% 64% at 50% 46%,
+            color-mix(in srgb, var(--surface) 86%, transparent) 0%,
+            color-mix(in srgb, var(--surface) 62%, transparent) 46%,
+            color-mix(in srgb, var(--surface) 18%, transparent) 78%,
+            transparent 100%
+        );
+    }
+}
+
 .happy-welcome-screen > .happy-window-drag-region {
     z-index: 2;
 }
@@ -238,6 +299,14 @@
     text-align: center;
 }
 
+/* Both supplied sky paintings are brand scenes rather than ordinary themed
+   surfaces. Their copy and logo stay white in either appearance; only the
+   selected painting and its contrast scrim change. */
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__title,
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__copy {
+    color: var(--button-primary-tint);
+}
+
 /* ---- Dots ------------------------------------------------------------- */
 
 /*
@@ -292,6 +361,39 @@
     background: var(--text);
 }
 
+/* On a photographic sky, position reads as one quiet white control instead of
+   a row of theme-coloured beads. Every tab keeps the same 28px hit box while
+   the selected mark stretches inside it, so advancing never moves its siblings. */
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__dot {
+    width: 28px;
+}
+
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__dot:focus-visible {
+    outline-color: var(--button-primary-tint);
+}
+
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__dot-mark {
+    width: 6px;
+    height: 6px;
+    background: color-mix(in srgb, var(--button-primary-tint) 44%, transparent);
+    transition:
+        width 200ms ease,
+        background-color 200ms ease;
+}
+
+.happy-welcome-screen[data-backdrop="sky"]
+    .happy-welcome-screen__dot:hover
+    .happy-welcome-screen__dot-mark {
+    background: color-mix(in srgb, var(--button-primary-tint) 72%, transparent);
+}
+
+.happy-welcome-screen[data-backdrop="sky"]
+    .happy-welcome-screen__dot[data-active]
+    .happy-welcome-screen__dot-mark {
+    width: 20px;
+    background: var(--button-primary-tint);
+}
+
 /* ---- Action ----------------------------------------------------------- */
 
 /*
@@ -301,6 +403,18 @@
 .happy-welcome-screen__action {
     flex: none;
     min-width: 240px;
+}
+
+/* The sky is one photographic treatment in either appearance: white mark,
+   white words, and a white way forward. The inverse label keeps the action
+   readable without introducing a theme-specific colour. */
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__action {
+    background: var(--button-primary-tint);
+    color: var(--button-primary-background);
+}
+
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__action:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--button-primary-background) 8%, var(--button-primary-tint));
 }
 
 /* ---- Appearance switcher ---------------------------------------------- */
@@ -321,6 +435,17 @@
     z-index: 2;
     right: 24px;
     bottom: 24px;
+}
+
+/*
+ * The corner the switcher sits in is the one place the scrim deliberately does
+ * not reach, and in this picture it is bright cloud — which a light glyph in the
+ * dark appearance would disappear into. The control gets its own disc of surface
+ * rather than the ellipse being widened to cover it: one 28px circle keeps its
+ * contrast without washing out the whole corner behind it.
+ */
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__appearance {
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
 }
 
 /*

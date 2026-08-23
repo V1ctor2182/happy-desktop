@@ -189,6 +189,38 @@ export function WelcomeScreenPage() {
                     <AppearanceSpecimen />
                 </WindowFrame>
             </Specimen>
+
+            <Specimen
+                detail="the paired light and dark sky backdrops the app opens with · both use the same white logo, copy, active capsule indicator, and primary action treatment · the selected picture covers the window and an elliptical scrim keeps the column legible while the corners retain the art at full strength"
+                label="Sky backdrop"
+                number="07"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                    <ThemeScope mode="light">
+                        <WindowFrame height={560}>
+                            <WelcomeScreen
+                                appearance="light"
+                                backdrop={{ kind: "sky" }}
+                                onAction={noop}
+                                onAppearanceChange={noop}
+                                slides={[brand, agents, build, clear]}
+                            />
+                        </WindowFrame>
+                    </ThemeScope>
+                    <ThemeScope mode="dark">
+                        <WindowFrame height={560}>
+                            <WelcomeScreen
+                                appearance="dark"
+                                backdrop={{ kind: "sky" }}
+                                onAction={noop}
+                                onAppearanceChange={noop}
+                                slides={[long, brand, agents, build]}
+                            />
+                        </WindowFrame>
+                    </ThemeScope>
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

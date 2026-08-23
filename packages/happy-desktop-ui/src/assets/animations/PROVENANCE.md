@@ -2,18 +2,32 @@
 
 ## Where these came from
 
-All five files were copied from `happy-list` (the Happy Coder React Native app),
-`sources/assets/animations/`, on 2 August 2026 — `sparkles.json` first, the other
-four on the same day the vocabulary was widened. Each is byte-identical to its
-source: none was re-exported, re-drawn, re-timed, or otherwise modified.
+The original five files were copied from `happy-list` (the Happy Coder React
+Native app), `sources/assets/animations/`, on 2 August 2026 — `sparkles.json`
+first, the other four on the same day the vocabulary was widened.
+`alien-monster.json` followed on 22 August 2026 from that directory's
+`game.json`. Each is byte-identical to its source: none was re-exported,
+re-drawn, re-timed, or otherwise modified. `cat-face.json`, `closed-lock.json`,
+`confetti-ball.json`, `fox.json`, `hatching-chick.json`, `llama.json`,
+`party.json`, and `unicorn.json` were supplied by the project owner on 22
+August 2026; their upstream sources are not recorded in the files.
 
-| File            | SHA-256                                                            | Format                                        | Size              |
-| --------------- | ------------------------------------------------------------------ | --------------------------------------------- | ----------------- |
-| `owl.json`      | `95402270d116a310aa4b1606f88a2bbc79d2b4d947b5d84181c0b126c7aaba59` | Lottie 5.5.2, 512×512, 60fps, 131f, 18 layers | 284 KB / 47 KB gz |
-| `robot.json`    | `eeabc392ba20328ce97452eb826dddf3e306129e360ce4847c3b48470ffc053b` | Lottie 5.5.2, 512×512, 60fps, 180f, 13 layers | 343 KB / 30 KB gz |
-| `snail.json`    | `6a9c7b648681ae9d15b31455a76f7d47c5f53d6d72da10b8e43ba134fbd47a2c` | Lottie 5.5.2, 512×512, 60fps, 180f, 19 layers | 368 KB / 42 KB gz |
-| `sparkles.json` | `b14e504ce3467a6ba1c519348dee9fc4e05286b9e4f058f33df9175865bde4b9` | Lottie 5.5.2, 512×512, 60fps, 180f, 23 layers | 104 KB / 8 KB gz  |
-| `wand.json`     | `8de70508fe1ebdeb08fc7005820329696f28ec84adc94f3cc4362cf7d3e72870` | Lottie 5.5.2, 512×512, 60fps, 176f, 30 layers | 193 KB / 16 KB gz |
+| File                  | SHA-256                                                            | Format                                        | Size              |
+| --------------------- | ------------------------------------------------------------------ | --------------------------------------------- | ----------------- |
+| `alien-monster.json`  | `e0875ef4ae4aa214a3d9de567ea39e9429465addabc91d177ea883302146ae89` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 66 KB / 5 KB gz   |
+| `cat-face.json`       | `21d629ce58ad92bf140bfb7f5534e553232376a56c6bdddd0e527523a89c4d90` | Lottie 5.5.2, 512×512, 60fps, 180f, 17 layers | 367 KB / 66 KB gz |
+| `closed-lock.json`    | `f6087f51de1ccc7dea5cfb9853292bc14271e86e9390a8fbc9514b31b32a0ad8` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 146 KB / 14 KB gz |
+| `confetti-ball.json`  | `65e82eafe12ac295ce747336f8453e3c500d3c130f77db97581431bf1c7d9fc5` | Lottie 5.5.2, 512×512, 60fps, 180f, 41 layers | 193 KB / 20 KB gz |
+| `fox.json`            | `7206bf1b9c34fd7d149e79747b48f7c9a1f51fd42ca92f4f344dee53eed0cd70` | Lottie 5.5.2, 512×512, 60fps, 180f, 20 layers | 368 KB / 38 KB gz |
+| `hatching-chick.json` | `1a693cca609409e3bf79c3c997801346bc083fd9ef2e6fa90689a1288be901dd` | Lottie 5.5.2, 512×512, 60fps, 180f, 3 layers  | 309 KB / 25 KB gz |
+| `llama.json`          | `ff16ee4b8a19a782b5e5b12dbe103d145410f16b8801af5723b6636c56a0a0ff` | Lottie 5.5.2, 512×512, 60fps, 180f, 27 layers | 462 KB / 60 KB gz |
+| `owl.json`            | `95402270d116a310aa4b1606f88a2bbc79d2b4d947b5d84181c0b126c7aaba59` | Lottie 5.5.2, 512×512, 60fps, 131f, 18 layers | 284 KB / 47 KB gz |
+| `party.json`          | `de4ac9e38f2c7c3bc1e4022be841ec0c26b9b75cca51df43aaf9c0e97aaa1492` | Lottie 5.5.2, 512×512, 60fps, 180f, 40 layers | 131 KB / 15 KB gz |
+| `robot.json`          | `eeabc392ba20328ce97452eb826dddf3e306129e360ce4847c3b48470ffc053b` | Lottie 5.5.2, 512×512, 60fps, 180f, 13 layers | 343 KB / 30 KB gz |
+| `snail.json`          | `6a9c7b648681ae9d15b31455a76f7d47c5f53d6d72da10b8e43ba134fbd47a2c` | Lottie 5.5.2, 512×512, 60fps, 180f, 19 layers | 368 KB / 42 KB gz |
+| `sparkles.json`       | `b14e504ce3467a6ba1c519348dee9fc4e05286b9e4f058f33df9175865bde4b9` | Lottie 5.5.2, 512×512, 60fps, 180f, 23 layers | 104 KB / 8 KB gz  |
+| `unicorn.json`        | `1e250cde4b49782d9c3140faaf50bee1bfbe88478ac794bf0c92402ff9b01b60` | Lottie 5.5.2, 512×512, 60fps, 180f, 31 layers | 463 KB / 60 KB gz |
+| `wand.json`           | `8de70508fe1ebdeb08fc7005820329696f28ec84adc94f3cc4362cf7d3e72870` | Lottie 5.5.2, 512×512, 60fps, 176f, 30 layers | 193 KB / 16 KB gz |
 
 None embeds a raster asset and none references an external image, so a scene is
 one JSON fetch and nothing else. Each is imported by URL, so a screen only
@@ -24,7 +38,8 @@ The repository formatter is told to leave this directory's JSON alone
 several times their size and the hashes above stop matching, which is the whole
 point of recording them.
 
-- **Licence** MIT, `Copyright (c) 2024 Happy Coder Contributors`. That is a
+- **Licence for the six Happy Coder files** MIT, `Copyright (c) 2024 Happy Coder
+Contributors`. That is a
   different copyright line from this repository's own
   (`Copyright (c) 2026 Happy (2) Contributors`), so the MIT requirement to carry
   the notice does apply. The complete, unabridged notice sits next to the files
@@ -33,6 +48,10 @@ point of recording them.
   these files and the JSON carries no author metadata, so this note can only
   vouch for the copy: where the artwork originally came from before it entered
   that repository has not been established here.
+- **Licence for `cat-face.json`, `closed-lock.json`, `confetti-ball.json`,
+  `fox.json`, `hatching-chick.json`, `llama.json`, `party.json`, and
+  `unicorn.json`** not recorded in the supplied files. Their upstream licensing
+  has not been independently established here.
 
 ### Why they were not converted to `.lottie` containers
 
@@ -43,11 +62,27 @@ Plain JSON stays diffable and needs no tooling.
 
 ## What each one means
 
-Eight animations were inspected frame by frame in a real renderer. They are
-glossy 3D emoji: 👾 game, 🦉 owl, 🍿 popcorn, 🤖 robot, 🐌 snail, ✨ sparkles,
-🗿 stone, 🪄 wand. Five carry a meaning Happy actually needs, and each is used
+Sixteen animations were inspected frame by frame in a real renderer. They are
+glossy 3D emoji: 👾 game, 🐱 cat face, 🔒 closed lock, 🎊 confetti ball, 🦊 fox,
+🐣 hatching chick, 🦙 llama, 🦄 unicorn, 🦉 owl, 🎉 party, 🍿 popcorn, 🤖 robot,
+🐌 snail, ✨ sparkles, 🗿 stone, 🪄 wand. Eleven carry a meaning Happy actually
+needs, and each is used
 for that one meaning and nothing else:
 
+- 👾 **alien monster** — _people and agents are together in one live session._
+  Multiplayer is a shared working room, not a transcript handed around after
+  the work is finished.
+- 🔒 **closed lock** — _access is secured._ It is the settled state after a
+  private boundary has been established, not a warning or an access error.
+- 🎊 **confetti ball** — _one milestone has just completed._ It marks the
+  specific completion rather than a group celebration.
+- 🐣 **hatching chick** — _something new has been created._ It belongs to the
+  first successful appearance of a new project, session, or document.
+- 🦙 **llama** — _several models are being combined on one job._ One harness
+  turns an unusual mix of Claude, Codex, Grok, or anything else into one
+  coherent workflow.
+- 🎉 **party** — _a group is celebrating a shared completion._ It is the social
+  counterpart to the confetti ball's single milestone.
 - 🤖 **robot** — _an agent is ready, and waiting to be told what to do._ The
   screen with no session open, and a conversation with nothing in it yet.
 - 🐌 **snail** — _something is being read right now, and it is taking a moment._
@@ -71,15 +106,18 @@ sparkle cluster full — so the frame a scene stops and holds is a frame worth
 holding. That is why no hand-picked "rest frame" index appears in the code: the
 last frame is the picture.
 
-### The three that are not used
+### The five that are not used
 
 - 🍿 **popcorn** would be a second way of saying "wait", competing with the
   snail on the same screens. One waiting picture, used consistently, is a
   vocabulary; two is decoration.
 - 🗿 **stone** is a deadpan internet joke. Happy should not smirk at someone who
   found nothing.
-- 👾 **game** is a mascot with no reading beyond itself. A mascot decorates an
-  absence; it does not explain one.
+- 🦄 **unicorn** duplicates the llama's model-mixing role without reading as
+  clearly as a model reference.
+- 🐱 **cat face** and 🦊 **fox** are mascots without distinct product-state
+  meanings. They stay available as source candidates without entering the typed
+  scene vocabulary as decoration.
 
 ### Where a scene is deliberately absent
 

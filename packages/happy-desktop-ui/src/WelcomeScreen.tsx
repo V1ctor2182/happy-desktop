@@ -7,7 +7,7 @@ import {
     type CSSProperties,
     type KeyboardEvent,
 } from "react";
-import { happyLogoBlackUrl } from "./assets";
+import { happyLogoBlackUrl, happyLogoWhiteUrl, welcomeSkyDarkUrl, welcomeSkyUrl } from "./assets";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
@@ -37,11 +37,14 @@ export interface WelcomeSlide {
     readonly copy: string;
 }
 
-export type WelcomeScreenBackdrop = {
-    readonly kind: "night-sky";
-    /** `still` is the deterministic Blueprint and reduced-motion presentation. */
-    readonly motion?: NightSkyShaderMotion;
-};
+export type WelcomeScreenBackdrop =
+    | {
+          readonly kind: "night-sky";
+          /** `still` is the deterministic Blueprint and reduced-motion presentation. */
+          readonly motion?: NightSkyShaderMotion;
+      }
+    /** Paired light/dark paintings, selected by appearance and scrimmed behind the words. */
+    | { readonly kind: "sky" };
 
 export interface WelcomeScreenProps {
     readonly className?: string;
@@ -127,9 +130,10 @@ const APPEARANCE_CYCLE: Record<
  * pinned to the window's top edge rather than scrolling away with the content
  * at the minimum window height.
  *
- * The optional night sky is also outside that flow: one full-window decorative
- * WebGL canvas below every control. It is transparent and quietest behind the
- * central copy, so the chosen light or dark appearance remains authoritative.
+ * The optional backdrop is also outside that flow: either one full-window
+ * decorative WebGL canvas or the appearance-matched still sky, below every
+ * control. Both are quietest behind the central copy, so the chosen light or
+ * dark appearance remains authoritative.
  *
  * The appearance switcher in the opposite corner is out of that flow for the
  * same reason and one more: it exists on a screen whose whole argument is that
@@ -226,6 +230,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         <div
             className={["happy-welcome-screen", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="welcome-screen"
+            data-appearance={local.appearance}
             data-backdrop={local.backdrop?.kind}
             data-motion={reducedMotion ? "reduced" : "full"}
             data-testid={local["data-testid"]}
@@ -242,6 +247,33 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                     motion={local.backdrop.motion}
                 />
             ) : null}
+            {/* Scenery, so it is never announced and never named: the words in
+                front of it are what this screen says. The scrim above it is a
+                sibling rather than a filter on the picture, because it is tinted
+                with the surface token and has to follow the appearance the
+                window is on. */}
+            {local.backdrop?.kind === "sky" ? (
+                <div
+                    aria-hidden="true"
+                    className="happy-welcome-screen__backdrop"
+                    data-happy-desktop-ui="welcome-backdrop"
+                >
+                    <picture>
+                        {local.appearance === "system" ? (
+                            <source
+                                media="(prefers-color-scheme: dark)"
+                                srcSet={welcomeSkyDarkUrl}
+                            />
+                        ) : null}
+                        <img
+                            alt=""
+                            className="happy-welcome-screen__sky"
+                            src={local.appearance === "dark" ? welcomeSkyDarkUrl : welcomeSkyUrl}
+                        />
+                    </picture>
+                    <span className="happy-welcome-screen__scrim" />
+                </div>
+            ) : null}
             <ScrollArea
                 className="happy-welcome-screen__view"
                 data-happy-desktop-ui="welcome-view"
@@ -256,7 +288,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                             className="happy-welcome-screen__stage"
                             data-happy-desktop-ui="welcome-stage"
                         >
-                            {active ? welcomeArt(active) : null}
+                            {active ? welcomeArt(active, local.backdrop?.kind === "sky") : null}
                         </div>
 
                         <div
@@ -394,15 +426,19 @@ function appearanceGlyph(appearance: HappyAgentAppearanceChoice) {
  * is what makes coming back to a slide show the animation again instead of a
  * held final frame.
  */
-function welcomeArt(slide: WelcomeSlide) {
+function welcomeArt(slide: WelcomeSlide, whiteLogo: boolean) {
     if (slide.art.kind === "logo")
         return (
             <img
                 alt=""
                 aria-hidden="true"
-                className="happy-brand-logo happy-welcome-screen__mark"
+                className={
+                    whiteLogo
+                        ? "happy-welcome-screen__mark"
+                        : "happy-brand-logo happy-welcome-screen__mark"
+                }
                 data-happy-desktop-ui="welcome-mark"
-                src={happyLogoBlackUrl}
+                src={whiteLogo ? happyLogoWhiteUrl : happyLogoBlackUrl}
             />
         );
     return (
