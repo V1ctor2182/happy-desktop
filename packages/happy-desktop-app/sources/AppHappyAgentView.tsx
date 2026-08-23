@@ -3102,7 +3102,6 @@ function HappyAgentGroupComposer(props: {
             {...(props.focusOnType ? { composerFocusKey: props.groupId } : {})}
             composerPlaceholder={composerPlaceholder(props.groupName)}
             composerSubmitDisabled={props.unavailable !== undefined}
-            {...(props.unavailable === undefined ? {} : { composerUnavailable: props.unavailable })}
             entries={NO_ENTRIES}
             // The first message is what creates the session, so its model,
             // effort, and access mode have to be choosable before it is sent
@@ -3373,7 +3372,7 @@ function HappyAgentConversationSurface(props: {
     // composer locks instead of collecting a message with nowhere to go.
     //
     // The Happy Agent being unreachable is deliberately not this: that is a wait, the
-    // draft survives it, and it keeps the banner that names it. Only an unusable
+    // draft survives it, and the window-level band names it. Only an unusable
     // destination locks the box.
     const sendRefusal = props.unavailable;
     const activeActivity = happyAgentActiveActivityCounts(conversation);
@@ -3393,7 +3392,6 @@ function HappyAgentConversationSurface(props: {
             composer={conversation.composer}
             composerDisabled={props.readOnly}
             composerSubmitDisabled={sendRefusal !== undefined}
-            {...(sendRefusal === undefined ? {} : { composerUnavailable: sendRefusal })}
             composerFocusOnType={!props.readOnly && props.focusOnType}
             // The open conversation is what this composer writes into, so moving
             // to another one — or landing in the one a new workspace was made
@@ -4234,9 +4232,6 @@ function HappyAgentPanelBody(props: {
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
-                            {...(props.happyAgentAvailabilityReason === undefined
-                                ? {}
-                                : { unavailable: props.happyAgentAvailabilityReason })}
                             {...(props.happyAgentAvailability !== undefined && all
                                 ? {
                                       fileActionsUnavailable:

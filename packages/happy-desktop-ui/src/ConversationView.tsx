@@ -153,8 +153,6 @@ export type ConversationViewProps = {
     composerDisabled?: boolean;
     /** Keeps the local draft editable while disabling submission to the Happy Agent. */
     composerSubmitDisabled?: boolean;
-    /** In-context reason submission is unavailable. */
-    composerUnavailable?: string;
     composerPlaceholder?: string;
     /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
     composerFocusOnType?: boolean;
@@ -686,9 +684,6 @@ export function ConversationView(props: ConversationViewProps) {
                 composerControls={props.composerControls}
                 disabled={props.composerDisabled}
                 submitDisabled={props.composerSubmitDisabled === true}
-                {...(props.composerUnavailable === undefined
-                    ? {}
-                    : { unavailable: props.composerUnavailable })}
                 composerFooterControl={props.composerFooterControl}
                 composerFocusOnType={props.composerFocusOnType}
                 {...(props.composerFocusKey === undefined

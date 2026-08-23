@@ -113,7 +113,7 @@ const chatItems = [
 
 function dock(
     value: string,
-    unavailable?: string,
+    submitDisabled = false,
     attachments: ComposerSnapshot["attachments"] = [],
     onAttachmentRemove: (attachmentId: string) => void = noop,
 ) {
@@ -161,15 +161,14 @@ function dock(
             onComposerAttachmentsSelect={noop}
             onComposerSend={noop}
             onComposerValueChange={noop}
-            submitDisabled={unavailable !== undefined}
-            unavailable={unavailable}
+            submitDisabled={submitDisabled}
         />
     );
 }
 
 function AttachmentDockSpecimen() {
     const [attachments, setAttachments] = useState(attachmentFixtures);
-    return dock("Compare these before making the change.", undefined, attachments, (attachmentId) =>
+    return dock("Compare these before making the change.", false, attachments, (attachmentId) =>
         setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId)),
     );
 }
@@ -303,7 +302,7 @@ export function FloatingConversationDockPage() {
                 </AppShell>
             </FullScreenSpecimen>
             <Specimen
-                detail="known Happy Agent offline · the draft remains editable while submission is unavailable"
+                detail="the global band carries connectivity · the draft remains editable while submission is unavailable"
                 label="Happy Agent offline"
                 number="04"
                 stage="surface"
@@ -317,10 +316,7 @@ export function FloatingConversationDockPage() {
                         justifyContent: "flex-end",
                     }}
                 >
-                    {dock(
-                        "Keep this draft here until the Happy Agent reconnects.",
-                        "Happy Agent is offline. The draft is preserved.",
-                    )}
+                    {dock("Keep this draft here until the Happy Agent reconnects.", true)}
                 </Box>
             </Specimen>
             <Specimen

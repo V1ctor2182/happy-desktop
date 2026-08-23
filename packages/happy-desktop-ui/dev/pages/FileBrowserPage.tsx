@@ -352,7 +352,6 @@ export function FileBrowserPage() {
                                 all: "Happy Agent must reconnect before loading all files.",
                             }}
                             selectedId="packages/happy-desktop-ui/src/FileTree.tsx"
-                            unavailable="Happy Agent is offline. Showing the last synced file list."
                         />,
                     )}
                     {panelFrame(
@@ -362,7 +361,6 @@ export function FileBrowserPage() {
                             layout="tree"
                             nodes={fileTreeBuild(everything, untouched)}
                             scope="all"
-                            unavailable="Happy Agent is offline. Showing the cached checkout."
                         />,
                     )}
                 </div>

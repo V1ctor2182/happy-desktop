@@ -549,9 +549,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                     {
                         completedAt: null,
                         failureReason: null,
-                        replacedMessageIds: historyOf(agentId).runs.flatMap((entry) =>
-                            entry.messages.map((candidate) => candidate.id),
-                        ),
                         startedAt: 1,
                         status: "running",
                         tokensAfter: null,

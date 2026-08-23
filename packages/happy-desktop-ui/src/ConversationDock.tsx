@@ -17,8 +17,6 @@ export type ConversationDockProps = {
     disabled?: boolean;
     /** Keeps the draft editable but disables submission to an unavailable Happy Agent. */
     submitDisabled?: boolean;
-    /** In-context reason the draft cannot currently be submitted. */
-    unavailable?: string;
     /** Controls rendered inside the composer toolbar, beside the send control. */
     composerControls?: ReactNode;
     /** Agent-authored contribution bar immediately above the composer card. */
@@ -200,11 +198,6 @@ export function ConversationDock(props: ConversationDockProps) {
                     title="Message not sent"
                 >
                     {composer.submission.error.message}
-                </Banner>
-            ) : null}
-            {props.unavailable ? (
-                <Banner icon="link" tone="neutral" title="Happy Agent unavailable">
-                    {props.unavailable}
                 </Banner>
             ) : null}
             <div className="happy-conversation__dock-inner">

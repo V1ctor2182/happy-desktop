@@ -1,7 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
-import { Banner } from "./Banner";
 import { compactCount, changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
 import { SegmentedControl } from "./SegmentedControl";
@@ -38,8 +37,6 @@ export type FileBrowserProps = {
     deletedLines?: number;
     /** Optional truthfulness note under the controls (e.g. a truncated listing). */
     note?: string;
-    /** Why new remote file reads are unavailable while retained rows stay selectable. */
-    unavailable?: string;
     /** Why file rows cannot open or select remote content; directory disclosure stays local. */
     fileActionsUnavailable?: string;
 };
@@ -88,7 +85,6 @@ export function FileBrowser(props: FileBrowserProps) {
         "addedLines",
         "deletedLines",
         "note",
-        "unavailable",
         "fileActionsUnavailable",
     ]);
     const added = local.addedLines !== undefined && local.addedLines > 0;
@@ -185,11 +181,6 @@ export function FileBrowser(props: FileBrowserProps) {
                 <div className="happy-file-browser__note" data-happy-desktop-ui="file-browser-note">
                     {local.note}
                 </div>
-            ) : null}
-            {local.unavailable ? (
-                <Banner tone="neutral" title="Happy Agent reconnecting">
-                    {local.unavailable}
-                </Banner>
             ) : null}
             {/* The tree does its own scrolling here, because a checkout listing
                 draws only the rows on screen and nothing outside it can know

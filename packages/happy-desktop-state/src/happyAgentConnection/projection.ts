@@ -680,7 +680,6 @@ function messageElementsProject(
                 name: "compact",
                 arguments: {
                     trigger: block.trigger,
-                    replacedMessages: block.replacedMessageIds.length,
                 },
                 argumentsComplete: true,
                 status: projectToolStatus(block.status, runStatus),

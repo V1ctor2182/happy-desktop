@@ -2868,9 +2868,7 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
             return (
                 next.type === "compaction" &&
                 previous.startedAt === next.startedAt &&
-                previous.trigger === next.trigger &&
-                JSON.stringify(previous.replacedMessageIds) ===
-                    JSON.stringify(next.replacedMessageIds)
+                previous.trigger === next.trigger
             );
     }
 }
