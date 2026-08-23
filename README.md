@@ -102,3 +102,22 @@ and take your own sessions with you.
   see what your work is costing as it happens.
 - **Notes and visibility.** Keep notes alongside the work, and see what agents
   and their processes are doing at any moment.
+
+## 🏠 Who We Are
+
+We're engineers scattered across Bay Area coffee shops and hacker houses,
+constantly checking how our AI coding agents are progressing on our pet
+projects during lunch breaks. Happy was born from the frustration of not
+being able to peek at our AI coding tools building our side hustles while
+we're away from our keyboards. We believe the best tools come from
+scratching your own itch and sharing with the community.
+
+## 📚 Documentation & Contributing
+
+- **[Documentation Website](https://happy.engineering/docs/)** - Learn how to use Happy effectively
+- **[Development Guide](DEVELOPMENT.md)** - Repository setup, browser mode, profiling, and validation
+- **[Discord](https://discord.gg/fX9WBAhyfD)** - Ask questions and share what you build
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
