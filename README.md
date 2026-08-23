@@ -14,13 +14,13 @@
   anywhere, and adaptable to your team.
 </p>
 
-[🖥️ **Download for macOS**](https://github.com/slopus/happy-desktop/releases/latest) • [📱 **iOS App**](https://apps.apple.com/us/app/happy-claude-code-client/id6748571505) • [🤖 **Android App**](https://play.google.com/store/apps/details?id=com.ex3ndr.happy) • [🌐 **Web App**](https://app.happy.engineering) • [📚 **Documentation**](https://happy.engineering/docs/) • [💬 **Discord**](https://discord.gg/fX9WBAhyfD)
+[🖥️ **Download for macOS**](https://github.com/slopus/happy-desktop/releases/latest) • [📱 **iOS App**](https://apps.apple.com/us/app/happy-claude-code-client/id6748571505) • [🤖 **Android App**](https://play.google.com/store/apps/details?id=com.ex3ndr.happy) • [📚 **Documentation**](https://happy.engineering/docs/) • [💬 **Discord**](https://discord.gg/fX9WBAhyfD)
 
 </div>
 
 https://github.com/user-attachments/assets/d193098c-4c60-440b-b91e-274a76d923d5
 
-## Why Happy
+## 🔥 Why Happy
 
 Serious work with coding agents outgrows a terminal tab fast. Sessions die
 with the window that held them. Every vendor's agent lives in its own app
@@ -36,7 +36,7 @@ point it. This repository is the macOS app — the place where that harness
 becomes a full working environment: conversations beside the files, diffs,
 terminals, and previews the work actually touches.
 
-## Natively multiplayer
+## 👥 Natively multiplayer
 
 An agent session shouldn't be a private transcript. Bring your team into one
 session with every agent: anyone can share context, steer the conversation,
@@ -44,7 +44,7 @@ approve decisions, and take over in real time. Start a task at your desk,
 check it from your phone, hand it to a teammate — it's the same session, the
 same permission boundary, the same history, on every device.
 
-## One harness. Every agent.
+## 🤖 One harness. Every agent.
 
 The best model for planning isn't the best model for building or reviewing,
 and you shouldn't have to abandon your context to switch. Let Claude plan,
@@ -54,7 +54,7 @@ a lowest common denominator, but the session, the permissions, and the
 context stay together across every handoff. Happy adds no account of its
 own; it uses the sign-ins already on your machine.
 
-## Yours to run. Yours to change.
+## 🔧 Yours to run. Yours to change.
 
 A tool this close to your code has to answer to you, not to a vendor's
 roadmap. Happy is open source end to end: run it on your hardware, in your
@@ -62,7 +62,7 @@ cloud, or in ours, and change it to fit how your team actually works. Happy
 adopts itself to build itself — the pressure of daily use is the product
 roadmap.
 
-## Secure and compliant
+## 🔐 Secure and compliant
 
 You can't bring an agent into real work if you can't say where the data
 goes. With Happy the answer is short: nowhere you didn't send it. No
@@ -73,7 +73,7 @@ relays carry ciphertext they cannot read. That is what makes Happy safe to
 run inside a corporate network: the only party that ever sees your prompts
 is the model provider you chose, under its own terms.
 
-## How to use it
+## 🚀 How to use it
 
 Download the desktop app and open it — that is the whole setup. Happy
 downloads and starts its agent runtime on its own, finds the Claude, Codex,
@@ -86,7 +86,7 @@ you are both inside the same conversation — steering, approving, and taking
 over in real time — or grab the [mobile app](https://apps.apple.com/us/app/happy-claude-code-client/id6748571505)
 and take your own sessions with you.
 
-## How you work in it
+## 🧭 How you work in it
 
 - **Projects, workspaces, and sessions.** Navigate everything the daemon knows
   about, start new sessions where the work belongs, and keep parallel efforts
