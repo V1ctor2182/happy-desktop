@@ -52,7 +52,8 @@ export function desktopDaemonStoreCreate(bridge: HappyDesktopBridge): AppHappyAg
         },
         daemonInstallDismiss() {
             if (snapshot.install.phase === "idle") return;
-            publish({ ...snapshot, install: { phase: "idle" } });
+            const { error: _error, ...current } = snapshot;
+            publish({ ...current, install: { phase: "idle" } });
             void bridge.daemonInstallDismiss().catch(fail);
         },
         daemonInstallKill() {

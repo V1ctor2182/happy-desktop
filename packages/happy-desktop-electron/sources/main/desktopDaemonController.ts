@@ -368,11 +368,28 @@ export class DesktopDaemonController {
                 });
             } catch (error) {
                 const message = displayError(error);
+                // Selecting a version is durable and happens before the daemon
+                // is restarted. If a later step fails, reread that selection so
+                // Settings does not keep offering the version already selected
+                // or label the previous release as installed.
+                const selectedAfter = await happyAgentBinarySelected(this.paths).catch(
+                    () => undefined,
+                );
+                const installedVersion =
+                    selectedAfter?.version ?? this.snapshotValue.installedVersion;
+                const availableVersion = this.snapshotValue.availableVersion;
                 this.publish({
-                    ...this.snapshotValue,
+                    ...(selectedAfter
+                        ? installationProject(this.snapshotValue, selectedAfter)
+                        : this.snapshotValue),
                     error: message,
                     install: { failedAt: step, message, phase: "error", reason, version: selected },
                     operation: "idle",
+                    updateAvailable:
+                        installedVersion !== undefined && availableVersion !== undefined
+                            ? versionNewer(availableVersion, installedVersion)
+                            : this.snapshotValue.updateAvailable,
+                    ...(await this.readyVersionRead()),
                 });
                 throw error;
             } finally {
@@ -407,7 +424,8 @@ export class DesktopDaemonController {
     /** Clears a failed install so the screen hands the window back. */
     installDismiss(): void {
         if (this.snapshotValue.install.phase === "idle") return;
-        this.publish({ ...this.snapshotValue, install: { phase: "idle" } });
+        const { error: _error, ...snapshot } = this.snapshotValue;
+        this.publish({ ...snapshot, install: { phase: "idle" } });
     }
 
     /**

@@ -36,7 +36,8 @@ const EXIT_POLL_MS = 100;
  * database and its sockets on the way out — but "now" has to mean now.
  */
 const KILL_GRACE_MS = 5_000;
-const START_TIMEOUT_MS = 120_000;
+/** How long either side of a restart may spend becoming ready. */
+const START_TIMEOUT_MS = 15 * 60_000;
 const START_POLL_MS = 250;
 const MAXIMUM_COMMAND_OUTPUT_BYTES = 1024 * 1024;
 
@@ -73,20 +74,31 @@ export async function happyAgentRestartRun(options: HappyAgentRestartOptions): P
             waitingFor: [],
             waitingPeak: 0,
         });
-        await client.drain();
-        await drainAwait(client, options.killSignal, (waitingFor, waitingPeak, killable) =>
+        const drainStarted = await drainBeginAwait(client, options.killSignal, (killable) =>
             options.onStep({
                 killable,
                 phase: "draining",
                 reason,
                 version,
-                waitingFor,
-                waitingPeak,
+                waitingFor: [],
+                waitingPeak: 0,
             }),
         );
-        const killed = options.killSignal.aborted;
-        options.onStep({ killed, phase: "stopping", reason, version });
-        await daemonStop(client, killed);
+        if (drainStarted) {
+            await drainAwait(client, options.killSignal, (waitingFor, waitingPeak, killable) =>
+                options.onStep({
+                    killable,
+                    phase: "draining",
+                    reason,
+                    version,
+                    waitingFor,
+                    waitingPeak,
+                }),
+            );
+            const killed = options.killSignal.aborted;
+            options.onStep({ killed, phase: "stopping", reason, version });
+            await daemonStop(client, killed);
+        }
     }
     options.onStep({ phase: "starting", reason, version });
     await daemonCommandRun(options.binary.path, "reload", options.environment);
@@ -133,6 +145,51 @@ async function daemonClientOpen(
         return client;
     } catch {
         return undefined;
+    }
+}
+
+/**
+ * Waits for the current daemon to accept a drain, or for that daemon to leave.
+ *
+ * Health deliberately answers while Happy Agent is still starting. A restart
+ * requested during that interval must not turn its authoritative `starting`
+ * state into a failure by asking it to drain too soon. The health report also
+ * closes the race between the last readiness probe and the drain request: when
+ * the request loses that race, its next health report decides whether to keep
+ * waiting, continue an already-started drain, or surface a genuine refusal.
+ */
+async function drainBeginAwait(
+    client: HappyAgentDaemonClient,
+    killSignal: AbortSignal,
+    onStarting: (killable: boolean) => void,
+): Promise<boolean> {
+    const started = Date.now();
+    const deadline = started + START_TIMEOUT_MS;
+    for (;;) {
+        // Stopping the wait still needs the live client so the caller can ask
+        // that exact process to shut down immediately.
+        if (killSignal.aborted) return true;
+        const health = await client.health().catch(() => undefined);
+        if (health === undefined) return false;
+        if (health.draining === true) return true;
+        if (health.ready) {
+            try {
+                await client.drain();
+                return true;
+            } catch (error) {
+                const current = await client.health().catch(() => undefined);
+                if (current === undefined) return false;
+                if (current.draining === true) return true;
+                // A daemon that still reports ready has refused the drain for
+                // a real reason. Only its explicit starting state is retried.
+                if (current.ready) throw error;
+            }
+        }
+        onStarting(Date.now() - started >= KILLABLE_AFTER_MS);
+        if (Date.now() >= deadline) {
+            throw new Error("Happy Agent was still starting after 15 minutes.");
+        }
+        await killableDelay(START_POLL_MS, killSignal);
     }
 }
 
