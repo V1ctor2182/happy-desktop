@@ -1,15 +1,16 @@
 /*
- * Spinner — ASCII terminal loaders redrawn as pure CSS shapes.
+ * Spinner — ASCII terminal loaders redrawn as compact geometric shapes.
  *
- * Every variant animates with `steps()` so it advances through the same
- * discrete cells as the text original instead of easing between them. All
- * geometry derives from one variable, `--happy-spinner-size` (the line height
- * of the box), so a variant keeps its proportions at 12px and at 48px.
+ * CSS draws every variant except `braille-2`, whose 2x4 cell is too small for
+ * independent antialiased circles: one canvas stamps it onto the final device
+ * pixels. All geometry derives from `--happy-spinner-size` (the line height of
+ * the box), so a variant keeps its proportions at 12px and at 48px.
  *
- * Frame parking: each animated part offsets its `animation-delay` by
+ * CSS frame parking: each animated part offsets its `animation-delay` by
  * `--happy-spinner-offset` (frame ÷ frame count, set by the component) plus
  * its own `--happy-spinner-phase`. With `[data-paused]` also freezing
- * `animation-play-state`, a fixture renders any variant on any exact cell.
+ * `animation-play-state`, a fixture renders any CSS variant on an exact cell.
+ * The Braille canvas reads the component's explicit `data-frame` instead.
  *
  * Declared widths: braille is twice its snapped dot pitch (8px at the 14px and
  * 16px production sizes); blocks are size * 1.125, bounce size * 2.625, bar
@@ -106,10 +107,11 @@
 /* ---- braille cells — ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, ⣾⣽⣻⢿, ⢄⢂⢁⡁, … ------------------ */
 
 /*
- * Shared geometry for every braille-cell variant; which dots light on which
- * frame lives in `spinner-braille.css`. Every variant is the same full 2x4
- * cell — two columns of four dots in one compact box — so the family shares
- * one silhouette even when a spinner never lights its bottom row.
+ * Shared outer geometry for every braille-cell variant. Every variant is the
+ * same full 2x4 cell — two columns of four dots in one compact box — so the
+ * family shares one silhouette even when a spinner never lights its bottom
+ * row. CSS lays out every family member except `braille-2`; its canvas uses the
+ * same box and resolves the inner grid in physical pixels.
  *
  * Dot diameter and dot pitch are independent: the pitch is the centre-to-centre
  * distance the cell is laid out on, and the column height and column gap are
@@ -155,6 +157,17 @@
      * between glyphs instead of blinking.
      */
     animation-timing-function: linear;
+}
+
+/* `braille-2` alone owns final physical pixels. The backing bitmap is resized
+   to the browser-reported device-pixel content box, so nearest-neighbour is a
+   safeguard rather than an ordinary scale operation. */
+.happy-spinner[data-variant="braille-2"] .happy-spinner__braille-canvas {
+    display: block;
+    flex: none;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
 }
 
 /* ---- line — |/-\ ------------------------------------------------------ */

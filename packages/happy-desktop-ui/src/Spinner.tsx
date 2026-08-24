@@ -1,4 +1,5 @@
 import { type CSSProperties, type ReactNode } from "react";
+import { brailleSpinnerCanvasAttach } from "./spinnerBrailleCanvas";
 
 export type SpinnerVariant =
     | "braille-2"
@@ -126,6 +127,16 @@ function bracketed(track: ReactNode) {
 }
 
 function variantParts(variant: SpinnerVariant) {
+    if (variant === "braille-2") {
+        return (
+            <canvas
+                aria-hidden="true"
+                className="happy-spinner__braille-canvas"
+                data-happy-desktop-ui="spinner-braille-canvas"
+                ref={brailleSpinnerCanvasAttach}
+            />
+        );
+    }
     if (variant.startsWith("braille")) {
         /* Always the full 2x4 cell: left column top to bottom is dots 1,2,3,7
          * and right column is dots 4,5,6,8 — the order spinner-braille.css
@@ -169,9 +180,9 @@ function variantParts(variant: SpinnerVariant) {
 /**
  * Spinner — the ASCII terminal loaders (braille cells, |/-\, ◜◝◞◟, ◐◓◑◒,
  * ▁▃▅▇, [####  ], [ =  ], …, ▮▯, .oO@, ▁▄▆█, ▏▍▊█, ◢◣◤◥, ◰◳◲◱, ▖▘▝▗, ☱☲☴,
- * ▓▒░, ←↖↑↗) redrawn as pure CSS shapes. Every
- * variant advances in discrete `steps()` frames like its text original rather
- * than easing, so it keeps the terminal cadence at any size.
+ * ▓▒░, ←↖↑↗) redrawn as CSS shapes. The production `braille-2` loop is the
+ * exception: its tiny dots are stamped onto the actual device-pixel grid so
+ * all eight retain one identical mask through their shared opacity cycle.
  */
 export function Spinner(props: SpinnerProps) {
     const variant = props.variant ?? "braille-2";
@@ -189,6 +200,7 @@ export function Spinner(props: SpinnerProps) {
         <span
             aria-label={props.label ?? "Loading"}
             className={["happy-spinner", props.className].filter(Boolean).join(" ")}
+            data-frame={paused ? index : undefined}
             data-happy-desktop-ui="spinner"
             data-paused={paused ? "" : undefined}
             data-tone={props.tone ?? "default"}

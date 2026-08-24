@@ -173,7 +173,7 @@ export function SpinnerPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Twenty-three terminal ASCII loaders rebuilt as pure CSS shapes. Each variant advances through the same discrete frames as its text original — steps() cadence, no easing — and parks on an exact frame for fixtures."
+            summary="Twenty-three terminal ASCII loaders rebuilt as compact geometric marks. The production Braille loop stamps one shared dot mask onto the actual device-pixel grid; the remaining variants use CSS shapes, and every variant parks on an exact frame for fixtures."
             title="Spinner"
         >
             <Specimen
