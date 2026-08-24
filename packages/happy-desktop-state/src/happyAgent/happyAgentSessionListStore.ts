@@ -35,23 +35,6 @@ import type {
 
 /** How many outstanding Happy Agent mutations this surface can attribute a refusal to. */
 const PENDING_MUTATION_LIMIT = 256;
-/** Recovery history retained for one project or worktree, newest first. */
-const ARCHIVED_SESSION_LIMIT_PER_GROUP = 40;
-
-function archivedSessionsBound(
-    sessions: readonly HappyAgentSessionSummary[],
-): readonly HappyAgentSessionSummary[] {
-    const counts = new Map<HappyAgentGroupId, number>();
-    return [...sessions]
-        .sort((left, right) => (right.archivedAt ?? 0) - (left.archivedAt ?? 0))
-        .filter((session) => {
-            const groupId = happyAgentSessionGroupIdOf(session);
-            const count = counts.get(groupId) ?? 0;
-            if (count >= ARCHIVED_SESSION_LIMIT_PER_GROUP) return false;
-            counts.set(groupId, count + 1);
-            return true;
-        });
-}
 
 /**
  * The list surface of the local workspace: a `Loadable` of projects, each
@@ -392,6 +375,7 @@ export interface HappyAgentSessionListDeps {
 export interface HappyAgentSessionCatalogSnapshot {
     readonly catalog: HappyAgentProjectCatalog;
     readonly sessions: readonly HappyAgentSessionSummary[];
+    /** The host's complete archived catalog in newest-archived-first presentation order. */
     readonly archivedSessions: readonly HappyAgentSessionSummary[];
 }
 
@@ -838,7 +822,7 @@ export function happyAgentSessionListStoreCreate(
         const token = ++readSequence;
         try {
             const snapshot = await deps.catalogSource.read();
-            const observedArchivedSessions = archivedSessionsBound(snapshot.archivedSessions);
+            const observedArchivedSessions = snapshot.archivedSessions;
             if (disposed)
                 return {
                     ok: false,

@@ -41,6 +41,7 @@ import type {
     HappyAgentGroupLifecycle,
     HappyAgentProjectGroup,
     HappyAgentProjectId,
+    HappyAgentRecentTabMemory,
     HappyAgentServiceTier,
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
@@ -462,7 +463,8 @@ const PANEL_TOGGLE_HINT = {
 } as const;
 const HISTORY_SESSION_PREFIX = "session:";
 const HISTORY_FILE_PREFIX = "file:";
-const HISTORY_SECTION_LIMIT = 8;
+
+type HappyAgentRecentFileTabMemory = Extract<HappyAgentRecentTabMemory, { readonly type: "file" }>;
 
 /** Keeps a recent file's name and nearest folder visible inside the compact menu. */
 function historyFileLabel(path: string): string {
@@ -828,6 +830,21 @@ function fileTabDirty(tab: HappyAgentFileTabSnapshot): boolean {
     return saved !== undefined && tab.draft !== saved;
 }
 
+/** The same familiar file-type glyph whether a file is open or in tab history. */
+function fileTabIcon(
+    path: string,
+    kind: HappyAgentFileTabKind,
+): "doc" | "globe" | "image" | "play" {
+    const preview = kind === "media" ? filePreviewKind(path) : undefined;
+    return kind === "document"
+        ? "globe"
+        : preview === "image"
+          ? "image"
+          : preview === "video" || preview === "audio"
+            ? "play"
+            : "doc";
+}
+
 /**
  * Exact identity of the ready document a file tab is currently drawing.
  *
@@ -850,19 +867,11 @@ function fileTabItem(tab: HappyAgentFileTabSnapshot): TabItem {
     // A tab of a picture says picture. Wearing the document glyph over every
     // open file made the strip a row of identical marks with only the name to
     // tell them apart.
-    const kind = tab.kind === "media" ? filePreviewKind(tab.path) : undefined;
     return {
         id: tab.id,
         label: tab.path.split("/").at(-1) ?? tab.path,
         dirty: fileTabDirty(tab),
-        icon:
-            tab.kind === "document"
-                ? "globe"
-                : kind === "image"
-                  ? "image"
-                  : kind === "video" || kind === "audio"
-                    ? "play"
-                    : "doc",
+        icon: fileTabIcon(tab.path, tab.kind),
         preview: tab.preview,
     };
 }
@@ -2055,60 +2064,74 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         ),
         ...(detachedConversationTab ? [detachedConversationTab] : []),
     ];
-    const archivedSessions = openGroup
-        ? [...workspace.list.archivedSessions]
-              .filter(
-                  (session) =>
-                      session.parentSessionId === undefined &&
-                      happyAgentSessionGroupIdOf(session) === openGroup.id,
-              )
-              .slice(0, HISTORY_SECTION_LIMIT)
-        : [];
-    const recentFiles = openGroup
-        ? workspace.recentFiles
-              .filter((file) => file.groupId === openGroup.id)
-              .slice(0, HISTORY_SECTION_LIMIT)
-        : [];
-    const historyMenuItems: MenuItem[] = [
-        ...(archivedSessions.length > 0
-            ? [
-                  { kind: "label" as const, label: "Archived sessions" },
-                  ...archivedSessions.map((session) => ({
-                      disabled: !availability.online,
-                      icon: "archive" as const,
-                      id: `${HISTORY_SESSION_PREFIX}${session.id}`,
-                      kind: "item" as const,
-                      label: session.title ?? "Untitled",
-                  })),
-              ]
-            : []),
-        ...(archivedSessions.length > 0 && recentFiles.length > 0
-            ? [{ kind: "separator" as const }]
-            : []),
-        ...(recentFiles.length > 0
-            ? [
-                  { kind: "label" as const, label: "Recent files" },
-                  ...recentFiles.map((file) => ({
-                      disabled: !availability.online,
-                      icon: "doc" as const,
-                      id: `${HISTORY_FILE_PREFIX}${file.path}`,
-                      kind: "item" as const,
-                      label: historyFileLabel(file.path),
-                  })),
-              ]
-            : []),
-        ...(archivedSessions.length === 0 && recentFiles.length === 0
-            ? [
-                  {
-                      disabled: true,
-                      icon: "history" as const,
-                      id: "empty",
-                      kind: "item" as const,
-                      label: "No archived sessions or recent files",
-                  },
-              ]
-            : []),
-    ];
+    const historyMenuItems = (): readonly MenuItem[] => {
+        if (!openGroup) return [];
+        const archivedSessions = workspace.list.archivedSessions.filter(
+            (session) =>
+                session.parentSessionId === undefined &&
+                happyAgentSessionGroupIdOf(session) === openGroup.id,
+        );
+        const archivedSessionById = new Map(
+            archivedSessions.map((session) => [session.id, session]),
+        );
+        const historyEntries: (
+            | { readonly type: "session"; readonly session: (typeof archivedSessions)[number] }
+            | { readonly type: "file"; readonly file: HappyAgentRecentFileTabMemory }
+        )[] = [];
+        const seenSessions = new Set<HappyAgentSessionId>();
+        const seenFiles = new Set<string>();
+        const historySessionAppend = (session: (typeof archivedSessions)[number]): void => {
+            if (seenSessions.has(session.id)) return;
+            seenSessions.add(session.id);
+            historyEntries.push({ type: "session", session });
+        };
+        const historyFileAppend = (file: HappyAgentRecentFileTabMemory): void => {
+            if (seenFiles.has(file.path)) return;
+            seenFiles.add(file.path);
+            historyEntries.push({ type: "file", file });
+        };
+        // Local visits provide the useful MRU weave. An archived session absent
+        // from that local history is appended afterward from the host catalog, so
+        // opening this window for the first time never hides recoverable work.
+        for (const tab of workspace.recentTabs) {
+            if (tab.groupId !== openGroup.id) continue;
+            if (tab.type === "session") {
+                const session = archivedSessionById.get(tab.sessionId);
+                if (session) historySessionAppend(session);
+            } else {
+                historyFileAppend(tab);
+            }
+        }
+        for (const session of archivedSessions) historySessionAppend(session);
+        if (historyEntries.length === 0)
+            return [
+                {
+                    disabled: true,
+                    icon: "history",
+                    id: "empty",
+                    kind: "item",
+                    label: "No archived sessions or recent files",
+                },
+            ];
+        return historyEntries.map(
+            (entry): MenuItem =>
+                entry.type === "session"
+                    ? {
+                          disabled: !availability.online,
+                          icon: "chat",
+                          id: `${HISTORY_SESSION_PREFIX}${entry.session.id}`,
+                          kind: "item",
+                          label: entry.session.title ?? "Untitled",
+                      }
+                    : {
+                          disabled: !availability.online,
+                          icon: fileTabIcon(entry.file.path, entry.file.fileKind),
+                          id: `${HISTORY_FILE_PREFIX}${entry.file.path}`,
+                          kind: "item",
+                          label: historyFileLabel(entry.file.path),
+                      },
+        );
+    };
     // Closing a tab archives the session behind it, while a file tab simply
     // closes. The close control and every context-menu sweep funnel through
     // this one routine, so a sweep behaves exactly like closing each tab by
@@ -2537,45 +2560,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                 void props.workspace.openIn(openGroup.id, target);
                                         }}
                                     />
-                                    <MenuButton
-                                        align="end"
-                                        icon="history"
-                                        items={historyMenuItems}
-                                        label="Open workspace history"
-                                        menuWidth={300}
-                                        onSelect={(id) => {
-                                            if (id.startsWith(HISTORY_SESSION_PREFIX)) {
-                                                const sessionId = id.slice(
-                                                    HISTORY_SESSION_PREFIX.length,
-                                                ) as HappyAgentSessionId;
-                                                if (
-                                                    !archivedSessions.some(
-                                                        (session) => session.id === sessionId,
-                                                    )
-                                                )
-                                                    return;
-                                                void props.workspace
-                                                    .conversationRestore(sessionId)
-                                                    .then(() =>
-                                                        props.onChatSelect(openGroup.id, sessionId),
-                                                    )
-                                                    .catch(() => undefined);
-                                                return;
-                                            }
-                                            if (!id.startsWith(HISTORY_FILE_PREFIX)) return;
-                                            const path = id.slice(HISTORY_FILE_PREFIX.length);
-                                            const file = recentFiles.find(
-                                                (candidate) => candidate.path === path,
-                                            );
-                                            if (file)
-                                                props.onFileSelect(
-                                                    openGroup.id,
-                                                    props.chatId,
-                                                    file.path,
-                                                    file.kind,
-                                                );
-                                        }}
-                                    />
                                     {!panel.open ? (
                                         <Button
                                             aria-label="Show panel"
@@ -2693,24 +2677,81 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     ) : (
                         <TabbedPane
                             actions={
-                                // A tab is a session, so adding one creates it
-                                // directly in the addressed project or worktree
-                                // instead of opening the task form. A workspace
-                                // that cannot host one keeps the control and
-                                // disables it: the strip is the same strip
-                                // throughout a checkout being prepared, so the
-                                // button goes grey for a moment rather than
-                                // appearing out of nowhere when it arrives.
-                                <Button
-                                    aria-label="Create a session in this project"
-                                    disabled={!sessionCreateAvailable}
-                                    icon="plus"
-                                    iconOnly
-                                    onClick={() => groupConversationCreate(openGroup)}
-                                    shortcut={APP_SHORTCUTS.sessionCreate}
-                                    size="small"
-                                    variant="ghost"
-                                />
+                                <>
+                                    {/* A tab is a session, so adding one creates it
+                                    directly in the addressed project or worktree
+                                    instead of opening the task form. A workspace
+                                    that cannot host one keeps the control and
+                                    disables it: the strip is the same strip
+                                    throughout a checkout being prepared, so the
+                                    button goes grey for a moment rather than
+                                    appearing out of nowhere when it arrives. */}
+                                    <Button
+                                        aria-label="Create a session in this project"
+                                        disabled={!sessionCreateAvailable}
+                                        icon="plus"
+                                        iconOnly
+                                        onClick={() => groupConversationCreate(openGroup)}
+                                        shortcut={APP_SHORTCUTS.sessionCreate}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                    <MenuButton
+                                        align="end"
+                                        icon="history"
+                                        items={historyMenuItems}
+                                        label="Open tab history"
+                                        menuMaxHeight={420}
+                                        menuLabel="Tab history"
+                                        menuPageSize={100}
+                                        menuWidth={300}
+                                        onSelect={(id) => {
+                                            if (id.startsWith(HISTORY_SESSION_PREFIX)) {
+                                                const sessionId = id.slice(
+                                                    HISTORY_SESSION_PREFIX.length,
+                                                ) as HappyAgentSessionId;
+                                                if (
+                                                    !props.workspace
+                                                        .get()
+                                                        .list.archivedSessions.some(
+                                                            (session) =>
+                                                                session.id === sessionId &&
+                                                                session.parentSessionId ===
+                                                                    undefined &&
+                                                                happyAgentSessionGroupIdOf(
+                                                                    session,
+                                                                ) === openGroup.id,
+                                                        )
+                                                )
+                                                    return;
+                                                void props.workspace
+                                                    .conversationRestore(sessionId)
+                                                    .then(() =>
+                                                        props.onChatSelect(openGroup.id, sessionId),
+                                                    )
+                                                    .catch(() => undefined);
+                                                return;
+                                            }
+                                            if (!id.startsWith(HISTORY_FILE_PREFIX)) return;
+                                            const path = id.slice(HISTORY_FILE_PREFIX.length);
+                                            const file = props.workspace
+                                                .get()
+                                                .recentTabs.find(
+                                                    (tab): tab is HappyAgentRecentFileTabMemory =>
+                                                        tab.type === "file" &&
+                                                        tab.groupId === openGroup.id &&
+                                                        tab.path === path,
+                                                );
+                                            if (file)
+                                                props.onFileSelect(
+                                                    openGroup.id,
+                                                    props.chatId,
+                                                    file.path,
+                                                    file.fileKind,
+                                                );
+                                        }}
+                                    />
+                                </>
                             }
                             activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"

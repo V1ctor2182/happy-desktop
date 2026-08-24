@@ -6,10 +6,17 @@ import { Menu, type MenuItem } from "./Menu";
 export interface MenuButtonProps {
     readonly label: string;
     readonly icon: IconName;
-    readonly items: readonly MenuItem[];
+    /** Static rows, or a catalog materialized only when the menu opens. */
+    readonly items: readonly MenuItem[] | (() => readonly MenuItem[]);
     readonly onSelect: (id: string) => void;
     readonly align?: "start" | "end";
     readonly disabled?: boolean;
+    /** Caps a long menu to a scrollable viewport while keeping its trigger fixed. */
+    readonly menuMaxHeight?: number;
+    /** Fixed heading above the menu's scrollable rows. */
+    readonly menuLabel?: string;
+    /** Keeps large catalogs in bounded DOM pages while leaving every row reachable. */
+    readonly menuPageSize?: number;
     readonly menuWidth?: number;
     readonly size?: ButtonSize;
     readonly variant?: ButtonVariant;
@@ -22,6 +29,9 @@ export interface MenuButtonProps {
  */
 export function MenuButton(props: MenuButtonProps) {
     const [open, setOpen] = useState(false);
+    const [materializedItems, setMaterializedItems] = useState<readonly MenuItem[]>([]);
+    const [menuPage, setMenuPage] = useState(0);
+    const [triggerBottom, setTriggerBottom] = useState(0);
     const root = useRef<HTMLDivElement>(null);
     const menuId = useId();
     const expanded = open && !props.disabled;
@@ -41,6 +51,42 @@ export function MenuButton(props: MenuButtonProps) {
         setOpen(false);
         if (returnFocus) triggerFocus();
     };
+    const allItems = typeof props.items === "function" ? materializedItems : props.items;
+    const pageSize =
+        props.menuPageSize !== undefined && props.menuPageSize > 0
+            ? Math.floor(props.menuPageSize)
+            : undefined;
+    const pageCount =
+        pageSize === undefined ? 1 : Math.max(1, Math.ceil(allItems.length / pageSize));
+    const currentPage = Math.min(menuPage, pageCount - 1);
+    const pageName = props.menuLabel?.toLowerCase() ?? "items";
+    const pageItems =
+        pageSize === undefined
+            ? allItems
+            : allItems.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+    const previousPageId = `${menuId}-previous-page`;
+    const nextPageId = `${menuId}-next-page`;
+    const visibleItems: readonly MenuItem[] = [
+        ...(currentPage > 0
+            ? [
+                  {
+                      id: previousPageId,
+                      kind: "item" as const,
+                      label: `Previous ${pageName} (${String(currentPage)} of ${String(pageCount)})`,
+                  },
+              ]
+            : []),
+        ...pageItems,
+        ...(currentPage + 1 < pageCount
+            ? [
+                  {
+                      id: nextPageId,
+                      kind: "item" as const,
+                      label: `More ${pageName} (${String(currentPage + 2)} of ${String(pageCount)})`,
+                  },
+              ]
+            : []),
+    ];
     return (
         <div
             className="happy-menu-button"
@@ -84,9 +130,16 @@ export function MenuButton(props: MenuButtonProps) {
                 disabled={props.disabled}
                 icon={props.icon}
                 iconOnly
-                onClick={() => {
+                onClick={(event) => {
                     if (expanded) close(false);
-                    else setOpen(true);
+                    else {
+                        setMaterializedItems(
+                            typeof props.items === "function" ? props.items() : props.items,
+                        );
+                        setMenuPage(0);
+                        setTriggerBottom(event.currentTarget.getBoundingClientRect().bottom);
+                        setOpen(true);
+                    }
                 }}
                 size={props.size ?? "small"}
                 variant={props.variant ?? "ghost"}
@@ -108,11 +161,29 @@ export function MenuButton(props: MenuButtonProps) {
                     >
                         <Menu
                             id={menuId}
-                            items={[...props.items]}
+                            items={[...visibleItems]}
+                            label={props.menuLabel}
                             onSelect={(id) => {
+                                if (id === previousPageId) {
+                                    setMenuPage((page) => Math.max(0, page - 1));
+                                    requestAnimationFrame(() => menuItems()[0]?.focus());
+                                    return;
+                                }
+                                if (id === nextPageId) {
+                                    setMenuPage((page) => Math.min(pageCount - 1, page + 1));
+                                    requestAnimationFrame(() => menuItems()[0]?.focus());
+                                    return;
+                                }
                                 close(true);
                                 props.onSelect(id);
                             }}
+                            {...(props.menuMaxHeight === undefined
+                                ? {}
+                                : {
+                                      style: {
+                                          maxHeight: `max(0px, min(${String(props.menuMaxHeight)}px, calc(100vh - ${String(triggerBottom)}px - 8px)))`,
+                                      },
+                                  })}
                             width={props.menuWidth}
                         />
                     </div>

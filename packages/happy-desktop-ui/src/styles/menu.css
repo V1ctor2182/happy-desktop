@@ -21,7 +21,8 @@
 }
 
 .happy-menu {
-    display: block;
+    display: flex;
+    flex-direction: column;
     width: 220px;
     background: var(--surface);
     border: 1px solid var(--modal-border);
@@ -35,6 +36,15 @@
 }
 
 .happy-menu__list {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.happy-menu__rows {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -139,6 +149,7 @@
 
 /* ---- Section label --------------------------------------------------- */
 
+.happy-menu__header,
 .happy-menu__label {
     display: block;
     flex: none;
@@ -154,6 +165,10 @@
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
+}
+
+.happy-menu__header {
+    margin: 4px 4px 0;
 }
 
 /* ---- Separator ------------------------------------------------------- */

@@ -11,7 +11,7 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { HappyAgentChatHandle, HappyAgentWorkspaceClient } from "./happyAgentClient.js";
-import type { HappyAgentRecentFileMemory } from "./happyAgentWorkspaceMemory.js";
+import type { HappyAgentRecentTabMemory } from "./happyAgentWorkspaceMemory.js";
 import {
     HAPPY_AGENT_VIEW_PREFERENCES_EMPTY,
     happyAgentViewPreferencesParse,
@@ -461,8 +461,8 @@ export interface HappyAgentWorkspaceSnapshot {
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<HappyAgentConversationSnapshot>;
     readonly fileTabs: readonly HappyAgentFileTabSnapshot[];
-    /** Local file destinations, newest first, retained even after their tabs close. */
-    readonly recentFiles: readonly HappyAgentRecentFileMemory[];
+    /** Local session and file destinations, newest first, retained after their tabs close. */
+    readonly recentTabs: readonly HappyAgentRecentTabMemory[];
     /**
      * The addressed group's tab strip, by tab id, in the order it is shown. It
      * covers everything the strip holds — sessions and files alike — because the
@@ -1668,7 +1668,7 @@ export function happyAgentWorkspaceStoreCreate(
         conversationDelegated: false,
         groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),
         fileTabs,
-        recentFiles: client.memory.recentFilesRead(),
+        recentTabs: client.memory.recentTabsRead(),
         tabOrder,
         groupResume,
         openInTargets,
@@ -2006,7 +2006,7 @@ export function happyAgentWorkspaceStoreCreate(
         const groupComposerDraft = groupComposer?.getState();
         const groupSessionDraft = groupDraft?.get();
         const nextAddress = addressPublic();
-        const recentFiles = client.memory.recentFilesRead();
+        const recentTabs = client.memory.recentTabsRead();
         // How this checkout is arranged travels with the address: moving to
         // another project shows that project the way it was left, rather than
         // carrying the last one's panel width and listing across to it.
@@ -2045,7 +2045,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.groupComposer === groupComposerDraft &&
                 snapshot.groupSessionDraft === groupSessionDraft &&
                 snapshot.fileTabs === fileTabs &&
-                snapshot.recentFiles === recentFiles &&
+                snapshot.recentTabs === recentTabs &&
                 snapshot.tabOrder === tabOrder &&
                 snapshot.activeMainViewId === activeMainViewId &&
                 snapshot.displayedMainViewId === displayedMainViewId &&
@@ -2077,7 +2077,7 @@ export function happyAgentWorkspaceStoreCreate(
                           conversationDelegated,
                           groupAccess,
                           fileTabs,
-                          recentFiles,
+                          recentTabs,
                           tabOrder,
                           groupResume,
                           openInTargets,
@@ -2659,7 +2659,8 @@ export function happyAgentWorkspaceStoreCreate(
         placement: HappyAgentViewPlacement = "main",
     ): void => {
         const kind = fileKindResolve(groupId, path, requestedKind);
-        if (!restoring) client.memory.recentFileRemember(groupId, path, kind);
+        if (!restoring)
+            client.memory.recentTabRemember({ type: "file", groupId, path, fileKind: kind });
         const id = fileTabIdOf(groupId, path);
         const existing = fileTabs.find((tab) => tab.id === id);
         // Only the main content selects what it is showing. A file opening in
@@ -3975,7 +3976,7 @@ export function happyAgentWorkspaceStoreCreate(
                     conversationDelegated: false,
                     groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),
                     fileTabs,
-                    recentFiles: client.memory.recentFilesRead(),
+                    recentTabs: client.memory.recentTabsRead(),
                     tabOrder,
                     groupResume,
                     openInTargets,
@@ -4201,6 +4202,11 @@ export function happyAgentWorkspaceStoreCreate(
             if (groupId !== undefined && fileScopeOf(groupId) === "all")
                 workspaceFilesEnsure(groupId);
             if (groupId !== undefined) {
+                client.memory.recentTabRemember({
+                    type: "session",
+                    groupId,
+                    sessionId: conversationId,
+                });
                 addressedGroupId = groupId;
                 addressedGroupSeenUpdate();
                 groupRestore(groupId);
@@ -4596,7 +4602,15 @@ export function happyAgentWorkspaceStoreCreate(
                         ? { ...tab, placement, ...(placement === "main" ? { preview: false } : {}) }
                         : tab,
                 );
-                if (placement === "main") groupTabRemember(file.groupId, file.id);
+                if (placement === "main") {
+                    client.memory.recentTabRemember({
+                        type: "file",
+                        groupId: file.groupId,
+                        path: file.path,
+                        fileKind: file.kind,
+                    });
+                    groupTabRemember(file.groupId, file.id);
+                }
                 recompute();
             });
         },
@@ -4615,8 +4629,15 @@ export function happyAgentWorkspaceStoreCreate(
             if (file) fileReadyDisplay(file.id);
             else displayedMainViewId = tool?.id;
             activeMainViewGroupId = tool ? addressedGroupId : undefined;
-            if (file) groupTabRemember(file.groupId, file.id);
-            else if (addressedGroupId !== undefined) {
+            if (file) {
+                client.memory.recentTabRemember({
+                    type: "file",
+                    groupId: file.groupId,
+                    path: file.path,
+                    fileKind: file.kind,
+                });
+                groupTabRemember(file.groupId, file.id);
+            } else if (addressedGroupId !== undefined) {
                 // Selecting nothing puts the open conversation back on screen,
                 // which is then the tab this group is being read on.
                 const remembered = tool?.id ?? openId;

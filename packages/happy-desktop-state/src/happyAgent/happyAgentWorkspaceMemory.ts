@@ -1,5 +1,5 @@
 import type { HappyAgentFileTabKind } from "./happyAgentWorkspaceStore.js";
-import type { HappyAgentGroupId } from "./happyAgentTypes.js";
+import type { HappyAgentGroupId, HappyAgentSessionId } from "./happyAgentTypes.js";
 import type { HappyAgentViewPlacement } from "./happyAgentPanelStore.js";
 
 /** One file tab remembered for a group, enough to reopen it as it was left. */
@@ -15,13 +15,20 @@ export interface HappyAgentFileTabMemory {
     readonly preview?: boolean;
 }
 
-/** One file destination in the reader's local most-recently-visited list. */
-export interface HappyAgentRecentFileMemory {
-    readonly groupId: HappyAgentGroupId;
-    readonly path: string;
-    /** The newest presentation used for this path; revisiting replaces the older one. */
-    readonly kind: HappyAgentFileTabKind;
-}
+/** One restorable tab destination in the reader's local most-recently-visited list. */
+export type HappyAgentRecentTabMemory =
+    | {
+          readonly type: "session";
+          readonly groupId: HappyAgentGroupId;
+          readonly sessionId: HappyAgentSessionId;
+      }
+    | {
+          readonly type: "file";
+          readonly groupId: HappyAgentGroupId;
+          readonly path: string;
+          /** The newest presentation used for this path; revisiting replaces the older one. */
+          readonly fileKind: HappyAgentFileTabKind;
+      };
 
 /** One browser tab remembered for a group's panel, by where it was left. */
 export interface HappyAgentPanelBrowserMemory {
@@ -106,8 +113,8 @@ export const HAPPY_AGENT_GROUP_DRAFT_MAX_LENGTH = 100_000;
  */
 export interface HappyAgentWorkspaceMemoryDocument {
     readonly groups: { readonly [groupId: string]: HappyAgentGroupTabMemory | undefined };
-    /** File destinations, most recently visited first. */
-    readonly recentFiles?: readonly HappyAgentRecentFileMemory[];
+    /** Restorable session and file destinations, most recently visited first. */
+    readonly recentTabs?: readonly HappyAgentRecentTabMemory[];
 }
 
 /**
@@ -154,15 +161,33 @@ export interface HappyAgentWorkspaceMemoryStore {
      * record of one.
      */
     groupDraftWrite(groupId: HappyAgentGroupId, draft: string): void;
-    /** File destinations most recently visited in this window, newest first. */
-    recentFilesRead(): readonly HappyAgentRecentFileMemory[];
-    /** Moves one destination to the front, replacing an older visit to the same path. */
-    recentFileRemember(groupId: HappyAgentGroupId, path: string, kind: HappyAgentFileTabKind): void;
+    /** Restorable session and file destinations most recently visited, newest first. */
+    recentTabsRead(): readonly HappyAgentRecentTabMemory[];
+    /** Moves one destination to the front, replacing an older visit to the same tab. */
+    recentTabRemember(tab: HappyAgentRecentTabMemory): void;
 }
 
 const FILE_KINDS: readonly HappyAgentFileTabKind[] = ["file", "diff", "document", "media"];
-/** Enough history to recover work without turning a small corner menu into a catalog. */
-const RECENT_FILE_LIMIT = 40;
+/** Per-group budgets keep one busy workspace from erasing every other workspace's history. */
+const RECENT_SESSION_LIMIT_PER_GROUP = 200;
+const RECENT_FILE_LIMIT_PER_GROUP = 80;
+
+function recentTabsBound(
+    tabs: readonly HappyAgentRecentTabMemory[],
+): readonly HappyAgentRecentTabMemory[] {
+    const sessions = new Map<HappyAgentGroupId, number>();
+    const files = new Map<HappyAgentGroupId, number>();
+    return tabs.filter((tab) => {
+        if (tab.type === "session") {
+            const count = (sessions.get(tab.groupId) ?? 0) + 1;
+            sessions.set(tab.groupId, count);
+            return count <= RECENT_SESSION_LIMIT_PER_GROUP;
+        }
+        const count = (files.get(tab.groupId) ?? 0) + 1;
+        files.set(tab.groupId, count);
+        return count <= RECENT_FILE_LIMIT_PER_GROUP;
+    });
+}
 
 /** Reads one stored file tab, rejecting anything that is not the shape we wrote. */
 function fileTabParse(value: unknown): HappyAgentFileTabMemory | undefined {
@@ -179,19 +204,45 @@ function fileTabParse(value: unknown): HappyAgentFileTabMemory | undefined {
     };
 }
 
-function recentFileParse(value: unknown): HappyAgentRecentFileMemory | undefined {
+function recentTabParse(value: unknown): HappyAgentRecentTabMemory | undefined {
     if (typeof value !== "object" || value === null) return undefined;
     const record = value as Record<string, unknown>;
-    const { groupId, path, kind } = record;
+    const { groupId, type } = record;
     if (typeof groupId !== "string" || groupId.length === 0) return undefined;
-    if (typeof path !== "string" || path.length === 0) return undefined;
-    if (typeof kind !== "string" || !FILE_KINDS.includes(kind as HappyAgentFileTabKind))
+    if (type === "session") {
+        if (typeof record.sessionId !== "string" || record.sessionId.length === 0) return undefined;
+        return {
+            type,
+            groupId: groupId as HappyAgentGroupId,
+            sessionId: record.sessionId as HappyAgentSessionId,
+        };
+    }
+    if (type !== "file") return undefined;
+    if (typeof record.path !== "string" || record.path.length === 0) return undefined;
+    if (
+        typeof record.fileKind !== "string" ||
+        !FILE_KINDS.includes(record.fileKind as HappyAgentFileTabKind)
+    )
         return undefined;
     return {
+        type,
         groupId: groupId as HappyAgentGroupId,
-        path,
-        kind: kind as HappyAgentFileTabKind,
+        path: record.path,
+        fileKind: record.fileKind as HappyAgentFileTabKind,
     };
+}
+
+function recentTabKey(tab: HappyAgentRecentTabMemory): string {
+    return tab.type === "session"
+        ? `session\u0000${tab.groupId}\u0000${tab.sessionId}`
+        : `file\u0000${tab.groupId}\u0000${tab.path}`;
+}
+
+function recentTabSame(left: HappyAgentRecentTabMemory, right: HappyAgentRecentTabMemory): boolean {
+    if (recentTabKey(left) !== recentTabKey(right)) return false;
+    if (left.type === "session") return right.type === "session";
+    if (right.type !== "file") return false;
+    return left.fileKind === right.fileKind;
 }
 
 function orderParse(value: unknown): { readonly [tabId: string]: string } | undefined {
@@ -295,7 +346,7 @@ export function happyAgentWorkspaceMemoryStoreCreate(
     persistence?: HappyAgentWorkspaceMemoryPersistence,
 ): HappyAgentWorkspaceMemoryStore {
     const groups = new Map<string, HappyAgentGroupTabMemory>();
-    let recentFiles: readonly HappyAgentRecentFileMemory[] = [];
+    let recentTabs: readonly HappyAgentRecentTabMemory[] = [];
     const stored = (() => {
         try {
             return persistence?.read();
@@ -311,25 +362,25 @@ export function happyAgentWorkspaceMemoryStoreCreate(
                 const group = groupParse(value);
                 if (group) groups.set(groupId, group);
             }
-        if (Array.isArray(document.recentFiles)) {
+        if (Array.isArray(document.recentTabs)) {
             const seen = new Set<string>();
-            recentFiles = document.recentFiles
-                .flatMap((value) => {
-                    const file = recentFileParse(value);
-                    if (!file) return [];
-                    const key = `${file.groupId}\u0000${file.path}`;
+            recentTabs = recentTabsBound(
+                document.recentTabs.flatMap((value) => {
+                    const tab = recentTabParse(value);
+                    if (!tab) return [];
+                    const key = recentTabKey(tab);
                     if (seen.has(key)) return [];
                     seen.add(key);
-                    return [file];
-                })
-                .slice(0, RECENT_FILE_LIMIT);
+                    return [tab];
+                }),
+            );
         }
     }
 
     const flush = (): void => {
         if (!persistence) return;
         try {
-            persistence.write({ groups: Object.fromEntries(groups), recentFiles });
+            persistence.write({ groups: Object.fromEntries(groups), recentTabs });
         } catch {
             // Storage the host refused still keeps this client's memory alive.
         }
@@ -376,7 +427,10 @@ export function happyAgentWorkspaceMemoryStoreCreate(
             merge(groupId, !panel.open && panel.browsers.length === 0 ? rest : { ...rest, panel });
         },
         groupForget(groupId) {
-            if (!groups.delete(groupId)) return;
+            const groupRemoved = groups.delete(groupId);
+            const remainingTabs = recentTabs.filter((tab) => tab.groupId !== groupId);
+            if (!groupRemoved && remainingTabs.length === recentTabs.length) return;
+            recentTabs = remainingTabs;
             flush();
         },
         groupDraftWrite(groupId, draft) {
@@ -393,15 +447,14 @@ export function happyAgentWorkspaceMemoryStoreCreate(
             }
             merge(groupId, { ...groupOr(groupId), draft: next });
         },
-        recentFilesRead: () => recentFiles,
-        recentFileRemember(groupId, path, kind) {
-            const existing = recentFiles[0];
-            if (existing?.groupId === groupId && existing.path === path && existing.kind === kind)
-                return;
-            recentFiles = [
-                { groupId, path, kind },
-                ...recentFiles.filter((file) => file.groupId !== groupId || file.path !== path),
-            ].slice(0, RECENT_FILE_LIMIT);
+        recentTabsRead: () => recentTabs,
+        recentTabRemember(tab) {
+            const key = recentTabKey(tab);
+            if (recentTabs[0] && recentTabSame(recentTabs[0], tab)) return;
+            recentTabs = recentTabsBound([
+                tab,
+                ...recentTabs.filter((entry) => recentTabKey(entry) !== key),
+            ]);
             flush();
         },
     };

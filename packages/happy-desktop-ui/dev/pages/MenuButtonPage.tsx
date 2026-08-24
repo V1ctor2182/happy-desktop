@@ -24,7 +24,7 @@ export function MenuButtonPage() {
         >
             <div className="specimen-grid">
                 <Specimen
-                    detail="28px icon trigger · end-aligned 300px popover · grouped recovery rows"
+                    detail="28px icon trigger · end-aligned 300px popover · fixed heading · bounded history pages"
                     label="End aligned"
                     number="MB-01"
                     stage="app"
@@ -42,6 +42,9 @@ export function MenuButtonPage() {
                             icon="history"
                             items={historyItems}
                             label="Open workspace history"
+                            menuLabel="Tab history"
+                            menuMaxHeight={220}
+                            menuPageSize={4}
                             menuWidth={300}
                             onSelect={() => {}}
                         />

@@ -29,6 +29,8 @@ export type MenuProps = {
     id?: string;
     "data-testid"?: string;
     style?: CSSProperties;
+    /** A fixed heading above the scrollable menu rows. */
+    label?: string;
     items: MenuItem[];
     onSelect?: (id: string) => void;
     width?: number;
@@ -42,7 +44,7 @@ export type MenuProps = {
  * destructive role.
  */
 export function Menu(props: MenuProps) {
-    const { className, items, onSelect, style, width, ...rest } = props;
+    const { className, items, label, onSelect, style, width, ...rest } = props;
     const hasIcons = items.some(
         (item) => item.kind === "item" && (item.icon !== undefined || item.iconUrl !== undefined),
     );
@@ -58,77 +60,84 @@ export function Menu(props: MenuProps) {
                 ...(width === undefined ? {} : { width: `${width}px` }),
             }}
         >
+            {label ? (
+                <div className="happy-menu__header" data-happy-desktop-ui="menu-header">
+                    {label}
+                </div>
+            ) : null}
             <div className="happy-menu__list" data-happy-desktop-ui="menu-list">
-                {items.map((item, index) => {
-                    if (item.kind === "separator") {
-                        return (
-                            <div
-                                aria-hidden="true"
-                                className="happy-menu__separator"
-                                data-happy-desktop-ui="menu-separator"
-                                key={`separator-${index}`}
-                                role="separator"
-                            />
-                        );
-                    }
-                    if (item.kind === "label") {
-                        return (
-                            <div
-                                className="happy-menu__label"
-                                data-happy-desktop-ui="menu-label"
-                                key={`label-${item.label}-${index}`}
-                            >
-                                {item.label}
-                            </div>
-                        );
-                    }
-                    return (
-                        <button
-                            aria-disabled={item.disabled ? "true" : undefined}
-                            className="happy-menu__item"
-                            data-danger={item.danger ? "" : undefined}
-                            data-item-id={item.id}
-                            data-happy-desktop-ui="menu-item"
-                            disabled={item.disabled}
-                            key={item.id}
-                            onClick={() => {
-                                if (!item.disabled) onSelect?.(item.id);
-                            }}
-                            role="menuitem"
-                            type="button"
-                        >
-                            {hasIcons ? (
-                                <span
-                                    className="happy-menu__item-icon"
-                                    data-happy-desktop-ui="menu-item-icon"
-                                >
-                                    {item.iconUrl ? (
-                                        <img
-                                            alt=""
-                                            className="happy-menu__item-image"
-                                            data-happy-desktop-ui="menu-item-image"
-                                            src={item.iconUrl}
-                                        />
-                                    ) : item.icon ? (
-                                        <Icon name={item.icon} size={16} />
-                                    ) : null}
-                                </span>
-                            ) : null}
-                            <span
-                                className="happy-menu__item-label"
-                                data-happy-desktop-ui="menu-item-label"
-                            >
-                                {item.label}
-                            </span>
-                            {item.shortcut ? (
-                                <KeyCap
-                                    className="happy-menu__item-shortcut"
-                                    keys={item.shortcut}
+                <div className="happy-menu__rows" data-happy-desktop-ui="menu-rows">
+                    {items.map((item, index) => {
+                        if (item.kind === "separator") {
+                            return (
+                                <div
+                                    aria-hidden="true"
+                                    className="happy-menu__separator"
+                                    data-happy-desktop-ui="menu-separator"
+                                    key={`separator-${index}`}
+                                    role="separator"
                                 />
-                            ) : null}
-                        </button>
-                    );
-                })}
+                            );
+                        }
+                        if (item.kind === "label") {
+                            return (
+                                <div
+                                    className="happy-menu__label"
+                                    data-happy-desktop-ui="menu-label"
+                                    key={`label-${item.label}-${index}`}
+                                >
+                                    {item.label}
+                                </div>
+                            );
+                        }
+                        return (
+                            <button
+                                aria-disabled={item.disabled ? "true" : undefined}
+                                className="happy-menu__item"
+                                data-danger={item.danger ? "" : undefined}
+                                data-item-id={item.id}
+                                data-happy-desktop-ui="menu-item"
+                                disabled={item.disabled}
+                                key={item.id}
+                                onClick={() => {
+                                    if (!item.disabled) onSelect?.(item.id);
+                                }}
+                                role="menuitem"
+                                type="button"
+                            >
+                                {hasIcons ? (
+                                    <span
+                                        className="happy-menu__item-icon"
+                                        data-happy-desktop-ui="menu-item-icon"
+                                    >
+                                        {item.iconUrl ? (
+                                            <img
+                                                alt=""
+                                                className="happy-menu__item-image"
+                                                data-happy-desktop-ui="menu-item-image"
+                                                src={item.iconUrl}
+                                            />
+                                        ) : item.icon ? (
+                                            <Icon name={item.icon} size={16} />
+                                        ) : null}
+                                    </span>
+                                ) : null}
+                                <span
+                                    className="happy-menu__item-label"
+                                    data-happy-desktop-ui="menu-item-label"
+                                >
+                                    {item.label}
+                                </span>
+                                {item.shortcut ? (
+                                    <KeyCap
+                                        className="happy-menu__item-shortcut"
+                                        keys={item.shortcut}
+                                    />
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
