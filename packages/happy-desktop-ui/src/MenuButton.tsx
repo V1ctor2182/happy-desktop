@@ -1,11 +1,19 @@
 import { useCallback, useId, useRef, useState } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "./Button";
-import type { IconName } from "./Icon";
+import { Icon, type IconName, type IconProps } from "./Icon";
 import { Menu, type MenuItem } from "./Menu";
 
 export interface MenuButtonProps {
     readonly label: string;
     readonly icon: IconName;
+    /**
+     * Optical size of the trigger glyph, for a name backed by the heavier of the
+     * two families. An Octicons glyph is drawn across the full 16 box where an
+     * Ionicons outline uses a 14 × 12 ink box, so at the button's own 14px it
+     * paints visibly larger than the Ionicons buttons beside it; 12px is where
+     * the two inks match. Defaults to the button's size for its own family.
+     */
+    readonly iconSize?: IconProps["size"];
     /** Static rows, or a catalog materialized only when the menu opens. */
     readonly items: readonly MenuItem[] | (() => readonly MenuItem[]);
     readonly onSelect: (id: string) => void;
@@ -128,7 +136,7 @@ export function MenuButton(props: MenuButtonProps) {
                 aria-haspopup="menu"
                 aria-label={props.label}
                 disabled={props.disabled}
-                icon={props.icon}
+                {...(props.iconSize === undefined ? { icon: props.icon } : {})}
                 iconOnly
                 onClick={(event) => {
                     if (expanded) close(false);
@@ -143,7 +151,11 @@ export function MenuButton(props: MenuButtonProps) {
                 }}
                 size={props.size ?? "small"}
                 variant={props.variant ?? "ghost"}
-            />
+            >
+                {props.iconSize === undefined ? null : (
+                    <Icon name={props.icon} size={props.iconSize} />
+                )}
+            </Button>
             {expanded ? (
                 <>
                     <button

@@ -1,5 +1,5 @@
 import { partitionComponentProps } from "./componentProps";
-import { type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { KeyboardShortcut } from "./keyboardShortcut";
 import { type MenuItem } from "./Menu";
 import { Tabs, type TabItem, type TabsSize } from "./Tabs";
@@ -41,6 +41,13 @@ export type TabbedPaneProps = {
      * scrolls. Living outside that clip also lets their overlays float below.
      */
     actions?: ReactNode;
+    /**
+     * Controls pinned to the far end of the bar, clear of the tabs. Use this for
+     * an affordance that belongs to the strip as a whole rather than to the tab
+     * after the last one: it holds the same trailing gutter as the header above
+     * it, so the two line up in one column no matter how many tabs there are.
+     */
+    trailing?: ReactNode;
 };
 
 /**
@@ -76,9 +83,32 @@ export function TabbedPane(props: TabbedPaneProps) {
         "style",
         "tabMenuItems",
         "tabs",
+        "trailing",
         "transferTargets",
         "transferable",
     ]);
+    const scroller = useRef<HTMLDivElement>(null);
+    // eslint-disable-next-line happy-react/no-layout-effect -- activation must reveal the committed tab before paint by moving its horizontal browser scrollport; depending only on activeId preserves a deliberate manual scroll until another tab is activated
+    useLayoutEffect(() => {
+        const viewport = scroller.current;
+        const active = viewport?.querySelector<HTMLElement>(
+            '[data-happy-desktop-ui="tab"][aria-selected="true"]',
+        );
+        if (!viewport || !active) return;
+        const viewportBounds = viewport.getBoundingClientRect();
+        const activeBounds = active.getBoundingClientRect();
+        let left = viewport.scrollLeft;
+        if (activeBounds.right > viewportBounds.right) {
+            // A newly appended tab lands against the trailing edge, like the
+            // document and terminal strips in desktop editors.
+            left += activeBounds.right - viewportBounds.right;
+        } else if (activeBounds.left < viewportBounds.left) {
+            left -= viewportBounds.left - activeBounds.left;
+        } else {
+            return;
+        }
+        viewport.scrollTo({ behavior: "auto", left });
+    }, [local.activeId]);
     return (
         <div
             {...rest}
@@ -91,6 +121,7 @@ export function TabbedPane(props: TabbedPaneProps) {
                 <div
                     className="happy-tabbed-pane__scroller"
                     data-happy-desktop-ui="tabbed-pane-scroller"
+                    ref={scroller}
                 >
                     {/* The strip is only as wide as the tabs. The action follows
                         this shrinkable scrollport outside its clip, so it stays
@@ -124,6 +155,14 @@ export function TabbedPane(props: TabbedPaneProps) {
                         data-happy-desktop-ui="tabbed-pane-actions"
                     >
                         {local.actions}
+                    </div>
+                ) : null}
+                {local.trailing ? (
+                    <div
+                        className="happy-tabbed-pane__trailing"
+                        data-happy-desktop-ui="tabbed-pane-trailing"
+                    >
+                        {local.trailing}
                     </div>
                 ) : null}
             </div>

@@ -2072,24 +2072,42 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     ];
     const historyMenuItems = (): readonly MenuItem[] => {
         if (!openGroup) return [];
-        const archivedSessions = workspace.list.archivedSessions.filter(
-            (session) =>
-                session.parentSessionId === undefined &&
-                happyAgentSessionGroupIdOf(session) === openGroup.id,
-        );
+        // The host's archived catalog is authoritative when it has anything to
+        // say, but it is not the record this list stands on: Happy Agent stops
+        // listing an agent entirely once it is archived, so the catalog is
+        // empty again after every reconnect. What this window wrote down as it
+        // visited each session is what survives, and the two are merged by id.
         const archivedSessionById = new Map(
-            archivedSessions.map((session) => [session.id, session]),
+            workspace.list.archivedSessions
+                .filter(
+                    (session) =>
+                        session.parentSessionId === undefined &&
+                        happyAgentSessionGroupIdOf(session) === openGroup.id,
+                )
+                .map((session) => [session.id, session]),
         );
+        // A session still in the strip is a tab, not history. It is reachable by
+        // clicking it, and offering to "restore" what is already open would put
+        // a row in this list that does nothing.
+        const openSessionIds = new Set(openGroup.conversations.map((summary) => summary.id));
         const historyEntries: (
-            | { readonly type: "session"; readonly session: (typeof archivedSessions)[number] }
+            | {
+                  readonly type: "session";
+                  readonly sessionId: HappyAgentSessionId;
+                  readonly title: string;
+              }
             | { readonly type: "file"; readonly file: HappyAgentRecentFileTabMemory }
         )[] = [];
         const seenSessions = new Set<HappyAgentSessionId>();
         const seenFiles = new Set<string>();
-        const historySessionAppend = (session: (typeof archivedSessions)[number]): void => {
-            if (seenSessions.has(session.id)) return;
-            seenSessions.add(session.id);
-            historyEntries.push({ type: "session", session });
+        const historySessionAppend = (sessionId: HappyAgentSessionId, title?: string): void => {
+            if (seenSessions.has(sessionId) || openSessionIds.has(sessionId)) return;
+            seenSessions.add(sessionId);
+            historyEntries.push({
+                type: "session",
+                sessionId,
+                title: title?.trim() || `Session ${sessionId.slice(0, 8)}`,
+            });
         };
         const historyFileAppend = (file: HappyAgentRecentFileTabMemory): void => {
             if (seenFiles.has(file.path)) return;
@@ -2101,14 +2119,15 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         // opening this window for the first time never hides recoverable work.
         for (const tab of workspace.recentTabs) {
             if (tab.groupId !== openGroup.id) continue;
-            if (tab.type === "session") {
-                const session = archivedSessionById.get(tab.sessionId);
-                if (session) historySessionAppend(session);
-            } else {
-                historyFileAppend(tab);
-            }
+            if (tab.type === "session")
+                historySessionAppend(
+                    tab.sessionId,
+                    archivedSessionById.get(tab.sessionId)?.title ?? tab.title,
+                );
+            else historyFileAppend(tab);
         }
-        for (const session of archivedSessions) historySessionAppend(session);
+        for (const [sessionId, session] of archivedSessionById)
+            historySessionAppend(sessionId, session.title);
         if (historyEntries.length === 0)
             return [
                 {
@@ -2116,7 +2135,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     icon: "history",
                     id: "empty",
                     kind: "item",
-                    label: "No archived sessions or recent files",
+                    label: "No closed sessions or recent files",
                 },
             ];
         return historyEntries.map(
@@ -2125,9 +2144,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     ? {
                           disabled: !availability.online,
                           icon: "chat",
-                          id: `${HISTORY_SESSION_PREFIX}${entry.session.id}`,
+                          id: `${HISTORY_SESSION_PREFIX}${entry.sessionId}`,
                           kind: "item",
-                          label: entry.session.title ?? "Untitled",
+                          label: entry.title,
                       }
                     : {
                           disabled: !availability.online,
@@ -2683,81 +2702,94 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     ) : (
                         <TabbedPane
                             actions={
-                                <>
-                                    {/* A tab is a session, so adding one creates it
-                                    directly in the addressed project or worktree
-                                    instead of opening the task form. A workspace
-                                    that cannot host one keeps the control and
-                                    disables it: the strip is the same strip
-                                    throughout a checkout being prepared, so the
-                                    button goes grey for a moment rather than
-                                    appearing out of nowhere when it arrives. */}
-                                    <Button
-                                        aria-label="Create a session in this project"
-                                        disabled={!sessionCreateAvailable}
-                                        icon="plus"
-                                        iconOnly
-                                        onClick={() => groupConversationCreate(openGroup)}
-                                        shortcut={APP_SHORTCUTS.sessionCreate}
-                                        size="small"
-                                        variant="ghost"
-                                    />
-                                    <MenuButton
-                                        align="end"
-                                        icon="history"
-                                        items={historyMenuItems}
-                                        label="Open tab history"
-                                        menuMaxHeight={420}
-                                        menuLabel="Tab history"
-                                        menuPageSize={100}
-                                        menuWidth={300}
-                                        onSelect={(id) => {
-                                            if (id.startsWith(HISTORY_SESSION_PREFIX)) {
-                                                const sessionId = id.slice(
-                                                    HISTORY_SESSION_PREFIX.length,
-                                                ) as HappyAgentSessionId;
-                                                if (
-                                                    !props.workspace
-                                                        .get()
-                                                        .list.archivedSessions.some(
-                                                            (session) =>
-                                                                session.id === sessionId &&
-                                                                session.parentSessionId ===
-                                                                    undefined &&
-                                                                happyAgentSessionGroupIdOf(
-                                                                    session,
-                                                                ) === openGroup.id,
-                                                        )
+                                /* A tab is a session, so adding one creates it
+                                   directly in the addressed project or worktree
+                                   instead of opening the task form. It follows
+                                   the last tab, the way an editor's "new tab"
+                                   does. A workspace that cannot host one keeps
+                                   the control and disables it: the strip is the
+                                   same strip throughout a checkout being
+                                   prepared, so the button goes grey for a moment
+                                   rather than appearing out of nowhere when it
+                                   arrives. */
+                                <Button
+                                    aria-label="Create a session in this project"
+                                    disabled={!sessionCreateAvailable}
+                                    icon="plus"
+                                    iconOnly
+                                    onClick={() => groupConversationCreate(openGroup)}
+                                    shortcut={APP_SHORTCUTS.sessionCreate}
+                                    size="small"
+                                    variant="ghost"
+                                />
+                            }
+                            trailing={
+                                /* The strip's own control, not the next thing
+                                   after the last tab: it offers everything this
+                                   workspace has closed, however many tabs are
+                                   open. So it holds the bar's far edge, in the
+                                   same column as the header control above it,
+                                   instead of sliding along with the tabs. */
+                                <MenuButton
+                                    align="end"
+                                    icon="history"
+                                    iconSize={12}
+                                    items={historyMenuItems}
+                                    label="Open tab history"
+                                    menuMaxHeight={420}
+                                    menuLabel="Tab history"
+                                    menuPageSize={100}
+                                    menuWidth={300}
+                                    onSelect={(id) => {
+                                        if (id.startsWith(HISTORY_SESSION_PREFIX)) {
+                                            const sessionId = id.slice(
+                                                HISTORY_SESSION_PREFIX.length,
+                                            ) as HappyAgentSessionId;
+                                            // A row that is already back in
+                                            // the strip is a plain selection.
+                                            // Everything else is asked of the
+                                            // host by id: it stopped listing
+                                            // this agent when it was
+                                            // archived, so there is no
+                                            // catalog entry left to check the
+                                            // request against first.
+                                            if (
+                                                props.workspace.get().list.projects.type ===
+                                                    "ready" &&
+                                                openGroup.conversations.some(
+                                                    (summary) => summary.id === sessionId,
                                                 )
-                                                    return;
-                                                void props.workspace
-                                                    .conversationRestore(sessionId)
-                                                    .then(() =>
-                                                        props.onChatSelect(openGroup.id, sessionId),
-                                                    )
-                                                    .catch(() => undefined);
+                                            ) {
+                                                props.onChatSelect(openGroup.id, sessionId);
                                                 return;
                                             }
-                                            if (!id.startsWith(HISTORY_FILE_PREFIX)) return;
-                                            const path = id.slice(HISTORY_FILE_PREFIX.length);
-                                            const file = props.workspace
-                                                .get()
-                                                .recentTabs.find(
-                                                    (tab): tab is HappyAgentRecentFileTabMemory =>
-                                                        tab.type === "file" &&
-                                                        tab.groupId === openGroup.id &&
-                                                        tab.path === path,
-                                                );
-                                            if (file)
-                                                props.onFileSelect(
-                                                    openGroup.id,
-                                                    props.chatId,
-                                                    file.path,
-                                                    file.fileKind,
-                                                );
-                                        }}
-                                    />
-                                </>
+                                            void props.workspace
+                                                .conversationRestore(sessionId)
+                                                .then(() =>
+                                                    props.onChatSelect(openGroup.id, sessionId),
+                                                )
+                                                .catch(() => undefined);
+                                            return;
+                                        }
+                                        if (!id.startsWith(HISTORY_FILE_PREFIX)) return;
+                                        const path = id.slice(HISTORY_FILE_PREFIX.length);
+                                        const file = props.workspace
+                                            .get()
+                                            .recentTabs.find(
+                                                (tab): tab is HappyAgentRecentFileTabMemory =>
+                                                    tab.type === "file" &&
+                                                    tab.groupId === openGroup.id &&
+                                                    tab.path === path,
+                                            );
+                                        if (file)
+                                            props.onFileSelect(
+                                                openGroup.id,
+                                                props.chatId,
+                                                file.path,
+                                                file.fileKind,
+                                            );
+                                    }}
+                                />
                             }
                             activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"

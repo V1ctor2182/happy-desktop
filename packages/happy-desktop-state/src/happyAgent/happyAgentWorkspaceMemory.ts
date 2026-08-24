@@ -21,6 +21,15 @@ export type HappyAgentRecentTabMemory =
           readonly type: "session";
           readonly groupId: HappyAgentGroupId;
           readonly sessionId: HappyAgentSessionId;
+          /**
+           * What the session was called when this window last saw it. The host's
+           * catalog stops listing an agent the moment it is archived — it is
+           * absent from `/v0/bootstrap/desktop` and from every list route — so a
+           * recovery list assembled only from the catalog would forget a closed
+           * session at the next reconnect. Carrying the name here is what lets
+           * the reader still recognize and reopen it afterwards.
+           */
+          readonly title?: string;
       }
     | {
           readonly type: "file";
@@ -165,6 +174,17 @@ export interface HappyAgentWorkspaceMemoryStore {
     recentTabsRead(): readonly HappyAgentRecentTabMemory[];
     /** Moves one destination to the front, replacing an older visit to the same tab. */
     recentTabRemember(tab: HappyAgentRecentTabMemory): void;
+    /**
+     * Renames a session already in the history without moving it. A session is
+     * titled after it is opened and retitled while it runs, and none of that is
+     * a visit: the name has to stay current where it is, or a closed session
+     * would be offered back under whatever it was called in its first seconds.
+     */
+    recentSessionTitleRemember(
+        groupId: HappyAgentGroupId,
+        sessionId: HappyAgentSessionId,
+        title: string,
+    ): void;
 }
 
 const FILE_KINDS: readonly HappyAgentFileTabKind[] = ["file", "diff", "document", "media"];
@@ -215,6 +235,9 @@ function recentTabParse(value: unknown): HappyAgentRecentTabMemory | undefined {
             type,
             groupId: groupId as HappyAgentGroupId,
             sessionId: record.sessionId as HappyAgentSessionId,
+            ...(typeof record.title === "string" && record.title.length > 0
+                ? { title: record.title }
+                : {}),
         };
     }
     if (type !== "file") return undefined;
@@ -240,7 +263,7 @@ function recentTabKey(tab: HappyAgentRecentTabMemory): string {
 
 function recentTabSame(left: HappyAgentRecentTabMemory, right: HappyAgentRecentTabMemory): boolean {
     if (recentTabKey(left) !== recentTabKey(right)) return false;
-    if (left.type === "session") return right.type === "session";
+    if (left.type === "session") return right.type === "session" && left.title === right.title;
     if (right.type !== "file") return false;
     return left.fileKind === right.fileKind;
 }
@@ -455,6 +478,25 @@ export function happyAgentWorkspaceMemoryStoreCreate(
                 tab,
                 ...recentTabs.filter((entry) => recentTabKey(entry) !== key),
             ]);
+            flush();
+        },
+        recentSessionTitleRemember(groupId, sessionId, title) {
+            const named = title.trim();
+            if (named.length === 0) return;
+            let changed = false;
+            const next = recentTabs.map((entry) => {
+                if (
+                    entry.type !== "session" ||
+                    entry.groupId !== groupId ||
+                    entry.sessionId !== sessionId ||
+                    entry.title === named
+                )
+                    return entry;
+                changed = true;
+                return { ...entry, title: named };
+            });
+            if (!changed) return;
+            recentTabs = next;
             flush();
         },
     };

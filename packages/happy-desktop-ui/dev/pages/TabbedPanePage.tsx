@@ -1,6 +1,8 @@
 import { Button } from "../../src/Button";
 import { EmptyState } from "../../src/EmptyState";
 import { commandShortcut } from "../../src/keyboardShortcut";
+import { MenuButton } from "../../src/MenuButton";
+import { type MenuItem } from "../../src/Menu";
 import { TabbedPane } from "../../src/TabbedPane";
 import { type TabItem } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -22,6 +24,11 @@ const longTabs: TabItem[] = [
     { id: "four", label: "Untitled session" },
 ];
 
+const historyItems: MenuItem[] = [
+    { id: "a", kind: "item", label: "Rebuild the composer model control", icon: "chat" },
+    { id: "b", kind: "item", label: "sources/…/workspace.ts", icon: "doc" },
+];
+
 function Body(props: { title: string }) {
     return (
         <EmptyState
@@ -40,6 +47,7 @@ function Pane(props: {
     withAction?: boolean;
     withClose?: boolean;
     withReorder?: boolean;
+    withTrailing?: boolean;
 }) {
     return (
         <div
@@ -70,6 +78,20 @@ function Pane(props: {
                 onReorder={props.withReorder ? () => {} : undefined}
                 onSelect={() => {}}
                 tabs={props.tabs}
+                trailing={
+                    props.withTrailing ? (
+                        <MenuButton
+                            align="end"
+                            icon="history"
+                            iconSize={12}
+                            items={historyItems}
+                            label="Open tab history"
+                            menuLabel="Tab history"
+                            menuWidth={240}
+                            onSelect={() => {}}
+                        />
+                    ) : undefined
+                }
             >
                 <Body title="Active tab body" />
             </TabbedPane>
@@ -108,14 +130,33 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="the strip scrolls; its action stays visible outside the clip"
+                    detail="the active tab is revealed at the trailing edge; its action stays visible outside the clip"
                     label="Many long tabs"
                     number="T-03"
                     stage="app"
                 >
                     <div style={{ padding: "24px" }}>
-                        <Pane active="one" tabs={longTabs} withAction />
-                        <DimensionRule label="tab max-width 200 · label ellipsis · strip scrolls" />
+                        <Pane active="four" tabs={longTabs} withAction withTrailing />
+                        <DimensionRule label="tab max-width 200 · active revealed · label ellipsis · strip scrolls" />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="the trailing control holds the bar's far edge whether the strip is short or overflowing, on the 16px header gutter"
+                    label="Pinned trailing control"
+                    number="T-07"
+                    stage="app"
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "16px",
+                            padding: "24px",
+                        }}
+                    >
+                        <Pane active="one" tabs={sessionTabs} withAction withTrailing />
+                        <Pane active="one" tabs={longTabs} withAction withTrailing />
+                        <DimensionRule label="trailing margin-left auto · pad 0 16 0 8 · gap 4" />
                     </div>
                 </Specimen>
                 <Specimen
