@@ -53,22 +53,18 @@ if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/u.test(options.name)) {
 }
 
 /*
- * A development Electron already running takes the whole application's
- * single-instance lock, and that lock is the application's rather than this
- * home's: a second one calls `app.quit()` before it opens anything, exits 0, and
- * says nothing at all. Every part of this script still works — portless binds,
- * Vite serves, the main bundle builds — so the only visible symptom is a window
- * that never appears, which reads exactly like the sandbox being broken.
+ * A development Electron already running from this checkout shares its build
+ * output with a second launch. Every part of this script still appears to work
+ * — portless binds, Vite serves, the main bundle builds — while both process
+ * groups race over the same files.
  *
- * So it is checked here, where there is somewhere to say it. A second sandbox is
- * not something to allow either: the lock would stop it just the same.
+ * So it is checked here, where there is somewhere to say it. Other worktrees
+ * are deliberately allowed: build identity gives each one its own Electron
+ * bundle identity, user-data directory, output tree, and Portless route.
  */
-const developmentElectron = "node_modules/.pnpm/electron@";
+const developmentElectron = join(workspace, "node_modules", ".pnpm", "electron@");
 const running = (() => {
     try {
-        // Deliberately every checkout rather than this one: the lock is the
-        // application's, so a development Happy running out of another worktree
-        // stops this one exactly as surely as one running out of here.
         return execFileSync("pgrep", ["-f", developmentElectron], { encoding: "utf8" }).trim();
     } catch {
         // pgrep exits non-zero when nothing matches, which is the ordinary case.
@@ -76,9 +72,9 @@ const running = (() => {
     }
 })();
 if (running) {
-    console.error("A development Happy is already running, and only one can be.");
+    console.error("A development Happy is already running from this checkout.");
     console.error("Quit that window first, or stop it with:");
-    console.error(`  pkill -f ${developmentElectron}`);
+    console.error(`  pkill -f '${developmentElectron}'`);
     process.exit(1);
 }
 
