@@ -380,7 +380,7 @@ export const happyAgentMenus: HappyAgentMenusSnapshot = {
         { mode: "full_access", label: "Full access", current: false },
     ],
     serviceTierOptions: [
-        { tier: null, label: "Standard", current: true },
+        { tier: null, label: "Regular", current: true },
         { tier: "fast", label: "Fast", current: false },
     ],
     currentProviderId: "codex",

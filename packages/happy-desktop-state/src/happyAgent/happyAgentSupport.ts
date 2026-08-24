@@ -102,5 +102,5 @@ export function happyAgentPermissionLabel(mode: HappyAgentPermissionMode): strin
 }
 
 export function happyAgentServiceTierLabel(tier: HappyAgentServiceTier | null): string {
-    return tier === "fast" ? "Fast" : "Standard";
+    return tier === "fast" ? "Fast" : "Regular";
 }

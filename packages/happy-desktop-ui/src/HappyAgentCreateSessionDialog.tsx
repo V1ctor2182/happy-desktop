@@ -335,7 +335,7 @@ export function HappyAgentCreateSessionDialog(props: HappyAgentCreateSessionDial
                             {...(menus ? { value: menus.currentPermissionMode } : {})}
                         />
                         {/* Speed is a choice only where the provider offers a fast
-                            tier. On a standard-only model the list would hold one
+                            tier. On a regular-only model the list would hold one
                             unchangeable row, so the control is absent rather than
                             shown as a decision nobody can make. */}
                         {tierOptions.length > 1 ? (

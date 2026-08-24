@@ -15,6 +15,10 @@ import type {
     UsageBreakdown,
     Workspace,
 } from "@slopus/happy-agent-client";
+import {
+    happyAgentServiceTierFromWire,
+    happyAgentServiceTiersFromWire,
+} from "../happyAgentServiceTier.js";
 import type {
     ChatElement,
     GitChangeSnapshot,
@@ -85,6 +89,7 @@ export function modeOf(
 export function projectSession(input: SessionProjectionInput): SessionState {
     const { agent, config, workspace } = input;
     const mode = modeOf(config, input.draft, input.mode, input.intendedMode);
+    const serviceTier = happyAgentServiceTierFromWire(mode.serviceTier);
     const activeRun = newestRunningRun(input.runs);
     const projectId = workspace?.projectId;
     const scope =
@@ -134,11 +139,11 @@ export function projectSession(input: SessionProjectionInput): SessionState {
         ...(agent.title === null ? {} : { title: agent.title }),
         titleStatus: agent.titleStatus,
         effort: mode.effort,
-        ...(mode.serviceTier === null ? {} : { serviceTier: mode.serviceTier }),
+        ...(serviceTier === undefined ? {} : { serviceTier }),
         permissionMode: mode.permissionMode,
         modelLocked: false,
         modelCatalog: modelCatalog(config),
-        models: Object.entries(config.models).map(([id, model]) => ({ id, ...model })),
+        models: modelDefinitionsProject(config),
         pendingUserInputs,
         pendingSteeringMessages: input.messages
             .filter(
@@ -488,6 +493,7 @@ function projectAgent(
     storedMode?: MessageMode | null,
 ): GroupSession {
     const mode = modeOf(config, draft, storedMode);
+    const serviceTier = happyAgentServiceTierFromWire(mode.serviceTier);
     const projectId = workspace?.projectId ?? agent.workspaceId;
     const scope =
         workspace?.kind === "root"
@@ -517,7 +523,7 @@ function projectAgent(
         permissionMode: mode.permissionMode,
         scope,
         providerId: mode.providerId,
-        ...(mode.serviceTier === null ? {} : { serviceTier: mode.serviceTier }),
+        ...(serviceTier === undefined ? {} : { serviceTier }),
         status: agent.status === "idle" ? "idle" : "running",
         ...(agent.title === null ? {} : { title: agent.title }),
         trackUnread: true,
@@ -955,9 +961,28 @@ function modelCatalog(config: DaemonConfig): SessionState["modelCatalog"] {
     return {
         defaultModelId: config.defaults.modelId,
         defaultProviderId: config.defaults.providerId,
-        models: Object.entries(config.models).map(([id, model]) => ({ id, ...model })),
-        providers: Object.entries(config.providers).map(([id, provider]) => ({ id, ...provider })),
+        models: modelDefinitionsProject(config),
+        providers: Object.entries(config.providers).map(([id, provider]) => ({
+            id,
+            ...provider,
+            models: provider.models.map((model) => ({
+                ...model,
+                ...(model.serviceTiers === undefined
+                    ? {}
+                    : {
+                          serviceTiers: happyAgentServiceTiersFromWire(model.serviceTiers),
+                      }),
+            })),
+        })),
     };
+}
+
+function modelDefinitionsProject(config: DaemonConfig): readonly unknown[] {
+    return Object.entries(config.models).map(([id, model]) => ({
+        id,
+        ...model,
+        serviceTiers: happyAgentServiceTiersFromWire(model.serviceTiers),
+    }));
 }
 
 function activityOf(agent: Agent): SessionState["activity"] {

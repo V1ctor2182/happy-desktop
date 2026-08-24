@@ -1,4 +1,5 @@
 import type { DaemonConfig, GitFileChange, Project } from "@slopus/happy-agent-client";
+import { happyAgentServiceTiersFromWire } from "../happyAgentServiceTier.js";
 import type {
     HappyAgentChangedFileDocument,
     HappyAgentGitChangedFile,
@@ -43,16 +44,12 @@ export function happyAgentModelCatalogProject(config: DaemonConfig): HappyAgentM
                 const model = modelProject(config, reference.id, reference);
                 return model === undefined ? [] : [model];
             });
-            const serviceTiers = [
-                ...new Set(
-                    references.flatMap(
-                        (reference) =>
-                            reference.serviceTiers ??
-                            config.models[reference.id]?.serviceTiers ??
-                            [],
-                    ),
+            const serviceTiers = happyAgentServiceTiersFromWire(
+                references.flatMap(
+                    (reference) =>
+                        reference.serviceTiers ?? config.models[reference.id]?.serviceTiers ?? [],
                 ),
-            ].filter((tier): tier is "fast" => tier === "fast");
+            );
             return {
                 enabled: provider.enabled,
                 id: providerId,

@@ -8,6 +8,7 @@ import type {
     Project,
 } from "@slopus/happy-agent-client";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
+import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
 
 export type { MutationId };
 
@@ -397,7 +398,7 @@ export interface SessionState {
     recap?: string;
     titleStatus: "error" | "generating" | "idle" | "ready";
     effort?: string;
-    serviceTier?: string;
+    serviceTier?: HappyAgentServiceTier;
     permissionMode: string;
     modelLocked: boolean;
     modelCatalog: {
@@ -515,7 +516,7 @@ export interface GroupSession {
         | { kind: "workspace"; projectId: string; workspaceId: string };
     providerId: string;
     recap?: string;
-    serviceTier?: string;
+    serviceTier?: HappyAgentServiceTier;
     status: SessionState["status"];
     title?: string;
     trackUnread: boolean;
@@ -655,7 +656,7 @@ export interface CreateSessionInput {
     permissionMode?: string;
     projectId?: string;
     providerId?: string;
-    serviceTier?: string;
+    serviceTier?: HappyAgentServiceTier;
     workspaceId?: string;
 }
 
@@ -735,7 +736,7 @@ export interface HappyAgentConnection {
     setDraft(sessionId: string, update: string | DraftUpdate): MutationId;
     switchModel(sessionId: string, selection: string | ModelSelection): MutationId;
     setEffort(sessionId: string, effort?: string): MutationId;
-    setServiceTier(sessionId: string, serviceTier?: string): MutationId;
+    setServiceTier(sessionId: string, serviceTier?: HappyAgentServiceTier): MutationId;
     setPermissionMode(sessionId: string, permissionMode: string): MutationId;
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;

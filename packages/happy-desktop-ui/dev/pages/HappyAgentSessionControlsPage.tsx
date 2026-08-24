@@ -62,7 +62,7 @@ export function HappyAgentSessionControlsPage() {
 
             <Specimen
                 detail="a provider without a fast tier: the speed control is absent, not a one-row menu"
-                label="Standard only"
+                label="Regular only"
                 number="03"
                 stage="surface"
             >
@@ -72,7 +72,7 @@ export function HappyAgentSessionControlsPage() {
                         menuPlacement="above"
                         menus={{
                             ...happyAgentMenus,
-                            serviceTierOptions: [{ tier: null, label: "Standard", current: true }],
+                            serviceTierOptions: [{ tier: null, label: "Regular", current: true }],
                         }}
                         onEffortChange={() => undefined}
                         onModelChange={() => undefined}

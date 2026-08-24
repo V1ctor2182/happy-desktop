@@ -86,7 +86,7 @@ const MENUS: HappyAgentMenusSnapshot = {
         { current: false, label: "Full access", mode: "full_access" },
     ],
     serviceTierOptions: [
-        { current: true, label: "Standard", tier: null },
+        { current: true, label: "Regular", tier: null },
         { current: false, label: "Fast", tier: "fast" },
     ],
 };

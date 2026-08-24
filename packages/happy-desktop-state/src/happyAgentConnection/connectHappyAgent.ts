@@ -22,6 +22,7 @@ import {
     type Workspace,
 } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
+import { happyAgentServiceTierToWire } from "../happyAgentServiceTier.js";
 import { ChatStore } from "./ChatStore.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
@@ -2590,7 +2591,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         setServiceTier(sessionId, serviceTier) {
             return saveMode(sessionId, "set_service_tier", (mode) => ({
                 ...mode,
-                serviceTier: serviceTier ?? null,
+                serviceTier: happyAgentServiceTierToWire(serviceTier),
             }));
         },
         setPermissionMode(sessionId, permissionMode) {
@@ -3001,7 +3002,10 @@ function modeFromInput(input: CreateSessionInput, config: DaemonConfig): Message
             (input.permissionMode as MessageMode["permissionMode"] | undefined) ??
             defaults.permissionMode,
         providerId: input.providerId ?? defaults.providerId,
-        serviceTier: input.serviceTier ?? defaults.serviceTier,
+        serviceTier:
+            input.serviceTier === undefined
+                ? defaults.serviceTier
+                : happyAgentServiceTierToWire(input.serviceTier),
     };
 }
 

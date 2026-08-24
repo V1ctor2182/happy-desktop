@@ -297,7 +297,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
 
     const currentTierLabel =
         menus?.serviceTierOptions.find((option) => option.current)?.label ??
-        (menus ? (menus.currentServiceTier ? "Fast" : "Standard") : "…");
+        (menus ? (menus.currentServiceTier ? "Fast" : "Regular") : "…");
 
     const control = (field: HappyAgentSessionControlField) => {
         if (field === "model")
@@ -347,7 +347,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
                 />
             );
         // Speed is a choice only where the provider actually offers a fast tier.
-        // On a standard-only model the menu would hold one unchangeable row, so
+        // On a regular-only model the menu would hold one unchangeable row, so
         // the control is absent rather than shown as a decision nobody can make.
         if (serviceTierItems.length < 2) return null;
         return (
@@ -356,7 +356,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
                 disabled={props.disabled || !menus}
                 items={serviceTierItems}
                 key={field}
-                label="Speed"
+                label={props.variant === "ghost" ? undefined : "Speed"}
                 menuPlacement={props.menuPlacement}
                 variant={props.variant}
                 onSelect={(id) =>

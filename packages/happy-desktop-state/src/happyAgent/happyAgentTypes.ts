@@ -5,6 +5,10 @@
  * never receives wire shapes, tokens, URLs, or sockets.
  */
 
+import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
+
+export type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
+
 declare const happyAgentSessionIdBrand: unique symbol;
 declare const happyAgentProjectIdBrand: unique symbol;
 declare const happyAgentWorktreeIdBrand: unique symbol;
@@ -53,8 +57,6 @@ export interface HappyAgentTerminal {
 }
 
 export type HappyAgentPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
-
-export type HappyAgentServiceTier = "fast";
 
 export type HappyAgentSessionStatus =
     | "idle"
