@@ -1134,7 +1134,6 @@ function happyAgentSections(
                   empty:
                       happyAgent.status === "connected"
                           ? {
-                                actionLabel: "Add project",
                                 description: "Choose a repository folder on this Mac.",
                                 icon: "plus" as const,
                                 title: "No projects yet",
@@ -2956,21 +2955,19 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             phase="refused"
                         />
                     ) : (
-                        /* No project is open, so there is nowhere in front of the
-                           reader for a session to be started — but Create asks
-                           where, so it answers from here as readily as anywhere
-                           else, and it is the only move this screen has. */
+                        /* Keep project setup in the main empty pane: the sidebar
+                           explains why it is empty without repeating this action. */
                         <EmptyState
                             {...(availability.online
                                 ? {
                                       action: {
-                                          label: "Create",
+                                          label: "Add project",
                                           icon: "plus" as const,
-                                          onClick: () => props.workspace.createOpen(),
+                                          onClick: () => props.workspace.projectAdd(),
                                       },
                                   }
                                 : {})}
-                            description="Pick one in the sidebar, or start a session in any of them."
+                            description="Pick one in the sidebar, or add a project."
                             icon="files"
                             size="panel"
                             title="No project open"
