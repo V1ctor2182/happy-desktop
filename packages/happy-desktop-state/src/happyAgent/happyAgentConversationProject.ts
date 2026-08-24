@@ -392,6 +392,21 @@ type ProjectableUserInput =
     | { readonly state: "pending"; readonly request: HappyAgentUserInputRequest }
     | { readonly state: "answered"; readonly request: HappyAgentAnsweredUserInput };
 
+/**
+ * Claude keeps oversized images in the conversation context, so this specific
+ * provider failure can often be recovered without abandoning the session.
+ */
+function happyAgentConversationFailureText(text: string): string {
+    const normalized = text.toLowerCase();
+    if (
+        !normalized.includes("many-image") ||
+        !normalized.includes("2000px") ||
+        normalized.includes("/compact")
+    )
+        return text;
+    return `${text} Try running /compact to heal this session.`;
+}
+
 function userInputRequestProject(
     input: ProjectableUserInput,
     sequence: string,
@@ -810,7 +825,7 @@ function happyAgentConnectGroupProject(
                         ? { retry: { attempt: element.attempt } }
                         : {}),
                     title: element.outcome === "retried" ? "Retrying" : "Failure",
-                    text: element.reason,
+                    text: happyAgentConversationFailureText(element.reason),
                     sequence,
                 });
                 break;
@@ -849,7 +864,7 @@ function happyAgentConnectGroupProject(
                         variant: "notice",
                         level: "error",
                         title: "Failure",
-                        text: element.errorMessage,
+                        text: happyAgentConversationFailureText(element.errorMessage),
                         sequence,
                     });
                 /* Steering that produced no visible message has no visible
