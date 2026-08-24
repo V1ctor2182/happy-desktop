@@ -48,6 +48,13 @@ export interface HappyAgentRouterHistory extends RouterHistory {
      * when it was the only place in the window.
      */
     fileForget(happyAgentId: string, groupId: string, path: string): boolean;
+    /** Removes every remembered address backed by one archived session. */
+    sessionForget(
+        happyAgentId: string,
+        groupId: string,
+        sessionId: string,
+        fallbackSessionId?: string,
+    ): boolean;
     /**
      * Removes every remembered place inside one group, showing the nearest
      * survivor if the window stood on one. Answers whether the stack changed,
@@ -120,7 +127,9 @@ function documentRoute(
     const route = happyAgentRoutePathParse(window.location.hash.slice(1));
     if (route === undefined || route.kind === "home") return undefined;
     const standing = restored?.entries[restored.index];
-    return standing !== undefined && happyAgentRouteSame(standing, route) ? undefined : route;
+    return standing !== undefined && happyAgentRoutePath(standing) === happyAgentRoutePath(route)
+        ? undefined
+        : route;
 }
 
 /**
@@ -292,6 +301,9 @@ export function happyAgentHistoryCreate(
             happyAgentRouteSame(standing, entries[at])
         ) {
             slotClaim(at, current.key);
+            // Identity ignores a file's current presentation and backing chat;
+            // the virtual entry is still the newest complete address.
+            urlReplace(path);
             mirrorPrune();
             return true;
         }
@@ -381,6 +393,10 @@ export function happyAgentHistoryCreate(
             // the router's newest location state without growing the stack.
             if (happyAgentRouteSame(entries[index], route)) {
                 const previousState = states[index];
+                // File identity deliberately ignores its presentation and the
+                // chat behind it. A revisit updates those fields in place so a
+                // later Back reopens the newest form of that one destination.
+                entries[index] = route;
                 states[index] = state as LocationState;
                 for (const write of mirrorWrites)
                     if (write.state === previousState) write.state = states[index];
@@ -506,7 +522,10 @@ export function happyAgentHistoryCreate(
             // An outside replace reuses the physical key, so it replaces the
             // virtual place too. Treating it as a push would create a twin.
             if (event.navigationType === "replace") {
-                if (route !== undefined && !happyAgentRouteSame(entries[index], route))
+                if (
+                    route !== undefined &&
+                    happyAgentRoutePath(entries[index]) !== happyAgentRoutePath(route)
+                )
                     history.replace(happyAgentRoutePath(route));
                 else if (!slots.includes(current.key)) {
                     slotClaim(index, current.key);
@@ -515,7 +534,18 @@ export function happyAgentHistoryCreate(
                 return;
             }
 
-            if (slots.includes(current.key)) return;
+            const mirroredAt = slots.indexOf(current.key);
+            if (mirroredAt !== -1) {
+                // A virtual route can be rewritten without removing its browser
+                // twin (restoring a file after its backing session closes, for
+                // example). Correct that twin as soon as a traversal lands on
+                // it so the address bar and a later reload name the live route.
+                const expected = happyAgentRoutePath(entries[index]);
+                const committed = current.url ? new URL(current.url).hash.slice(1) : undefined;
+                if (mirroredAt === index && committed !== expected)
+                    mirrorReplaceAt(index, expected);
+                return;
+            }
             if (route === undefined) return;
 
             // This committed browser entry predates this history instance or
@@ -530,6 +560,10 @@ export function happyAgentHistoryCreate(
                 if (event.navigationType === "traverse") slotsForget(removed);
             }
             if (same) {
+                // An outside address may update how this one file is shown.
+                // It stays one destination while its complete route follows
+                // the address the reader explicitly supplied.
+                entries[index] = route;
                 slotClaim(index, current.key);
                 persist();
                 history.notify({ type: "REPLACE" });
@@ -559,7 +593,12 @@ export function happyAgentHistoryCreate(
             const route = happyAgentRoutePathParse(window.location.hash.slice(1));
             // A hash naming no place, and the reflection of a step already
             // taken, are both nothing to act on.
-            if (route === undefined || happyAgentRouteSame(entries[index], route)) return;
+            if (route === undefined) return;
+            if (happyAgentRouteSame(entries[index], route)) {
+                if (happyAgentRoutePath(entries[index]) !== happyAgentRoutePath(route))
+                    history.replace(happyAgentRoutePath(route));
+                return;
+            }
             history.push(happyAgentRoutePath(route));
         };
         window.addEventListener("hashchange", hashChange);
@@ -664,6 +703,54 @@ export function happyAgentHistoryCreate(
                     route.happyAgentId === happyAgentId &&
                     route.groupId === groupId,
             );
+        },
+        sessionForget: (
+            happyAgentId: string,
+            groupId: string,
+            sessionId: string,
+            fallbackSessionId?: string,
+        ): boolean => {
+            let fileRouteUpdated = false;
+            entries = entries.map((route) => {
+                if (
+                    route.kind !== "file" ||
+                    route.happyAgentId !== happyAgentId ||
+                    route.groupId !== groupId ||
+                    route.chatId !== sessionId
+                )
+                    return route;
+                fileRouteUpdated = true;
+                return {
+                    fileKind: route.fileKind,
+                    groupId: route.groupId,
+                    kind: "file",
+                    happyAgentId: route.happyAgentId,
+                    path: route.path,
+                };
+            });
+            const removed = forget(
+                (route) =>
+                    route.kind === "chat" &&
+                    route.happyAgentId === happyAgentId &&
+                    route.groupId === groupId &&
+                    route.chatId === sessionId,
+                fallbackSessionId === undefined
+                    ? { groupId, kind: "group", happyAgentId }
+                    : {
+                          chatId: fallbackSessionId,
+                          groupId,
+                          kind: "chat",
+                          happyAgentId,
+                      },
+                (route) =>
+                    (route.kind === "chat" || route.kind === "file") &&
+                    route.happyAgentId === happyAgentId &&
+                    route.groupId === groupId,
+            );
+            if (removed || !fileRouteUpdated) return removed;
+            settle();
+            history.notify({ type: "REPLACE" });
+            return true;
         },
         groupForget: (happyAgentId: string, groupId: string): boolean =>
             forget(

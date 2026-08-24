@@ -26,6 +26,7 @@ export type MenuItem =
       };
 export type MenuProps = {
     className?: string;
+    id?: string;
     "data-testid"?: string;
     style?: CSSProperties;
     items: MenuItem[];

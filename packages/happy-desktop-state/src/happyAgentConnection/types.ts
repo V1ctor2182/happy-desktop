@@ -495,6 +495,8 @@ export interface GitChangeSnapshot {
 
 export interface GroupSession {
     archived: boolean;
+    /** When the host archived it, for recovery-history order. */
+    archivedAt?: number;
     createdAt: number;
     cwd: string;
     draft?: string;

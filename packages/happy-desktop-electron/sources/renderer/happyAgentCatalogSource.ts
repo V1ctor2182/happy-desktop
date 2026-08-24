@@ -107,10 +107,14 @@ function catalogProject(
     const projects: HappyAgentProject[] = [];
     const worktrees: HappyAgentWorktree[] = [];
     const sessions: HappyAgentSessionSummary[] = [];
+    const archivedSessions: HappyAgentSessionSummary[] = [];
 
     for (const group of groups) {
         projects.push(projectProject(group, baseUrl));
         sessions.push(...group.sessions.filter((session) => !session.archived).map(sessionProject));
+        archivedSessions.push(
+            ...group.sessions.filter((session) => session.archived).map(sessionProject),
+        );
         for (const workspace of group.workspaces) {
             worktrees.push({
                 id: workspace.id as HappyAgentWorktreeId,
@@ -131,11 +135,15 @@ function catalogProject(
             sessions.push(
                 ...workspace.sessions.filter((session) => !session.archived).map(sessionProject),
             );
+            archivedSessions.push(
+                ...workspace.sessions.filter((session) => session.archived).map(sessionProject),
+            );
         }
     }
 
+    archivedSessions.sort((left, right) => (right.archivedAt ?? 0) - (left.archivedAt ?? 0));
     const catalog: HappyAgentProjectCatalog = { projects, worktrees };
-    return { catalog, sessions };
+    return { archivedSessions, catalog, sessions };
 }
 
 function projectProject(group: ProjectGroup, baseUrl: string): HappyAgentProject {
@@ -230,6 +238,7 @@ function sessionProject(session: GroupSession): HappyAgentSessionSummary {
         session.serviceTier === "fast" ? ("fast" as HappyAgentServiceTier) : undefined;
     return {
         id: session.id as HappyAgentSessionId,
+        ...(session.archivedAt === undefined ? {} : { archivedAt: session.archivedAt }),
         projectId: session.scope.projectId as HappyAgentProjectId,
         ...(session.scope.kind === "workspace"
             ? { worktreeId: session.scope.workspaceId as HappyAgentWorktreeId }

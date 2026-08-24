@@ -15,6 +15,14 @@ export interface HappyAgentFileTabMemory {
     readonly preview?: boolean;
 }
 
+/** One file destination in the reader's local most-recently-visited list. */
+export interface HappyAgentRecentFileMemory {
+    readonly groupId: HappyAgentGroupId;
+    readonly path: string;
+    /** The newest presentation used for this path; revisiting replaces the older one. */
+    readonly kind: HappyAgentFileTabKind;
+}
+
 /** One browser tab remembered for a group's panel, by where it was left. */
 export interface HappyAgentPanelBrowserMemory {
     readonly url: string;
@@ -98,6 +106,8 @@ export const HAPPY_AGENT_GROUP_DRAFT_MAX_LENGTH = 100_000;
  */
 export interface HappyAgentWorkspaceMemoryDocument {
     readonly groups: { readonly [groupId: string]: HappyAgentGroupTabMemory | undefined };
+    /** File destinations, most recently visited first. */
+    readonly recentFiles?: readonly HappyAgentRecentFileMemory[];
 }
 
 /**
@@ -144,9 +154,15 @@ export interface HappyAgentWorkspaceMemoryStore {
      * record of one.
      */
     groupDraftWrite(groupId: HappyAgentGroupId, draft: string): void;
+    /** File destinations most recently visited in this window, newest first. */
+    recentFilesRead(): readonly HappyAgentRecentFileMemory[];
+    /** Moves one destination to the front, replacing an older visit to the same path. */
+    recentFileRemember(groupId: HappyAgentGroupId, path: string, kind: HappyAgentFileTabKind): void;
 }
 
 const FILE_KINDS: readonly HappyAgentFileTabKind[] = ["file", "diff", "document", "media"];
+/** Enough history to recover work without turning a small corner menu into a catalog. */
+const RECENT_FILE_LIMIT = 40;
 
 /** Reads one stored file tab, rejecting anything that is not the shape we wrote. */
 function fileTabParse(value: unknown): HappyAgentFileTabMemory | undefined {
@@ -160,6 +176,21 @@ function fileTabParse(value: unknown): HappyAgentFileTabMemory | undefined {
         path,
         kind: kind as HappyAgentFileTabKind,
         ...(record.preview === true ? { preview: true } : {}),
+    };
+}
+
+function recentFileParse(value: unknown): HappyAgentRecentFileMemory | undefined {
+    if (typeof value !== "object" || value === null) return undefined;
+    const record = value as Record<string, unknown>;
+    const { groupId, path, kind } = record;
+    if (typeof groupId !== "string" || groupId.length === 0) return undefined;
+    if (typeof path !== "string" || path.length === 0) return undefined;
+    if (typeof kind !== "string" || !FILE_KINDS.includes(kind as HappyAgentFileTabKind))
+        return undefined;
+    return {
+        groupId: groupId as HappyAgentGroupId,
+        path,
+        kind: kind as HappyAgentFileTabKind,
     };
 }
 
@@ -264,6 +295,7 @@ export function happyAgentWorkspaceMemoryStoreCreate(
     persistence?: HappyAgentWorkspaceMemoryPersistence,
 ): HappyAgentWorkspaceMemoryStore {
     const groups = new Map<string, HappyAgentGroupTabMemory>();
+    let recentFiles: readonly HappyAgentRecentFileMemory[] = [];
     const stored = (() => {
         try {
             return persistence?.read();
@@ -272,18 +304,32 @@ export function happyAgentWorkspaceMemoryStoreCreate(
         }
     })();
     if (stored && typeof stored === "object") {
-        const storedGroups = (stored as HappyAgentWorkspaceMemoryDocument).groups;
+        const document = stored as HappyAgentWorkspaceMemoryDocument;
+        const storedGroups = document.groups;
         if (storedGroups && typeof storedGroups === "object")
             for (const [groupId, value] of Object.entries(storedGroups)) {
                 const group = groupParse(value);
                 if (group) groups.set(groupId, group);
             }
+        if (Array.isArray(document.recentFiles)) {
+            const seen = new Set<string>();
+            recentFiles = document.recentFiles
+                .flatMap((value) => {
+                    const file = recentFileParse(value);
+                    if (!file) return [];
+                    const key = `${file.groupId}\u0000${file.path}`;
+                    if (seen.has(key)) return [];
+                    seen.add(key);
+                    return [file];
+                })
+                .slice(0, RECENT_FILE_LIMIT);
+        }
     }
 
     const flush = (): void => {
         if (!persistence) return;
         try {
-            persistence.write({ groups: Object.fromEntries(groups) });
+            persistence.write({ groups: Object.fromEntries(groups), recentFiles });
         } catch {
             // Storage the host refused still keeps this client's memory alive.
         }
@@ -346,6 +392,17 @@ export function happyAgentWorkspaceMemoryStoreCreate(
                 return;
             }
             merge(groupId, { ...groupOr(groupId), draft: next });
+        },
+        recentFilesRead: () => recentFiles,
+        recentFileRemember(groupId, path, kind) {
+            const existing = recentFiles[0];
+            if (existing?.groupId === groupId && existing.path === path && existing.kind === kind)
+                return;
+            recentFiles = [
+                { groupId, path, kind },
+                ...recentFiles.filter((file) => file.groupId !== groupId || file.path !== path),
+            ].slice(0, RECENT_FILE_LIMIT);
+            flush();
         },
     };
 }

@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type {
     AppearanceStore,
     ConversationEntry,
@@ -72,6 +72,7 @@ import {
     type AgentWaitStatus,
     AppShell,
     APP_SHELL_PANEL_DEFAULT_WIDTH,
+    type AppShellFocusedPane,
     Banner,
     BrowserPanel,
     DevBuildMenu,
@@ -95,6 +96,7 @@ import {
     filePreviewKind,
     Lightbox,
     MarkdownDocument,
+    MenuButton,
     Modal,
     ModalOverlay,
     HappyAgentActivityControl,
@@ -387,6 +389,13 @@ export interface AppHappyAgentViewProps {
         chatId?: string,
         replace?: boolean,
     ): void;
+    /** Removes an archived session's dead destinations from Back/Forward history. */
+    onChatClose?(
+        happyAgentId: string,
+        groupId: string,
+        chatId: string,
+        fallbackChatId?: string,
+    ): boolean;
     /** Removes every history visit to a file tab that the reader closed. */
     onFileClose(happyAgentId: string, groupId: string, path: string): void;
     /**
@@ -451,6 +460,17 @@ const PANEL_TOGGLE_HINT = {
     aria: `${APP_SHORTCUTS.panelToggle.aria} ${APP_SHORTCUTS.panelToggleAlternate.aria}`,
     caps: APP_SHORTCUTS.panelToggle.caps,
 } as const;
+const HISTORY_SESSION_PREFIX = "session:";
+const HISTORY_FILE_PREFIX = "file:";
+const HISTORY_SECTION_LIMIT = 8;
+
+/** Keeps a recent file's name and nearest folder visible inside the compact menu. */
+function historyFileLabel(path: string): string {
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length <= 3) return path;
+    const tail = segments.slice(-2).join("/");
+    return path.startsWith("/") ? `/…/${tail}` : `${segments[0]}/…/${tail}`;
+}
 
 /**
  * The rows one project contributes: the project itself, then a nested row per
@@ -1628,6 +1648,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     onChatSelect={(groupId, chatId, replace) =>
                         props.onChatSelect(active.id, groupId, chatId, replace)
                     }
+                    onChatClose={(groupId, chatId, fallbackChatId) =>
+                        props.onChatClose?.(active.id, groupId, chatId, fallbackChatId) ?? false
+                    }
                     onFileClose={(groupId, path) => props.onFileClose(active.id, groupId, path)}
                     onFileSelect={(groupId, chatId, path, kind, replace) =>
                         props.onFileSelect(active.id, groupId, chatId, path, kind, replace)
@@ -1808,6 +1831,7 @@ interface HappyAgentWorkspaceSurfaceProps {
     /** Ready online project that Cmd-N and its sidebar cap both address. */
     workspaceCreateProjectId?: HappyAgentProjectId;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
+    onChatClose(groupId: string, chatId: string, fallbackChatId?: string): boolean;
     onFileClose(groupId: string, path: string): void;
     onFileSelect(
         groupId: string,
@@ -1839,6 +1863,12 @@ interface HappyAgentWorkspaceSurfaceProps {
  * pure projection.
  */
 function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
+    const workspaceFocusedPane = useRef<AppShellFocusedPane>("workspace");
+    // AppShell's panel callback ref treats this callback's identity as the
+    // panel lifetime, so ordinary store renders must keep it stable.
+    const workspaceFocusedPaneChange = useCallback((pane: AppShellFocusedPane): void => {
+        workspaceFocusedPane.current = pane;
+    }, []);
     const workspace = useSyncExternalStore(
         reactFrameSubscribe(props.workspace),
         props.workspace.get,
@@ -2025,13 +2055,66 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         ),
         ...(detachedConversationTab ? [detachedConversationTab] : []),
     ];
+    const archivedSessions = openGroup
+        ? [...workspace.list.archivedSessions]
+              .filter(
+                  (session) =>
+                      session.parentSessionId === undefined &&
+                      happyAgentSessionGroupIdOf(session) === openGroup.id,
+              )
+              .slice(0, HISTORY_SECTION_LIMIT)
+        : [];
+    const recentFiles = openGroup
+        ? workspace.recentFiles
+              .filter((file) => file.groupId === openGroup.id)
+              .slice(0, HISTORY_SECTION_LIMIT)
+        : [];
+    const historyMenuItems: MenuItem[] = [
+        ...(archivedSessions.length > 0
+            ? [
+                  { kind: "label" as const, label: "Archived sessions" },
+                  ...archivedSessions.map((session) => ({
+                      disabled: !availability.online,
+                      icon: "archive" as const,
+                      id: `${HISTORY_SESSION_PREFIX}${session.id}`,
+                      kind: "item" as const,
+                      label: session.title ?? "Untitled",
+                  })),
+              ]
+            : []),
+        ...(archivedSessions.length > 0 && recentFiles.length > 0
+            ? [{ kind: "separator" as const }]
+            : []),
+        ...(recentFiles.length > 0
+            ? [
+                  { kind: "label" as const, label: "Recent files" },
+                  ...recentFiles.map((file) => ({
+                      disabled: !availability.online,
+                      icon: "doc" as const,
+                      id: `${HISTORY_FILE_PREFIX}${file.path}`,
+                      kind: "item" as const,
+                      label: historyFileLabel(file.path),
+                  })),
+              ]
+            : []),
+        ...(archivedSessions.length === 0 && recentFiles.length === 0
+            ? [
+                  {
+                      disabled: true,
+                      icon: "history" as const,
+                      id: "empty",
+                      kind: "item" as const,
+                      label: "No archived sessions or recent files",
+                  },
+              ]
+            : []),
+    ];
     // Closing a tab archives the session behind it, while a file tab simply
     // closes. The close control and every context-menu sweep funnel through
     // this one routine, so a sweep behaves exactly like closing each tab by
-    // hand. Navigation happens once, up front: when the addressed session is
-    // among the closed, the surface addresses what will remain — preferring
-    // the tab the sweep was asked to keep — before anything leaves the list,
-    // so it never sits on a session that has just gone.
+    // hand. History is repaired before the session leaves the list. It chooses
+    // the most recently visited survivor in this workspace; a requested keeper
+    // or the nearest surviving session to the left is its fallback.
     const groupTabsClose = (tabIds: readonly string[], keepId?: string) => {
         const current = props.workspace.get();
         const currentRows =
@@ -2057,13 +2140,23 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         );
         const targets = new Set(closeableIds);
         const rest = currentGroup.conversations.filter((summary) => !targets.has(summary.id));
-        if (current.address.conversationId && targets.has(current.address.conversationId)) {
-            const next =
-                keepId !== undefined && rest.some((summary) => summary.id === keepId)
-                    ? keepId
-                    : rest[0]?.id;
-            props.onChatSelect(rest.length > 0 ? currentGroup.id : undefined, next, true);
-        }
+        const selectedSessionIndex = current.address.conversationId
+            ? currentGroup.conversations.findIndex(
+                  (summary) => summary.id === current.address.conversationId,
+              )
+            : -1;
+        const leftFallbackSessionId =
+            selectedSessionIndex < 1
+                ? undefined
+                : currentGroup.conversations
+                      .slice(0, selectedSessionIndex)
+                      .reverse()
+                      .find((summary) => !targets.has(summary.id))?.id;
+        const fallbackSessionId =
+            keepId !== undefined && rest.some((summary) => summary.id === keepId)
+                ? keepId
+                : (leftFallbackSessionId ?? rest[0]?.id);
+        let selectedHistoryRepaired = false;
         for (const tabId of closeableIds) {
             if (fileIds.has(tabId)) {
                 const file = current.fileTabs.find((tab) => tab.id === tabId);
@@ -2078,20 +2171,28 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 props.workspace.panel.tabClose(tabId as HappyAgentPanelTabId);
                 continue;
             }
+            const repaired = props.onChatClose(currentGroup.id, tabId, fallbackSessionId);
+            if (tabId === current.address.conversationId) selectedHistoryRepaired = repaired;
             void props.workspace
                 .conversationArchive(tabId as HappyAgentSessionId)
                 .catch(() => undefined);
         }
+        // A router-backed window repairs and lands through its navigation stack,
+        // which preserves the most recently visited survivor. Standalone
+        // Blueprint composition has no history owner, so it receives the same
+        // left-tab/workspace fallback directly.
+        if (
+            current.address.conversationId &&
+            targets.has(current.address.conversationId) &&
+            !selectedHistoryRepaired
+        )
+            props.onChatSelect(currentGroup.id, fallbackSessionId, true);
     };
     const groupTabClose = (tabId: string) => {
         // A detached subagent's tab is an address, not a member of the list:
         // closing it only steps back to the sessions that are listed.
         if (tabId === detachedConversationId) {
-            props.onChatSelect(
-                openGroup && openGroup.conversations.length > 0 ? openGroup.id : undefined,
-                openGroup?.conversations[0]?.id,
-                true,
-            );
+            props.onChatSelect(openGroup?.id, openGroup?.conversations[0]?.id, true);
             return;
         }
         groupTabsClose([tabId]);
@@ -2106,23 +2207,19 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const activeTabClose = () => {
         const panelNow = props.workspace.panel.get();
         const panelTarget = openGroupPreparing ? undefined : panelCloseTargetFind(panelNow);
-        const focused = typeof document === "undefined" ? null : document.activeElement;
-        const focusedPanel =
-            typeof Element !== "undefined" && focused instanceof Element
-                ? focused.closest<HTMLElement>('[data-happy-desktop-ui="app-shell-panel"]')
-                : null;
-        if (focusedPanel && panelNow.open) {
+        if (workspaceFocusedPane.current === "panel" && panelNow.open && !openGroupPreparing) {
             if (panelTarget) panelViewClose(panelTarget);
             else {
                 // Files is permanent. Closing from that focused tab dismisses
                 // its pane and returns the keyboard to the selected main tab.
-                const shell = focusedPanel.closest<HTMLElement>(
-                    '[data-happy-desktop-ui="app-shell"]',
+                const shell = document.querySelector<HTMLElement>(
+                    '[data-happy-desktop-ui="app-shell"][data-embedded]',
                 );
                 const mainTab = shell?.querySelector<HTMLElement>(
                     '[data-happy-desktop-ui="app-shell-workspace"] [data-happy-desktop-ui="tab"][aria-selected="true"]',
                 );
                 mainTab?.focus();
+                workspaceFocusedPane.current = "workspace";
                 props.workspace.panel.panelToggle();
             }
             return;
@@ -2130,6 +2227,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         const current = props.workspace.get();
         const tabId = current.activeMainViewId ?? current.address.conversationId;
         if (tabId) groupTabClose(tabId);
+        else if (openGroup) props.workspace.groupArchiveOpen(openGroup.id);
     };
     // The strip in the order it is drawn, without the detached subagent: it is
     // addressed rather than listed, so a sweep over "the tabs beside this one"
@@ -2227,6 +2325,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             // than seeded once, so moving to another project shows that
             // project's width instead of carrying this one's across.
             panelWidth={workspace.panelWidth ?? APP_SHELL_PANEL_DEFAULT_WIDTH}
+            onFocusedPaneChange={workspaceFocusedPaneChange}
             onPanelWidthChange={(width) => {
                 if (openGroup) props.workspace.panelWidthUpdate(openGroup.id, width);
             }}
@@ -2436,6 +2535,45 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                             );
                                             if (target && happyAgentOnline() && openGroup.create)
                                                 void props.workspace.openIn(openGroup.id, target);
+                                        }}
+                                    />
+                                    <MenuButton
+                                        align="end"
+                                        icon="history"
+                                        items={historyMenuItems}
+                                        label="Open workspace history"
+                                        menuWidth={300}
+                                        onSelect={(id) => {
+                                            if (id.startsWith(HISTORY_SESSION_PREFIX)) {
+                                                const sessionId = id.slice(
+                                                    HISTORY_SESSION_PREFIX.length,
+                                                ) as HappyAgentSessionId;
+                                                if (
+                                                    !archivedSessions.some(
+                                                        (session) => session.id === sessionId,
+                                                    )
+                                                )
+                                                    return;
+                                                void props.workspace
+                                                    .conversationRestore(sessionId)
+                                                    .then(() =>
+                                                        props.onChatSelect(openGroup.id, sessionId),
+                                                    )
+                                                    .catch(() => undefined);
+                                                return;
+                                            }
+                                            if (!id.startsWith(HISTORY_FILE_PREFIX)) return;
+                                            const path = id.slice(HISTORY_FILE_PREFIX.length);
+                                            const file = recentFiles.find(
+                                                (candidate) => candidate.path === path,
+                                            );
+                                            if (file)
+                                                props.onFileSelect(
+                                                    openGroup.id,
+                                                    props.chatId,
+                                                    file.path,
+                                                    file.kind,
+                                                );
                                         }}
                                     />
                                     {!panel.open ? (
@@ -3782,6 +3920,12 @@ function HappyAgentWindowDialogs(props: {
                 props.happyAgentOnline,
                 props.unavailable,
             )}
+            {happyAgentGroupArchiveDialog(
+                workspace.groupArchive,
+                props.workspace,
+                props.happyAgentOnline,
+                props.unavailable,
+            )}
             {happyAgentCreateDialog(
                 workspace.create,
                 props.workspace,
@@ -3804,6 +3948,66 @@ function HappyAgentWindowDialogs(props: {
                 />
             ) : null}
         </>
+    );
+}
+
+/**
+ * Cmd-W over an empty main pane stops at a confirmation. The dialog names the
+ * exact group the store resolved, and the keystroke itself never archives it.
+ */
+function happyAgentGroupArchiveDialog(
+    archive: HappyAgentWorkspaceSnapshot["groupArchive"],
+    store: HappyAgentWorkspaceStore,
+    happyAgentOnline: () => boolean,
+    unavailable?: string,
+): ReactNode {
+    if (!archive) return null;
+    const subject = archive.kind === "worktree" ? "workspace" : "project";
+    return (
+        <ModalOverlay
+            {...(archive.submitting ? {} : { onDismiss: () => store.groupArchiveCancel() })}
+        >
+            <Modal
+                footer={
+                    <>
+                        <Button
+                            disabled={archive.submitting}
+                            onClick={() => store.groupArchiveCancel()}
+                            variant="ghost"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            disabled={unavailable !== undefined}
+                            loading={archive.submitting}
+                            onClick={() => {
+                                if (happyAgentOnline())
+                                    void store.groupArchiveSubmit().catch(() => undefined);
+                            }}
+                            variant="danger"
+                        >
+                            Archive {subject}
+                        </Button>
+                    </>
+                }
+                icon="archive"
+                {...(archive.submitting ? {} : { onClose: () => store.groupArchiveCancel() })}
+                size="small"
+                title={`Archive ${archive.name}?`}
+                tone="danger"
+            >
+                {archive.error ? (
+                    <Banner tone="danger" title={`Could not archive ${subject}`}>
+                        {archive.error}
+                    </Banner>
+                ) : null}
+                <p>
+                    {archive.kind === "worktree"
+                        ? "This removes the workspace from the sidebar and removes its worktree folder."
+                        : "This removes the project and its sessions from the sidebar, archives every workspace under it, and removes those worktree folders. The project's own checkout stays where it is."}
+                </p>
+            </Modal>
+        </ModalOverlay>
     );
 }
 

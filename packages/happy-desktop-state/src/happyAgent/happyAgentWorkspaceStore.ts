@@ -11,6 +11,7 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { HappyAgentChatHandle, HappyAgentWorkspaceClient } from "./happyAgentClient.js";
+import type { HappyAgentRecentFileMemory } from "./happyAgentWorkspaceMemory.js";
 import {
     HAPPY_AGENT_VIEW_PREFERENCES_EMPTY,
     happyAgentViewPreferencesParse,
@@ -55,6 +56,7 @@ import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import { orderKeySequence } from "../utils/orderKeySequence.js";
 import type {
     HappyAgentProjectArchiveResult,
+    HappyAgentWorktreeArchiveResult,
     HappyAgentSessionListSnapshot,
     HappyAgentSessionListStore,
     HappyAgentSessionLocation,
@@ -459,6 +461,8 @@ export interface HappyAgentWorkspaceSnapshot {
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<HappyAgentConversationSnapshot>;
     readonly fileTabs: readonly HappyAgentFileTabSnapshot[];
+    /** Local file destinations, newest first, retained even after their tabs close. */
+    readonly recentFiles: readonly HappyAgentRecentFileMemory[];
     /**
      * The addressed group's tab strip, by tab id, in the order it is shown. It
      * covers everything the strip holds — sessions and files alike — because the
@@ -529,6 +533,8 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly rename?: HappyAgentRenameSnapshot;
     /** The project archive that has been asked for and not yet carried out, if any. */
     readonly projectArchive?: HappyAgentProjectArchiveSnapshot;
+    /** The empty workspace/project Cmd-W has offered to archive, if any. */
+    readonly groupArchive?: HappyAgentGroupArchiveSnapshot;
     /**
      * Where the project whose settings are open runs its sessions. Present only
      * while a project's settings are open — a worktree has no compute of its own
@@ -724,6 +730,28 @@ export interface HappyAgentProjectArchiveSnapshot {
     readonly error?: string;
 }
 
+/**
+ * The project or worktree an empty main pane has offered to archive. This is a
+ * separate confirmation from project settings: Cmd-W names the open group
+ * directly and must never perform the destructive act on the keystroke itself.
+ */
+export type HappyAgentGroupArchiveSnapshot =
+    | {
+          readonly kind: "project";
+          readonly projectId: HappyAgentProjectId;
+          readonly name: string;
+          readonly submitting: boolean;
+          readonly error?: string;
+      }
+    | {
+          readonly kind: "worktree";
+          readonly projectId: HappyAgentProjectId;
+          readonly worktreeId: HappyAgentWorktreeId;
+          readonly name: string;
+          readonly submitting: boolean;
+          readonly error?: string;
+      };
+
 /** Which of the three things a project can say about where its sessions run. */
 export type HappyAgentProjectComputeMode = "default" | "local" | "docker";
 
@@ -891,6 +919,8 @@ export interface HappyAgentWorkspaceStore {
      * conversation is the open one; this store does not navigate.
      */
     conversationArchive(conversationId: HappyAgentSessionId): Promise<void>;
+    /** Returns an archived conversation to its workspace strip. Navigation remains the caller's. */
+    conversationRestore(conversationId: HappyAgentSessionId): Promise<void>;
     /**
      * Moves one tab of the addressed group directly after `afterId`, or to the
      * front of the strip when null. The order is this client's own and takes
@@ -941,7 +971,7 @@ export interface HappyAgentWorkspaceStore {
     worktreeArchive(
         projectId: HappyAgentProjectId,
         worktreeId: HappyAgentWorktreeId,
-    ): Promise<void>;
+    ): Promise<HappyAgentWorktreeArchiveResult>;
     /** Moves one worktree after `afterId` within its project, or to the front when null. */
     worktreeReorder(
         projectId: HappyAgentProjectId,
@@ -1152,6 +1182,12 @@ export interface HappyAgentWorkspaceStore {
     renameCancel(): void;
     /** Commits the pending name; a blank one is not a rename and closes instead. */
     renameSubmit(): Promise<void>;
+    /** Offers to archive the open empty project or worktree; it archives nothing yet. */
+    groupArchiveOpen(groupId: HappyAgentGroupId): void;
+    /** Dismisses the empty-group archive confirmation. */
+    groupArchiveCancel(): void;
+    /** Confirms the pending empty-group archive. */
+    groupArchiveSubmit(): Promise<void>;
     /**
      * Asks to archive a project, which puts the confirmation in front of the
      * reader rather than archiving anything. A project the list no longer holds
@@ -1313,6 +1349,9 @@ export function happyAgentWorkspaceStoreCreate(
     let openInTargetsRequested = false;
     let rename: HappyAgentRenameSnapshot | undefined;
     let projectArchive: HappyAgentProjectArchiveSnapshot | undefined;
+    let groupArchive: HappyAgentGroupArchiveSnapshot | undefined;
+    /** Which submission owns the empty-group confirmation. */
+    let groupArchiveSubmission = 0;
     /** Which submission the pending archive belongs to, so a superseded one's answer is dropped. */
     let projectArchiveSubmission = 0;
     let projectCompute: HappyAgentProjectComputeSnapshot | undefined;
@@ -1629,6 +1668,7 @@ export function happyAgentWorkspaceStoreCreate(
         conversationDelegated: false,
         groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),
         fileTabs,
+        recentFiles: client.memory.recentFilesRead(),
         tabOrder,
         groupResume,
         openInTargets,
@@ -1966,6 +2006,7 @@ export function happyAgentWorkspaceStoreCreate(
         const groupComposerDraft = groupComposer?.getState();
         const groupSessionDraft = groupDraft?.get();
         const nextAddress = addressPublic();
+        const recentFiles = client.memory.recentFilesRead();
         // How this checkout is arranged travels with the address: moving to
         // another project shows that project the way it was left, rather than
         // carrying the last one's panel width and listing across to it.
@@ -2004,6 +2045,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.groupComposer === groupComposerDraft &&
                 snapshot.groupSessionDraft === groupSessionDraft &&
                 snapshot.fileTabs === fileTabs &&
+                snapshot.recentFiles === recentFiles &&
                 snapshot.tabOrder === tabOrder &&
                 snapshot.activeMainViewId === activeMainViewId &&
                 snapshot.displayedMainViewId === displayedMainViewId &&
@@ -2013,6 +2055,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.openInRecent === openInRecent &&
                 snapshot.rename === rename &&
                 snapshot.projectArchive === projectArchive &&
+                snapshot.groupArchive === groupArchive &&
                 snapshot.projectCompute === projectCompute &&
                 snapshot.fileViewMode === fileViewMode &&
                 snapshot.fileViewWrap === fileViewWrap &&
@@ -2034,6 +2077,7 @@ export function happyAgentWorkspaceStoreCreate(
                           conversationDelegated,
                           groupAccess,
                           fileTabs,
+                          recentFiles,
                           tabOrder,
                           groupResume,
                           openInTargets,
@@ -2057,6 +2101,7 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(groupSessionDraft ? { groupSessionDraft } : {}),
                           ...(rename ? { rename } : {}),
                           ...(projectArchive ? { projectArchive } : {}),
+                          ...(groupArchive ? { groupArchive } : {}),
                           ...(projectCompute ? { projectCompute } : {}),
                       },
             true,
@@ -2340,6 +2385,9 @@ export function happyAgentWorkspaceStoreCreate(
         restoredGroupIds.add(groupId);
         const memory = client.memory.groupRead(groupId);
         if (!memory || memory.files.length === 0) return;
+        const activeBeforeRestore = activeMainViewId;
+        const activeGroupBeforeRestore = activeMainViewGroupId;
+        const displayedBeforeRestore = displayedMainViewId;
         restoring = true;
         try {
             for (const file of memory.files) {
@@ -2349,13 +2397,21 @@ export function happyAgentWorkspaceStoreCreate(
         } finally {
             restoring = false;
         }
-        // Reopening moved the selection through every restored file; the reader
-        // left exactly one of them on screen, so the memory decides which.
-        activeMainViewId =
-            memory.activeTabId && fileTabs.some((tab) => tab.id === memory.activeTabId)
-                ? memory.activeTabId
-                : undefined;
-        activeMainViewGroupId = undefined;
+        // Reopening moved the selection through every restored file. It may
+        // choose the remembered one only while navigation has not already
+        // named a session or file. A deep link can arrive before the catalog;
+        // its delayed restore must not cover that explicit destination later.
+        if (openId === undefined && activeBeforeRestore === undefined) {
+            activeMainViewId =
+                memory.activeTabId && fileTabs.some((tab) => tab.id === memory.activeTabId)
+                    ? memory.activeTabId
+                    : undefined;
+            activeMainViewGroupId = undefined;
+        } else {
+            activeMainViewId = activeBeforeRestore;
+            activeMainViewGroupId = activeGroupBeforeRestore;
+            displayedMainViewId = displayedBeforeRestore;
+        }
     };
 
     const fileTabCacheStore = (tab: HappyAgentFileTabSnapshot): void => {
@@ -2603,6 +2659,7 @@ export function happyAgentWorkspaceStoreCreate(
         placement: HappyAgentViewPlacement = "main",
     ): void => {
         const kind = fileKindResolve(groupId, path, requestedKind);
+        if (!restoring) client.memory.recentFileRemember(groupId, path, kind);
         const id = fileTabIdOf(groupId, path);
         const existing = fileTabs.find((tab) => tab.id === id);
         // Only the main content selects what it is showing. A file opening in
@@ -3766,6 +3823,21 @@ export function happyAgentWorkspaceStoreCreate(
                 output({ type: "addressedGroupRemoved", groupId: addressedGroupId });
             }
         }
+        if (groupArchive && !groupArchive.submitting) {
+            const pendingArchive = groupArchive;
+            const project = projects.value.find(
+                (candidate) => candidate.id === pendingArchive.projectId,
+            );
+            const currentName =
+                pendingArchive.kind === "project"
+                    ? project?.name
+                    : project?.worktrees.find(
+                          (candidate) => candidate.id === pendingArchive.worktreeId,
+                      )?.name;
+            if (currentName === undefined) groupArchive = undefined;
+            else if (currentName !== pendingArchive.name)
+                groupArchive = { ...pendingArchive, name: currentName, error: undefined };
+        }
         // A submission owns its own confirmation until it settles; the read that
         // proves it archived is the one that closes it, from `projectArchiveSubmit`.
         if (!projectArchive || projectArchive.submitting) return;
@@ -3903,6 +3975,7 @@ export function happyAgentWorkspaceStoreCreate(
                     conversationDelegated: false,
                     groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),
                     fileTabs,
+                    recentFiles: client.memory.recentFilesRead(),
                     tabOrder,
                     groupResume,
                     openInTargets,
@@ -4295,6 +4368,11 @@ export function happyAgentWorkspaceStoreCreate(
         conversationArchive: async (conversationId) => {
             await list.sessionArchive(conversationId);
             client.chatArchive(conversationId);
+        },
+        conversationRestore: async (conversationId) => {
+            const result = await list.sessionRestore(conversationId);
+            if (result.type === "failed") throw result.error;
+            client.chatRestore(conversationId);
         },
         tabReorder(tabId, afterId) {
             if (disposed || addressedGroupId === undefined) return;
@@ -4975,6 +5053,74 @@ export function happyAgentWorkspaceStoreCreate(
                 }
                 recompute();
             }
+        },
+        groupArchiveOpen(groupId) {
+            if (groupArchive?.submitting) return;
+            const projects = list.get().projects;
+            if (projects.type !== "ready") return;
+            for (const project of projects.value) {
+                if (project.id === groupId) {
+                    // The home project is the machine's permanent catch-all;
+                    // taking it out only makes it return on the next session.
+                    if (project.kind === "home") return;
+                    groupArchive = {
+                        kind: "project",
+                        projectId: project.id,
+                        name: project.name,
+                        submitting: false,
+                    };
+                    recompute();
+                    return;
+                }
+                const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
+                if (!worktree) continue;
+                groupArchive = {
+                    kind: "worktree",
+                    projectId: project.id,
+                    worktreeId: worktree.id,
+                    name: worktree.name,
+                    submitting: false,
+                };
+                recompute();
+                return;
+            }
+        },
+        groupArchiveCancel() {
+            if (!groupArchive || groupArchive.submitting) return;
+            groupArchive = undefined;
+            recompute();
+        },
+        async groupArchiveSubmit() {
+            const pending = groupArchive;
+            if (!pending || pending.submitting) return;
+            const submission = ++groupArchiveSubmission;
+            groupArchive = { ...pending, submitting: true, error: undefined };
+            recompute();
+            if (pending.kind === "worktree") {
+                const result = await list.worktreeArchive(pending.projectId, pending.worktreeId);
+                if (disposed || submission !== groupArchiveSubmission) return;
+                groupArchive =
+                    result.type === "archived"
+                        ? undefined
+                        : {
+                              ...pending,
+                              submitting: false,
+                              error: result.error.message,
+                          };
+                recompute();
+                return;
+            }
+            const result = await list.projectArchive(pending.projectId);
+            if (disposed || submission !== groupArchiveSubmission) return;
+            groupArchive =
+                result.type === "archived"
+                    ? undefined
+                    : {
+                          ...pending,
+                          submitting: false,
+                          error: result.error.message,
+                      };
+            recompute();
         },
         projectArchiveOpen(projectId) {
             // An archive already with the host owns this slot until it answers;

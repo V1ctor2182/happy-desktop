@@ -1,0 +1,29 @@
+.happy-menu-button {
+    position: relative;
+    display: flex;
+    flex: none;
+}
+
+.happy-menu-button__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--happy-z-overlay) - 1);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: default;
+}
+
+.happy-menu-button__popover {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: var(--happy-z-overlay);
+    padding-top: 4px;
+}
+
+.happy-menu-button[data-align="end"] .happy-menu-button__popover {
+    right: 0;
+    left: auto;
+}

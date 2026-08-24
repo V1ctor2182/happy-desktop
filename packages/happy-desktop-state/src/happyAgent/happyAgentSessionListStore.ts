@@ -35,6 +35,23 @@ import type {
 
 /** How many outstanding Happy Agent mutations this surface can attribute a refusal to. */
 const PENDING_MUTATION_LIMIT = 256;
+/** Recovery history retained for one project or worktree, newest first. */
+const ARCHIVED_SESSION_LIMIT_PER_GROUP = 40;
+
+function archivedSessionsBound(
+    sessions: readonly HappyAgentSessionSummary[],
+): readonly HappyAgentSessionSummary[] {
+    const counts = new Map<HappyAgentGroupId, number>();
+    return [...sessions]
+        .sort((left, right) => (right.archivedAt ?? 0) - (left.archivedAt ?? 0))
+        .filter((session) => {
+            const groupId = happyAgentSessionGroupIdOf(session);
+            const count = counts.get(groupId) ?? 0;
+            if (count >= ARCHIVED_SESSION_LIMIT_PER_GROUP) return false;
+            counts.set(groupId, count + 1);
+            return true;
+        });
+}
 
 /**
  * The list surface of the local workspace: a `Loadable` of projects, each
@@ -45,6 +62,8 @@ const PENDING_MUTATION_LIMIT = 256;
  */
 export interface HappyAgentSessionListSnapshot {
     readonly projects: Loadable<readonly HappyAgentProjectGroup[]>;
+    /** Sessions the host still holds but has taken out of their workspace strips. */
+    readonly archivedSessions: readonly HappyAgentSessionSummary[];
     /** Last failed create/fork/reset, surfaced without rejecting the action. */
     readonly mutationError?: UserError;
     /**
@@ -96,6 +115,14 @@ export interface HappyAgentSessionListSnapshot {
  */
 export type HappyAgentProjectArchiveResult =
     | { readonly type: "archived" }
+    | { readonly type: "failed"; readonly error: UserError };
+
+/** Verified outcome of removing one worktree and its checkout. */
+export type HappyAgentWorktreeArchiveResult = HappyAgentProjectArchiveResult;
+
+/** Authoritative outcome of returning one archived session to its strip. */
+export type HappyAgentSessionRestoreResult =
+    | { readonly type: "restored" }
     | { readonly type: "failed"; readonly error: UserError };
 
 /**
@@ -172,6 +199,8 @@ export interface HappyAgentSessionListStore {
      * `mutationError` and the row returns on the following reconcile.
      */
     sessionArchive(sessionId: HappyAgentSessionId): Promise<void>;
+    /** Returns an archived session to its workspace strip and verifies the host's answer. */
+    sessionRestore(sessionId: HappyAgentSessionId): Promise<HappyAgentSessionRestoreResult>;
     /** Moves one session after `afterId`, or to the front of its workspace when null. */
     sessionReorder(
         sessionId: HappyAgentSessionId,
@@ -309,7 +338,7 @@ export interface HappyAgentSessionListStore {
     worktreeArchive(
         projectId: HappyAgentProjectId,
         worktreeId: HappyAgentWorktreeId,
-    ): Promise<void>;
+    ): Promise<HappyAgentWorktreeArchiveResult>;
     /** Renames a worktree; the new name shows before the host confirms it. */
     worktreeRename(
         projectId: HappyAgentProjectId,
@@ -363,6 +392,7 @@ export interface HappyAgentSessionListDeps {
 export interface HappyAgentSessionCatalogSnapshot {
     readonly catalog: HappyAgentProjectCatalog;
     readonly sessions: readonly HappyAgentSessionSummary[];
+    readonly archivedSessions: readonly HappyAgentSessionSummary[];
 }
 
 export interface HappyAgentSessionCatalogSource {
@@ -374,9 +404,9 @@ export interface HappyAgentSessionCatalogSource {
 /**
  * Owns the local conversation catalog grouped by project: the host's projects
  * and worktrees are read together with the flat session list, already in the
- * host's presentation order — the host owns both that arrangement and leaving
- * archived sessions out — and projected into project rows, keeping that order
- * inside each group and putting the most recently active project first. The
+ * host's presentation order — with archived sessions carried explicitly beside
+ * the active set — and projected into project rows, keeping that order inside
+ * each group and putting the most recently active project first. The
  * constructor opens nothing; the first subscriber triggers hydration and one
  * global-event subscription, and the last unsubscribe tears both down.
  *
@@ -395,6 +425,7 @@ export function happyAgentSessionListStoreCreate(
     const NO_SESSION_CREATE_FAILURES: ReadonlyMap<HappyAgentSessionId, UserError> = new Map();
 
     const store = createStore<HappyAgentSessionListSnapshot>()(() => ({
+        archivedSessions: [],
         catalogRevision: 0,
         projectCreateFailures: NO_PROJECT_CREATE_FAILURES,
         projects: { type: "loading" },
@@ -418,6 +449,7 @@ export function happyAgentSessionListStoreCreate(
         // things.
         readonly catalogListed: boolean;
         readonly sessions: readonly HappyAgentSessionSummary[];
+        readonly archivedSessions: readonly HappyAgentSessionSummary[];
         /**
          * Counts the changes the authoritative reads have made to what this
          * list describes. An optimistic publication leaves it alone, so a
@@ -440,9 +472,12 @@ export function happyAgentSessionListStoreCreate(
          * nothing counts as nothing.
          */
         readonly authoritativeProjects: readonly HappyAgentProjectGroup[] | undefined;
+        readonly authoritativeArchivedSessions: readonly HappyAgentSessionSummary[] | undefined;
     }
 
     const internal = createStore<HappyAgentSessionListInternalState>()(() => ({
+        archivedSessions: [],
+        authoritativeArchivedSessions: undefined,
         authoritativeProjects: undefined,
         catalog: EMPTY_CATALOG,
         catalogListed: false,
@@ -480,12 +515,30 @@ export function happyAgentSessionListStoreCreate(
     // memory to attribute.
     const pendingMutationIds = new Set<string>();
     const pendingMutationOrder: string[] = [];
+    interface SessionArchiveIntent {
+        readonly archived: boolean;
+        readonly mutationId: string;
+        readonly summary?: HappyAgentSessionSummary;
+    }
+    const sessionArchiveIntents = new Map<HappyAgentSessionId, SessionArchiveIntent>();
+    const sessionArchiveMutationIds = new Map<string, HappyAgentSessionId>();
+    interface SessionRestoreWaiter {
+        readonly resolve: (result: HappyAgentSessionRestoreResult) => void;
+        stopObservation?: () => void;
+    }
+    const sessionRestoreWaiters = new Map<string, SessionRestoreWaiter>();
     interface ProjectArchiveWaiter {
         readonly projectId: HappyAgentProjectId;
         readonly resolve: (result: HappyAgentProjectArchiveResult) => void;
         stopObservation?: () => void;
     }
     const projectArchiveWaiters = new Map<string, ProjectArchiveWaiter>();
+    interface WorktreeArchiveWaiter {
+        readonly worktreeId: HappyAgentWorktreeId;
+        readonly resolve: (result: HappyAgentWorktreeArchiveResult) => void;
+        stopObservation?: () => void;
+    }
+    const worktreeArchiveWaiters = new Map<string, WorktreeArchiveWaiter>();
     const reorderMutations = new Map<
         string,
         | { readonly kind: "project"; readonly order: readonly HappyAgentProjectId[] }
@@ -548,6 +601,30 @@ export function happyAgentSessionListStoreCreate(
         waiter.resolve(result);
     };
 
+    const worktreeArchiveSettle = (
+        mutationId: string,
+        result: HappyAgentWorktreeArchiveResult,
+    ): void => {
+        const waiter = worktreeArchiveWaiters.get(mutationId);
+        if (waiter === undefined) return;
+        worktreeArchiveWaiters.delete(mutationId);
+        pendingMutationIds.delete(mutationId);
+        waiter.stopObservation?.();
+        waiter.resolve(result);
+    };
+
+    const sessionRestoreSettle = (
+        mutationId: string,
+        result: HappyAgentSessionRestoreResult,
+    ): void => {
+        const waiter = sessionRestoreWaiters.get(mutationId);
+        if (waiter === undefined) return;
+        sessionRestoreWaiters.delete(mutationId);
+        pendingMutationIds.delete(mutationId);
+        waiter.stopObservation?.();
+        waiter.resolve(result);
+    };
+
     const projectArchivesConfirmAbsent = (): void => {
         for (const [mutationId, waiter] of projectArchiveWaiters) {
             if (
@@ -558,6 +635,52 @@ export function happyAgentSessionListStoreCreate(
                 projectArchiveSettle(mutationId, { type: "archived" });
             }
         }
+    };
+
+    const worktreeArchivesConfirmAbsent = (): void => {
+        for (const [mutationId, waiter] of worktreeArchiveWaiters) {
+            if (
+                !internal
+                    .getState()
+                    .catalog.worktrees.some((worktree) => worktree.id === waiter.worktreeId)
+            ) {
+                worktreeArchiveSettle(mutationId, { type: "archived" });
+            }
+        }
+    };
+
+    /** Keeps a local archive/restore visible until an authoritative read confirms it. */
+    const sessionArchiveIntentsApply = (
+        sessions: readonly HappyAgentSessionSummary[],
+        archivedSessions: readonly HappyAgentSessionSummary[],
+    ): {
+        readonly sessions: readonly HappyAgentSessionSummary[];
+        readonly archivedSessions: readonly HappyAgentSessionSummary[];
+    } => {
+        if (sessionArchiveIntents.size === 0) return { sessions, archivedSessions };
+        let active = [...sessions];
+        let archived = [...archivedSessions];
+        for (const [sessionId, intent] of sessionArchiveIntents) {
+            const activeSummary = active.find((session) => session.id === sessionId);
+            const archivedSummary = archived.find((session) => session.id === sessionId);
+            if (
+                (intent.archived && archivedSummary !== undefined) ||
+                (!intent.archived && activeSummary !== undefined)
+            ) {
+                sessionArchiveIntents.delete(sessionId);
+                sessionArchiveMutationIds.delete(intent.mutationId);
+                pendingMutationIds.delete(intent.mutationId);
+                if (!intent.archived) sessionRestoreSettle(intent.mutationId, { type: "restored" });
+                continue;
+            }
+            const summary = activeSummary ?? archivedSummary ?? intent.summary;
+            active = active.filter((session) => session.id !== sessionId);
+            archived = archived.filter((session) => session.id !== sessionId);
+            if (summary === undefined) continue;
+            if (intent.archived) archived.unshift(summary);
+            else active.push(summary);
+        }
+        return { sessions: active, archivedSessions: archived };
     };
 
     const orderByIds = <T extends { readonly id: string }>(
@@ -634,6 +757,8 @@ export function happyAgentSessionListStoreCreate(
             internal.getState().catalog,
             internal.getState().sessions,
         ),
+        archivedSessions: readonly HappyAgentSessionSummary[] = internal.getState()
+            .archivedSessions,
     ): void => {
         const { catalogRevision } = internal.getState();
         const ordered = optimisticOrderApply(projected);
@@ -654,11 +779,13 @@ export function happyAgentSessionListStoreCreate(
             if (
                 previous.projects.type === "ready" &&
                 previous.projects.value === projects &&
+                previous.archivedSessions === archivedSessions &&
                 previous.catalogRevision === catalogRevision
             )
                 return previous;
             return {
                 ...previous,
+                archivedSessions,
                 catalogRevision,
                 projects: { type: "ready", value: projects },
             };
@@ -679,6 +806,7 @@ export function happyAgentSessionListStoreCreate(
     interface CatalogObservation {
         readonly catalog: HappyAgentProjectCatalog;
         readonly sessions: readonly HappyAgentSessionSummary[];
+        readonly archivedSessions: readonly HappyAgentSessionSummary[];
         readonly superseded: boolean;
     }
 
@@ -710,6 +838,7 @@ export function happyAgentSessionListStoreCreate(
         const token = ++readSequence;
         try {
             const snapshot = await deps.catalogSource.read();
+            const observedArchivedSessions = archivedSessionsBound(snapshot.archivedSessions);
             if (disposed)
                 return {
                     ok: false,
@@ -727,40 +856,67 @@ export function happyAgentSessionListStoreCreate(
                 // is the read order, and a later read must not be allowed to think
                 // this one never happened just because the host had nothing new.
                 appliedSequence = token;
+                const pending = sessionArchiveIntentsApply(
+                    snapshot.sessions,
+                    observedArchivedSessions,
+                );
                 internal.setState({
+                    archivedSessions: pending.archivedSessions,
                     catalog: snapshot.catalog,
                     catalogListed: true,
-                    sessions: snapshot.sessions,
+                    sessions: pending.sessions,
                 });
-                const projected = happyAgentProjectGroupsProject(
+                const authoritativeProjected = happyAgentProjectGroupsProject(
                     snapshot.catalog,
                     snapshot.sessions,
                 );
-                optimisticOrdersConfirm(projected);
+                const projected = happyAgentProjectGroupsProject(
+                    snapshot.catalog,
+                    pending.sessions,
+                );
+                optimisticOrdersConfirm(authoritativeProjected);
                 // Judged against the previous authoritative read, so a row this
                 // store took out optimistically is still a change when the host
                 // confirms it, and a read describing the same catalog twice is
                 // not. Reusing that read's references keeps the equal case
                 // identical rather than merely equal, which is what lets the
                 // comparison be an identity check.
-                const { authoritativeProjects } = internal.getState();
+                const { authoritativeArchivedSessions, authoritativeProjects } =
+                    internal.getState();
                 const authoritative =
                     authoritativeProjects === undefined
-                        ? projected
-                        : referencesPreserve(authoritativeProjects, projected);
-                if (authoritative !== authoritativeProjects) {
+                        ? authoritativeProjected
+                        : referencesPreserve(authoritativeProjects, authoritativeProjected);
+                const archived =
+                    authoritativeArchivedSessions === undefined
+                        ? observedArchivedSessions
+                        : referencesPreserve(
+                              authoritativeArchivedSessions,
+                              observedArchivedSessions,
+                          );
+                if (
+                    authoritative !== authoritativeProjects ||
+                    archived !== authoritativeArchivedSessions
+                ) {
                     internal.setState((state) => ({
+                        authoritativeArchivedSessions: archived,
                         authoritativeProjects: authoritative,
                         catalogRevision: state.catalogRevision + 1,
                     }));
                 }
-                publish(authoritative);
+                publish(projected, pending.archivedSessions);
                 worktreesSettle();
                 projectArchivesConfirmAbsent();
+                worktreeArchivesConfirmAbsent();
             }
             return {
                 ok: true,
-                observed: { catalog: snapshot.catalog, sessions: snapshot.sessions, superseded },
+                observed: {
+                    archivedSessions: observedArchivedSessions,
+                    catalog: snapshot.catalog,
+                    sessions: snapshot.sessions,
+                    superseded,
+                },
                 token,
             };
         } catch (error) {
@@ -881,6 +1037,13 @@ export function happyAgentSessionListStoreCreate(
         // any optimistic ordering, name, or archive projection.
         if (disposed || !pendingMutationIds.delete(rejection.mutationId)) return;
         const error = happyAgentUserError(new Error(rejection.message));
+        const archivedSessionId = sessionArchiveMutationIds.get(rejection.mutationId);
+        sessionArchiveMutationIds.delete(rejection.mutationId);
+        if (
+            archivedSessionId !== undefined &&
+            sessionArchiveIntents.get(archivedSessionId)?.mutationId === rejection.mutationId
+        )
+            sessionArchiveIntents.delete(archivedSessionId);
         const reordered = reorderMutations.get(rejection.mutationId);
         reorderMutations.delete(rejection.mutationId);
         const { optimisticProjectOrder, optimisticWorkspaceOrders } = internal.getState();
@@ -917,6 +1080,14 @@ export function happyAgentSessionListStoreCreate(
                   )
                 : previous.sessionCreateFailures;
         projectArchiveSettle(rejection.mutationId, {
+            type: "failed",
+            error,
+        });
+        worktreeArchiveSettle(rejection.mutationId, {
+            type: "failed",
+            error,
+        });
+        sessionRestoreSettle(rejection.mutationId, {
             type: "failed",
             error,
         });
@@ -996,7 +1167,13 @@ export function happyAgentSessionListStoreCreate(
         pendingMutationOrder.push(mutationId);
         while (pendingMutationOrder.length > PENDING_MUTATION_LIMIT) {
             const expired = pendingMutationOrder.shift();
-            if (expired) pendingMutationIds.delete(expired);
+            if (expired) {
+                pendingMutationIds.delete(expired);
+                const sessionId = sessionArchiveMutationIds.get(expired);
+                sessionArchiveMutationIds.delete(expired);
+                if (sessionId && sessionArchiveIntents.get(sessionId)?.mutationId === expired)
+                    sessionArchiveIntents.delete(sessionId);
+            }
         }
         return mutationId;
     };
@@ -1174,12 +1351,78 @@ export function happyAgentSessionListStoreCreate(
                 // closing a tab must feel immediate. A failed archive is
                 // recorded in `mutationError`; its rejection then reconciles
                 // the authoritative catalog and puts the row back.
-                internal.setState((state) => ({
-                    sessions: state.sessions.filter((existing) => existing.id !== sessionId),
-                }));
+                const closing = internal
+                    .getState()
+                    .sessions.find((existing) => existing.id === sessionId);
+                internal.setState((state) => {
+                    return {
+                        archivedSessions: closing
+                            ? [
+                                  closing,
+                                  ...state.archivedSessions.filter(
+                                      (existing) => existing.id !== sessionId,
+                                  ),
+                              ]
+                            : state.archivedSessions,
+                        sessions: state.sessions.filter((existing) => existing.id !== sessionId),
+                    };
+                });
                 publish();
-                connectMutationTrack(deps.connectActions.setSessionArchived(sessionId, true));
+                const mutationId = connectMutationTrack(
+                    deps.connectActions.setSessionArchived(sessionId, true),
+                );
+                sessionArchiveIntents.set(sessionId, {
+                    archived: true,
+                    mutationId,
+                    ...(closing === undefined ? {} : { summary: closing }),
+                });
+                sessionArchiveMutationIds.set(mutationId, sessionId);
             }),
+        async sessionRestore(sessionId) {
+            const state = internal.getState();
+            if (state.sessions.some((existing) => existing.id === sessionId))
+                return { type: "restored" };
+            const restoring = state.archivedSessions.find((existing) => existing.id === sessionId);
+            store.setState({ ...store.getState(), mutationError: undefined });
+            internal.setState((current) => ({
+                archivedSessions: current.archivedSessions.filter(
+                    (existing) => existing.id !== sessionId,
+                ),
+                sessions:
+                    restoring === undefined ||
+                    current.sessions.some((existing) => existing.id === sessionId)
+                        ? current.sessions
+                        : [...current.sessions, restoring],
+            }));
+            publish();
+            return await new Promise<HappyAgentSessionRestoreResult>((resolve) => {
+                const mutationId = connectMutationTrack(
+                    deps.connectActions.setSessionArchived(sessionId, false),
+                );
+                sessionArchiveIntents.set(sessionId, {
+                    archived: false,
+                    mutationId,
+                    ...(restoring === undefined ? {} : { summary: restoring }),
+                });
+                sessionArchiveMutationIds.set(mutationId, sessionId);
+                const waiter: SessionRestoreWaiter = { resolve };
+                sessionRestoreWaiters.set(mutationId, waiter);
+                const unsubscribeCatalog = deps.catalogSource.subscribe(
+                    () => {
+                        void reconcile();
+                    },
+                    () => {
+                        void reconcile();
+                    },
+                );
+                const unsubscribeMutation = deps.connectMutationSubscribe(mutationRejected);
+                waiter.stopObservation = () => {
+                    unsubscribeCatalog();
+                    unsubscribeMutation();
+                };
+                void reconcile();
+            });
+        },
         sessionReorder: (sessionId, afterId) =>
             mutate(async () => {
                 connectMutationTrack(deps.connectActions.reorderSession(sessionId, afterId));
@@ -1230,22 +1473,46 @@ export function happyAgentSessionListStoreCreate(
                     .catalog.worktrees.find((entry) => entry.id === worktreeId);
                 return sessionCreateRun({ ...create, cwd: known?.path ?? "", worktreeId }, pathed);
             }),
-        worktreeArchive: (projectId, worktreeId) =>
-            mutate(async () => {
-                // The worktree leaves the list before the host confirms, because
-                // archiving is a deliberate act and must feel immediate. A failure
-                // is recorded and the reconcile below puts it back.
-                internal.setState((state) => ({
-                    catalog: {
-                        ...state.catalog,
-                        worktrees: state.catalog.worktrees.filter(
-                            (entry) => entry.id !== worktreeId,
-                        ),
+        async worktreeArchive(projectId, worktreeId) {
+            if (
+                !internal
+                    .getState()
+                    .catalog.worktrees.some((worktree) => worktree.id === worktreeId)
+            )
+                return { type: "archived" };
+            store.setState({ ...store.getState(), mutationError: undefined });
+            // The row leaves immediately, but the promise below answers only
+            // after the authoritative catalog confirms removal or the mutation
+            // stream reports a refusal.
+            internal.setState((state) => ({
+                catalog: {
+                    ...state.catalog,
+                    worktrees: state.catalog.worktrees.filter((entry) => entry.id !== worktreeId),
+                },
+            }));
+            publish();
+            return await new Promise<HappyAgentWorktreeArchiveResult>((resolve) => {
+                const mutationId = connectMutationTrack(
+                    deps.connectActions.archiveWorkspace(projectId, worktreeId),
+                );
+                const waiter: WorktreeArchiveWaiter = { worktreeId, resolve };
+                worktreeArchiveWaiters.set(mutationId, waiter);
+                const unsubscribeCatalog = deps.catalogSource.subscribe(
+                    () => {
+                        void reconcile();
                     },
-                }));
-                publish();
-                connectMutationTrack(deps.connectActions.archiveWorkspace(projectId, worktreeId));
-            }),
+                    () => {
+                        void reconcile();
+                    },
+                );
+                const unsubscribeMutation = deps.connectMutationSubscribe(mutationRejected);
+                waiter.stopObservation = () => {
+                    unsubscribeCatalog();
+                    unsubscribeMutation();
+                };
+                void reconcile();
+            });
+        },
         worktreeReorder: (projectId, worktreeId, afterId) =>
             mutate(async () => {
                 const { catalog, sessions } = internal.getState();
@@ -1415,6 +1682,20 @@ export function happyAgentSessionListStoreCreate(
                     error: happyAgentUserError(cancelled),
                 });
             }
+            for (const mutationId of worktreeArchiveWaiters.keys()) {
+                worktreeArchiveSettle(mutationId, {
+                    type: "failed",
+                    error: happyAgentUserError(cancelled),
+                });
+            }
+            for (const mutationId of sessionRestoreWaiters.keys()) {
+                sessionRestoreSettle(mutationId, {
+                    type: "failed",
+                    error: happyAgentUserError(cancelled),
+                });
+            }
+            sessionArchiveIntents.clear();
+            sessionArchiveMutationIds.clear();
             stop();
             storeUnsub();
             listeners.clear();

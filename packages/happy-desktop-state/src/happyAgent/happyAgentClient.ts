@@ -235,6 +235,8 @@ export interface HappyAgentWorkspaceClient {
     chat(sessionId: HappyAgentSessionId): Promise<HappyAgentChatHandle>;
     /** Stops background synchronization for an archived chat without evicting its memory. */
     chatArchive(sessionId: HappyAgentSessionId): void;
+    /** Lets a restored chat resume background synchronization when it is acquired again. */
+    chatRestore(sessionId: HappyAgentSessionId): void;
     /**
      * Opens one interactive terminal in a session's working directory. Unlike a
      * chat store these are not shared or reference-counted: two terminals in the
@@ -297,6 +299,8 @@ interface ChatBinding {
     store?: HappyAgentChatStore;
     activeUnsubscribe?: () => void;
     archived: boolean;
+    /** Ignores the archived snapshot retained until an unarchive is confirmed. */
+    restoring: boolean;
 }
 
 async function workspaceFileTreeRead(
@@ -404,16 +408,21 @@ export function happyAgentWorkspaceClientCreate(
         ) {
             return;
         }
-        const unsubscribe = store.subscribe(() => {
-            if (!store.get().archived) return;
-            binding.archived = true;
-            chatDeactivate(binding);
-        });
+        const archivedRead = (): void => {
+            const archived = store.get().archived;
+            // Restoring starts against the last archived snapshot. Keep this
+            // watcher alive until the connection publishes the host's false;
+            // only a later true is another archive.
+            if (binding.restoring) {
+                if (archived) return;
+                binding.restoring = false;
+            }
+            binding.archived = archived;
+            if (archived) chatDeactivate(binding);
+        };
+        const unsubscribe = store.subscribe(archivedRead);
         binding.activeUnsubscribe = unsubscribe;
-        if (store.get().archived) {
-            binding.archived = true;
-            chatDeactivate(binding);
-        }
+        archivedRead();
     };
 
     return {
@@ -558,7 +567,7 @@ export function happyAgentWorkspaceClientCreate(
                     }
                     return store;
                 });
-                binding = { count: 0, storePromise, archived: false };
+                binding = { count: 0, storePromise, archived: false, restoring: false };
                 chats.set(sessionId, binding);
             }
             binding.count += 1;
@@ -591,7 +600,15 @@ export function happyAgentWorkspaceClientCreate(
             const binding = chats.get(sessionId);
             if (!binding) return;
             binding.archived = true;
+            binding.restoring = false;
             chatDeactivate(binding);
+        },
+        chatRestore(sessionId) {
+            const binding = chats.get(sessionId);
+            if (!binding) return;
+            binding.archived = false;
+            binding.restoring = true;
+            chatActivate(binding);
         },
         terminalOpen(sessionId) {
             if (disposed) throw new Error("The Happy Agent client is disposed.");

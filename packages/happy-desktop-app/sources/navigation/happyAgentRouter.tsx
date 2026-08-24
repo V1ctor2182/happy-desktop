@@ -408,6 +408,17 @@ function HappyAgentWorkspaceLayout(
                             },
                 )
             }
+            onChatClose={(happyAgentId, groupId, chatId, fallbackChatId) => {
+                const changed = router.history.sessionForget(
+                    happyAgentId,
+                    groupId,
+                    chatId,
+                    fallbackChatId,
+                );
+                if (changed && router.history.subscribers.size === 0)
+                    void router.load({ action: { type: "REPLACE" } });
+                return changed;
+            }}
             onFileClose={(happyAgentId, groupId, path) => {
                 // The route helper owns history repair; the surface owns the
                 // tab bytes and closes those immediately after this callback.

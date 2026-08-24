@@ -504,6 +504,8 @@ export interface HappyAgentProjectCatalog {
 
 export interface HappyAgentSessionSummary {
     readonly id: HappyAgentSessionId;
+    /** Epoch milliseconds when the host archived it; absent while active. */
+    readonly archivedAt?: number;
     /** The project containing this code chat. */
     readonly projectId: HappyAgentProjectId;
     /** Set when the chat belongs to one of the project's workspaces. */

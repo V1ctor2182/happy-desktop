@@ -62,6 +62,7 @@
 @import "./styles/terminal-panel.css";
 @import "./styles/browser-panel.css";
 @import "./styles/menu.css";
+@import "./styles/menu-button.css";
 @import "./styles/modal.css";
 @import "./styles/modal-overlay.css";
 @import "./styles/compose-modal.css";

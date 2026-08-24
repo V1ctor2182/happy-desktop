@@ -371,9 +371,11 @@ export function projectGroups(
                         modes,
                     ),
                 );
-            const agents = (root?.agents ?? project.agents).filter(
-                (agent) => agent.archivedAt === null,
-            );
+            // Archived sessions remain part of the typed group projection so
+            // consumers that offer recovery can see them. Active list surfaces
+            // filter on the explicit `archived` field; unread counts do not.
+            const agents = root?.agents ?? project.agents;
+            const activeAgents = agents.filter((agent) => agent.archivedAt === null);
             const git = projectGit(gitStates.get(project.id));
             return {
                 id: project.id,
@@ -401,9 +403,9 @@ export function projectGroups(
                     : {}),
                 ...(git === undefined ? {} : { git }),
                 usage: { totalTokens: 0 },
-                unread: unreadOf(agents),
+                unread: unreadOf(activeAgents),
                 workspaces: children,
-                sessions: agents
+                sessions: [...agents]
                     .sort(orderCompare)
                     .map((agent) =>
                         projectAgent(
@@ -443,7 +445,10 @@ function projectWorkspace(
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
 ): WorkspaceGroup {
-    const agents = workspace.agents.filter((agent) => agent.archivedAt === null);
+    // See the project-root projection above: archival is data, not removal from
+    // this owned connection contract. Consumers decide which set they need.
+    const agents = workspace.agents;
+    const activeAgents = agents.filter((agent) => agent.archivedAt === null);
     const git = workspaceGit(gitState);
     return {
         id: workspace.id,
@@ -457,7 +462,7 @@ function projectWorkspace(
             ? {}
             : { error: workspace.initialization.error }),
         ...(git === undefined ? {} : { git }),
-        sessions: agents
+        sessions: [...agents]
             .sort(orderCompare)
             .map((agent) =>
                 projectAgent(
@@ -470,7 +475,7 @@ function projectWorkspace(
                 ),
             ),
         usage: { totalTokens: 0 },
-        unread: unreadOf(agents),
+        unread: unreadOf(activeAgents),
     };
 }
 
@@ -490,6 +495,7 @@ function projectAgent(
             : ({ kind: "workspace", projectId, workspaceId: agent.workspaceId } as const);
     return {
         archived: agent.archivedAt !== null,
+        ...(agent.archivedAt === null ? {} : { archivedAt: agent.archivedAt }),
         createdAt: agent.createdAt,
         cwd: workspacePath(workspace),
         ...(draft?.value == null

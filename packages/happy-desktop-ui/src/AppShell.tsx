@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import {
+    useCallback,
     useContext,
     useLayoutEffect,
     useRef,
@@ -95,7 +96,10 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      */
     panelFooterFloating?: boolean;
     panelResizeLabel?: string;
+    /** Reports pointer or DOM-focus ownership for this exact shell instance. */
+    onFocusedPaneChange?: (pane: AppShellFocusedPane) => void;
 };
+export type AppShellFocusedPane = "workspace" | "panel";
 const SIDEBAR_DEFAULT_WIDTH = 288;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 480;
@@ -281,6 +285,8 @@ function ResizeHandle(props: {
  */
 export function AppShell(props: AppShellProps) {
     const shell = useRef<HTMLDivElement>(null);
+    const [panelNode, setPanelNode] = useState<HTMLElement | null>(null);
+    const [focusedPaneOwner, setFocusedPaneOwner] = useState<HTMLElement | null>(null);
     // The overlay lane below, held as state rather than in a ref because the
     // surfaces that portal into it render from this shell's own subtree and
     // must be told once the node they hang from exists.
@@ -318,7 +324,18 @@ export function AppShell(props: AppShellProps) {
         "panelFooter",
         "panelFooterFloating",
         "panelResizeLabel",
+        "onFocusedPaneChange",
     ]);
+    const onFocusedPaneChange = local.onFocusedPaneChange;
+    // Ref identity is a measured lifetime contract: a changed callback ref is
+    // cleared on every render, while this reset must mean the panel itself left.
+    const panelRef = useCallback(
+        (node: HTMLElement | null): void => {
+            setPanelNode(node);
+            if (node === null) onFocusedPaneChange?.("workspace");
+        },
+        [onFocusedPaneChange],
+    );
     const sidebarMin = local.sidebarMinWidth ?? SIDEBAR_MIN_WIDTH;
     const panelMin = local.panelMinWidth ?? PANEL_MIN_WIDTH;
     // The caps a lane answers to on its own. What is actually left for it is
@@ -451,6 +468,24 @@ export function AppShell(props: AppShellProps) {
         : panelWidthState;
     const panelWidth = panelWidthControlled ? (panelDragWidth ?? panelWidthBase) : panelWidthState;
     const panelPresent = local.panel !== undefined && local.panel !== null;
+    const focusedPane: AppShellFocusedPane =
+        panelPresent && panelNode !== null && focusedPaneOwner === panelNode
+            ? "panel"
+            : "workspace";
+    const paneFocusRead = (current: HTMLElement, target: EventTarget | null): void => {
+        if (!(target instanceof Element)) return;
+        // Resizing the boundary changes geometry, not keyboard ownership.
+        if (target.closest('[data-happy-desktop-ui="app-shell-resize-handle"]')) return;
+        const pane = target.closest<HTMLElement>("[data-app-shell-pane]");
+        if (pane?.closest('[data-happy-desktop-ui="app-shell"]') !== current) return;
+        if (pane.dataset.appShellPane === "panel") {
+            setFocusedPaneOwner(pane);
+            onFocusedPaneChange?.("panel");
+        } else if (pane.dataset.appShellPane === "workspace") {
+            setFocusedPaneOwner(null);
+            onFocusedPaneChange?.("workspace");
+        }
+    };
     // eslint-disable-next-line happy-react/no-layout-effect -- live splitter geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
     useLayoutEffect(() => {
         shell.current?.dispatchEvent(new Event(APP_SHELL_RESIZE_LAYOUT_EVENT, { bubbles: true }));
@@ -554,11 +589,20 @@ export function AppShell(props: AppShellProps) {
                 {...rest}
                 className={["happy-desktop-app-shell", local.className].filter(Boolean).join(" ")}
                 data-embedded={local.embedded ? "" : undefined}
+                data-focused-pane={focusedPane}
                 data-happy-desktop-ui="app-shell"
                 data-shortcut-hints={shortcutHintsVisible ? "" : undefined}
                 data-sidebar-collapsed={sidebarHidden ? "" : undefined}
                 data-window-controls={local.windowControls ? "" : undefined}
                 data-window-full-screen={local.windowFullScreen ? "" : undefined}
+                onFocusCapture={(event) => {
+                    rest.onFocusCapture?.(event);
+                    paneFocusRead(event.currentTarget, event.target);
+                }}
+                onPointerDownCapture={(event) => {
+                    rest.onPointerDownCapture?.(event);
+                    paneFocusRead(event.currentTarget, event.target);
+                }}
                 ref={shell}
                 style={local.style}
             >
@@ -666,6 +710,7 @@ export function AppShell(props: AppShellProps) {
                             ) : null}
                             <div
                                 className="happy-desktop-app-shell__workspace"
+                                data-app-shell-pane="workspace"
                                 data-happy-desktop-ui="app-shell-workspace"
                             >
                                 {local.children}
@@ -674,8 +719,10 @@ export function AppShell(props: AppShellProps) {
                         {local.panel ? (
                             <aside
                                 className="happy-desktop-app-shell__panel"
+                                data-app-shell-pane="panel"
                                 data-happy-desktop-ui="app-shell-panel"
                                 data-resizable={panelResizable ? "" : undefined}
+                                ref={panelRef}
                                 style={panelStyle}
                             >
                                 {panelResizable ? (

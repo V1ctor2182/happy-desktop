@@ -223,6 +223,15 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
 
 /** Whether two places are the same place. */
 export function happyAgentRouteSame(one: HappyAgentRoute, other: HappyAgentRoute): boolean {
+    // A file tab is one destination per checkout and path. Its presentation and
+    // the session visible behind it may change on a revisit; keeping either in
+    // identity would leave duplicate Back entries for the same tab.
+    if (one.kind === "file" && other.kind === "file")
+        return (
+            one.happyAgentId === other.happyAgentId &&
+            one.groupId === other.groupId &&
+            one.path === other.path
+        );
     return happyAgentRoutePath(one) === happyAgentRoutePath(other);
 }
 

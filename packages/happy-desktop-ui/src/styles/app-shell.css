@@ -112,7 +112,7 @@
    all — `app-region: none` is not an escape hatch, Chromium resolves it to
    `no-drag`, so the only way out of the region list is to not match here. */
 .happy-desktop-app-shell[data-window-controls]
-    button:not(.happy-agent-control__backdrop, .happy-slot-backdrop),
+    button:not(.happy-agent-control__backdrop, .happy-menu-button__backdrop, .happy-slot-backdrop),
 .happy-desktop-app-shell[data-window-controls] a,
 .happy-desktop-app-shell[data-window-controls] input,
 .happy-desktop-app-shell[data-window-controls] select,
@@ -138,6 +138,7 @@
    every product popover is built from, so claiming them here covers the menus
    opened from any header rather than one call site's control. */
 .happy-desktop-app-shell[data-window-controls] .happy-menu,
+.happy-desktop-app-shell[data-window-controls] .happy-menu-button__popover,
 .happy-desktop-app-shell[data-window-controls] .happy-agent-control__popover,
 .happy-desktop-app-shell[data-window-controls] .happy-channel-header__menu-popover {
     -webkit-app-region: no-drag;
@@ -501,24 +502,25 @@
     overflow: hidden;
 }
 
-/* A selected tab is always legible, while focus ownership says which pane the
-   keyboard acts on. The main workspace owns focus by default; a panel's mark is
-   half strength until focus enters it, at which point the panel becomes full
-   strength and the main mark dims. `:focus-within` reads the real focused
-   control from anywhere in the pane, including an editor or terminal body, so
-   there is no second focus state to drift from the document. */
+/* A selected tab is always legible, while AppShell's one focus owner says which
+   pane the keyboard acts on. Pointer-down joins DOM focus because a file canvas
+   or transcript is often not itself focusable; clicking it still owns Cmd-W. */
 .happy-desktop-app-shell__panel .happy-tabs__tab-underline {
     opacity: 0.5;
 }
 
-.happy-desktop-app-shell__content:has(> .happy-desktop-app-shell__panel:focus-within)
+.happy-desktop-app-shell[data-focused-pane="panel"]
+    .happy-desktop-app-shell__content
     > .happy-desktop-app-shell__main
     > .happy-desktop-app-shell__workspace
     .happy-tabs__tab-underline {
     opacity: 0.5;
 }
 
-.happy-desktop-app-shell__panel:focus-within .happy-tabs__tab-underline {
+.happy-desktop-app-shell[data-focused-pane="panel"]
+    .happy-desktop-app-shell__content
+    > .happy-desktop-app-shell__panel
+    .happy-tabs__tab-underline {
     opacity: 1;
 }
 

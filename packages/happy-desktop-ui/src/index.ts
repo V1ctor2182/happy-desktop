@@ -70,7 +70,12 @@ export {
     type ApprovalRequest,
     type ApprovalResolution,
 } from "./ApprovalCard";
-export { AppShell, APP_SHELL_PANEL_DEFAULT_WIDTH, type AppShellProps } from "./AppShell";
+export {
+    AppShell,
+    APP_SHELL_PANEL_DEFAULT_WIDTH,
+    type AppShellFocusedPane,
+    type AppShellProps,
+} from "./AppShell";
 export {
     Avatar,
     type AvatarProps,
@@ -404,6 +409,7 @@ export {
 } from "./tabTransfer";
 export { Toolbar, type ToolbarProps, type ToolbarSearch } from "./Toolbar";
 export { Menu, type MenuItem, type MenuProps } from "./Menu";
+export { MenuButton, type MenuButtonProps } from "./MenuButton";
 export { Modal, type ModalProps, type ModalSize, type ModalTone } from "./Modal";
 export { ModalOverlay, type ModalOverlayProps } from "./ModalOverlay";
 export {
