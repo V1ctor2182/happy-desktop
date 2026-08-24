@@ -18,6 +18,10 @@ import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
 import { Icon, type IconName } from "./Icon";
 import { messageMediaSingleBox } from "./conversationRowHeight";
+import {
+    MessageListDisclosureAnchorProvider,
+    type MessageListDisclosureAnchor,
+} from "./messageListDisclosureAnchor";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
 import { ScrollArea } from "./Scrollbar";
 export type MessageSegment =
@@ -766,6 +770,7 @@ type MessageListVirtualAnchor =
  */
 export function MessageList(props: MessageListProps) {
     const list = useRef<HTMLDivElement>(null);
+    const spacer = useRef<HTMLDivElement>(null);
     const estimateRowWidth = props.estimateRowWidth;
     /* The restore payload is read once, at mount. This list reports its own
        position back out, and an owner that stores it where a later render can
@@ -801,6 +806,36 @@ export function MessageList(props: MessageListProps) {
         expectedScrollTop.current = element.scrollTop;
         readerScrollTop.current = element.scrollTop;
     };
+    const sparseInsetHold = () => {
+        const spacerElement = spacer.current;
+        const firstRow = spacerElement?.nextElementSibling;
+        if (!spacerElement || !firstRow) return;
+        const inset = Math.max(
+            0,
+            firstRow.getBoundingClientRect().top - spacerElement.getBoundingClientRect().bottom,
+        );
+        if (inset > 0.5) spacerElement.style.marginTop = `${String(inset)}px`;
+    };
+    const sparseInsetRelease = () => {
+        spacer.current?.style.removeProperty("margin-top");
+    };
+    /* Context identity stays fixed for the mounted list: thousands of rows may
+       consume it, and ordinary transcript renders must not notify them all. */
+    const disclosureAnchor = useRef<MessageListDisclosureAnchor>((disclosure) => {
+        const element = list.current;
+        if (!element || !element.contains(disclosure)) return;
+        /* Expanding a row is a reading action, not new transcript content.
+           Keep the control under the pointer while its details take space
+           below it. A short transcript needs its resolved auto-margin held
+           too; otherwise bottom alignment consumes that margin first and
+           visually inserts the body above the disclosure. */
+        sparseInsetHold();
+        escapedFromFollow.current = true;
+        following.current = false;
+        pendingAnchor.current = undefined;
+        readerAnchor.current = { scrollTop: element.scrollTop, type: "scrollTop" };
+        readerScrollTop.current = element.scrollTop;
+    }).current;
     const startReachedReport = (element: HTMLElement) => {
         if (element.scrollTop > START_REACHED_THRESHOLD) return;
         startReportedHeight.current = element.scrollHeight;
@@ -1148,6 +1183,8 @@ export function MessageList(props: MessageListProps) {
                 if (bottomOffset <= FOLLOW_BOTTOM_THRESHOLD) {
                     escapedFromFollow.current = false;
                     following.current = true;
+                    sparseInsetRelease();
+                    scrollToBottom();
                 }
             }
         };
@@ -1206,6 +1243,10 @@ export function MessageList(props: MessageListProps) {
                 escapedFromFollow.current = false;
             following.current =
                 !escapedFromFollow.current && bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
+            if (following.current) {
+                sparseInsetRelease();
+                scrollToBottom();
+            }
             pendingAnchor.current = undefined;
             readerAnchor.current = following.current
                 ? undefined
@@ -1246,50 +1287,55 @@ export function MessageList(props: MessageListProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- modelAnchorCaptureCurrent reads the current modeled rows, while this effect deliberately owns one scrollport-listener lifetime
     }, [virtualized, virtualizer]);
     return (
-        <ScrollArea
-            className={["happy-message-list", props.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="message-list"
-            style={props.style}
-            viewportClassName="happy-message-list__viewport"
-            viewportRef={list}
-        >
-            <div
-                className="happy-message-list__content"
-                data-happy-desktop-ui="message-list-content"
-                data-virtualized={virtualized ? "" : undefined}
+        <MessageListDisclosureAnchorProvider value={disclosureAnchor}>
+            <ScrollArea
+                className={["happy-message-list", props.className].filter(Boolean).join(" ")}
+                data-happy-desktop-ui="message-list"
+                style={props.style}
+                viewportClassName="happy-message-list__viewport"
+                viewportRef={list}
             >
                 <div
-                    aria-hidden="true"
-                    className="happy-message-list__spacer"
-                    data-happy-desktop-ui="message-list-spacer"
-                />
-                {virtualized ? (
+                    className="happy-message-list__content"
+                    data-happy-desktop-ui="message-list-content"
+                    data-virtualized={virtualized ? "" : undefined}
+                >
                     <div
-                        className="happy-message-list__virtual"
-                        data-happy-desktop-ui="message-list-virtual"
-                        style={{ height: `${String(virtualizer.getTotalSize())}px` }}
-                    >
-                        {virtualizer.getVirtualItems().map((virtualItem) => (
-                            <div
-                                className="happy-message-list__virtual-row"
-                                data-index={virtualItem.index}
-                                data-item-id={
-                                    virtualItem.index === footerIndex ? "working-status" : undefined
-                                }
-                                key={virtualItem.key}
-                                style={{
-                                    transform: `translateY(${String(virtualItem.start)}px)`,
-                                }}
-                            >
-                                {items[virtualItem.index]}
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    items
-                )}
-            </div>
-        </ScrollArea>
+                        aria-hidden="true"
+                        className="happy-message-list__spacer"
+                        data-happy-desktop-ui="message-list-spacer"
+                        ref={spacer}
+                    />
+                    {virtualized ? (
+                        <div
+                            className="happy-message-list__virtual"
+                            data-happy-desktop-ui="message-list-virtual"
+                            style={{ height: `${String(virtualizer.getTotalSize())}px` }}
+                        >
+                            {virtualizer.getVirtualItems().map((virtualItem) => (
+                                <div
+                                    className="happy-message-list__virtual-row"
+                                    data-index={virtualItem.index}
+                                    data-item-id={
+                                        virtualItem.index === footerIndex
+                                            ? "working-status"
+                                            : undefined
+                                    }
+                                    key={virtualItem.key}
+                                    style={{
+                                        transform: `translateY(${String(virtualItem.start)}px)`,
+                                    }}
+                                >
+                                    {items[virtualItem.index]}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        items
+                    )}
+                </div>
+            </ScrollArea>
+        </MessageListDisclosureAnchorProvider>
     );
 }
 /** Centered plain-text date separating message days. */

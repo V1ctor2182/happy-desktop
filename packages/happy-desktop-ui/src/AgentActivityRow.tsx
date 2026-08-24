@@ -13,6 +13,7 @@ import { CopyButton } from "./CopyButton";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { filePreviewKind } from "./FilePreview";
 import { Icon, type IconName } from "./Icon";
+import { useMessageListDisclosureAnchor } from "./messageListDisclosureAnchor";
 import { renderMessageMarkdown } from "./MessageMarkdown";
 import { ScrollingText } from "./ScrollingText";
 import { Spinner } from "./Spinner";
@@ -1067,6 +1068,7 @@ function AgentMessageActivity(props: {
         props.expanded,
         props.onExpandedChange,
     );
+    const disclosureAnchor = useMessageListDisclosureAnchor();
     const hasBody = props.text.trim().length > 0;
     return (
         <div
@@ -1081,7 +1083,11 @@ function AgentMessageActivity(props: {
                 className="happy-agent-activity__header"
                 data-happy-desktop-ui="agent-activity-header"
                 disabled={!hasBody}
-                onClick={() => hasBody && setExpanded(!expanded)}
+                onClick={(event) => {
+                    if (!hasBody) return;
+                    disclosureAnchor?.(event.currentTarget);
+                    setExpanded(!expanded);
+                }}
                 type="button"
             >
                 <span
