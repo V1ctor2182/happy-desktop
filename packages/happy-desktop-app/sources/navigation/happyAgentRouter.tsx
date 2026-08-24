@@ -7,6 +7,7 @@ import {
     useNavigate,
     useParams,
     useRouteContext,
+    useRouter,
 } from "@tanstack/react-router";
 import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAgentHistory";
 import { happyAgentRoutePathParse } from "./happyAgentRoute";
@@ -14,6 +15,7 @@ import type {
     AppearanceStore,
     ExperimentsStore,
     HappyAgentGroupId,
+    HappyAgentFileTabKind,
     HappyAgentNavigationOrderStore,
     HappyAgentSidebarCollapseStore,
     HappyAgentSessionId,
@@ -201,6 +203,55 @@ const chatRoute = createRoute({
     path: "/chats/$happyAgentId/$groupId/$chatId",
 });
 
+/** A file presentation carried explicitly by its durable address. */
+function happyAgentFileTabKindParse(value: string): HappyAgentFileTabKind | undefined {
+    return value === "file" || value === "diff" || value === "media" || value === "document"
+        ? value
+        : undefined;
+}
+
+/** A file opened over an empty workspace, with no session behind it. */
+const groupFileRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    loader: ({ context, params }) => {
+        const groupId = params.groupId as HappyAgentGroupId;
+        const workspace = happyAgentWorkspace(context, params.happyAgentId);
+        const fileKind = happyAgentFileTabKindParse(params.fileKind);
+        if (!fileKind)
+            throw redirect({
+                params: { groupId, happyAgentId: params.happyAgentId },
+                replace: true,
+                to: "/chats/$happyAgentId/$groupId",
+            });
+        workspace?.groupOpen(groupId);
+        workspace?.filePreview(groupId, params.filePath, fileKind);
+    },
+    path: "/chats/$happyAgentId/$groupId/file/$fileKind/$filePath",
+});
+
+/** A file opened over one addressed session in its workspace. */
+const chatFileRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    loader: ({ context, params }) => {
+        const groupId = params.groupId as HappyAgentGroupId;
+        const workspace = happyAgentWorkspace(context, params.happyAgentId);
+        const fileKind = happyAgentFileTabKindParse(params.fileKind);
+        if (!fileKind)
+            throw redirect({
+                params: {
+                    chatId: params.chatId,
+                    groupId,
+                    happyAgentId: params.happyAgentId,
+                },
+                replace: true,
+                to: "/chats/$happyAgentId/$groupId/$chatId",
+            });
+        workspace?.conversationOpen(params.chatId as HappyAgentSessionId, groupId);
+        workspace?.filePreview(groupId, params.filePath, fileKind);
+    },
+    path: "/chats/$happyAgentId/$groupId/$chatId/file/$fileKind/$filePath",
+});
+
 /**
  * One machine's inbox of agent questions. The Happy Agent is in the address because the
  * queue is that machine's — its agents are the ones waiting — so the window's
@@ -258,7 +309,13 @@ const settingsSectionRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     indexRoute,
     chatsRootRoute,
-    workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
+    workspaceRoute.addChildren([
+        chatsIndexRoute,
+        groupRoute,
+        chatRoute,
+        groupFileRoute,
+        chatFileRoute,
+    ]),
     inboxRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
@@ -293,6 +350,7 @@ function HappyAgentWorkspaceLayout(
     // together, so it is read back as the whole context it was given.
     const context = useRouteContext({ strict: false }) as unknown as HappyAgentRouterContext;
     const navigate = useNavigate();
+    const router = useRouter();
     // `strict: false` because a Happy Agent's list carries only `happyAgentId`, and a group
     // carries no `chatId`.
     const params = useParams({ strict: false });
@@ -350,6 +408,26 @@ function HappyAgentWorkspaceLayout(
                             },
                 )
             }
+            onFileClose={(happyAgentId, groupId, path) => {
+                // The route helper owns history repair; the surface owns the
+                // tab bytes and closes those immediately after this callback.
+                happyAgentRouterFileForget(router, happyAgentId, groupId, path);
+            }}
+            onFileSelect={(happyAgentId, groupId, chatId, path, fileKind, replace) => {
+                if (chatId) {
+                    void navigate({
+                        params: { chatId, fileKind, filePath: path, groupId, happyAgentId },
+                        replace,
+                        to: "/chats/$happyAgentId/$groupId/$chatId/file/$fileKind/$filePath",
+                    });
+                    return;
+                }
+                void navigate({
+                    params: { fileKind, filePath: path, groupId, happyAgentId },
+                    replace,
+                    to: "/chats/$happyAgentId/$groupId/file/$fileKind/$filePath",
+                });
+            }}
             onSettingsOpen={() =>
                 void navigate({
                     params: { section: HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY },
@@ -442,6 +520,22 @@ export function happyAgentRouterGroupOpen(
         params: { groupId, happyAgentId },
         to: "/chats/$happyAgentId/$groupId",
     });
+}
+
+/**
+ * Removes a closed file tab from this window's navigation stack. A current file
+ * lands on the nearest surviving destination; a file that was the window's only
+ * destination uncovers its addressed session or workspace.
+ */
+export function happyAgentRouterFileForget(
+    router: HappyAgentRouter,
+    happyAgentId: string,
+    groupId: string,
+    path: string,
+): void {
+    const changed = router.history.fileForget(happyAgentId, groupId, path);
+    if (changed && router.history.subscribers.size === 0)
+        void router.load({ action: { type: "REPLACE" } });
 }
 
 /**

@@ -387,6 +387,20 @@ export interface AppHappyAgentViewProps {
         chatId?: string,
         replace?: boolean,
     ): void;
+    /** Removes every history visit to a file tab that the reader closed. */
+    onFileClose(happyAgentId: string, groupId: string, path: string): void;
+    /**
+     * Addresses a file tab over the session currently visible in its workspace.
+     * An absent chat is the empty-workspace form of the same destination.
+     */
+    onFileSelect(
+        happyAgentId: string,
+        groupId: string,
+        chatId: string | undefined,
+        path: string,
+        kind: HappyAgentFileTabKind,
+        replace?: boolean,
+    ): void;
     /** Opens the local settings destination from the pinned sidebar footer. */
     onSettingsOpen(): void;
     /** Whether the URL addresses the addressed Happy Agent's inbox of agent questions. */
@@ -1614,6 +1628,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     onChatSelect={(groupId, chatId, replace) =>
                         props.onChatSelect(active.id, groupId, chatId, replace)
                     }
+                    onFileClose={(groupId, path) => props.onFileClose(active.id, groupId, path)}
+                    onFileSelect={(groupId, chatId, path, kind, replace) =>
+                        props.onFileSelect(active.id, groupId, chatId, path, kind, replace)
+                    }
                     platform={props.platform}
                     projects={active.projects}
                     happyAgentOnline={activeHappyAgentOnline}
@@ -1790,6 +1808,14 @@ interface HappyAgentWorkspaceSurfaceProps {
     /** Ready online project that Cmd-N and its sidebar cap both address. */
     workspaceCreateProjectId?: HappyAgentProjectId;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
+    onFileClose(groupId: string, path: string): void;
+    onFileSelect(
+        groupId: string,
+        chatId: string | undefined,
+        path: string,
+        kind: HappyAgentFileTabKind,
+        replace?: boolean,
+    ): void;
 }
 
 /**
@@ -2040,6 +2066,8 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         }
         for (const tabId of closeableIds) {
             if (fileIds.has(tabId)) {
+                const file = current.fileTabs.find((tab) => tab.id === tabId);
+                if (file) props.onFileClose(file.groupId, file.path);
                 props.workspace.fileClose(tabId);
                 continue;
             }
@@ -2078,8 +2106,25 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const activeTabClose = () => {
         const panelNow = props.workspace.panel.get();
         const panelTarget = openGroupPreparing ? undefined : panelCloseTargetFind(panelNow);
-        if (panelTarget) {
-            panelViewClose(panelTarget);
+        const focused = typeof document === "undefined" ? null : document.activeElement;
+        const focusedPanel =
+            typeof Element !== "undefined" && focused instanceof Element
+                ? focused.closest<HTMLElement>('[data-happy-desktop-ui="app-shell-panel"]')
+                : null;
+        if (focusedPanel && panelNow.open) {
+            if (panelTarget) panelViewClose(panelTarget);
+            else {
+                // Files is permanent. Closing from that focused tab dismisses
+                // its pane and returns the keyboard to the selected main tab.
+                const shell = focusedPanel.closest<HTMLElement>(
+                    '[data-happy-desktop-ui="app-shell"]',
+                );
+                const mainTab = shell?.querySelector<HTMLElement>(
+                    '[data-happy-desktop-ui="app-shell-workspace"] [data-happy-desktop-ui="tab"][aria-selected="true"]',
+                );
+                mainTab?.focus();
+                props.workspace.panel.panelToggle();
+            }
             return;
         }
         const current = props.workspace.get();
@@ -2113,6 +2158,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
             mode={workspace.fileViewMode}
             happyAgentOnline={happyAgentOnline}
+            onMainFileOpen={(path, kind) =>
+                props.onFileSelect(file.groupId, props.chatId, path, kind)
+            }
             wrap={workspace.fileViewWrap}
             {...(access.writeRefusal === undefined ? {} : { writeRefusal: access.writeRefusal })}
             {...(connectionRefusal === undefined ? {} : { saveRefusal: connectionRefusal })}
@@ -2203,11 +2251,22 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         layout={workspace.fileLayout}
                         onFileSelect={(path) => {
                             if (openGroup && happyAgentOnline())
-                                props.workspace.filePreview(openGroup.id, path, fileTabKind(path));
+                                props.onFileSelect(
+                                    openGroup.id,
+                                    props.chatId,
+                                    path,
+                                    fileTabKind(path),
+                                );
                         }}
                         onFileOpen={(path) => {
-                            if (openGroup && happyAgentOnline())
-                                props.workspace.fileOpen(openGroup.id, path, fileTabKind(path));
+                            if (openGroup && happyAgentOnline()) {
+                                const kind = fileTabKind(path);
+                                // A double click pins the preview; the address
+                                // is unchanged when the first click already
+                                // selected this file.
+                                props.workspace.fileOpen(openGroup.id, path, kind);
+                                props.onFileSelect(openGroup.id, props.chatId, path, kind);
+                            }
                         }}
                         onFilePreprocess={(path) => {
                             if (openGroup && happyAgentOnline())
@@ -2264,9 +2323,20 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             props.workspace.fileTreeDirectoryPrefetch(path)
                         }
                         onLoadMore={(path) => props.workspace.fileTreeLoadMore(path)}
-                        onViewTransfer={(viewId) =>
-                            props.workspace.viewPlacementUpdate(viewId, "main")
-                        }
+                        onViewTransfer={(viewId) => {
+                            const file =
+                                viewId === HAPPY_AGENT_PANEL_FILE_VIEW_ID
+                                    ? workspace.panelFile
+                                    : workspace.fileTabs.find((tab) => tab.id === viewId);
+                            props.workspace.viewPlacementUpdate(viewId, "main");
+                            if (file)
+                                props.onFileSelect(
+                                    file.groupId,
+                                    props.chatId,
+                                    file.path,
+                                    file.kind,
+                                );
+                        }}
                         panel={panel}
                         previewTool={previewTool}
                         {...(terminalHappyAgentAvailability === undefined
@@ -2506,7 +2576,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             }
                             activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"
-                            {...(panelCloseTarget ? {} : { closeShortcut: APP_SHORTCUTS.tabClose })}
+                            closeShortcut={APP_SHORTCUTS.tabClose}
                             onClose={groupTabClose}
                             onDoubleClick={(tabId) => {
                                 const file = groupFileTabs.find((tab) => tab.id === tabId);
@@ -2527,19 +2597,33 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 props.workspace.tabReorder(move.id, move.afterId);
                             }}
                             onSelect={(tabId) => {
-                                if (
-                                    groupFileTabs.some((tab) => tab.id === tabId) ||
-                                    mainTools.some((tab) => tab.id === tabId)
-                                ) {
+                                const file = groupFileTabs.find((tab) => tab.id === tabId);
+                                if (file) {
+                                    props.onFileSelect(
+                                        file.groupId,
+                                        props.chatId,
+                                        file.path,
+                                        file.kind,
+                                    );
+                                    return;
+                                }
+                                if (mainTools.some((tab) => tab.id === tabId)) {
                                     props.workspace.mainViewSelect(tabId);
                                     return;
                                 }
-                                props.workspace.mainViewSelect(undefined);
                                 props.onChatSelect(openGroup.id, tabId);
                             }}
-                            onTransfer={(tabId) =>
-                                props.workspace.viewPlacementUpdate(tabId, "panel")
-                            }
+                            onTransfer={(tabId) => {
+                                const file = groupFileTabs.find((tab) => tab.id === tabId);
+                                const selected = workspace.activeMainViewId === tabId;
+                                props.workspace.viewPlacementUpdate(tabId, "panel");
+                                // Moving the addressed file beside the session
+                                // uncovers that session in the main region, so
+                                // its address must stop claiming the file is
+                                // still selected there.
+                                if (file && selected)
+                                    props.onChatSelect(openGroup.id, props.chatId, true);
+                            }}
                             // A session is what the address names, so it stays
                             // where the address points; a diff is two revisions
                             // read together and the panel's viewer reads one
@@ -2739,6 +2823,8 @@ function HappyAgentFileBody(props: {
     wrap: boolean;
     /** Re-reads Happy Agent availability when a retained file handler fires. */
     happyAgentOnline: () => boolean;
+    /** Addresses a linked file opened from a main-content file tab. */
+    onMainFileOpen(path: string, kind: HappyAgentFileTabKind): void;
     /** Why this file cannot be edited or saved, or absent when it can. */
     writeRefusal?: string;
     /** Why the current local draft cannot be persisted to the Happy Agent. */
@@ -2756,7 +2842,7 @@ function HappyAgentFileBody(props: {
         if (!props.happyAgentOnline()) return;
         const kind = fileTabKind(target);
         if (file.placement === "panel") workspace.filePanelOpen(file.groupId, target, kind);
-        else workspace.fileOpen(file.groupId, target, kind);
+        else props.onMainFileOpen(target, kind);
     };
     // Typing into a document that could never be written back is worse than not
     // offering the editor at all: the reader loses what they typed and learns

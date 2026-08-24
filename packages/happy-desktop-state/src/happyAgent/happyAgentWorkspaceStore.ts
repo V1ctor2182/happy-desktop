@@ -4123,10 +4123,7 @@ export function happyAgentWorkspaceStoreCreate(
 
         conversationOpen: (conversationId, groupId) => {
             addressApply(groupId, conversationId);
-            if (groupId !== addressedGroupId) {
-                displayedMainViewId = undefined;
-                fileTreeExpansionReset();
-            }
+            if (groupId !== addressedGroupId) fileTreeExpansionReset();
             releaseGroup();
             if (groupId !== undefined && fileScopeOf(groupId) === "all")
                 workspaceFilesEnsure(groupId);
@@ -4134,12 +4131,15 @@ export function happyAgentWorkspaceStoreCreate(
                 addressedGroupId = groupId;
                 addressedGroupSeenUpdate();
                 groupRestore(groupId);
-                // A restored file tab is what this group was left showing, so it
-                // stays on screen and stays the tab this group resumes on.
-                const restoredFile = fileTabs.find(
-                    (tab) => tab.id === activeMainViewId && tab.groupId === groupId,
-                );
-                groupTabRemember(groupId, restoredFile ? restoredFile.id : conversationId);
+                // Restoration reopens the group's tabs, but this address names
+                // the session. A file address applies this action first and
+                // explicitly selects its file immediately afterward; an
+                // ordinary Back/Forward step therefore cannot be covered by a
+                // remembered file or leave the wrong tab highlighted.
+                activeMainViewId = undefined;
+                activeMainViewGroupId = undefined;
+                displayedMainViewId = undefined;
+                groupTabRemember(groupId, conversationId);
             }
             list.sessionRead(conversationId, conversationSummaryFind(conversationId)?.unread);
             openConversation(conversationId);

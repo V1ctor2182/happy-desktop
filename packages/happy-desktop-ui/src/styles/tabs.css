@@ -290,6 +290,7 @@
        structure rather than an interactive or semantic state, and the active
        tab's own text already switches to the primary color. */
     background: var(--text);
+    transition: opacity 120ms ease;
 }
 
 /*

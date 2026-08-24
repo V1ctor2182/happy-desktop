@@ -190,6 +190,8 @@ function view(
             chatId={options.chatId}
             groupId={options.groupId}
             onChatSelect={options.onChatSelect ?? (() => undefined)}
+            onFileClose={() => undefined}
+            onFileSelect={() => undefined}
             onSettingsOpen={() => undefined}
             happyAgentId="local"
             happyAgents={directory(options.host ?? happyAgentHostNoop, projects)}

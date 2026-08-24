@@ -1,3 +1,5 @@
+import type { HappyAgentFileTabKind } from "happy-desktop-state";
+
 /**
  * Every place this window can be, as a value. Paths and stored records are only
  * how a place is rendered for the router and written down; both parse back into
@@ -19,6 +21,15 @@ export type HappyAgentRoute =
           readonly chatId: string;
       }
     | { readonly kind: "chats" }
+    | {
+          readonly kind: "file";
+          readonly happyAgentId: string;
+          readonly groupId: string;
+          /** The session visible behind the file, absent in an empty workspace. */
+          readonly chatId?: string;
+          readonly fileKind: HappyAgentFileTabKind;
+          readonly path: string;
+      }
     | { readonly kind: "group"; readonly happyAgentId: string; readonly groupId: string }
     | { readonly kind: "home" }
     | { readonly kind: "inbox"; readonly happyAgentId: string }
@@ -43,6 +54,10 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}/${part(route.chatId)}`;
         case "chats":
             return "/chats";
+        case "file": {
+            const parent = route.chatId ? `/${part(route.chatId)}` : "";
+            return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}${parent}/file/${part(route.fileKind)}/${part(route.path)}`;
+        }
         case "group":
             return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}`;
         case "home":
@@ -72,6 +87,13 @@ function segmentsOf(pathname: string): string[] | undefined {
     }
 }
 
+/** A file presentation written into an address, or nothing for an unknown value. */
+function fileKindOf(value: string | undefined): HappyAgentFileTabKind | undefined {
+    return value === "file" || value === "diff" || value === "media" || value === "document"
+        ? value
+        : undefined;
+}
+
 /**
  * The place a path addresses, or nothing. This is where an address stops being
  * text and becomes one of the places above; a path matching no route is refused
@@ -80,7 +102,7 @@ function segmentsOf(pathname: string): string[] | undefined {
 export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | undefined {
     const segments = segmentsOf(pathname);
     if (segments === undefined) return undefined;
-    const [head, first, second, third] = segments;
+    const [head, first, second, third, fourth, fifth, sixth] = segments;
     if (head === undefined) return HAPPY_AGENT_ROUTE_HOME;
     switch (head) {
         case "blueprint":
@@ -89,9 +111,34 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
             if (first === undefined) return { kind: "chats" };
             if (second === undefined) return { kind: "happyAgent", happyAgentId: first };
             if (third === undefined) return { kind: "group", groupId: second, happyAgentId: first };
-            return segments.length === 4
-                ? { chatId: third, groupId: second, kind: "chat", happyAgentId: first }
-                : undefined;
+            if (third === "file" && segments.length === 6) {
+                const fileKind = fileKindOf(fourth);
+                return fileKind && fifth
+                    ? {
+                          fileKind,
+                          groupId: second,
+                          kind: "file",
+                          happyAgentId: first,
+                          path: fifth,
+                      }
+                    : undefined;
+            }
+            if (fourth === undefined)
+                return { chatId: third, groupId: second, kind: "chat", happyAgentId: first };
+            if (fourth === "file" && segments.length === 7) {
+                const fileKind = fileKindOf(fifth);
+                return fileKind && sixth
+                    ? {
+                          chatId: third,
+                          fileKind,
+                          groupId: second,
+                          kind: "file",
+                          happyAgentId: first,
+                          path: sixth,
+                      }
+                    : undefined;
+            }
+            return undefined;
         case "inbox":
             return first !== undefined && segments.length === 2
                 ? { kind: "inbox", happyAgentId: first }
@@ -131,6 +178,23 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         }
         case "chats":
             return { kind: "chats" };
+        case "file": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const groupId = fieldOf(record, "groupId");
+            const chatId = fieldOf(record, "chatId");
+            const fileKind = fileKindOf(fieldOf(record, "fileKind"));
+            const path = fieldOf(record, "path");
+            return happyAgentId && groupId && fileKind && path
+                ? {
+                      ...(chatId ? { chatId } : {}),
+                      fileKind,
+                      groupId,
+                      kind: "file",
+                      happyAgentId,
+                      path,
+                  }
+                : undefined;
+        }
         case "group": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             const groupId = fieldOf(record, "groupId");
@@ -163,9 +227,9 @@ export function happyAgentRouteSame(one: HappyAgentRoute, other: HappyAgentRoute
 }
 
 /**
- * Whether a place sits inside one machine's group — the group itself, or a
- * conversation in it. Everything else exists in its own right and outlives the
- * group going away.
+ * Whether a place sits inside one machine's group — the group itself, a
+ * conversation, or a file in it. Everything else exists in its own right and
+ * outlives the group going away.
  */
 export function happyAgentRouteInGroup(
     route: HappyAgentRoute,
@@ -173,7 +237,7 @@ export function happyAgentRouteInGroup(
     groupId: string,
 ): boolean {
     return (
-        (route.kind === "group" || route.kind === "chat") &&
+        (route.kind === "group" || route.kind === "chat" || route.kind === "file") &&
         route.happyAgentId === happyAgentId &&
         route.groupId === groupId
     );

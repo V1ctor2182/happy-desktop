@@ -43,6 +43,12 @@ export interface HappyAgentHistoryPersistence {
  */
 export interface HappyAgentRouterHistory extends RouterHistory {
     /**
+     * Removes every remembered visit to one file tab. A selected file falls
+     * back through the surviving stack, or to the session/workspace behind it
+     * when it was the only place in the window.
+     */
+    fileForget(happyAgentId: string, groupId: string, path: string): boolean;
+    /**
      * Removes every remembered place inside one group, showing the nearest
      * survivor if the window stood on one. Answers whether the stack changed,
      * which is not the same as the window having moved: places behind the reader
@@ -370,19 +376,48 @@ export function happyAgentHistoryCreate(
             settle();
         },
         pushState: (path, state) => {
+            const route = routeOf(path);
+            // Choosing what is already on screen is not another visit. Keep
+            // the router's newest location state without growing the stack.
+            if (happyAgentRouteSame(entries[index], route)) {
+                const previousState = states[index];
+                states[index] = state as LocationState;
+                for (const write of mirrorWrites)
+                    if (write.state === previousState) write.state = states[index];
+                mirrorReplace(path);
+                persist();
+                return;
+            }
+
             // Somewhere new from part-way back abandons what was ahead.
-            let removedSlots: (string | undefined)[] = [];
+            let forwardSlots: (string | undefined)[] = [];
             if (index < entries.length - 1) {
                 entries.splice(index + 1);
                 states.splice(index + 1);
-                removedSlots = slots.splice(index + 1);
+                forwardSlots = slots.splice(index + 1);
             }
-            entries.push(routeOf(path));
+
+            // A revisit moves to the front rather than leaving an older copy
+            // behind. Otherwise bouncing between two tabs makes Back appear to
+            // loop forever without ever reaching genuinely older work.
+            const revisitedSlots: (string | undefined)[] = [];
+            for (let at = entries.length - 1; at >= 0; at--) {
+                if (!happyAgentRouteSame(entries[at], route)) continue;
+                entries.splice(at, 1);
+                states.splice(at, 1);
+                revisitedSlots.push(...slots.splice(at, 1));
+                if (at <= index) index -= 1;
+            }
+
+            entries.push(route);
             states.push(state as LocationState);
             slots.push(undefined);
             index = entries.length - 1;
             const result = mirrorPush(path);
-            if (result !== true) slotsForget(removedSlots);
+            // A browser push from part-way back physically disposes its forward
+            // branch. Older revisits remain real entries and are always ghosts.
+            slotsForget(revisitedSlots);
+            if (result !== true) slotsForget(forwardSlots);
             persist();
         },
         replaceState: (path, state) => {
@@ -531,45 +566,109 @@ export function happyAgentHistoryCreate(
         browserDispose = () => window.removeEventListener("hashchange", hashChange);
     }
 
-    return Object.assign(history, {
-        groupForget: (happyAgentId: string, groupId: string): boolean => {
-            const keptEntries: HappyAgentRoute[] = [];
-            const keptStates: LocationState[] = [];
-            const keptSlots: (string | undefined)[] = [];
-            let keptIndex = -1;
-            for (let at = 0; at < entries.length; at++) {
-                const route = entries[at];
-                const slot = slots[at];
-                if (happyAgentRouteInGroup(route, happyAgentId, groupId)) {
-                    if (slot !== undefined) forgotten.add(slot);
-                    continue;
+    /** Removes matching places and repairs the cursor around what survives. */
+    const forget = (
+        matches: (route: HappyAgentRoute) => boolean,
+        fallback: HappyAgentRoute,
+        preferred?: (route: HappyAgentRoute) => boolean,
+    ): boolean => {
+        const standingRemoved = matches(entries[index]);
+        const keptEntries: HappyAgentRoute[] = [];
+        const keptStates: LocationState[] = [];
+        const keptSlots: (string | undefined)[] = [];
+        let keptIndex = -1;
+        for (let at = 0; at < entries.length; at++) {
+            const route = entries[at];
+            const slot = slots[at];
+            if (matches(route)) {
+                if (slot !== undefined) forgotten.add(slot);
+                continue;
+            }
+            // Removing what sat between two visits to one place would leave
+            // it twice in a row, and a Back that appears to do nothing.
+            const previous = keptEntries[keptEntries.length - 1];
+            if (previous === undefined || !happyAgentRouteSame(previous, route)) {
+                keptEntries.push(route);
+                keptStates.push(states[at]);
+                keptSlots.push(slot);
+            } else if (slot !== undefined) forgotten.add(slot);
+            if (at <= index) keptIndex = keptEntries.length - 1;
+        }
+        if (keptEntries.length === entries.length) return false;
+        entries = keptEntries;
+        states = keptStates;
+        slots = keptSlots;
+        index = keptIndex === -1 ? 0 : keptIndex;
+
+        if (standingRemoved && preferred) {
+            // Closing stays in the workspace when any previously visited tab
+            // there survives, regardless of older visits elsewhere.
+            for (let at = entries.length - 1; at >= 0; at--)
+                if (preferred(entries[at])) {
+                    index = at;
+                    settle();
+                    history.notify({ type: "REPLACE" });
+                    return true;
                 }
-                // Removing what sat between two visits to one place would leave
-                // it twice in a row, and a Back that appears to do nothing.
-                const previous = keptEntries[keptEntries.length - 1];
-                if (previous === undefined || !happyAgentRouteSame(previous, route)) {
-                    keptEntries.push(route);
-                    keptStates.push(states[at]);
-                    keptSlots.push(slot);
-                } else if (slot !== undefined) forgotten.add(slot);
-                if (at <= index) keptIndex = keptEntries.length - 1;
+        }
+
+        if (entries.length === 0 || (standingRemoved && preferred)) {
+            // Nothing visited in this workspace survived. Move its underlying
+            // session/workspace to the front, preserving older global history
+            // behind it and keeping one entry per destination.
+            for (let at = entries.length - 1; at >= 0; at--) {
+                if (!happyAgentRouteSame(entries[at], fallback)) continue;
+                const slot = slots[at];
+                if (slot !== undefined) forgotten.add(slot);
+                entries.splice(at, 1);
+                states.splice(at, 1);
+                slots.splice(at, 1);
             }
-            if (keptEntries.length === entries.length) return false;
-            if (keptEntries.length === 0) {
-                entries = [HAPPY_AGENT_ROUTE_HOME];
-                states = [stateOf()];
-                slots = [undefined];
-                index = 0;
-            } else {
-                entries = keptEntries;
-                states = keptStates;
-                slots = keptSlots;
-                index = keptIndex === -1 ? 0 : keptIndex;
-            }
-            settle();
-            // Told whether or not the place changed: what it can go back to has.
-            history.notify({ type: "REPLACE" });
-            return true;
+            entries.push(fallback);
+            states.push(stateOf());
+            slots.push(undefined);
+            index = entries.length - 1;
+        }
+        settle();
+        // Told whether or not the place changed: what it can go back to has.
+        history.notify({ type: "REPLACE" });
+        return true;
+    };
+
+    return Object.assign(history, {
+        fileForget: (happyAgentId: string, groupId: string, path: string): boolean => {
+            const standing = entries[index];
+            const fallback: HappyAgentRoute =
+                standing.kind === "file" &&
+                standing.happyAgentId === happyAgentId &&
+                standing.groupId === groupId &&
+                standing.path === path
+                    ? standing.chatId
+                        ? {
+                              chatId: standing.chatId,
+                              groupId,
+                              kind: "chat",
+                              happyAgentId,
+                          }
+                        : { groupId, kind: "group", happyAgentId }
+                    : HAPPY_AGENT_ROUTE_HOME;
+            return forget(
+                (route) =>
+                    route.kind === "file" &&
+                    route.happyAgentId === happyAgentId &&
+                    route.groupId === groupId &&
+                    route.path === path,
+                fallback,
+                (route) =>
+                    (route.kind === "chat" || route.kind === "file") &&
+                    route.happyAgentId === happyAgentId &&
+                    route.groupId === groupId,
+            );
         },
+        groupForget: (happyAgentId: string, groupId: string): boolean =>
+            forget(
+                (route) => happyAgentRouteInGroup(route, happyAgentId, groupId),
+                HAPPY_AGENT_ROUTE_HOME,
+            ),
     });
 }
