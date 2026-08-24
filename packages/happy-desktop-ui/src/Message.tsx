@@ -11,6 +11,7 @@ import {
     type Key,
     type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import { Avatar, type AvatarSize, type ToneName } from "./Avatar";
 import { AvatarBrutalist } from "./AvatarBrutalist";
 import { happyLogoBlackUrl } from "./assets";
@@ -1038,8 +1039,10 @@ export function MessageList(props: MessageListProps) {
             /* ResizeObserver runs after layout. Rebuild every keyed size from
                that settled client box before publishing the rect to TanStack,
                so one render cannot combine new cell widths with old offsets. */
-            viewportGeometryCommitCurrent.current(element.clientWidth, element.clientHeight);
-            reportRect(element.clientWidth, element.clientHeight);
+            flushSync(() => {
+                viewportGeometryCommitCurrent.current(element.clientWidth, element.clientHeight);
+                reportRect(element.clientWidth, element.clientHeight);
+            });
         };
         const host = element.parentElement;
         const overflowObserver =

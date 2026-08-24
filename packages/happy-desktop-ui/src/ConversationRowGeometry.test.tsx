@@ -415,7 +415,7 @@ it.skipIf(server.browser === "firefox")(
 
         for (let width = 1500; width >= 200; width -= 1) {
             flushSync(() => widthUpdate(width));
-            await nextLayout();
+            await nextFrame();
             for (const specimen of specimens) {
                 const container = view.$(`[data-testid="${specimen.name}-container"]`).element;
                 const scrollport = container.querySelector<HTMLElement>(
