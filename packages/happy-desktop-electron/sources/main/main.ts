@@ -80,8 +80,8 @@ import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
 import { cloudAuthProductionRedirectUri } from "../shared/cloudAuthConfig";
 
-if (process.platform !== "darwin") {
-    console.error("Happy Place desktop is available only on macOS.");
+if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
+    console.error("Happy Place desktop is available only on macOS, Linux, and Windows.");
     app.exit(1);
 }
 const buildIdentity = desktopBuildIdentityRead(app.isPackaged, app.getAppPath());
@@ -210,13 +210,28 @@ const developmentRendererOrigin = process.env.VITE_DEV_SERVER_URL
 const updateCheckIntervalMs = 15 * 60 * 1000;
 const titleBarHeight = 40;
 const macosTrafficLightSize = 14;
-const macosWindowChrome = {
-    titleBarStyle: "hidden",
-    trafficLightPosition: {
-        x: 14,
-        y: (titleBarHeight - macosTrafficLightSize) / 2,
-    },
-} as const;
+/*
+ * macOS hides the native title bar and positions its traffic lights inside the
+ * renderer's own 40px bar. Windows does the same with the native caption
+ * buttons drawn as an overlay at the same height. Linux keeps its native frame:
+ * with no overlay mechanism, a hidden title bar would leave the window without
+ * close/minimize controls entirely.
+ */
+const platformWindowChrome: Electron.BrowserWindowConstructorOptions =
+    process.platform === "darwin"
+        ? {
+              titleBarStyle: "hidden",
+              trafficLightPosition: {
+                  x: 14,
+                  y: (titleBarHeight - macosTrafficLightSize) / 2,
+              },
+          }
+        : process.platform === "win32"
+          ? {
+                titleBarStyle: "hidden",
+                titleBarOverlay: { height: titleBarHeight },
+            }
+          : {};
 
 nativeTheme.themeSource = "system";
 app.commandLine.appendSwitch("disable-quic");
@@ -819,7 +834,7 @@ function windowOptions(
         minHeight: 480,
         ...(applicationIconPath ? { icon: applicationIconPath } : {}),
         show: false,
-        ...macosWindowChrome,
+        ...platformWindowChrome,
         webPreferences,
     };
 }
@@ -1257,24 +1272,32 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
         } satisfies DesktopNavigationStep);
     };
     const template: MenuItemConstructorOptions[] = [
-        {
-            // macOS reads the bold first menu from this label. Left to the
-            // default it is the running binary's name — "Electron" in any build
-            // that is not packaged — which names the toolkit rather than the app.
-            label: applicationName,
-            role: "appMenu",
-            submenu: [
-                { role: "about" },
-                { type: "separator" },
-                { role: "services" },
-                { type: "separator" },
-                { role: "hide" },
-                { role: "hideOthers" },
-                { role: "unhide" },
-                { type: "separator" },
-                { role: "quit" },
-            ],
-        },
+        process.platform === "darwin"
+            ? {
+                  // macOS reads the bold first menu from this label. Left to the
+                  // default it is the running binary's name — "Electron" in any
+                  // build that is not packaged — which names the toolkit rather
+                  // than the app.
+                  label: applicationName,
+                  role: "appMenu",
+                  submenu: [
+                      { role: "about" },
+                      { type: "separator" },
+                      { role: "services" },
+                      { type: "separator" },
+                      { role: "hide" },
+                      { role: "hideOthers" },
+                      { role: "unhide" },
+                      { type: "separator" },
+                      { role: "quit" },
+                  ],
+              }
+            : {
+                  // The services/hide roles above exist only on macOS; other
+                  // platforms put quit under an ordinary first menu.
+                  label: applicationName,
+                  submenu: [{ role: "about" }, { type: "separator" }, { role: "quit" }],
+              },
         ...(desktopFlavor.kind === "local-web"
             ? []
             : [{ label: "Instances", submenu: instances } as MenuItemConstructorOptions]),
@@ -1419,7 +1442,9 @@ void app
                 window.webContents.send(desktopIpc.onboardingChanged, snapshot);
         });
         const updater = desktopUpdaterCreate({
-            packaged: app.isPackaged,
+            // Releases publish macOS update manifests only; a packaged Linux or
+            // Windows build has nothing to check against yet.
+            packaged: app.isPackaged && process.platform === "darwin",
             update: (snapshot) => runtime.updateSet(snapshot),
         });
         runtime.subscribe((snapshot) => {

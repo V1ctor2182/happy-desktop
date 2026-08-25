@@ -23,7 +23,11 @@ import {
     type HappyAgentBinary,
     SEMANTIC_VERSION_PATTERN,
 } from "./happyAgentBinaryConfig";
-import { happyAgentBinaryPath, type HappyDaemonPaths } from "./happyAgentBinaryPaths";
+import {
+    HAPPY_AGENT_BINARY_FILE_NAME,
+    happyAgentBinaryPath,
+    type HappyDaemonPaths,
+} from "./happyAgentBinaryPaths";
 
 const HAPPY_AGENT_RELEASES_URL = "https://api.github.com/repos/slopus/happy-agent/releases";
 const HAPPY_AGENT_LATEST_RELEASE_URL = `${HAPPY_AGENT_RELEASES_URL}/latest`;
@@ -204,7 +208,13 @@ export async function happyAgentReleaseDownload(
 }
 
 function releaseTarget(platform: NodeJS.Platform, arch: NodeJS.Architecture): string {
-    if ((platform !== "darwin" && platform !== "linux") || (arch !== "arm64" && arch !== "x64")) {
+    if (arch !== "arm64" && arch !== "x64") {
+        throw new Error(`Happy Agent does not publish a binary for ${platform}-${arch}.`);
+    }
+    // Happy Agent publishes no win32-arm64 build; Windows on ARM runs the x64
+    // binary under the OS's own emulation, so one target covers both.
+    if (platform === "win32") return "win32-x64";
+    if (platform !== "darwin" && platform !== "linux") {
         throw new Error(`Happy Agent does not publish a binary for ${platform}-${arch}.`);
     }
     return `${platform}-${arch}`;
@@ -219,7 +229,12 @@ function releaseResolve(release: Release, target: string): HappyAgentRelease {
     if (asset.digest === null) {
         throw new Error(`Happy Agent ${version} does not publish a checksum for ${target}.`);
     }
-    return { asset, archivedBinaryName: `happy-agent-${target}`, version };
+    // Bun's compiler appends `.exe` to a Windows-target binary, and the release
+    // pipeline keeps that name inside the archive.
+    const archivedBinaryName = target.startsWith("win32-")
+        ? `happy-agent-${target}.exe`
+        : `happy-agent-${target}`;
+    return { asset, archivedBinaryName, version };
 }
 
 async function releaseFetch(fetch_: typeof globalThis.fetch, url: string): Promise<Release> {
@@ -303,7 +318,7 @@ async function releaseInstall(options: {
     const staging = await mkdtemp(join(options.paths.versionsDirectory, ".install-"));
     const archivePath = join(staging, "happy-agent.tar.gz");
     const stagedBinaryPath = join(staging, options.archivedBinaryName);
-    const normalizedBinaryPath = join(staging, "happy-agent");
+    const normalizedBinaryPath = join(staging, HAPPY_AGENT_BINARY_FILE_NAME);
     const finalDirectory = join(options.paths.versionsDirectory, options.version);
     try {
         await archiveDownload(options.fetch, options.asset, archivePath, options.onProgress);

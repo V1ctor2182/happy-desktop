@@ -421,6 +421,7 @@ export async function electronWorkloadsRun(options: {
         cwd: options.paths.workspaceRoot,
         env: {
             ...options.runtime.environment,
+            ...linuxDisplayEnvironment(),
             // The optimized profile is a checked-in Electron build flavor. Do
             // not point the gym at the Vite dev server: its timings include
             // development-only transforms and are not representative.
@@ -557,6 +558,30 @@ async function nativeProfilerStart(page: Page): Promise<GymProfilerSnapshot> {
             };
         return bridge.profilerStart({ durationMs: 10 * 60_000 });
     });
+}
+
+/**
+ * The launch environment is an exact allowlist, so a Linux host's display
+ * server coordinates must be handed through deliberately or the launched
+ * Electron cannot open a window at all — under xvfb in CI, DISPLAY exists only
+ * in the harness's own environment. ELECTRON_DISABLE_SANDBOX rides along for
+ * hosts whose kernel restrictions (CI runners) refuse Chromium's sandbox;
+ * setting it remains the operator's decision.
+ */
+function linuxDisplayEnvironment(): Record<string, string> {
+    if (process.platform !== "linux") return {};
+    const passthrough: Record<string, string> = {};
+    for (const name of [
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "XAUTHORITY",
+        "XDG_RUNTIME_DIR",
+        "ELECTRON_DISABLE_SANDBOX",
+    ]) {
+        const value = process.env[name];
+        if (value !== undefined && value !== "") passthrough[name] = value;
+    }
+    return passthrough;
 }
 
 /**

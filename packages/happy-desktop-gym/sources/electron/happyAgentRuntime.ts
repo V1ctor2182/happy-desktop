@@ -143,7 +143,10 @@ function environmentCreate(
         LANG: "C.UTF-8",
         LOGNAME: "happy-desktop-gym",
         PATH: `${paths.bin}:${safeSystemPath}`,
-        SHELL: "/bin/zsh",
+        // The run's login shell must exist on the host: zsh ships with macOS,
+        // while Linux hosts (including CI runners) are only guaranteed bash.
+        // The fixtures seed both .zprofile and .bash_profile in the run home.
+        SHELL: process.platform === "linux" ? "/bin/bash" : "/bin/zsh",
         TERM: "xterm-256color",
         USER: "happy-desktop-gym",
         XDG_CACHE_HOME: join(paths.home, ".cache"),

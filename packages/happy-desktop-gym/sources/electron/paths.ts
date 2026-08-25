@@ -11,6 +11,7 @@ import {
     unlink,
     writeFile,
 } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -193,14 +194,12 @@ export function electronEntrypointResolve(workspaceRoot = workspaceRootResolve()
     return {
         executable:
             process.env.HAPPY_DESKTOP_ELECTRON_EXECUTABLE?.trim() ||
-            join(
-                workspaceRoot,
-                "packages",
-                "happy-desktop-electron",
-                "node_modules",
-                ".bin",
-                process.platform === "win32" ? "electron.cmd" : "electron",
-            ),
+            // The electron package exports its real binary path. The `.bin`
+            // shim would resolve to a `.cmd` wrapper on Windows, which cannot
+            // be spawned directly.
+            (createRequire(
+                join(workspaceRoot, "packages", "happy-desktop-electron", "package.json"),
+            )("electron") as string),
         main: join(workspaceRoot, "packages", "happy-desktop-electron", "dist", "main.js"),
     };
 }

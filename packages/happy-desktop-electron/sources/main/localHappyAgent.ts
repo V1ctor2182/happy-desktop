@@ -142,6 +142,7 @@ export async function localRuntimeProbe(
     environment: NodeJS.ProcessEnv = process.env,
     configuredShell?: string,
 ): Promise<LocalRuntimeProbe> {
+    if (process.platform === "win32") return windowsRuntimeProbe(host, environment);
     const shell = loginShellResolve(environment, configuredShell);
     const result = await host.execFile(shell, [...discoveryShellArguments], {
         env: minimalShellEnvironment(environment),
@@ -153,6 +154,55 @@ export async function localRuntimeProbe(
         ...(parsed.nodeCommand ? { nodeCommand: parsed.nodeCommand } : {}),
         ...(parsed.nodeVersion ? { nodeVersion: parsed.nodeVersion } : {}),
         shell,
+    };
+}
+
+/**
+ * Windows has no login shell to interrogate: a GUI process already inherits
+ * the user's registry-based environment, including installer PATH edits, so
+ * this process's own environment is the authoritative answer the POSIX probe
+ * reconstructs from a shell. `where.exe` answers the same question
+ * `command -v` answers there — which file a bare command name resolves to.
+ */
+async function windowsRuntimeProbe(
+    host: HappyAgentProcessHost,
+    environment: NodeJS.ProcessEnv,
+): Promise<LocalRuntimeProbe> {
+    if (!environment.PATH) throw new Error("The Windows environment did not include PATH.");
+    const locate = async (command: string): Promise<string | undefined> => {
+        try {
+            const result = await host.execFile("where.exe", [command], { env: environment });
+            const first = result.stdout
+                .split(/\r?\n/u)
+                .map((line) => line.trim())
+                .find((line) => line.length > 0);
+            return first && isAbsolute(first) ? first : undefined;
+        } catch {
+            return undefined;
+        }
+    };
+    const nodeCommand = await locate("node");
+    let nodeVersion: string | undefined;
+    if (nodeCommand) {
+        try {
+            const result = await host.execFile(nodeCommand, ["--version"], { env: environment });
+            const candidate = result.stdout.trim();
+            if (/^v?\d+\.\d+\.\d+/u.test(candidate)) nodeVersion = candidate;
+        } catch {
+            // A Node that cannot report its version is reported as absent.
+        }
+    }
+    const assistants: Record<string, string> = {};
+    for (const command of Object.keys(assistantCommands)) {
+        const path = await locate(command);
+        if (path) assistants[command] = path;
+    }
+    return {
+        assistants,
+        environment,
+        ...(nodeCommand ? { nodeCommand } : {}),
+        ...(nodeVersion ? { nodeVersion } : {}),
+        shell: environment.ComSpec ?? "C:\\Windows\\System32\\cmd.exe",
     };
 }
 

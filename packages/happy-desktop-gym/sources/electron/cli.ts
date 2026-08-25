@@ -1,6 +1,7 @@
 import { gymPrepare, gymRun } from "./gym.js";
 import { gymProfilesList } from "./manifest.js";
 import { gymRunClean, gymRunsRootResolve } from "./paths.js";
+import { gymSmokeRun } from "./smoke.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -34,6 +35,11 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         const root = required(flags, "root");
         await gymRunClean(root);
         console.log(JSON.stringify({ cleaned: root }));
+        return;
+    }
+    if (command === "smoke") {
+        const result = await gymSmokeRun();
+        console.log(JSON.stringify({ command, ...result }, null, 2));
         return;
     }
     if (command === "prepare") {
@@ -145,6 +151,7 @@ function printHelp(): void {
 Commands:
   prepare --profile smoke|realistic|stress [--root PATH] [--artifact-dir PATH]
   run [--profile PROFILE] [--root PATH] [--workload WORKLOAD] [--ui-trace]
+  smoke
   clean --root PATH
 
 Workloads:

@@ -27,6 +27,8 @@
         "build:local-web-ui": "HAPPY_LOCAL_WEB_SITE=1 vite build --outDir release/local-web-site",
         "predist:mac": "pnpm --dir ../.. desktop:assets",
         "dist:mac": "pnpm build && electron-builder --mac",
+        "dist:linux": "pnpm build && electron-builder --linux --publish never",
+        "dist:win": "pnpm build && electron-builder --win --publish never",
         "prerelease:mac": "pnpm --dir ../.. desktop:assets",
         "release:mac": "pnpm build && electron-builder --mac --arm64 --x64",
         "prestart": "node ../../scripts/name-dev-electron.mjs",
@@ -124,6 +126,29 @@
         },
         "dmg": {
             "sign": false
+        },
+        "linux": {
+            "category": "Development",
+            "icon": "assets/app-icon/generated/app-icon.png",
+            "target": [
+                {
+                    "target": "AppImage",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                }
+            ]
+        },
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ]
         },
         "artifactName": "Happy-${version}-${arch}.${ext}",
         "publish": {

@@ -34,8 +34,12 @@ export function happyDaemonPaths(
     };
 }
 
+/** The installed binary's file name. Windows will not execute it without `.exe`. */
+export const HAPPY_AGENT_BINARY_FILE_NAME =
+    process.platform === "win32" ? "happy-agent.exe" : "happy-agent";
+
 export function happyAgentBinaryPath(paths: HappyDaemonPaths, version: string): string {
-    return join(paths.versionsDirectory, version, "happy-agent");
+    return join(paths.versionsDirectory, version, HAPPY_AGENT_BINARY_FILE_NAME);
 }
 
 function happyHomeResolve(environment: NodeJS.ProcessEnv, homeDirectory: string): string {
