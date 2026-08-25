@@ -1,5 +1,6 @@
 import type { HappyAgentProviderUsageEntry } from "happy-desktop-state";
 import {
+    HappySocialSettings,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
     HappyAgentGeneralSettings,
@@ -30,7 +31,10 @@ const categories: readonly HappyAgentSettingsCategory[] = [
 
 const usageDescription = "How much of each provider account's plan this machine has spent";
 
-const profileDescription = "Who this machine is when it authors work";
+const profileDescription =
+    "Who this machine is when it authors work, and the account it signs into";
+
+const mobileDescription = "This Happy Agent's connection to Happy Mobile";
 
 const usageAccounts: readonly HappyAgentProviderUsageEntry[] = [
     {
@@ -435,14 +439,98 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Happy category: configured and connected, with the installation-wide unlink action"
-                label="Happy Agent settings — Mobile Access"
+                detail="Happy Social account: Happy Agent reports its persisted cloud identity as connected"
+                label="Happy Agent settings — Happy Social connected"
                 number="01a"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <HappySocialSettings
+                        displayName="Steve Korshakov"
+                        email="steve@example.com"
+                        onConnect={noop}
+                        onDisconnect={noop}
+                        status="connected"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Social account: Connect stays visibly pending while browser authentication returns to Happy Agent"
+                label="Happy Agent settings — Happy Social connecting"
+                number="01b"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <HappySocialSettings
+                        authorizationCompleting
+                        onConnect={noop}
+                        onDisconnect={noop}
+                        status="authorizing"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Social account: an authorization retained across restart can reopen its browser flow"
+                label="Happy Agent settings — Happy Social authorization retained"
+                number="01c"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <HappySocialSettings
+                        onConnect={noop}
+                        onDisconnect={noop}
+                        status="authorizing"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Social account: a daemon-reported authentication failure remains retryable"
+                label="Happy Agent settings — Happy Social verification failed"
+                number="01d"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <HappySocialSettings
+                        error="Happy Agent could not complete Happy Social authentication."
+                        onConnect={noop}
+                        onDisconnect={noop}
+                        status="disconnected"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Mobile Access category: configured and connected, with the installation-wide unlink action"
+                label="Happy Agent settings — Mobile Access"
+                number="01e"
             >
                 <HappyAgentSettingsShell
                     activeCategoryId="mobile-access"
                     categories={categories}
-                    description="This Happy Agent's connection to Happy Mobile"
+                    description={mobileDescription}
                     onCategorySelect={noop}
                     onClose={noop}
                     title="Mobile Access"
@@ -459,12 +547,12 @@ export function HappyAgentSettingsBlueprintPage() {
             <FullScreenSpecimen
                 detail="Happy Mobile pairing: the unconfigured installation is waiting for a phone to scan its authorization"
                 label="Happy Agent settings — Mobile Access pairing"
-                number="01b"
+                number="01f"
             >
                 <HappyAgentSettingsShell
                     activeCategoryId="mobile-access"
                     categories={categories}
-                    description="This Happy Agent's connection to Happy Mobile"
+                    description={mobileDescription}
                     onCategorySelect={noop}
                     onClose={noop}
                     title="Mobile Access"
@@ -483,7 +571,7 @@ export function HappyAgentSettingsBlueprintPage() {
             <FullScreenSpecimen
                 detail="Live debugger controls and a bounded raw renderer profile with React attribution"
                 label="Happy Agent settings — Dev Tools"
-                number="01c"
+                number="01g"
             >
                 <HappyAgentSettingsShell
                     activeCategoryId="debug"
@@ -629,7 +717,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Profile category: the single identity this machine authors work as, edited where it is shown"
+                detail="Profile category in full: the identity this machine authors work as, then the Happy Social account that identity signs into"
                 label="Happy Agent settings — profile"
                 number="02a"
             >
@@ -648,6 +736,13 @@ export function HappyAgentSettingsBlueprintPage() {
                         onNameChange={noop}
                         onRevert={noop}
                         onSave={noop}
+                    />
+                    <HappySocialSettings
+                        displayName="Steve Korshakov"
+                        email="steve@example.com"
+                        onConnect={noop}
+                        onDisconnect={noop}
+                        status="connected"
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>

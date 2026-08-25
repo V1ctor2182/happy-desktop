@@ -42,6 +42,7 @@ import {
     mediaPreviewView,
     type DesktopBrowserProxyTarget,
     type DesktopBrowserStatus,
+    type DesktopCloudAuthConfiguration,
     type DesktopDebugSnapshot,
     type DesktopGuestKeyEvent,
     type DesktopMediaPreview,
@@ -77,6 +78,7 @@ import { DesktopProfilerController } from "./desktopProfilerController";
 import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
+import { cloudAuthProductionRedirectUri } from "../shared/cloudAuthConfig";
 
 if (process.platform !== "darwin") {
     console.error("Happy Place desktop is available only on macOS.");
@@ -259,6 +261,45 @@ let browserProxyOperation = Promise.resolve();
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>((window) => {
     if (desktopGymActive) window.showInactive();
     else window.show();
+});
+const cloudAuthConfiguration: DesktopCloudAuthConfiguration = {
+    environment: "production",
+    redirectUri: cloudAuthProductionRedirectUri,
+};
+const cloudAuthProtocol = new URL(cloudAuthConfiguration.redirectUri).protocol.slice(0, -1);
+let cloudAuthCallback: string | undefined;
+
+function cloudAuthCallbackRead(candidate: string): string | undefined {
+    try {
+        const parsed = new URL(candidate);
+        return parsed.protocol === `${cloudAuthProtocol}:` && parsed.hostname === "callback"
+            ? parsed.href
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+if (
+    !(app.isPackaged
+        ? app.setAsDefaultProtocolClient(cloudAuthProtocol)
+        : process.argv[1]
+          ? app.setAsDefaultProtocolClient(cloudAuthProtocol, process.execPath, [process.argv[1]])
+          : app.setAsDefaultProtocolClient(cloudAuthProtocol))
+)
+    console.warn(`Happy could not register the ${cloudAuthProtocol}: callback protocol.`);
+
+app.on("open-url", (event, candidate) => {
+    const callback = cloudAuthCallbackRead(candidate);
+    if (!callback) return;
+    event.preventDefault();
+    cloudAuthCallback = callback;
+    const window = windowLifecycle.get();
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(desktopIpc.cloudAuthCallbackReceived);
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
 });
 const unavailableBrowserProxy = "http://127.0.0.1:9";
 /*
@@ -1411,6 +1452,29 @@ void app
         ipcMain.handle(desktopIpc.desktopConfigWrite, (_event, config: unknown) =>
             desktopConfigStore.write(config),
         );
+        ipcMain.handle(desktopIpc.cloudAuthCallbackTake, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            const callback = cloudAuthCallback;
+            cloudAuthCallback = undefined;
+            return callback;
+        });
+        ipcMain.handle(desktopIpc.cloudAuthCallbackPending, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return cloudAuthCallback !== undefined;
+        });
+        ipcMain.handle(desktopIpc.cloudAuthConfigurationGet, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return cloudAuthConfiguration;
+        });
+        ipcMain.handle(desktopIpc.cloudAuthOpen, (event, candidate: unknown) => {
+            desktopDaemonSenderRequire(event.sender);
+            if (typeof candidate !== "string")
+                throw new Error("Happy Agent returned an invalid Cloud authorization URL.");
+            const url = new URL(candidate);
+            if (url.protocol !== "https:")
+                throw new Error("Happy Agent returned an invalid Cloud authorization URL.");
+            return shell.openExternal(url.href);
+        });
         ipcMain.handle(desktopIpc.daemonGet, (event) => {
             desktopDaemonSenderRequire(event.sender);
             return daemonController.get();

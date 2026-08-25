@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { SplashScreen } from "./SplashScreen";
+import type { SegmentedProgressSegment } from "./SegmentedProgress";
 
 export interface SplashCoverProps {
     /**
@@ -9,6 +10,13 @@ export interface SplashCoverProps {
     readonly ready: boolean;
     /** Optional startup detail shown below the mark while the cover remains. */
     readonly note?: string;
+    /**
+     * The steps of the start being covered, and where it has got to. Shown below
+     * the mark for a start that lasts long enough to be worth explaining.
+     */
+    readonly steps?: readonly SegmentedProgressSegment[];
+    /** Names the sequence for a screen reader when steps are shown. */
+    readonly stepsLabel?: string;
     readonly children: ReactNode;
 }
 
@@ -50,7 +58,7 @@ export function SplashCover(props: SplashCoverProps) {
                     if (props.ready) setFinished(true);
                 }}
             >
-                <SplashScreen note={props.note} />
+                <SplashScreen note={props.note} steps={props.steps} stepsLabel={props.stepsLabel} />
             </div>
         </div>
     );

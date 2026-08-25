@@ -75,9 +75,36 @@ export function SplashCoverPage() {
             </Specimen>
 
             <Specimen
+                detail="Starting the machine's agent: the boot's own steps, shown once the start has lasted long enough to be worth explaining"
+                label="Booting with progress"
+                number="03"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <SplashCover
+                            ready={false}
+                            steps={[
+                                {
+                                    id: "agent",
+                                    label: "Starting Happy Agent",
+                                    state: "running",
+                                },
+                                { id: "connect", label: "Connecting", state: "pending" },
+                                { id: "projects", label: "Loading projects", state: "pending" },
+                            ]}
+                        >
+                            <Underneath />
+                        </SplashCover>
+                    </div>
+                    <DimensionRule label="Three equal tracks · live step sweeps · 600ms before it appears" />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Ready: the veil fades over 260ms and removes itself on animationend"
                 label="Dissolving"
-                number="03"
+                number="04"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>

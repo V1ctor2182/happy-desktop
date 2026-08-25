@@ -191,6 +191,13 @@ export function happyAgentDirectoryStoreCreate(
         connectionClose();
         happyAgent.url = happyAgentHttpUrl;
         happyAgent.connection = happyAgentConnectionOpen({
+            cloudHost: {
+                cloudAuthCallbackSubscribe: (listener) =>
+                    bridge.cloudAuthCallbackSubscribe(listener),
+                cloudAuthCallbackTake: () => bridge.cloudAuthCallbackTake(),
+                cloudAuthConfigurationGet: () => bridge.cloudAuthConfigurationGet(),
+                cloudAuthOpen: (url) => bridge.cloudAuthOpen(url),
+            },
             host,
             happyAgentId: LOCAL_HAPPY_AGENT_ID,
             happyAgentHttpUrl,
@@ -228,6 +235,20 @@ export function happyAgentDirectoryStoreCreate(
                 },
                 changed: () => {
                     const session = happyAgent.connection?.get();
+                    // A daemon that has not finished starting is a machine on
+                    // its way up, so it holds the connecting state it was
+                    // already in rather than becoming a failure the window has
+                    // to report and the reader has to dismiss.
+                    if (happyAgent.connection?.starting() === true) {
+                        happyAgent.entry = {
+                            ...happyAgent.entry,
+                            status: "connecting",
+                            message: "Happy Agent is starting.",
+                            projectsStatus: "loading",
+                        };
+                        publish();
+                        return;
+                    }
                     const failure = happyAgent.connection?.failure();
                     if (failure) {
                         happyAgent.entry = {
@@ -300,14 +321,20 @@ export function happyAgentDirectoryStoreCreate(
             publish();
             return;
         }
-        const failure = happyAgent.connection?.failure();
+        const starting = happyAgent.connection?.starting() === true;
+        const failure = starting ? undefined : happyAgent.connection?.failure();
         happyAgent.entry = {
             ...happyAgent.entry,
             ...(failure
                 ? { status: "error" as const, message: failure }
-                : happyAgent.entry.session
-                  ? connectionRead(happyAgent, happyAgent.entry.session.connection.get())
-                  : { status: "connecting" as const, message: "Connecting to this Happy Agent." }),
+                : starting
+                  ? { status: "connecting" as const, message: "Happy Agent is starting." }
+                  : happyAgent.entry.session
+                    ? connectionRead(happyAgent, happyAgent.entry.session.connection.get())
+                    : {
+                          status: "connecting" as const,
+                          message: "Connecting to this Happy Agent.",
+                      }),
             version: target.happyAgentVersion,
         };
         if (happyAgent.url !== target.happyAgentHttpUrl) connectionOpen(target.happyAgentHttpUrl);

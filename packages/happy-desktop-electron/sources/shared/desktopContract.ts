@@ -11,6 +11,11 @@ export type DesktopMode = "local";
 export type DesktopAppearanceMode = "dark" | "light" | "system";
 export type DesktopScrollbarVisibility = "always" | "automatic";
 
+export interface DesktopCloudAuthConfiguration {
+    readonly environment: "production" | "staging";
+    readonly redirectUri: string;
+}
+
 /** Access granted to a newly created local Happy Agent session. */
 export type DesktopPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
 
@@ -614,6 +619,16 @@ export interface HappyDesktopBridge {
     browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
+    /** Announces that the shell received a Happy Social OAuth callback. */
+    cloudAuthCallbackSubscribe(listener: () => void): () => void;
+    /** Whether a callback is waiting, without consuming its one-shot URL. */
+    cloudAuthCallbackPending(): Promise<boolean>;
+    /** Takes the most recent unforwarded callback URL, if one has arrived. */
+    cloudAuthCallbackTake(): Promise<string | undefined>;
+    /** Selects the daemon's matching Cloud deployment and callback address. */
+    cloudAuthConfigurationGet(): Promise<DesktopCloudAuthConfiguration>;
+    /** Opens only the HTTPS authorization URL returned by Happy Agent. */
+    cloudAuthOpen(url: string): Promise<void>;
     /**
      * Relays Command keyboard input while an isolated browser or HTML preview
      * guest owns focus. The renderer dispatches it through the same window
@@ -748,6 +763,11 @@ export const desktopIpc = {
     browserProxyApply: "happy:browser:proxy-apply",
     browserOpenRequested: "happy:browser:open-requested",
     browserStatusChanged: "happy:browser:status-changed",
+    cloudAuthCallbackReceived: "happy:cloud-auth:callback-received",
+    cloudAuthCallbackPending: "happy:cloud-auth:callback-pending",
+    cloudAuthCallbackTake: "happy:cloud-auth:callback-take",
+    cloudAuthConfigurationGet: "happy:cloud-auth:configuration-get",
+    cloudAuthOpen: "happy:cloud-auth:open",
     guestKey: "happy:guest:key",
     previewNavigationChanged: "happy:html-preview:navigation-changed",
     /** Main → renderer: the reader asked to go back or forward. */

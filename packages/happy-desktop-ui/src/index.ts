@@ -541,6 +541,11 @@ export {
     type HappyAgentScrollbarVisibilityChoice,
 } from "./pages/settings/HappyAgentGeneralSettings";
 export {
+    HappySocialSettings,
+    type HappySocialSettingsProps,
+    type HappySocialStatus,
+} from "./pages/settings/HappySocialSettings";
+export {
     HappyAgentMobileSettings,
     type HappyAgentMobileSettingsProps,
     type HappyAgentMobileStatus,

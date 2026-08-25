@@ -975,6 +975,14 @@ if (mediaPreviewBridge) {
             persistence: desktopHistoryPersistence(),
         });
         const happyAgentRouter = happyAgentRouterCreate(happyAgentHistory);
+        // Where the Happy Social account is shown, which is the Profile category.
+        const cloudAuthCallbackOpen = (): void => happyAgentHistory.replace("/settings/profile");
+        appDisposers.push(desktopBridge.cloudAuthCallbackSubscribe(cloudAuthCallbackOpen));
+        desktopAction(
+            desktopBridge.cloudAuthCallbackPending().then((pending) => {
+                if (pending) cloudAuthCallbackOpen();
+            }),
+        );
         // The shell's Back and Forward arrive as a direction and are walked here.
         appDisposers.push(
             desktopBridge.navigationStepSubscribe((step) => {

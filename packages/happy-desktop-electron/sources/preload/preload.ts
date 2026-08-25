@@ -67,6 +67,15 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.browserStatusChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.browserStatusChanged, receive);
     },
+    cloudAuthCallbackSubscribe(listener: () => void) {
+        const receive = () => listener();
+        ipcRenderer.on(desktopIpc.cloudAuthCallbackReceived, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.cloudAuthCallbackReceived, receive);
+    },
+    cloudAuthCallbackPending: () => ipcRenderer.invoke(desktopIpc.cloudAuthCallbackPending),
+    cloudAuthCallbackTake: () => ipcRenderer.invoke(desktopIpc.cloudAuthCallbackTake),
+    cloudAuthConfigurationGet: () => ipcRenderer.invoke(desktopIpc.cloudAuthConfigurationGet),
+    cloudAuthOpen: (url) => ipcRenderer.invoke(desktopIpc.cloudAuthOpen, url),
     guestKeySubscribe(listener: (event: DesktopGuestKeyEvent) => void) {
         const receive = (_event: Electron.IpcRendererEvent, input: DesktopGuestKeyEvent) =>
             listener(input);

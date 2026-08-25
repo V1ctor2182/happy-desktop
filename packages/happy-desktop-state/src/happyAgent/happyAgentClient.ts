@@ -83,6 +83,11 @@ import {
     happyAgentIntegrationStoreCreate,
     type HappyAgentIntegrationStore,
 } from "./happyAgentIntegrationStore.js";
+import {
+    happyAgentCloudStoreCreate,
+    type HappyAgentCloudHost,
+    type HappyAgentCloudStore,
+} from "./happyAgentCloudStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface HappyAgentChatHandle {
@@ -122,6 +127,8 @@ export interface HappyAgentWorkspaceClient {
     providerUsage(): HappyAgentProviderUsageStore | undefined;
     /** The installation-wide Happy Mobile connection, materialized on first access. */
     happyIntegration(): HappyAgentIntegrationStore;
+    /** The installation-wide Happy Social account, materialized on first access. */
+    cloud(): HappyAgentCloudStore;
     /** The one host-owned identity work is authored as. */
     profile(): HappyAgentProfileStore | undefined;
     /**
@@ -249,6 +256,7 @@ export interface HappyAgentWorkspaceClient {
 
 export interface HappyAgentWorkspaceClientDeps {
     readonly client: HappyAgentClient;
+    readonly cloudHost: HappyAgentCloudHost;
     readonly connection: HappyAgentConnection;
     readonly hostServices: HappyAgentHostServices;
     /** Stream-owned read authority for the project/workspace/session catalog. */
@@ -386,6 +394,7 @@ export function happyAgentWorkspaceClientCreate(
     let inboxStore: HappyAgentInboxStore | undefined;
     let providerUsageStore: HappyAgentProviderUsageStore | undefined;
     let happyIntegrationStore: HappyAgentIntegrationStore | undefined;
+    let cloudStore: HappyAgentCloudStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
     let instructionsStore: HappyAgentInstructionsStore | undefined;
@@ -516,6 +525,14 @@ export function happyAgentWorkspaceClientCreate(
             happyIntegrationStore ??= happyAgentIntegrationStoreCreate({ client: deps.client });
             return happyIntegrationStore;
         },
+        cloud() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            cloudStore ??= happyAgentCloudStoreCreate({
+                client: deps.client,
+                host: deps.cloudHost,
+            });
+            return cloudStore;
+        },
         profile() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!deps.profileSource || !deps.profileActions) return undefined;
@@ -635,7 +652,9 @@ export function happyAgentWorkspaceClientCreate(
             providerUsageStore?.[Symbol.dispose]();
             providerUsageStore = undefined;
             happyIntegrationStore?.[Symbol.dispose]();
+            cloudStore?.[Symbol.dispose]();
             happyIntegrationStore = undefined;
+            cloudStore = undefined;
             profileStore?.[Symbol.dispose]();
             profileStore = undefined;
             providersStore?.[Symbol.dispose]();

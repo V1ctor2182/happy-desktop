@@ -13,6 +13,11 @@ import type {
 } from "../shared/desktopProfiler";
 
 const endpoint = "/__happy_local_happy_agent";
+const cloudAuthCallbackPath = "/cloud-auth/callback";
+let cloudAuthCallback =
+    window.location.pathname === cloudAuthCallbackPath ? window.location.href : undefined;
+if (cloudAuthCallback)
+    window.history.replaceState(null, "", `${window.location.origin}/#/settings/profile`);
 
 const unsupportedDebugSnapshot: DesktopDebugSnapshot = {
     daemon: { status: "stopped" },
@@ -77,6 +82,23 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         browserProxyApply: async () => undefined,
         browserOpenSubscribe: () => () => undefined,
         browserStatusSubscribe: () => () => undefined,
+        cloudAuthCallbackSubscribe: () => () => undefined,
+        cloudAuthCallbackPending: async () => cloudAuthCallback !== undefined,
+        cloudAuthCallbackTake: async () => {
+            const callback = cloudAuthCallback;
+            cloudAuthCallback = undefined;
+            return callback;
+        },
+        cloudAuthConfigurationGet: async () => ({
+            environment: "production",
+            redirectUri: new URL(cloudAuthCallbackPath, window.location.origin).href,
+        }),
+        cloudAuthOpen: async (candidate) => {
+            const url = new URL(candidate);
+            if (url.protocol !== "https:")
+                throw new Error("Happy Agent returned an invalid Cloud authorization URL.");
+            window.location.assign(url.href);
+        },
         // Browser-local mode has no isolated Electron guest to relay from.
         guestKeySubscribe: () => () => undefined,
         // A browser tab hosts no preview guest, so no navigation is ever

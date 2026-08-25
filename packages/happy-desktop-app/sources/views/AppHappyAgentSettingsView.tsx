@@ -22,6 +22,7 @@ import {
     happyAgentPermissionLabel,
     happyAgentThinkingLabel,
     experimentsStoreNoop,
+    happyAgentCloudStoreNoop,
     happyAgentAvailabilityProject,
     happyAgentIntegrationStoreNoop,
     happyAgentProfileStoreNoop,
@@ -31,6 +32,7 @@ import {
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
 import {
+    HappySocialSettings,
     HappyAgentGeneralSettings,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
@@ -51,6 +53,9 @@ import { hostHappyAgent, type AppHappyAgentDirectoryStore } from "../AppHappyAge
 /** The categories the local settings window offers, in the order they are listed. */
 export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
+    // Profile is who this machine is, together with the account that identity
+    // signs into. Those were two categories saying the same thing about one
+    // person. Pairing a phone is a device, not an identity, so it stays its own.
     { icon: "users", id: "profile", label: "Profile" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "globe", id: "providers", label: "Providers" },
@@ -242,7 +247,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     debug: "Inspect live state, Happy and Happy Agent debugger endpoints, and renderer profiles",
     general: "How this window looks and what a new session starts with",
     "mobile-access": "This Happy Agent's connection to Happy Mobile",
-    profile: "Who this machine is when it authors work",
+    profile: "Who this machine is when it authors work, and the account it signs into",
     instructions: "Machine-wide agent guidance and permission-review policy",
     providers: "Every model provider this Happy Agent daemon knows about",
     usage: "How much of each provider account's plan this machine has spent",
@@ -350,6 +355,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         profileStore.get,
         profileStore.get,
     );
+    // The account is read on the Profile category with the profile itself,
+    // because that is the category that shows it. Subscribing is what starts the
+    // read, so it is not asked for while another category is open.
+    const cloudStore =
+        (props.section === "profile" ? host?.session?.cloud?.() : undefined) ??
+        happyAgentCloudStoreNoop;
+    const cloud = useSyncExternalStore(cloudStore.subscribe, cloudStore.get, cloudStore.get);
     const happyIntegrationStore =
         (props.section === "mobile-access" ? host?.session?.happyIntegration?.() : undefined) ??
         happyAgentIntegrationStoreNoop;
@@ -442,6 +454,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         model?.model && !model.model.thinkingLevels.includes(settings.defaultEffort)
             ? model.model.defaultThinkingLevel
             : settings.defaultEffort;
+    const cloudDisplayName = cloud.user
+        ? [cloud.user.firstName, cloud.user.lastName].filter(Boolean).join(" ") || undefined
+        : undefined;
     return (
         <HappyAgentSettingsShell
             activeCategoryId={props.section}
@@ -520,23 +535,48 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     />
                 </>
             ) : props.section === "profile" ? (
-                <HappyAgentProfileSettings
-                    dirty={profile.dirty}
-                    email={profile.email}
-                    loading={profile.loading}
-                    name={profile.name}
-                    onEmailChange={(value) => profileStore.emailUpdate(value)}
-                    onNameChange={(value) => profileStore.displayNameUpdate(value)}
-                    onRevert={() => profileStore.profileRevert()}
-                    onSave={() => {
-                        if (happyAgentOnline()) void profileStore.profileSave();
-                    }}
-                    saving={profile.saving}
-                    {...(profile.photo === undefined ? {} : { imageUrl: profile.photo.imageUrl })}
-                    {...(profile.error ? { error: profile.error.message } : {})}
-                    {...(profile.saveError ? { saveError: profile.saveError } : {})}
-                    {...(unavailable === undefined ? {} : { unavailable })}
-                />
+                // Who this machine is, then the account that identity signs into.
+                <>
+                    <HappyAgentProfileSettings
+                        dirty={profile.dirty}
+                        email={profile.email}
+                        loading={profile.loading}
+                        name={profile.name}
+                        onEmailChange={(value) => profileStore.emailUpdate(value)}
+                        onNameChange={(value) => profileStore.displayNameUpdate(value)}
+                        onRevert={() => profileStore.profileRevert()}
+                        onSave={() => {
+                            if (happyAgentOnline()) void profileStore.profileSave();
+                        }}
+                        saving={profile.saving}
+                        {...(profile.photo === undefined
+                            ? {}
+                            : { imageUrl: profile.photo.imageUrl })}
+                        {...(profile.error ? { error: profile.error.message } : {})}
+                        {...(profile.saveError ? { saveError: profile.saveError } : {})}
+                        {...(unavailable === undefined ? {} : { unavailable })}
+                    />
+                    <HappySocialSettings
+                        authorizationCompleting={cloud.authorizationCompleting}
+                        authorizationStarting={cloud.authorizationStarting}
+                        disconnecting={cloud.disconnecting}
+                        onConnect={() => {
+                            if (happyAgentOnline()) cloudStore.cloudAccountConnect();
+                        }}
+                        onDisconnect={() => {
+                            if (happyAgentOnline()) cloudStore.cloudAccountDisconnect();
+                        }}
+                        status={cloud.status}
+                        {...(cloud.error ? { error: cloud.error.message } : {})}
+                        {...(cloud.user
+                            ? {
+                                  email: cloud.user.email,
+                                  ...(cloudDisplayName ? { displayName: cloudDisplayName } : {}),
+                              }
+                            : {})}
+                        {...(unavailable === undefined ? {} : { unavailable })}
+                    />
+                </>
             ) : props.section === "instructions" ? (
                 <HappyAgentInstructionsSettings
                     documents={[

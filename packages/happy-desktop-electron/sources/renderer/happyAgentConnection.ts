@@ -7,9 +7,12 @@ import {
     happyAgentClockStoreCreate,
     happyAgentDebugLogStoreCreate,
     happyAgentWorkspaceStoreCreate,
+    HappyAgentApiError,
     type MutationRejectedDelta,
     type HappyAgentWorkspaceClient,
     type HappyAgentClockStore,
+    type HappyAgentCloudHost,
+    type HappyAgentCloudStore,
     type HappyAgentConnection,
     type HappyAgentConnectionSnapshot,
     type HappyAgentConnectionStore,
@@ -87,6 +90,7 @@ function workspaceMemoryPersistence(happyAgentId: string): HappyAgentWorkspaceMe
 
 export interface HappyAgentSession {
     readonly connection: HappyAgentConnectionStore;
+    readonly cloud: () => HappyAgentCloudStore;
     readonly debugLog: HappyAgentDebugLogStore;
     readonly host: HappyAgentHost;
     readonly models: HappyAgentModelStore;
@@ -117,8 +121,34 @@ export interface HappyAgentSessionDeps {
 
 export interface HappyAgentConnectionHandle {
     get(): HappyAgentSession | undefined;
+    /**
+     * Why this connection has nothing to hand over, when that is a failure. A
+     * daemon that is merely still starting is not one: see `starting`.
+     */
     failure(): string | undefined;
+    /** The daemon is up and has said it is not finished starting yet. */
+    starting(): boolean;
     dispose(): void;
+}
+
+/**
+ * Whether the daemon refused because it has not finished starting.
+ *
+ * Happy Agent has its own word for this and sends it: `not_initialized` means the
+ * daemon is up, listening, and not ready to answer for its contents yet. That is
+ * a startup, not a failure, and reading it from the code the daemon sends is the
+ * whole of the test — the sentence beside it is for people, and matching on it
+ * would make Happy's boot depend on Happy Agent's wording.
+ *
+ * The chain is walked because the refusal reaches here wrapped: a catalog read
+ * fails as a `UserError` carrying whatever actually refused as its cause.
+ */
+function daemonStarting(error: unknown): boolean {
+    for (let current = error; current instanceof Error; current = current.cause) {
+        if (current instanceof HappyAgentApiError && current.code === "not_initialized")
+            return true;
+    }
+    return false;
 }
 
 function snapshotsEqual(
@@ -218,6 +248,7 @@ function streamConnectionStoreCreate(connection: HappyAgentConnection): HappyAge
  * state with the small set of services that remain owned by the desktop host.
  */
 export function happyAgentConnectionOpen(input: {
+    readonly cloudHost: HappyAgentCloudHost;
     readonly host: HappyAgentHost;
     readonly deps: HappyAgentSessionDeps;
     readonly modelPreferencePersistence: HappyAgentModelPreferencePersistence;
@@ -239,6 +270,7 @@ export function happyAgentConnectionOpen(input: {
     let retry: ReturnType<typeof setTimeout> | undefined;
     let compatibilityFailure: string | undefined;
     let catalogFailure: string | undefined;
+    let catalogStarting = false;
     const { store: debugLog, writer: debugLogWriter } = happyAgentDebugLogStoreCreate();
     const debugEntry = (entry: HappyAgentDebugLogInput): void => debugLogWriter.entryAppend(entry);
     debugEntry({
@@ -274,6 +306,7 @@ export function happyAgentConnectionOpen(input: {
     const hostServices = happyAgentHostServicesCreate(input.happyAgentHttpUrl);
     const client: HappyAgentWorkspaceClient = happyAgentWorkspaceClientCreate({
         client: directClient,
+        cloudHost: input.cloudHost,
         connection: agentConnection,
         hostServices,
         modelPreferencePersistence: input.modelPreferencePersistence,
@@ -317,6 +350,7 @@ export function happyAgentConnectionOpen(input: {
                     source: "catalog",
                 });
                 session = {
+                    cloud: () => client.cloud(),
                     connection: streamConnectionStoreCreate(agentConnection),
                     debugLog,
                     host: input.host,
@@ -352,21 +386,31 @@ export function happyAgentConnectionOpen(input: {
                     source: "sync",
                 });
                 catalogFailure = undefined;
+                catalogStarting = false;
                 input.deps.changed();
             },
             (error: unknown) => {
                 if (disposed) return;
+                // A daemon that is still starting is the ordinary first seconds
+                // of a cold machine, not a fault: it is reported as the wait it
+                // is, at the level a wait belongs, and the same retry brings the
+                // catalog in as soon as the daemon will answer for it.
+                const starting = daemonStarting(error);
                 debugEntry({
                     detail: error instanceof Error ? (error.stack ?? error.message) : String(error),
-                    level: "error",
-                    message: `Model catalog failed; retrying in ${RETRY_MS} ms`,
+                    level: starting ? "info" : "error",
+                    message: starting
+                        ? `Happy Agent is still starting; asking again in ${RETRY_MS} ms`
+                        : `Model catalog failed; retrying in ${RETRY_MS} ms`,
                     source: "catalog",
                 });
-                catalogFailure =
-                    error instanceof Error && error.message
-                        ? error.message
-                        : "Happy could not read this Happy Agent's model catalog.";
-                input.deps.unavailable?.(error);
+                catalogStarting = starting;
+                catalogFailure = starting
+                    ? undefined
+                    : error instanceof Error && error.message
+                      ? error.message
+                      : "Happy could not read this Happy Agent's model catalog.";
+                if (!starting) input.deps.unavailable?.(error);
                 input.deps.changed();
                 retry = setTimeout(modelsLoad, RETRY_MS);
             },
@@ -377,6 +421,7 @@ export function happyAgentConnectionOpen(input: {
     return {
         get: () => session,
         failure: () => compatibilityFailure ?? (session ? undefined : catalogFailure),
+        starting: () => !session && catalogStarting,
         dispose() {
             if (disposed) return;
             debugEntry({

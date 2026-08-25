@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { happyLogoBlackUrl } from "./assets";
+import { SegmentedProgress, type SegmentedProgressSegment } from "./SegmentedProgress";
 
 export interface SplashScreenProps {
     readonly className?: string;
@@ -14,6 +15,15 @@ export interface SplashScreenProps {
      * saying, and the mark stays optically centered whether or not this is set.
      */
     readonly note?: string;
+    /**
+     * The named steps of the start this screen is covering, and where it has
+     * got to in them. Absent by default, for the same reason the note is: a load
+     * that resolves in a few frames has nothing to report, and the steps belong
+     * to whatever is running them rather than to this screen.
+     */
+    readonly steps?: readonly SegmentedProgressSegment[];
+    /** Names the sequence for a screen reader when steps are shown. */
+    readonly stepsLabel?: string;
 }
 
 /**
@@ -24,8 +34,11 @@ export interface SplashScreenProps {
  * mark reads as a deliberate splash and fights the crossfade
  * it is about to lose. It carries no spinner, because it is on screen only as
  * long as the first probe takes and anything more would flash; the optional
- * `note` exists for the one case that isn't instant — a slow local Happy Agent start —
- * and never shifts the mark's position when it appears. The owner crossfades
+ * `note` and `steps` exist for the case that isn't instant — a local Happy Agent
+ * that has to start — and neither shifts the mark's position when it appears.
+ * They are held back for the first moments by the stylesheet rather than by a
+ * timer here, so a start that resolves quickly shows the mark alone and a start
+ * that does not explains itself. The owner crossfades
  * this screen to whatever resolves — the sign-in card or the workspace — so the
  * mark dissolves rather than cutting away. Props only: no timers, no state, no
  * animation of its own.
@@ -37,6 +50,8 @@ export function SplashScreen(props: SplashScreenProps) {
         "style",
         "label",
         "note",
+        "steps",
+        "stepsLabel",
     ]);
     return (
         <div
@@ -52,12 +67,26 @@ export function SplashScreen(props: SplashScreenProps) {
                     data-happy-desktop-ui="splash-screen-mark"
                     src={happyLogoBlackUrl}
                 />
-                {local.note !== undefined ? (
+                {local.note !== undefined || local.steps !== undefined ? (
                     <div
-                        className="happy-splash-screen__note"
-                        data-happy-desktop-ui="splash-screen-note"
+                        className="happy-splash-screen__below"
+                        data-happy-desktop-ui="splash-screen-below"
                     >
-                        {local.note}
+                        {local.steps !== undefined ? (
+                            <SegmentedProgress
+                                data-testid="splash-screen-progress"
+                                label={local.stepsLabel ?? "Startup progress"}
+                                segments={local.steps}
+                            />
+                        ) : null}
+                        {local.note !== undefined ? (
+                            <div
+                                className="happy-splash-screen__note"
+                                data-happy-desktop-ui="splash-screen-note"
+                            >
+                                {local.note}
+                            </div>
+                        ) : null}
                     </div>
                 ) : null}
             </div>

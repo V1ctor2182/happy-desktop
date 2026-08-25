@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type ReactNode } from "react";
-import { SplashCover } from "happy-desktop-ui";
+import { SplashCover, type SegmentedProgressSegment } from "happy-desktop-ui";
 import type { DesktopRuntimeSnapshot } from "../shared/desktopContract";
 import type { LocalOnboardingStore } from "./localOnboardingStore";
 import type {
@@ -72,9 +72,41 @@ function bootReady(
     return happyAgents.every(happyAgentSettled);
 }
 
-/** Keep the one allowed initial cover honest about what the window is waiting for. */
-function bootNote(runtime: DesktopRuntimeSnapshot | undefined): string | undefined {
-    return runtime?.phase === "starting" ? runtime.message : undefined;
+/**
+ * What the window is waiting for, as the three things it actually waits for.
+ *
+ * They are the boot's own steps rather than a guess at how long it will take:
+ * the machine's agent has to be up, this window has to reach it, and it has to
+ * say what it holds. Each is read from the state that already decides when the
+ * cover lifts, so the bar and the cover can never disagree about where the boot
+ * is. None of them counts anything — nothing in a boot knows its own size — so a
+ * live step says it is alive and claims no position inside itself.
+ *
+ * There is no failed step here. Every way a boot can fail is a screen of its own
+ * that the cover gets out of the way for, so a bar that stopped in red would be
+ * drawn underneath the page already explaining the failure.
+ */
+function bootSteps(
+    runtime: DesktopRuntimeSnapshot | undefined,
+    happyAgents: readonly HappyAgentDirectoryEntry[],
+    setupAnswered: boolean,
+): readonly SegmentedProgressSegment[] {
+    const running = runtime?.phase === "ready";
+    const reached = running && happyAgents.some((happyAgent) => happyAgent.status === "connected");
+    const settled = reached && setupAnswered && happyAgents.every((one) => happyAgentSettled(one));
+    return [
+        { id: "agent", label: "Starting Happy Agent", state: running ? "done" : "running" },
+        {
+            id: "connect",
+            label: "Connecting",
+            state: !running ? "pending" : reached ? "done" : "running",
+        },
+        {
+            id: "projects",
+            label: "Loading projects",
+            state: !reached ? "pending" : settled ? "done" : "running",
+        },
+    ];
 }
 
 /**
@@ -122,7 +154,11 @@ export function DesktopBootGate(props: {
     const ready = bootReady(runtime, directory.happyAgents, setup.onboarding !== undefined);
     if (ready) booted = true;
     return (
-        <SplashCover note={bootNote(runtime)} ready={ready}>
+        <SplashCover
+            ready={ready}
+            steps={bootSteps(runtime, directory.happyAgents, setup.onboarding !== undefined)}
+            stepsLabel="Startup progress"
+        >
             {props.children}
         </SplashCover>
     );
