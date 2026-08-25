@@ -1786,39 +1786,6 @@ export function happyAgentWorkspaceStoreCreate(
         new Set(groupConversationIdList(groupId));
 
     /**
-     * Keeps the remembered name of every session in the history current with the
-     * list. A session is titled after it starts and retitled as it runs, and the
-     * host drops an agent from its catalog the moment it is archived — so this
-     * local record is the only thing that can still name a closed session, and
-     * it has to be written while the session is still listed.
-     */
-    const recentSessionTitlesReconcile = (): void => {
-        const projects = list.get().projects;
-        if (projects.type !== "ready") return;
-        const remembered = new Set<string>();
-        for (const tab of client.memory.recentTabsRead())
-            if (tab.type === "session") remembered.add(tab.sessionId);
-        if (remembered.size === 0) return;
-        const named = (
-            groupId: HappyAgentGroupId,
-            conversations: readonly ConversationSummary[],
-        ) => {
-            for (const summary of conversations) {
-                if (!remembered.has(summary.id)) continue;
-                client.memory.recentSessionTitleRemember(
-                    groupId,
-                    summary.id as HappyAgentSessionId,
-                    summary.title,
-                );
-            }
-        };
-        for (const project of projects.value) {
-            named(project.id, project.conversations);
-            for (const worktree of project.worktrees) named(worktree.id, worktree.conversations);
-        }
-    };
-
-    /**
      * One group's tab strip in the order it is shown. Tabs the reader has
      * dragged carry a fractional order key and sort by it; everything else
      * follows in the order it arrived, which is what puts a newly opened tab
@@ -3946,7 +3913,6 @@ export function happyAgentWorkspaceStoreCreate(
             // has is what makes that possible.
             if (addressedGroupId !== undefined) groupRestore(addressedGroupId);
             fileTabsReconcile();
-            recentSessionTitlesReconcile();
             pendingProjectClonesApply();
             sessionCreateFailureApply();
             catalogAuthoritativeApply();
@@ -4246,13 +4212,6 @@ export function happyAgentWorkspaceStoreCreate(
                     type: "session",
                     groupId,
                     sessionId: conversationId,
-                    // Named on arrival where the list already knows the name, so
-                    // a session opened and closed inside one run is still
-                    // recognizable in the recovery history afterwards. The list
-                    // subscription keeps it current from here on.
-                    ...((title) => (title === undefined ? {} : { title }))(
-                        conversationSummaryFind(conversationId)?.title,
-                    ),
                 });
                 addressedGroupId = groupId;
                 addressedGroupSeenUpdate();

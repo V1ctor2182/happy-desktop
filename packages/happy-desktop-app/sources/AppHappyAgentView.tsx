@@ -42,7 +42,6 @@ import type {
     HappyAgentGroupLifecycle,
     HappyAgentProjectGroup,
     HappyAgentProjectId,
-    HappyAgentRecentTabMemory,
     HappyAgentServiceTier,
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
@@ -466,17 +465,6 @@ const PANEL_TOGGLE_HINT = {
     caps: APP_SHORTCUTS.panelToggle.caps,
 } as const;
 const HISTORY_SESSION_PREFIX = "session:";
-const HISTORY_FILE_PREFIX = "file:";
-
-type HappyAgentRecentFileTabMemory = Extract<HappyAgentRecentTabMemory, { readonly type: "file" }>;
-
-/** Keeps a recent file's name and nearest folder visible inside the compact menu. */
-function historyFileLabel(path: string): string {
-    const segments = path.split("/").filter(Boolean);
-    if (segments.length <= 3) return path;
-    const tail = segments.slice(-2).join("/");
-    return path.startsWith("/") ? `/…/${tail}` : `${segments[0]}/…/${tail}`;
-}
 
 /**
  * The rows one project contributes: the project itself, then a nested row per
@@ -2072,89 +2060,54 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     ];
     const historyMenuItems = (): readonly MenuItem[] => {
         if (!openGroup) return [];
-        // The host's archived catalog is authoritative when it has anything to
-        // say, but it is not the record this list stands on: Happy Agent stops
-        // listing an agent entirely once it is archived, so the catalog is
-        // empty again after every reconnect. What this window wrote down as it
-        // visited each session is what survives, and the two are merged by id.
-        const archivedSessionById = new Map(
-            workspace.list.archivedSessions
+        // One list in one order: every session this workspace has, open or
+        // closed, most recently active first. It is the session list as the
+        // host keeps it — the open rows are the strip's sessions, the closed
+        // ones are the archived rows the list still remembers — so the menu
+        // answers "what was I just working on here" by time, the way Xcode's
+        // recents do, rather than replaying local clicks.
+        const openSessionIds = new Set(openGroup.conversations.map((summary) => summary.id));
+        const rows = [
+            ...openGroup.conversations.map((summary) => ({
+                sessionId: summary.id as HappyAgentSessionId,
+                title: summary.title,
+                updatedAt: summary.updatedAt,
+                open: true,
+            })),
+            ...workspace.list.archivedSessions
                 .filter(
                     (session) =>
                         session.parentSessionId === undefined &&
-                        happyAgentSessionGroupIdOf(session) === openGroup.id,
+                        happyAgentSessionGroupIdOf(session) === openGroup.id &&
+                        !openSessionIds.has(session.id),
                 )
-                .map((session) => [session.id, session]),
-        );
-        // A session still in the strip is a tab, not history. It is reachable by
-        // clicking it, and offering to "restore" what is already open would put
-        // a row in this list that does nothing.
-        const openSessionIds = new Set(openGroup.conversations.map((summary) => summary.id));
-        const historyEntries: (
-            | {
-                  readonly type: "session";
-                  readonly sessionId: HappyAgentSessionId;
-                  readonly title: string;
-              }
-            | { readonly type: "file"; readonly file: HappyAgentRecentFileTabMemory }
-        )[] = [];
-        const seenSessions = new Set<HappyAgentSessionId>();
-        const seenFiles = new Set<string>();
-        const historySessionAppend = (sessionId: HappyAgentSessionId, title?: string): void => {
-            if (seenSessions.has(sessionId) || openSessionIds.has(sessionId)) return;
-            seenSessions.add(sessionId);
-            historyEntries.push({
-                type: "session",
-                sessionId,
-                title: title?.trim() || `Session ${sessionId.slice(0, 8)}`,
-            });
-        };
-        const historyFileAppend = (file: HappyAgentRecentFileTabMemory): void => {
-            if (seenFiles.has(file.path)) return;
-            seenFiles.add(file.path);
-            historyEntries.push({ type: "file", file });
-        };
-        // Local visits provide the useful MRU weave. An archived session absent
-        // from that local history is appended afterward from the host catalog, so
-        // opening this window for the first time never hides recoverable work.
-        for (const tab of workspace.recentTabs) {
-            if (tab.groupId !== openGroup.id) continue;
-            if (tab.type === "session")
-                historySessionAppend(
-                    tab.sessionId,
-                    archivedSessionById.get(tab.sessionId)?.title ?? tab.title,
-                );
-            else historyFileAppend(tab);
-        }
-        for (const [sessionId, session] of archivedSessionById)
-            historySessionAppend(sessionId, session.title);
-        if (historyEntries.length === 0)
+                .map((session) => ({
+                    sessionId: session.id,
+                    title: session.title?.trim() || `Session ${session.id.slice(0, 8)}`,
+                    updatedAt: session.lastMessageAt ?? session.updatedAt,
+                    open: false,
+                })),
+        ].sort((left, right) => right.updatedAt - left.updatedAt);
+        if (rows.length === 0)
             return [
                 {
                     disabled: true,
                     icon: "history",
                     id: "empty",
                     kind: "item",
-                    label: "No closed sessions or recent files",
+                    label: "No sessions yet",
                 },
             ];
-        return historyEntries.map(
-            (entry): MenuItem =>
-                entry.type === "session"
-                    ? {
-                          disabled: !availability.online,
-                          icon: "chat",
-                          id: `${HISTORY_SESSION_PREFIX}${entry.sessionId}`,
-                          kind: "item",
-                          label: entry.title,
-                      }
-                    : {
-                          disabled: !availability.online,
-                          icon: fileTabIcon(entry.file.path, entry.file.fileKind),
-                          id: `${HISTORY_FILE_PREFIX}${entry.file.path}`,
-                          kind: "item",
-                          label: historyFileLabel(entry.file.path),
-                      },
+        return rows.map(
+            (row): MenuItem => ({
+                // Selecting an open session is local navigation and works
+                // offline; reopening a closed one asks the host.
+                disabled: !row.open && !availability.online,
+                icon: row.open ? "chat" : "history",
+                id: `${HISTORY_SESSION_PREFIX}${row.sessionId}`,
+                kind: "item",
+                label: row.title,
+            }),
         );
     };
     // Closing a tab archives the session behind it, while a file tab simply
@@ -2735,59 +2688,34 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     icon="history"
                                     iconSize={12}
                                     items={historyMenuItems}
-                                    label="Open tab history"
+                                    label="Show recent sessions"
                                     menuMaxHeight={420}
-                                    menuLabel="Tab history"
+                                    menuLabel="Recent sessions"
                                     menuPageSize={100}
                                     menuWidth={300}
                                     onSelect={(id) => {
-                                        if (id.startsWith(HISTORY_SESSION_PREFIX)) {
-                                            const sessionId = id.slice(
-                                                HISTORY_SESSION_PREFIX.length,
-                                            ) as HappyAgentSessionId;
-                                            // A row that is already back in
-                                            // the strip is a plain selection.
-                                            // Everything else is asked of the
-                                            // host by id: it stopped listing
-                                            // this agent when it was
-                                            // archived, so there is no
-                                            // catalog entry left to check the
-                                            // request against first.
-                                            if (
-                                                props.workspace.get().list.projects.type ===
-                                                    "ready" &&
-                                                openGroup.conversations.some(
-                                                    (summary) => summary.id === sessionId,
-                                                )
-                                            ) {
-                                                props.onChatSelect(openGroup.id, sessionId);
-                                                return;
-                                            }
-                                            void props.workspace
-                                                .conversationRestore(sessionId)
-                                                .then(() =>
-                                                    props.onChatSelect(openGroup.id, sessionId),
-                                                )
-                                                .catch(() => undefined);
+                                        if (!id.startsWith(HISTORY_SESSION_PREFIX)) return;
+                                        const sessionId = id.slice(
+                                            HISTORY_SESSION_PREFIX.length,
+                                        ) as HappyAgentSessionId;
+                                        // A session still in the strip is a
+                                        // plain selection. A closed one is asked
+                                        // of the host by id: it stopped listing
+                                        // the agent when it was archived, so
+                                        // there is no catalog entry left to
+                                        // check the request against first.
+                                        if (
+                                            openGroup.conversations.some(
+                                                (summary) => summary.id === sessionId,
+                                            )
+                                        ) {
+                                            props.onChatSelect(openGroup.id, sessionId);
                                             return;
                                         }
-                                        if (!id.startsWith(HISTORY_FILE_PREFIX)) return;
-                                        const path = id.slice(HISTORY_FILE_PREFIX.length);
-                                        const file = props.workspace
-                                            .get()
-                                            .recentTabs.find(
-                                                (tab): tab is HappyAgentRecentFileTabMemory =>
-                                                    tab.type === "file" &&
-                                                    tab.groupId === openGroup.id &&
-                                                    tab.path === path,
-                                            );
-                                        if (file)
-                                            props.onFileSelect(
-                                                openGroup.id,
-                                                props.chatId,
-                                                file.path,
-                                                file.fileKind,
-                                            );
+                                        void props.workspace
+                                            .conversationRestore(sessionId)
+                                            .then(() => props.onChatSelect(openGroup.id, sessionId))
+                                            .catch(() => undefined);
                                     }}
                                 />
                             }

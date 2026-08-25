@@ -26,7 +26,7 @@ const longTabs: TabItem[] = [
 
 const historyItems: MenuItem[] = [
     { id: "a", kind: "item", label: "Rebuild the composer model control", icon: "chat" },
-    { id: "b", kind: "item", label: "sources/…/workspace.ts", icon: "doc" },
+    { id: "b", kind: "item", label: "Address sessions by URL", icon: "history" },
 ];
 
 function Body(props: { title: string }) {
@@ -85,8 +85,8 @@ function Pane(props: {
                             icon="history"
                             iconSize={12}
                             items={historyItems}
-                            label="Open tab history"
-                            menuLabel="Tab history"
+                            label="Show recent sessions"
+                            menuLabel="Recent sessions"
                             menuWidth={240}
                             onSelect={() => {}}
                         />
