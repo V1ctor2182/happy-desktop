@@ -1719,8 +1719,9 @@ export function happyAgentWorkspaceStoreCreate(
     const conversationProject = (
         chat: HappyAgentChatSnapshot,
         draft: ComposerSnapshot,
+        /** Stands in only until this session states its own; see `recompute`. */
+        pendingMenus: HappyAgentMenusSnapshot | undefined,
     ): HappyAgentConversationSnapshot => {
-        const models = client.models.get();
         const activityAvailable =
             chat.goal !== undefined ||
             chat.tasks.length > 0 ||
@@ -1760,11 +1761,7 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.contextGauge ? { contextGauge: chat.contextGauge } : {}),
             activityPanelOpen: chat.activityPanelOpen,
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
-            ...(chat.menus
-                ? { menus: chat.menus }
-                : models.type === "ready"
-                  ? { menus: models.menus }
-                  : {}),
+            ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),
             modelLocked: chat.modelLocked,
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
@@ -1987,17 +1984,27 @@ export function happyAgentWorkspaceStoreCreate(
             tabOrder = nextTabOrder;
         const chat = chatStore?.get();
         const draft = composer?.getState();
+        const conversationDelegated = openId !== undefined && list.sessionDelegated(openId);
         // A failed acquisition stays failed until something retries it; the
         // composer must not paint over the error the reader has to act on.
         if (draft && openId && conversation.type !== "error") {
             const models = client.models.get();
+            /* Until a session states its own selection, the machine's default
+               stands in for it — which is honest for a conversation this reader
+               writes into, because it is what a message sent right now would
+               use, and false for a delegated one. That chat's model, reasoning,
+               access mode, and speed belong to the runner that started it, so it
+               shows nothing rather than another session's model until its own
+               arrives. */
+            const pendingMenus =
+                conversationDelegated || models.type !== "ready" ? undefined : models.menus;
             const next = chat
-                ? conversationProject(chat, draft)
+                ? conversationProject(chat, draft, pendingMenus)
                 : conversationAcquiring(
                       openId,
                       draft,
                       conversationSummaryFind(openId),
-                      models.type === "ready" ? models.menus : undefined,
+                      pendingMenus,
                   );
             if (conversation.type !== "ready" || !conversationEqual(conversation.value, next)) {
                 conversation = { type: "ready", value: next };
@@ -2027,7 +2034,6 @@ export function happyAgentWorkspaceStoreCreate(
         );
         if (groupAccess.writeRefusal !== panel.get().terminalRefusal)
             panel.scopeApply(addressedGroupId, openId, groupAccess.writeRefusal);
-        const conversationDelegated = openId !== undefined && list.sessionDelegated(openId);
         // The panel's file is not a second thing to keep in step: it is the one
         // member of the strip placed there, found rather than mirrored.
         const panelFile = fileTabs.find((tab) => tab.placement === "panel");

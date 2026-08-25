@@ -3683,6 +3683,16 @@ function HappyAgentConversationSurface(props: {
     // draft survives it, and the window-level band names it. Only an unusable
     // destination locks the box.
     const sendRefusal = props.unavailable;
+    /*
+     * Whether the reader may choose how this conversation runs. The model,
+     * reasoning, access mode, and speed all describe the message about to be
+     * sent, so a chat that takes no message offers no choice about one: a
+     * subagent's settings belong to the runner that started it, and a checkout
+     * that has gone away has nothing to apply them to. The controls stay
+     * visible and keep showing what the session actually runs, which is what a
+     * reader looking at someone else's chat came to find out.
+     */
+    const configurable = !props.readOnly && sendRefusal === undefined;
     const activeActivity = happyAgentActiveActivityCounts(conversation);
     const activityTotal = activeActivity.agents + activeActivity.terminals;
     return (
@@ -3746,7 +3756,7 @@ function HappyAgentConversationSurface(props: {
                                 // is active or queued behind it, so the control
                                 // says so rather than accepting a choice the
                                 // next message could not apply.
-                                disabled: sendRefusal !== undefined || conversation.modelLocked,
+                                disabled: !configurable || conversation.modelLocked,
                                 onEffortChange: (effort?: HappyAgentThinkingLevel) => {
                                     if (props.happyAgentOnline())
                                         workspace.sessionEffortUpdate(effort);
@@ -3765,7 +3775,7 @@ function HappyAgentConversationSurface(props: {
                     leading={
                         <>
                             <HappyAgentSessionControls
-                                disabled={sendRefusal !== undefined}
+                                disabled={!configurable}
                                 fields={["permission", "tier"]}
                                 menuPlacement="above"
                                 variant="ghost"
