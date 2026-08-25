@@ -46,6 +46,7 @@ import type {
     HappyAgentServiceTier,
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
+    SubagentSummary,
     HappyAgentTerminalStore,
     HappyAgentThinkingLevel,
     TitleShimmerStore,
@@ -2026,7 +2027,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
               avatarId: detachedConversationId,
               label: detachedConversation?.title ?? "Untitled",
               labelShimmer: props.titleShimmerEnabled,
-              ...(detachedConversation?.running ? { busy: true } : {}),
+              ...(detachedConversation !== undefined &&
+              happyAgentConversationWorking(detachedConversation)
+                  ? { busy: true }
+                  : {}),
           }
         : undefined;
     // Sessions without a list position are delegated children. They remain
@@ -3555,6 +3559,22 @@ function HappyAgentConversationBody(props: {
     );
 }
 
+/** A delegated agent that is still working, or about to be. */
+function happyAgentSubagentActive(subagent: SubagentSummary): boolean {
+    return subagent.status === "queued" || subagent.status === "running";
+}
+
+/**
+ * Whether this conversation is working at all: its own turn, or the agents it
+ * delegated to and has not outlived. A turn can hand work to a child and end
+ * before the child does, and the session is still working while that lasts.
+ */
+function happyAgentConversationWorking(
+    conversation: Pick<HappyAgentConversationSnapshot, "running" | "subagents">,
+): boolean {
+    return conversation.running || conversation.subagents.some(happyAgentSubagentActive);
+}
+
 /** Counts live agents and terminals for the compact transcript affordance. */
 function happyAgentActiveActivityCounts(
     conversation: Pick<
@@ -3565,15 +3585,35 @@ function happyAgentActiveActivityCounts(
     readonly agents: number;
     readonly terminals: number;
 } {
-    const agents = conversation.subagents.filter(
-        (subagent) => subagent.status === "queued" || subagent.status === "running",
-    );
+    const agents = conversation.subagents.filter(happyAgentSubagentActive);
     return {
         agents: agents.length,
         terminals: conversation.backgroundProcesses.filter((process) =>
             conversation.detachedBackgroundProcessIds.has(process.id),
         ).length,
     };
+}
+
+/**
+ * How long this conversation's delegated agents have been working, counted from
+ * the first one still going. It is the clock the status line shows once the
+ * parent turn has ended and the children have not, so it measures the work that
+ * is actually still running rather than the turn that started it.
+ *
+ * A child whose runner never told us when it started leaves the state without a
+ * clock, and the status line then shows the state alone.
+ */
+function happyAgentDelegatedElapsedMs(
+    conversation: Pick<HappyAgentConversationSnapshot, "subagents">,
+    now: number,
+): number | undefined {
+    let startedAt: number | undefined;
+    for (const subagent of conversation.subagents) {
+        if (!happyAgentSubagentActive(subagent)) continue;
+        const since = subagent.activeSince ?? subagent.createdAt;
+        if (startedAt === undefined || since < startedAt) startedAt = since;
+    }
+    return startedAt === undefined ? undefined : Math.max(0, now - startedAt);
 }
 
 function HappyAgentConversationSurface(props: {
@@ -3859,6 +3899,8 @@ function HappyAgentConversationSurface(props: {
             activityTreatment="focused"
             motion="calm-typed"
             running={conversation.running}
+            delegatedAgents={activeActivity.agents}
+            delegatedElapsedMs={happyAgentDelegatedElapsedMs(conversation, props.now)}
             elapsedMs={happyAgentTurnElapsedMs(conversation, props.now)}
             now={props.now}
             workingPhase={conversation.workingPhase}

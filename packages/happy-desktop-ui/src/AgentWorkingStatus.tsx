@@ -12,7 +12,9 @@ export type AgentWorkingPhase =
     | "thinking"
     | "generatingTools"
     | "callingTools"
-    | "texting";
+    | "texting"
+    /** The turn itself has ended and only the agents it delegated to are still working. */
+    | "delegating";
 
 export interface AgentWorkingStatusProps {
     /** Paints the status without changing its stable layout slot or DOM identity. */
@@ -65,6 +67,7 @@ const PHASE_LABELS: Readonly<Record<AgentWorkingPhase, string>> = {
     generatingTools: "Generating tools",
     callingTools: "Calling tools",
     texting: "Texting",
+    delegating: "Working in subagents",
 };
 
 /** The phase word a scheduled wait shows in place of "Thinking". */

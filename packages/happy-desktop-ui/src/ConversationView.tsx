@@ -68,6 +68,18 @@ export type ConversationViewProps = {
     /** The scheduled wait the turn is inside, counted down by the owner's clock. */
     workingWait?: AgentWaitStatus;
     /**
+     * How many agents this conversation delegated to are still working. A turn
+     * can hand work to a child and end before the child does, and the reader is
+     * then watching a conversation that looks finished while it is not: this is
+     * what keeps the status line saying so.
+     */
+    delegatedAgents?: number;
+    /**
+     * How long those agents have been going, when the owner knows. Absent leaves
+     * the dedicated status without a clock rather than inventing one.
+     */
+    delegatedElapsedMs?: number;
+    /**
      * Motion profile for live activity rows and the working-status footer.
      * Defaults to the historical typewriter behavior.
      */
@@ -335,14 +347,24 @@ export function ConversationView(props: ConversationViewProps) {
             entry.request.status !== "answered",
     );
     /*
+     * The turn ended and the agents it delegated to did not. That is a state of
+     * its own rather than a continuation of the turn: the conversation is still
+     * working, but nothing of the parent's is running, so the line takes the
+     * loader and the children's clock instead of the finished turn's phase,
+     * label, and wait — and it never claims the identity header, because the
+     * work it reports was set going by the turn above it.
+     */
+    const delegating = props.running !== true && !awaitingInput && (props.delegatedAgents ?? 0) > 0;
+    /*
      * An unanswered question keeps the footer after the run that asked it
      * stops. The turn is not over — it is waiting on the reader — and the one
      * line that reports what this conversation is doing is the place that says
      * so, rather than leaving the transcript looking finished.
      */
-    const statusVisible = props.running === true || awaitingInput;
+    const statusVisible = props.running === true || awaitingInput || delegating;
     const workingStatusStartsGroup =
         statusVisible &&
+        !delegating &&
         props.agentAuthor !== undefined &&
         conversationWorkingStatusStartsGroup(transcript);
     const workingStatus = (
@@ -350,8 +372,8 @@ export function ConversationView(props: ConversationViewProps) {
             active={statusVisible}
             awaitingInput={awaitingInput}
             className="happy-conversation-turn-status"
-            elapsedMs={props.elapsedMs}
-            label={props.workingLabel}
+            elapsedMs={delegating ? props.delegatedElapsedMs : props.elapsedMs}
+            label={delegating ? undefined : props.workingLabel}
             /* The phase word is the one label whose changes are the whole
                point of the row, so it retypes wherever the rows above it
                retype verbs. */
@@ -362,8 +384,8 @@ export function ConversationView(props: ConversationViewProps) {
                     ? "typewriter"
                     : "calm"
             }
-            phase={props.workingPhase}
-            wait={props.workingWait}
+            phase={delegating ? "delegating" : props.workingPhase}
+            wait={delegating ? undefined : props.workingWait}
         />
     );
     /**

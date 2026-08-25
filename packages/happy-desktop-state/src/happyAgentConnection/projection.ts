@@ -500,6 +500,7 @@ function projectAgent(
             ? ({ kind: "project", projectId } as const)
             : ({ kind: "workspace", projectId, workspaceId: agent.workspaceId } as const);
     return {
+        activeSubagents: agent.subagents.running,
         archived: agent.archivedAt !== null,
         ...(agent.archivedAt === null ? {} : { archivedAt: agent.archivedAt }),
         createdAt: agent.createdAt,
@@ -569,7 +570,11 @@ function projectSubagents(
             depth: 1,
             createdAt: agent.createdAt,
             updatedAt: agent.updatedAt,
-            ...(agent.status === "idle" ? {} : { activeSince: agent.updatedAt }),
+            // A delegated agent's whole life is the one run it was made for, so
+            // it has been working since it was created. `updatedAt` moves every
+            // time the child reports anything, which would restart the clock a
+            // reader is watching count up.
+            ...(agent.status === "idle" ? {} : { activeSince: agent.createdAt }),
         };
     });
 }

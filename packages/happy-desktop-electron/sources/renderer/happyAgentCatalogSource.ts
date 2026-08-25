@@ -255,6 +255,7 @@ function sessionProject(session: GroupSession): HappyAgentSessionSummary {
         ...(effort ? { effort } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         status: session.status as HappyAgentSessionStatus,
+        activeSubagentCount: session.activeSubagents,
         ...(session.wait === undefined
             ? {}
             : { wait: { startedAt: session.wait.startedAt, dueAt: session.wait.dueAt } }),

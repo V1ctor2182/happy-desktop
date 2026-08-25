@@ -47,18 +47,30 @@ function summaryTitle(session: HappyAgentConversationSummaryInput): string {
     return `Session ${session.id.slice(0, 8)}`;
 }
 
+/**
+ * How live one session reads in a list. A session is working when its own turn
+ * is running and equally when it is only its delegated agents that still are:
+ * work handed to a child is work this session set in motion, so the row keeps
+ * its marker until nothing of the session's is running anywhere.
+ *
+ * A scheduled wait is the low-priority modifier it has always been, and it only
+ * describes the session's own turn — a session sitting in a wait while its
+ * children work is working, not waiting.
+ */
+function summaryActivity(
+    session: HappyAgentConversationSummaryInput,
+): ConversationSummary["activity"] {
+    if (session.unreadReason === "attention_needed") return "awaitingInput";
+    if (session.activeSubagentCount > 0) return "running";
+    if (session.status !== "running" && session.status !== "queued") return "idle";
+    return session.wait === undefined ? "running" : "waiting";
+}
+
 /** Projects one Happy Agent session into the shared conversation-list row. */
 export function happyAgentConversationSummaryProject(
     session: HappyAgentConversationSummaryInput,
 ): ConversationSummary {
-    const activity =
-        session.unreadReason === "attention_needed"
-            ? "awaitingInput"
-            : session.status === "running" || session.status === "queued"
-              ? session.wait === undefined
-                  ? "running"
-                  : "waiting"
-              : "idle";
+    const activity = summaryActivity(session);
     return {
         id: session.id,
         title: summaryTitle(session),

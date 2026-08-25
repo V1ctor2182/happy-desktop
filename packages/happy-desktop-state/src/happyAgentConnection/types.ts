@@ -495,6 +495,13 @@ export interface GitChangeSnapshot {
 }
 
 export interface GroupSession {
+    /**
+     * How many agents this session started are running right now, as the host
+     * counts them on the session itself. A session whose own turn has ended
+     * while its delegated agents keep working is still doing work, and this is
+     * what says so without reading another resource.
+     */
+    activeSubagents: number;
     archived: boolean;
     /** When the host archived it, for recovery-history order. */
     archivedAt?: number;

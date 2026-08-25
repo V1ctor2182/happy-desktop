@@ -540,6 +540,12 @@ export interface HappyAgentSessionSummary {
     readonly effort?: HappyAgentThinkingLevel;
     readonly serviceTier?: HappyAgentServiceTier;
     readonly status: HappyAgentSessionStatus;
+    /**
+     * How many agents this session delegated to are running right now. Work it
+     * handed to a child is still this session's work, so a row, tab, or group
+     * counts it as live even after the session's own turn has ended.
+     */
+    readonly activeSubagentCount: number;
     /** Present while the agent is inside a scheduled `wait`/`wait_until`. */
     readonly wait?: HappyAgentSessionWait;
     /** Why this chat is waiting for the person, as durably tracked by Happy Agent. */

@@ -47,6 +47,7 @@ const SETTLED_ENTRIES: readonly ConversationEntry[] = [
  */
 function TranscriptStage(props: {
     readonly agents?: number;
+    readonly delegatedElapsedMs?: number;
     readonly running?: boolean;
     readonly terminals?: number;
     readonly width: number;
@@ -77,6 +78,8 @@ function TranscriptStage(props: {
                 composer={COMPOSER}
                 composerPlaceholder="Message Happy…"
                 conversationId="activity-control"
+                delegatedAgents={props.agents}
+                delegatedElapsedMs={props.delegatedElapsedMs}
                 elapsedMs={28_000}
                 entries={props.running === false ? SETTLED_ENTRIES : conversationEntries}
                 motion="calm-typed"
@@ -95,7 +98,7 @@ export function HappyAgentActivityControlPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The live-work summary that shares one stable line with the working status, remains there by itself when the parent turn stops, and disappears only when no agent or terminal remains active."
+            summary="The live-work summary that shares one stable line with the working status, keeps that line saying the conversation is working in its subagents after the parent turn stops, and disappears only when no agent or terminal remains active."
             title="HappyAgentActivityControl"
         >
             <Specimen
@@ -129,9 +132,32 @@ export function HappyAgentActivityControlPage() {
             </Specimen>
 
             <Specimen
+                detail="the turn ended and its delegated agents did not, so the line takes the dedicated subagent state and counts the children's own clock"
+                label="Working in subagents"
+                number="04"
+                stage="surface"
+            >
+                <TranscriptStage
+                    agents={2}
+                    delegatedElapsedMs={61_000}
+                    running={false}
+                    width={720}
+                />
+            </Specimen>
+
+            <Specimen
+                detail="the same state for a child whose start the host never reported: the loader and the state, and no clock invented for it"
+                label="Subagents without a clock"
+                number="05"
+                stage="surface"
+            >
+                <TranscriptStage agents={1} running={false} width={720} />
+            </Specimen>
+
+            <Specimen
                 detail="settled agents and no live terminal produce no summary at all"
                 label="Nothing running"
-                number="04"
+                number="06"
                 stage="surface"
             >
                 <TranscriptStage running={false} width={720} />
