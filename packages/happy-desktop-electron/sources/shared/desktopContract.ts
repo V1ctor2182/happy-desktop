@@ -84,6 +84,8 @@ export type DesktopActiveTarget = DesktopTopologyTarget & {
 
 export interface DesktopUpdateSnapshot {
     availableVersion?: string;
+    /** Share of the update downloaded so far, 0 to 1, while `downloading`. */
+    downloadedFraction?: number;
     message?: string;
     status: "idle" | "checking" | "available" | "downloading" | "downloaded" | "error";
 }

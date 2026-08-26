@@ -3,6 +3,7 @@ import type {
     AgentActivityResponse,
     AgentContextUsage,
     AgentDraftSnapshot,
+    Bot,
     DaemonConfig,
     GitState,
     Message,
@@ -20,6 +21,7 @@ import {
     happyAgentServiceTiersFromWire,
 } from "../happyAgentServiceTier.js";
 import type {
+    BotGroup,
     ChatElement,
     GitChangeSnapshot,
     GroupSession,
@@ -91,13 +93,19 @@ export function projectSession(input: SessionProjectionInput): SessionState {
     const mode = modeOf(config, input.draft, input.mode, input.intendedMode);
     const serviceTier = happyAgentServiceTierFromWire(mode.serviceTier);
     const activeRun = newestRunningRun(input.runs);
-    const projectId = workspace?.projectId;
+    // A bot's workspace belongs to the bot, not to any project, so the daemon
+    // gives it no `projectId` at all. That is the scope, stated as itself: a
+    // conversation in a bot is not a loose session the catalog failed to place.
+    const botId = workspace?.kind === "bot" ? (workspace.botId ?? undefined) : undefined;
+    const projectId = workspace?.projectId ?? undefined;
     const scope =
-        workspace === undefined || projectId === undefined
-            ? ({ kind: "unsorted" } as const)
-            : workspace.kind === "root"
-              ? ({ kind: "project", projectId } as const)
-              : ({ kind: "workspace", projectId, workspaceId: workspace.id } as const);
+        workspace !== undefined && botId !== undefined
+            ? ({ kind: "bot", botId, workspaceId: workspace.id } as const)
+            : workspace === undefined || projectId === undefined
+              ? ({ kind: "unsorted" } as const)
+              : workspace.kind === "root"
+                ? ({ kind: "project", projectId } as const)
+                : ({ kind: "workspace", projectId, workspaceId: workspace.id } as const);
     const usage =
         input.usage === undefined
             ? undefined
@@ -352,6 +360,8 @@ export function projectGroups(
     const workspacesByProject = new Map<string, Workspace[]>();
     for (const workspace of workspaces) {
         if (workspace.archivedAt !== null || workspace.status !== "active") continue;
+        // A bot's workspace has no project and is listed under its bot instead.
+        if (workspace.projectId === null) continue;
         const entries = workspacesByProject.get(workspace.projectId) ?? [];
         entries.push(workspace);
         workspacesByProject.set(workspace.projectId, entries);
@@ -369,6 +379,7 @@ export function projectGroups(
                 .map((workspace) =>
                     projectWorkspace(
                         workspace,
+                        project.id,
                         endpoint,
                         config,
                         gitStates.get(workspace.id),
@@ -442,8 +453,67 @@ export function applyChanges<T extends object>(resource: T, changes: Partial<T>)
     return { ...resource, ...changes };
 }
 
+/**
+ * The bot catalog, in the order the daemon keeps it.
+ *
+ * A bot carries its one agent inline, so no workspace lookup is needed to state
+ * the conversation: the agent the daemon sends with the bot *is* the session.
+ * The dedicated workspace is still consulted when this connection has it, for
+ * the path and the draft the conversation is composed against; a bot whose
+ * workspace has not arrived yet is still a complete row, because the row is the
+ * bot rather than the folder underneath it.
+ */
+export function projectBots(
+    bots: readonly Bot[],
+    workspaces: readonly Workspace[],
+    endpoint: string,
+    config: DaemonConfig,
+    drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
+    modes: ReadonlyMap<string, MessageMode | null> = new Map(),
+): readonly BotGroup[] {
+    const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
+    return bots
+        .filter((bot) => bot.archivedAt === null && bot.status === "active")
+        .sort(orderCompare)
+        .map((bot) => {
+            const workspace = workspaceById.get(bot.workspaceId);
+            return {
+                id: bot.id,
+                workspaceId: bot.workspaceId,
+                name: bot.name,
+                username: bot.username,
+                orderKey: bot.orderKey,
+                path: computePath(bot.compute),
+                ...(bot.avatar === null
+                    ? {}
+                    : {
+                          avatar: {
+                              url: `${endpoint.replace(/\/$/, "")}/v0/bots/${bot.id}/avatar`,
+                              thumbhash: bot.avatar.thumbhash,
+                          },
+                      }),
+                session: projectAgent(
+                    bot.agent,
+                    workspace,
+                    endpoint,
+                    config,
+                    drafts.get(bot.agent.id),
+                    modes.get(bot.agent.id),
+                ),
+                unread: unreadOf([bot.agent]),
+            };
+        });
+}
+
 function projectWorkspace(
     workspace: Workspace,
+    /**
+     * The project this workspace was listed under. It is passed rather than
+     * read back off the workspace because only a project's own workspaces reach
+     * here — a bot's carries no project at all — and the caller is the one that
+     * already knows which list it is building.
+     */
+    projectId: string,
     endpoint: string,
     config: DaemonConfig,
     gitState: GitState | undefined,
@@ -461,7 +531,7 @@ function projectWorkspace(
         orderKey: workspace.orderKey,
         path: computePath(workspace.compute),
         presence: "present",
-        projectId: workspace.projectId,
+        projectId,
         status: workspace.initialization.status,
         ...(workspace.initialization.error === null
             ? {}
@@ -494,11 +564,16 @@ function projectAgent(
 ): GroupSession {
     const mode = modeOf(config, draft, storedMode);
     const serviceTier = happyAgentServiceTierFromWire(mode.serviceTier);
+    const botId = workspace?.kind === "bot" ? (workspace.botId ?? undefined) : undefined;
     const projectId = workspace?.projectId ?? agent.workspaceId;
+    // A bot's one conversation is scoped to the bot. Only a project's workspace
+    // can answer with a project, so the bot case is decided before that.
     const scope =
-        workspace?.kind === "root"
-            ? ({ kind: "project", projectId } as const)
-            : ({ kind: "workspace", projectId, workspaceId: agent.workspaceId } as const);
+        botId !== undefined
+            ? ({ kind: "bot", botId, workspaceId: agent.workspaceId } as const)
+            : workspace?.kind === "root"
+              ? ({ kind: "project", projectId } as const)
+              : ({ kind: "workspace", projectId, workspaceId: agent.workspaceId } as const);
     return {
         activeSubagents: agent.subagents.running,
         archived: agent.archivedAt !== null,

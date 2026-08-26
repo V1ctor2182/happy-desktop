@@ -653,26 +653,50 @@ function DesktopProtocolGate(props: {
               ?.protocolMismatch
         : undefined;
     if (!mismatch) return <>{props.children}</>;
-    // Happy is behind. It updates itself, so the only useful thing on screen is
-    // the update it already has — and, until it has one, the plain fact. The
-    // button arrives here on its own when the download lands, because this
-    // screen is drawn from the same runtime snapshot the updater publishes to.
+    // Happy is behind. It downloads its own update automatically, so the screen
+    // states the version this build would need, shows the download as it runs,
+    // and offers the install the moment the bytes have landed — all drawn from
+    // the same runtime snapshot the updater publishes to.
     if (mismatch.side === "app") {
-        const downloaded = props.update?.status === "downloaded";
+        const update = props.update;
+        const version = update?.availableVersion;
+        const downloaded = update?.status === "downloaded";
+        const downloading = update?.status === "available" || update?.status === "downloading";
+        const action = downloaded
+            ? {
+                  label: version ? `Install ${version} and restart` : "Install update and restart",
+                  onSelect: props.onUpdateInstall,
+                  width: 280,
+              }
+            : downloading
+              ? {
+                    busy: true,
+                    label: version ? `Downloading ${version}…` : "Downloading update…",
+                    // The download is automatic and already running; the button
+                    // is the progress read-out, not a control.
+                    onSelect: () => undefined,
+                    width: 280,
+                    progress:
+                        update.status === "downloading" && update.downloadedFraction !== undefined
+                            ? {
+                                  kind: "measured" as const,
+                                  ...(update.message ? { detail: update.message } : {}),
+                                  fraction: update.downloadedFraction,
+                              }
+                            : { kind: "waiting" as const },
+                }
+              : undefined;
         return (
             <SetupPage
-                {...(downloaded
-                    ? {
-                          action: {
-                              label: "Install update and restart",
-                              onSelect: props.onUpdateInstall,
-                          },
-                      }
-                    : {})}
-                copy={`Happy Agent on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy reads up to ${mismatch.supportedMaximum}. ${
+                {...(action ? { action } : {})}
+                copy={`Happy Agent on this machine is version ${mismatch.serverVersion}, which is newer than this build of Happy understands. ${
                     downloaded
-                        ? "The update is downloaded and ready to install."
-                        : "Happy is looking for its own update and will offer it here as soon as it has one."
+                        ? `${version ? `Update ${version}` : "The update"} is downloaded and ready to install.`
+                        : downloading
+                          ? "Happy is downloading its update now and will offer the install here when it is ready."
+                          : update?.status === "error"
+                            ? `Happy could not check for its update${update.message ? `: ${update.message}` : "."} It will try again automatically.`
+                            : "Happy is looking for its own update and will offer it here as soon as it has one."
                 }`}
                 data-testid="desktop-protocol-screen"
                 scene="owl"
@@ -691,10 +715,11 @@ function DesktopProtocolGate(props: {
                               ? "Updating Happy Agent…"
                               : `Update to ${daemon.availableVersion ?? "latest"}`,
                           onSelect: daemonStore.daemonUpgrade,
+                          width: 280,
                       },
                   }
                 : {})}
-            copy={`Happy Agent on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy needs at least ${mismatch.supportedMinimum}. ${
+            copy={`Happy Agent on this machine is version ${mismatch.serverVersion}, and this build of Happy needs at least ${mismatch.minimumVersion}. ${
                 !daemon.managed
                     ? "This daemon is supplied by an external development environment; update it there and reconnect."
                     : daemon.error

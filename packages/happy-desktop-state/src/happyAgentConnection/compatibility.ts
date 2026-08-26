@@ -1,38 +1,75 @@
-import { HAPPY_AGENT_PROTOCOL_VERSION } from "@slopus/happy-agent-client";
+import { HAPPY_AGENT_PROTOCOL_VERSION, type DaemonVersion } from "@slopus/happy-agent-client";
 import type { ServerCompatibility } from "./types.js";
 
 export const MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION = HAPPY_AGENT_PROTOCOL_VERSION;
 export const MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION = HAPPY_AGENT_PROTOCOL_VERSION;
 
+/**
+ * The oldest Happy Agent this build works with, as the daemon's own product
+ * version — the number people see, install, and update to.
+ *
+ * This is the one knob to raise when Happy starts requiring a newer daemon.
+ * The wire protocol number stays the hard gate underneath: a daemon speaking
+ * another protocol cannot be talked to at all, whatever its version says. So
+ * when a `@slopus/happy-agent-client` bump moves the protocol, raise this to
+ * the first daemon version that speaks it; the screens quote this version, not
+ * the protocol number.
+ */
+export const MINIMUM_HAPPY_AGENT_VERSION = "0.4.11";
+
+/**
+ * Orders two daemon product versions by their dotted numeric fields. A
+ * prerelease suffix on a field ("29-beta") counts as the number it starts
+ * with; the daemon and this client share one version scheme, so nothing finer
+ * is needed to say "at least".
+ */
+function versionCompare(left: string, right: string): number {
+    const leftParts = left.split(".");
+    const rightParts = right.split(".");
+    const length = Math.max(leftParts.length, rightParts.length);
+    for (let index = 0; index < length; index += 1) {
+        const leftValue = Number.parseInt(leftParts[index] ?? "0", 10) || 0;
+        const rightValue = Number.parseInt(rightParts[index] ?? "0", 10) || 0;
+        if (leftValue !== rightValue) return leftValue < rightValue ? -1 : 1;
+    }
+    return 0;
+}
+
 export const CHECKING_SERVER_COMPATIBILITY: ServerCompatibility = {
     status: "checking",
     minimumSupportedProtocolVersion: MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
     maximumSupportedProtocolVersion: MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
+    minimumSupportedVersion: MINIMUM_HAPPY_AGENT_VERSION,
 };
 
 export function serverCompatibility(
-    protocolVersion: number,
+    version: DaemonVersion,
 ): Exclude<ServerCompatibility, { status: "checking" }> {
-    const version =
-        Number.isSafeInteger(protocolVersion) && protocolVersion >= 0 ? protocolVersion : 0;
+    const protocol =
+        Number.isSafeInteger(version.protocol) && version.protocol >= 0 ? version.protocol : 0;
     const supported = {
         minimumSupportedProtocolVersion: MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
         maximumSupportedProtocolVersion: MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
-        serverProtocolVersion: version,
+        minimumSupportedVersion: MINIMUM_HAPPY_AGENT_VERSION,
+        serverProtocolVersion: protocol,
+        serverVersion: version.daemon,
     };
-    if (version < MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION)
-        return { ...supported, status: "server_outdated" };
-    if (version > MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION)
+    if (protocol > MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION)
         return { ...supported, status: "client_outdated" };
+    if (
+        protocol < MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION ||
+        versionCompare(version.daemon, MINIMUM_HAPPY_AGENT_VERSION) < 0
+    )
+        return { ...supported, status: "server_outdated" };
     return { ...supported, status: "compatible" };
 }
 
 export function describeServerCompatibility(compatibility: ServerCompatibility): string {
     if (compatibility.status === "server_outdated") {
-        return `The Happy Agent server protocol is version ${String(compatibility.serverProtocolVersion)}, but this client requires at least version ${String(compatibility.minimumSupportedProtocolVersion)}.`;
+        return `Happy Agent on this machine is version ${compatibility.serverVersion}, but this build of Happy needs at least version ${compatibility.minimumSupportedVersion}.`;
     }
     if (compatibility.status === "client_outdated") {
-        return `The Happy Agent server protocol is version ${String(compatibility.serverProtocolVersion)}, but this client supports at most version ${String(compatibility.maximumSupportedProtocolVersion)}.`;
+        return `Happy Agent on this machine is version ${compatibility.serverVersion}, which is newer than this build of Happy understands.`;
     }
     return compatibility.status === "compatible"
         ? "The Happy Agent server is compatible."

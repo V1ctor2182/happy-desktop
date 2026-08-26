@@ -20,6 +20,7 @@ import {
     type UserMessage,
     type Workspace,
 } from "@slopus/happy-agent-client";
+import { MINIMUM_HAPPY_AGENT_VERSION } from "../happyAgentConnection/compatibility.js";
 
 /**
  * A programmable in-memory Happy Agent daemon for state-package tests.
@@ -92,8 +93,8 @@ export interface FakeHappyAgentDaemon {
     /** Answer the next stream's hello with `gap: true` — the cursor was lost. */
     gapOnNextStream(): void;
 
-    /** Toggle daemon health readiness and protocol version. */
-    healthSet(options: { ready?: boolean; protocol?: number }): void;
+    /** Toggle daemon health readiness, protocol number, and product version. */
+    healthSet(options: { daemon?: string; ready?: boolean; protocol?: number }): void;
 }
 
 export interface FakeDaemonCall {
@@ -259,6 +260,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     let nextStreamGap = false;
     let healthReady = true;
     let protocol = HAPPY_AGENT_PROTOCOL_VERSION;
+    let daemonVersion = MINIMUM_HAPPY_AGENT_VERSION;
 
     const historyOf = (agentId: string): { runs: HistoryRun[]; pending: UserMessage[] } => {
         let history = histories.get(agentId);
@@ -326,7 +328,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 healthy: true,
                 ready: healthReady,
                 status: healthReady ? ("ready" as const) : ("starting" as const),
-                version: { daemon: "0.0.0-test", protocol },
+                version: { daemon: daemonVersion, protocol },
             };
         },
         async getDesktopBootstrap(...args: unknown[]) {
@@ -771,6 +773,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         healthSet(options) {
             if (options.ready !== undefined) healthReady = options.ready;
             if (options.protocol !== undefined) protocol = options.protocol;
+            if (options.daemon !== undefined) daemonVersion = options.daemon;
         },
     };
 }

@@ -385,6 +385,7 @@ export interface SessionState {
     scope:
         | { kind: "project"; projectId: string }
         | { kind: "workspace"; projectId: string; workspaceId: string }
+        | { kind: "bot"; botId: string; workspaceId: string }
         | { kind: "unsorted" };
     projectId?: string;
     workspaceId?: string;
@@ -520,7 +521,8 @@ export interface GroupSession {
     permissionMode: string;
     scope:
         | { kind: "project"; projectId: string }
-        | { kind: "workspace"; projectId: string; workspaceId: string };
+        | { kind: "workspace"; projectId: string; workspaceId: string }
+        | { kind: "bot"; botId: string; workspaceId: string };
     providerId: string;
     recap?: string;
     serviceTier?: HappyAgentServiceTier;
@@ -567,6 +569,33 @@ export interface ProjectGroup {
     sessions: readonly GroupSession[];
 }
 
+/**
+ * A bot: a persistent assistant with one dedicated workspace and exactly one
+ * agent that never ends.
+ *
+ * It is a sibling of `ProjectGroup` rather than a kind of one. A project is a
+ * place work is started in — it holds many workspaces, gains and loses
+ * conversations, and is configured. A bot holds none of that: the daemon
+ * creates its workspace and its one agent together, and neither can be added
+ * to or taken away. So the group states the one session outright instead of
+ * carrying a list that could only ever have one entry.
+ */
+export interface BotGroup {
+    id: string;
+    /** The bot's dedicated workspace, which is what its conversation addresses. */
+    workspaceId: string;
+    name: string;
+    /** Immutable local snake_case name, also the bot's folder name. */
+    username: string;
+    orderKey: string;
+    path: string;
+    /** Present when the bot has a picture; the bytes are fetched separately. */
+    avatar?: { url: string; thumbhash: string };
+    /** The bot's one permanent conversation. */
+    session: GroupSession;
+    unread: { count: number; attentionCount: number; reason?: string; since?: number };
+}
+
 export interface GroupsState {
     connection: ConnectionState;
     sessionsComplete: boolean;
@@ -577,6 +606,7 @@ export type GroupDelta =
     | { type: "groups_state_changed"; state: GroupsState }
     | { type: "project_added"; projectId: string }
     | { type: "workspace_added"; projectId: string; workspaceId: string }
+    | { type: "bot_added"; botId: string; workspaceId: string }
     | { type: "session_added"; sessionId: string }
     | { type: "session_removed"; sessionId: string }
     | MutationRejectedDelta;
@@ -584,6 +614,7 @@ export type GroupDelta =
 export type MutationAction =
     | "create_project"
     | "archive_project"
+    | "archive_bot"
     | "create_workspace"
     | "archive_workspace"
     | "create_session"
@@ -601,6 +632,7 @@ export type MutationAction =
     | "mark_session_read"
     | "rename_group"
     | "reorder_group"
+    | "reorder_bot"
     | "reorder_session";
 
 export interface MutationRejectedDelta {
@@ -626,13 +658,23 @@ export interface HappyAgentSessionConnection {
 }
 
 export interface HappyAgentGroupsSubscriptionOptions {
-    onChange: (projects: readonly ProjectGroup[], state: GroupsState) => void;
+    /**
+     * The catalog as it now stands. Bots arrive beside the projects rather than
+     * among them: they are a separate top-level list the daemon orders itself,
+     * and a subscriber that renders both gets one coherent picture per call.
+     */
+    onChange: (
+        projects: readonly ProjectGroup[],
+        state: GroupsState,
+        bots: readonly BotGroup[],
+    ) => void;
     onDelta?: (delta: GroupDelta) => void;
     onError?: (error: unknown) => void;
 }
 
 export interface HappyAgentGroupsConnection {
     projects: () => readonly ProjectGroup[];
+    bots: () => readonly BotGroup[];
     state: () => GroupsState;
     close: () => void;
 }
@@ -748,6 +790,8 @@ export interface HappyAgentConnection {
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
+    archiveBot(botId: string): MutationId;
+    reorderBot(botId: string, afterId: string | null): MutationId;
     reorderProject(projectId: string, afterId: string | null): MutationId;
     reorderWorkspace(workspaceId: string, afterId: string | null): MutationId;
     reorderSession(sessionId: string, afterId: string | null): MutationId;
@@ -759,12 +803,18 @@ export type ServerCompatibility =
           status: "checking";
           maximumSupportedProtocolVersion: number;
           minimumSupportedProtocolVersion: number;
+          /** The oldest Happy Agent product version this build works with. */
+          minimumSupportedVersion: string;
       }
     | {
           status: "compatible" | "server_outdated" | "client_outdated";
           maximumSupportedProtocolVersion: number;
           minimumSupportedProtocolVersion: number;
+          /** The oldest Happy Agent product version this build works with. */
+          minimumSupportedVersion: string;
           serverProtocolVersion: number;
+          /** The daemon's own product version, as its health report states it. */
+          serverVersion: string;
       };
 
 export type SessionEvent = HappyAgentEvent;

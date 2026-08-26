@@ -1,10 +1,15 @@
 import {
+    type BotGroup,
     type GitChangeSnapshot,
     type GroupSession,
     type ProjectGroup,
     type HappyAgentConnection,
     type HappyAgentGitChangedFile,
     type HappyAgentPermissionMode,
+    type HappyAgentBot,
+    type HappyAgentBotId,
+    type HappyAgentConversationSummaryInput,
+    happyAgentConversationSummaryProject,
     type HappyAgentProject,
     type HappyAgentProjectAvatar,
     type HappyAgentProjectCatalog,
@@ -40,9 +45,9 @@ export function happyAgentCatalogSourceCreate(
         reject: (error: unknown) => void;
     }>();
 
-    const publish = (projects: readonly ProjectGroup[]): void => {
+    const publish = (projects: readonly ProjectGroup[], bots: readonly BotGroup[]): void => {
         if (disposed) return;
-        snapshot = catalogProject(projects, base);
+        snapshot = catalogProject(projects, bots, base);
         for (const waiter of waiting) waiter.resolve(snapshot);
         waiting.clear();
         for (const listener of listeners) listener();
@@ -58,9 +63,9 @@ export function happyAgentCatalogSourceCreate(
     const start = (): void => {
         if (disposed || connection) return;
         connection = happyAgent.connectGroups({
-            onChange: (projects, state) => {
+            onChange: (projects, state, bots) => {
                 if (!state.sessionsComplete) return;
-                publish(projects);
+                publish(projects, bots);
             },
             onError: fail,
         });
@@ -102,6 +107,7 @@ export function happyAgentCatalogSourceCreate(
 
 function catalogProject(
     groups: readonly ProjectGroup[],
+    botGroups: readonly BotGroup[],
     baseUrl: string,
 ): HappyAgentSessionCatalogSnapshot {
     const projects: HappyAgentProject[] = [];
@@ -110,10 +116,17 @@ function catalogProject(
     const archivedSessions: HappyAgentSessionSummary[] = [];
 
     for (const group of groups) {
+        const projectId = group.id as HappyAgentProjectId;
         projects.push(projectProject(group, baseUrl));
-        sessions.push(...group.sessions.filter((session) => !session.archived).map(sessionProject));
+        sessions.push(
+            ...group.sessions
+                .filter((session) => !session.archived)
+                .map((session) => sessionProject(session, projectId)),
+        );
         archivedSessions.push(
-            ...group.sessions.filter((session) => session.archived).map(sessionProject),
+            ...group.sessions
+                .filter((session) => session.archived)
+                .map((session) => sessionProject(session, projectId)),
         );
         for (const workspace of group.workspaces) {
             worktrees.push({
@@ -133,16 +146,34 @@ function catalogProject(
                 ...gitProject(workspace.git),
             });
             sessions.push(
-                ...workspace.sessions.filter((session) => !session.archived).map(sessionProject),
+                ...workspace.sessions
+                    .filter((session) => !session.archived)
+                    .map((session) => sessionProject(session, projectId)),
             );
             archivedSessions.push(
-                ...workspace.sessions.filter((session) => session.archived).map(sessionProject),
+                ...workspace.sessions
+                    .filter((session) => session.archived)
+                    .map((session) => sessionProject(session, projectId)),
             );
         }
     }
 
     archivedSessions.sort((left, right) => (right.archivedAt ?? 0) - (left.archivedAt ?? 0));
-    const catalog: HappyAgentProjectCatalog = { projects, worktrees };
+    // A bot's conversation is stated on the bot and deliberately kept out of the
+    // flat session list: that list is grouped under projects, and a bot is not
+    // one. The chat itself is opened by id, which needs no catalog entry.
+    const bots: HappyAgentBot[] = botGroups.map((bot) => ({
+        id: bot.id as HappyAgentBotId,
+        workspaceId: bot.workspaceId as HappyAgentWorktreeId,
+        conversation: happyAgentConversationSummaryProject(conversationProject(bot.session)),
+        name: bot.name,
+        username: bot.username,
+        orderKey: bot.orderKey,
+        path: bot.path,
+        displayPath: bot.path,
+        ...(bot.avatar === undefined ? {} : { avatar: bot.avatar }),
+    }));
+    const catalog: HappyAgentProjectCatalog = { bots, projects, worktrees };
     return { archivedSessions, catalog, sessions };
 }
 
@@ -232,17 +263,41 @@ function gitStatusProject(status: string): HappyAgentGitChangedFile["status"] {
     return "modified";
 }
 
-function sessionProject(session: GroupSession): HappyAgentSessionSummary {
+function sessionProject(
+    session: GroupSession,
+    /**
+     * The project whose list this session is being put into. It is supplied by
+     * the caller rather than read off the session's own scope because only a
+     * project's sessions are gathered here — a bot's one conversation is stated
+     * on the bot itself and never joins this flat list.
+     */
+    projectId: HappyAgentProjectId,
+): HappyAgentSessionSummary {
+    return {
+        ...conversationProject(session),
+        projectId,
+        ...(session.scope.kind === "workspace"
+            ? { worktreeId: session.scope.workspaceId as HappyAgentWorktreeId }
+            : {}),
+    };
+}
+
+/**
+ * One session as everything about it except where it is listed.
+ *
+ * A bot's conversation is exactly this and nothing more: it belongs to the bot
+ * rather than to a project, so the placement a session summary carries is the
+ * one part of the shape it cannot supply. Splitting it out is what lets a bot's
+ * chat be projected by the same code that projects every other one, instead of
+ * a second reading of the same fields that could drift from it.
+ */
+function conversationProject(session: GroupSession): HappyAgentConversationSummaryInput {
     const effort = thinkingLevel(session.effort);
     const serviceTier =
         session.serviceTier === "fast" ? ("fast" as HappyAgentServiceTier) : undefined;
     return {
         id: session.id as HappyAgentSessionId,
         ...(session.archivedAt === undefined ? {} : { archivedAt: session.archivedAt }),
-        projectId: session.scope.projectId as HappyAgentProjectId,
-        ...(session.scope.kind === "workspace"
-            ? { worktreeId: session.scope.workspaceId as HappyAgentWorktreeId }
-            : {}),
         ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
         ...(session.parentSessionId === undefined
             ? {}

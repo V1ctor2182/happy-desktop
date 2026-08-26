@@ -44,9 +44,10 @@ import { happyAgentUsageSourceCreate } from "./happyAgentUsageSource";
 
 export interface HappyAgentProtocolMismatch {
     readonly side: "app" | "agent";
-    readonly serverProtocolVersion: number;
-    readonly supportedMinimum: number;
-    readonly supportedMaximum: number;
+    /** The daemon's own product version, as its health report states it. */
+    readonly serverVersion: string;
+    /** The oldest daemon product version this build works with. */
+    readonly minimumVersion: string;
     readonly message: string;
 }
 
@@ -57,10 +58,9 @@ function protocolMismatchOf(
         return undefined;
     return {
         message: describeServerCompatibility(compatibility),
-        serverProtocolVersion: compatibility.serverProtocolVersion,
+        minimumVersion: compatibility.minimumSupportedVersion,
+        serverVersion: compatibility.serverVersion,
         side: compatibility.status === "client_outdated" ? "app" : "agent",
-        supportedMaximum: compatibility.maximumSupportedProtocolVersion,
-        supportedMinimum: compatibility.minimumSupportedProtocolVersion,
     };
 }
 

@@ -68,6 +68,7 @@ function panel(): HappyAgentPanelStore {
 function workspace(): HappyAgentWorkspaceStore {
     const snapshot = {
         list: {
+            bots: [],
             projects: {
                 type: "ready" as const,
                 value: [
@@ -144,6 +145,7 @@ function directory(
     const snapshot: AppHappyAgentDirectorySnapshot = {
         happyAgents: [
             {
+                bots: [],
                 id: "local",
                 label: "This Mac",
                 projects,

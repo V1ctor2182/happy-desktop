@@ -36,6 +36,7 @@ export function desktopUpdaterCreate(input: {
         input.update({
             status: "downloading",
             ...(availableVersion ? { availableVersion } : {}),
+            downloadedFraction: progress.percent / 100,
             message: `${Math.round(progress.percent)}% downloaded`,
         }),
     );

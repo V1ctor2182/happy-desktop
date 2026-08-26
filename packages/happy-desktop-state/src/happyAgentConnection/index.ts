@@ -5,6 +5,7 @@ export {
     CHECKING_SERVER_COMPATIBILITY,
     MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
     MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
+    MINIMUM_HAPPY_AGENT_VERSION,
     describeServerCompatibility,
     serverCompatibility,
 } from "./compatibility.js";

@@ -65,6 +65,7 @@ import type {
     HappyAgentBackgroundProcess,
     HappyAgentChangedFileDocument,
     HappyAgentFileSearchResult,
+    HappyAgentBotId,
     HappyAgentGitChangedFile,
     HappyAgentGoal,
     HappyAgentGroupId,
@@ -954,6 +955,10 @@ export interface HappyAgentWorkspaceStore {
         projectId: HappyAgentProjectId,
         afterId: HappyAgentProjectId | null,
     ): Promise<void>;
+    /** Archives a bot, preserving its dedicated folder for a later restore. */
+    botArchive(botId: HappyAgentBotId): Promise<void>;
+    /** Moves one bot after `afterId`, or to the front of the bot list when null. */
+    botReorder(botId: HappyAgentBotId, afterId: HappyAgentBotId | null): Promise<void>;
     /**
      * Archives a project, taking its conversations and its worktrees' checkouts
      * with it, and resolves with the verified outcome. The caller does not
@@ -3051,7 +3056,13 @@ export function happyAgentWorkspaceStoreCreate(
     const conversationSummaryFind = (
         conversationId: HappyAgentSessionId,
     ): ConversationSummary | undefined => {
-        const projects = list.get().projects;
+        const listSnapshot = list.get();
+        // A bot's one conversation is listed on the bot rather than under a
+        // project, so it is looked for there first — it is the only row a bot's
+        // chat could be, and the loop below would never reach it.
+        const bot = listSnapshot.bots.find((entry) => entry.conversation.id === conversationId);
+        if (bot) return bot.conversation;
+        const projects = listSnapshot.projects;
         if (projects.type !== "ready") return undefined;
         for (const project of projects.value) {
             const direct = project.conversations.find((summary) => summary.id === conversationId);
@@ -3811,6 +3822,11 @@ export function happyAgentWorkspaceStoreCreate(
             listedIds.add(project.id);
             for (const worktree of project.worktrees) listedIds.add(worktree.id);
         }
+        // A bot is addressed through its own workspace, which hangs off no
+        // project. It is listed here so an open bot counts as confirmed rather
+        // than as an address the host has never answered for, and so archiving
+        // one moves the reader off it the way archiving a project does.
+        for (const bot of listSnapshot.bots) listedIds.add(bot.workspaceId);
         authoritativeGroupIds = listedIds;
         if (addressedGroupId !== undefined) {
             const listed = listedIds.has(addressedGroupId);
@@ -4511,6 +4527,8 @@ export function happyAgentWorkspaceStoreCreate(
             }
         },
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
+        botArchive: (botId) => list.botArchive(botId),
+        botReorder: (botId, afterId) => list.botReorder(botId, afterId),
         projectArchive: (projectId) => list.projectArchive(projectId),
         async worktreeCreate(projectId) {
             // The new checkout is forked from the project's own folder, so a

@@ -21,7 +21,8 @@ export interface HappyAgentProject {
 
 export interface HappyAgentWorkspace {
     readonly id: string;
-    readonly projectId: string;
+    /** Null for a bot's dedicated workspace, which belongs to no project. */
+    readonly projectId: string | null;
     readonly name: string;
     readonly path: string;
     readonly initialization: "initializing" | "ready" | "failed";
@@ -32,7 +33,8 @@ export interface HappyAgentWorkspace {
 
 export interface HappyAgent {
     readonly id: string;
-    readonly projectId: string;
+    /** Null for a bot's agent, whose workspace belongs to no project. */
+    readonly projectId: string | null;
     readonly workspaceId: string;
     readonly status: string;
 }

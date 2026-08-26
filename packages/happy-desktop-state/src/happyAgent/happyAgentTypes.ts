@@ -5,6 +5,7 @@
  * never receives wire shapes, tokens, URLs, or sockets.
  */
 
+import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
 
 export type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
@@ -13,6 +14,7 @@ declare const happyAgentSessionIdBrand: unique symbol;
 declare const happyAgentProjectIdBrand: unique symbol;
 declare const happyAgentWorktreeIdBrand: unique symbol;
 declare const happyAgentTerminalIdBrand: unique symbol;
+declare const happyAgentBotIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type HappyAgentSessionId = string & { readonly [happyAgentSessionIdBrand]: true };
@@ -32,6 +34,48 @@ export type HappyAgentGroupId = HappyAgentProjectId | HappyAgentWorktreeId;
 
 /** Branded identifier of one interactive terminal the daemon runs for a session. */
 export type HappyAgentTerminalId = string & { readonly [happyAgentTerminalIdBrand]: true };
+
+/** Branded identifier of a bot the daemon owns durably (CUID2 on the wire). */
+export type HappyAgentBotId = string & { readonly [happyAgentBotIdBrand]: true };
+
+/**
+ * A bot: one persistent assistant, one dedicated workspace, one conversation
+ * that always exists and can never be joined by a second.
+ *
+ * It sits beside the projects in the catalog rather than inside them. The
+ * conversation is carried outright instead of as a list, because "exactly one,
+ * forever" is the whole of what a bot is, and a list of one invites code that
+ * asks how many there are.
+ *
+ * The workspace is what the conversation is addressed through, so `workspaceId`
+ * is the group id a route names — a bot is opened the way any workspace is.
+ */
+export interface HappyAgentBot {
+    readonly id: HappyAgentBotId;
+    /** The bot's dedicated workspace, and the group its conversation is opened as. */
+    readonly workspaceId: HappyAgentWorktreeId;
+    /**
+     * The bot's one conversation, which the daemon created with the bot, as the
+     * same row every other conversation is listed as. It is the whole summary
+     * rather than an id: the bot's row reports what that conversation is doing
+     * and the open bot renders it as its one tab, and neither may work the state
+     * out again from a narrower field.
+     */
+    readonly conversation: ConversationSummary;
+    readonly name: string;
+    /** Immutable local snake_case name, also the folder the bot works in. */
+    readonly username: string;
+    /** Fractional index the host sorts the bot catalog by. */
+    readonly orderKey: string;
+    readonly path: string;
+    readonly displayPath: string;
+    /**
+     * The bot's picture. Unlike a project avatar it has no intrinsic size: the
+     * daemon serves the bytes and a thumbhash to stand in until they arrive,
+     * and the row draws it at whatever size the row is.
+     */
+    readonly avatar?: { readonly url: string; readonly thumbhash: string };
+}
 
 /** The one application collection containing a visible primary chat. */
 export type HappyAgentSessionScope =
@@ -498,6 +542,8 @@ export interface HappyAgentChangedFileDocument {
 export interface HappyAgentProjectCatalog {
     readonly projects: readonly HappyAgentProject[];
     readonly worktrees: readonly HappyAgentWorktree[];
+    /** Every active bot, in the order the host keeps them. */
+    readonly bots: readonly HappyAgentBot[];
 }
 
 // ---------------------------------------------------------------------------

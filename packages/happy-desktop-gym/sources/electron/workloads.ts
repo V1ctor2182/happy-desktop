@@ -5252,15 +5252,20 @@ async function firstSessionLocation(
 
 function agentLocation(agent: {
     readonly id: string;
-    readonly projectId: string;
+    readonly projectId: string | null;
     readonly workspaceId: string;
-}): {
-    readonly projectId: string;
-    readonly route: string;
-    readonly scopeRoute: string;
-    readonly workspace: boolean;
-    readonly workspaceId: string;
-} {
+}):
+    | {
+          readonly projectId: string;
+          readonly route: string;
+          readonly scopeRoute: string;
+          readonly workspace: boolean;
+          readonly workspaceId: string;
+      }
+    | undefined {
+    // A bot's agent has no project to be located within. These workloads drive
+    // project work, so such an agent simply has no location here.
+    if (agent.projectId === null) return undefined;
     return {
         projectId: agent.projectId,
         route: `/chats/local/${agent.workspaceId}/${agent.id}`,

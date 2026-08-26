@@ -14,19 +14,22 @@ import type {
  * what is waiting, and opening a conversation clears both at once because
  * `sessionRead` is what changes the underlying summary.
  *
- * Sessions in a project's worktrees are counted with the project's own, because
- * the Dock speaks for the whole window and a worktree is not a place a reader
- * would think to look separately.
+ * Sessions in a project's worktrees are counted with the project's own, and a
+ * bot's one conversation is counted beside them, because the Dock speaks for
+ * the whole window: a reader told nothing is waiting has been told about their
+ * bots too, and a worktree is not a place they would think to look separately.
  */
 export function happyAgentDirectoryUnreadCount(snapshot: HappyAgentDirectorySnapshot): number {
     let count = 0;
-    for (const happyAgent of snapshot.happyAgents)
+    for (const happyAgent of snapshot.happyAgents) {
+        for (const bot of happyAgent.bots) if (bot.conversation.unread) count += 1;
         for (const project of happyAgent.projects) {
             for (const conversation of project.conversations) if (conversation.unread) count += 1;
             for (const worktree of project.worktrees)
                 for (const conversation of worktree.conversations)
                     if (conversation.unread) count += 1;
         }
+    }
     return count;
 }
 

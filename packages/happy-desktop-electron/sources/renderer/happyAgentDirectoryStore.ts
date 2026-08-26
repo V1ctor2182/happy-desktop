@@ -1,4 +1,5 @@
 import type {
+    HappyAgentBot,
     HappyAgentConnectionSnapshot,
     HappyAgentHost,
     HappyAgentModelPreferencePersistence,
@@ -27,6 +28,8 @@ export interface HappyAgentDirectoryEntry {
     readonly message?: string;
     readonly version?: string;
     readonly projects: readonly HappyAgentProjectGroup[];
+    /** This Happy Agent's bots, shown under their own heading above its projects. */
+    readonly bots: readonly HappyAgentBot[];
     readonly projectsStatus: "loading" | "ready" | "error";
     readonly projectAdd: HappyAgentProjectAddSnapshot;
     readonly session?: HappyAgentSession;
@@ -73,10 +76,11 @@ interface LocalHappyAgent {
 
 function projectsRead(
     session: HappyAgentSession,
-): Pick<HappyAgentDirectoryEntry, "projects" | "projectsStatus" | "projectAdd"> {
+): Pick<HappyAgentDirectoryEntry, "bots" | "projects" | "projectsStatus" | "projectAdd"> {
     const workspace = session.workspace.get();
     const projects = workspace.list.projects;
     return {
+        bots: workspace.list.bots,
         projects: projects.type === "ready" ? projects.value : [],
         projectsStatus:
             projects.type === "ready" ? "ready" : projects.type === "error" ? "error" : "loading",
@@ -86,9 +90,10 @@ function projectsRead(
 
 function projectsMatch(
     entry: HappyAgentDirectoryEntry,
-    next: Pick<HappyAgentDirectoryEntry, "projects" | "projectsStatus" | "projectAdd">,
+    next: Pick<HappyAgentDirectoryEntry, "bots" | "projects" | "projectsStatus" | "projectAdd">,
 ): boolean {
     return (
+        entry.bots === next.bots &&
         entry.projects === next.projects &&
         entry.projectsStatus === next.projectsStatus &&
         entry.projectAdd === next.projectAdd
@@ -147,6 +152,7 @@ export function happyAgentDirectoryStoreCreate(
         entry: {
             id: LOCAL_HAPPY_AGENT_ID,
             label: "Projects",
+            bots: [],
             projects: [],
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,
@@ -180,6 +186,7 @@ export function happyAgentDirectoryStoreCreate(
         happyAgent.url = undefined;
         happyAgent.entry = {
             ...happyAgent.entry,
+            bots: [],
             projects: [],
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,

@@ -6,6 +6,7 @@ import {
     type AgentActivityResponse,
     type AgentContextUsage,
     type AgentDraftSnapshot,
+    type Bot,
     type BackgroundProcess,
     type DaemonConfig,
     type GitState,
@@ -33,6 +34,7 @@ import {
     elementsReuse,
     modeOf,
     projectElements,
+    projectBots,
     projectGroups,
     projectNumericIdentity,
     projectSession,
@@ -205,12 +207,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     interface GroupsStoreState {
         readonly projects: readonly Project[];
         readonly workspaces: readonly Workspace[];
+        readonly bots: readonly Bot[];
         readonly connection: GroupsState["connection"];
         /** The published group projection, rebuilt by `publishGroups`. */
         readonly groups: ReturnType<typeof projectGroups>;
+        /** The published bot projection, rebuilt beside `groups`. */
+        readonly botGroups: ReturnType<typeof projectBots>;
     }
 
     const groupsStore = createStore<GroupsStoreState>()(() => ({
+        botGroups: [],
+        bots: [],
         connection: "connecting",
         groups: [],
         projects: [],
@@ -300,13 +307,21 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     agentDrafts,
                     agentModes,
                 ),
+                botGroups: projectBots(
+                    current.bots,
+                    current.workspaces,
+                    endpoint,
+                    daemonConfig,
+                    agentDrafts,
+                    agentModes,
+                ),
             }));
         }
         const state = groupState();
-        const { groups } = groupsStore.getState();
+        const { botGroups, groups } = groupsStore.getState();
         for (const subscriber of groupSubscribers) {
             if (subscriber.closed) continue;
-            subscriber.onChange(groups, state);
+            subscriber.onChange(groups, state, botGroups);
             for (const delta of deltas) subscriber.onDelta?.(delta);
         }
     };
@@ -404,8 +419,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const workspaceOf = (workspaceId: string): Workspace | undefined =>
         groupsStore.getState().workspaces.find((candidate) => candidate.id === workspaceId);
 
+    const botOf = (botId: string): Bot | undefined =>
+        groupsStore.getState().bots.find((candidate) => candidate.id === botId);
+
     const agentOf = (agentId: string): Agent | undefined => {
-        const { projects, workspaces } = groupsStore.getState();
+        const { bots, projects, workspaces } = groupsStore.getState();
         for (const workspace of workspaces) {
             const agent = workspace.agents.find((candidate) => candidate.id === agentId);
             if (agent !== undefined) return agent;
@@ -413,6 +431,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         for (const project of projects) {
             const agent = project.agents.find((candidate) => candidate.id === agentId);
             if (agent !== undefined) return agent;
+        }
+        // A bot carries its one agent itself, and on a daemon that lists the
+        // bot's workspace without its agents this is the only copy there is.
+        for (const bot of bots) {
+            if (bot.agent.id === agentId) return bot.agent;
         }
         const materialized = sessions.get(agentId)?.agent;
         if (materialized !== undefined) return materialized;
@@ -445,6 +468,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     ? { ...project, agents: replaceResource(project.agents, agent) as Agent[] }
                     : project,
             ),
+            // A bot's row is drawn from the agent embedded in the bot, so the
+            // same versioned agent event has to reach that copy too — otherwise
+            // the bot keeps reporting the status it was created with.
+            bots: current.bots.map((bot) => (bot.agent.id === agent.id ? { ...bot, agent } : bot)),
         }));
         const entry = sessions.get(agent.id);
         if (entry !== undefined) {
@@ -799,6 +826,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             );
             config = bootstrap.config;
             groupsStore.setState({
+                // A daemon too old to know about bots omits the field entirely,
+                // which is an empty catalog rather than an unknown one.
+                bots: bootstrap.bots ?? [],
                 projects: bootstrap.projects,
                 workspaces: bootstrap.workspaces,
             });
@@ -1029,19 +1059,66 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 publishGroups();
                 return;
             }
-            case "workspace.created":
+            case "workspace.created": {
+                const created = event.payload.workspace;
                 groupsStore.setState((state) => ({
-                    workspaces: replaceResource(state.workspaces, event.payload.workspace),
+                    workspaces: replaceResource(state.workspaces, created),
+                }));
+                // A bot's workspace is announced by `bot.created`, which carries
+                // the bot the row is actually made of. There is no project for
+                // this delta to name, so none is published.
+                publishGroups(
+                    created.projectId === null
+                        ? []
+                        : [
+                              {
+                                  type: "workspace_added",
+                                  projectId: created.projectId,
+                                  workspaceId: created.id,
+                              },
+                          ],
+                );
+                background(renewGitWatch());
+                return;
+            }
+            case "bot.created":
+                groupsStore.setState((state) => ({
+                    bots: replaceResource(state.bots, event.payload.bot),
                 }));
                 publishGroups([
                     {
-                        type: "workspace_added",
-                        projectId: event.payload.workspace.projectId,
-                        workspaceId: event.payload.workspace.id,
+                        type: "bot_added",
+                        botId: event.payload.bot.id,
+                        workspaceId: event.payload.bot.workspaceId,
                     },
                 ]);
-                background(renewGitWatch());
                 return;
+            case "bot.updated": {
+                const current = botOf(event.payload.botId);
+                // The bot is not held yet, so there is no version chain to
+                // extend: ask for it whole, exactly as a workspace does.
+                if (current === undefined) {
+                    refetchResource(
+                        client
+                            .getBot(event.payload.botId, { signal: rootController.signal })
+                            .then(({ bot }) => {
+                                groupsStore.setState((state) => ({
+                                    bots: replaceResource(state.bots, bot),
+                                }));
+                                publishGroups();
+                            }),
+                    );
+                    return;
+                }
+                groupsStore.setState((state) => ({
+                    bots: replaceResource(state.bots, {
+                        ...applyChanges(current, event.payload.changes),
+                        version: event.payload.version,
+                    }),
+                }));
+                publishGroups();
+                return;
+            }
             case "workspace.updated": {
                 const current = workspaceOf(event.payload.workspaceId);
                 if (current === undefined) {
@@ -1613,7 +1690,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             : "Happy Agent is not ready",
                         source: "connection",
                     });
-                    const nextCompatibility = serverCompatibility(health.version.protocol);
+                    const nextCompatibility = serverCompatibility(health.version);
                     reportCompatibility(nextCompatibility);
                     if (nextCompatibility.status !== "compatible" || !health.ready) {
                         publishConnection("connecting");
@@ -1963,9 +2040,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             if (closed) throw new Error("This Happy Agent connection is closed.");
             const subscriber: GroupsSubscriber = { ...subscription, closed: false };
             groupSubscribers.add(subscriber);
-            subscriber.onChange(groupsStore.getState().groups, groupState());
+            subscriber.onChange(
+                groupsStore.getState().groups,
+                groupState(),
+                groupsStore.getState().botGroups,
+            );
             return {
                 projects: () => groupsStore.getState().groups,
+                bots: () => groupsStore.getState().botGroups,
                 state: groupState,
                 close: () => {
                     subscriber.closed = true;
@@ -2140,7 +2222,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 publishGroups([
                     {
                         type: "workspace_added",
-                        projectId: optimistic.projectId,
+                        projectId: input.projectId,
                         workspaceId: optimistic.id,
                     },
                 ]);
@@ -2164,10 +2246,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         { signal: rootController.signal },
                     ),
                 ({ workspace }) =>
+                    // This route only ever makes a workspace inside a project,
+                    // so the delta names the project that was asked for rather
+                    // than the response field a bot's workspace leaves null.
                     adoptWorkspace(workspace, [
                         {
                             type: "workspace_added",
-                            projectId: workspace.projectId,
+                            projectId: input.projectId,
                             workspaceId: workspace.id,
                         },
                     ]),
@@ -2663,6 +2748,77 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         },
         renameGroup(target, name) {
             return renameGroup(target, name);
+        },
+        archiveBot(botId) {
+            const mutationId = nextId();
+            const bot = botOf(botId);
+            if (bot === undefined) {
+                return mutation(
+                    "archive_bot",
+                    mutationId,
+                    () => Promise.reject(new Error("The bot is not loaded.")),
+                    undefined,
+                    undefined,
+                    undefined,
+                    `bot:${botId}`,
+                );
+            }
+            return mutation(
+                "archive_bot",
+                mutationId,
+                () =>
+                    client.archiveBot(botId, {
+                        ifMatch: botOf(botId)?.version ?? bot.version,
+                        mutationId,
+                        signal: rootController.signal,
+                    }),
+                ({ bot: updated }) => {
+                    groupsStore.setState((state) => ({
+                        bots: replaceResource(state.bots, updated),
+                    }));
+                    publishGroups();
+                },
+                undefined,
+                undefined,
+                `bot:${botId}`,
+            );
+        },
+        reorderBot(botId, afterId) {
+            const mutationId = nextId();
+            const bot = botOf(botId);
+            if (bot === undefined) {
+                return mutation(
+                    "reorder_bot",
+                    mutationId,
+                    () => Promise.reject(new Error("The bot is not loaded.")),
+                    undefined,
+                    undefined,
+                    undefined,
+                    `bot:${botId}`,
+                );
+            }
+            return mutation(
+                "reorder_bot",
+                mutationId,
+                () =>
+                    client.reorderBot(
+                        botId,
+                        { afterId, mutationId },
+                        {
+                            ifMatch: botOf(botId)?.version ?? bot.version,
+                            signal: rootController.signal,
+                        },
+                    ),
+                ({ bot: updated }) => {
+                    groupsStore.setState((state) => ({
+                        bots: replaceResource(state.bots, updated),
+                    }));
+                    publishGroups();
+                },
+                undefined,
+                undefined,
+                `bot:${botId}`,
+            );
         },
         reorderProject(projectId, afterId) {
             const mutationId = nextId();

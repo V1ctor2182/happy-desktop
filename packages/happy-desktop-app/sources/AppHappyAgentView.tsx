@@ -40,6 +40,7 @@ import type {
     HappyAgentAvailabilitySnapshot,
     HappyAgentProviderUsageStore,
     HappyAgentProvidersStore,
+    HappyAgentBot,
     HappyAgentGroupLifecycle,
     HappyAgentProjectGroup,
     HappyAgentProjectId,
@@ -243,6 +244,13 @@ export interface AppHappyAgentEntry {
     readonly message?: string;
     readonly version?: string;
     readonly projects: readonly HappyAgentProjectGroup[];
+    /**
+     * This Happy Agent's bots. They are listed under a heading of their own
+     * above its projects and are not projects: a bot offers no
+     * new-conversation control and no settings, because it is one permanent
+     * conversation with nothing to configure.
+     */
+    readonly bots: readonly HappyAgentBot[];
     readonly projectsStatus: "loading" | "ready" | "error";
     /**
      * Where adding a folder to this Happy Agent as a project stands. Absent on a host
@@ -507,6 +515,45 @@ const HISTORY_SESSION_PREFIX = "session:";
  * it has no remote to derive a picture from, and an "H" plaque would read as one
  * more repository, so it wears a house instead.
  */
+/**
+ * One bot's row.
+ *
+ * It is deliberately barer than a project's. A project row carries a `+`
+ * because a project is a place work is started in, and a settings control
+ * because a project has a name and a path someone chose. A bot has neither: the
+ * daemon made its one conversation with it and no second one can ever be added,
+ * so the row is the bot's face, its name, and whatever that one conversation is
+ * doing — and nothing else to press.
+ *
+ * The row is top level like a project and nests nothing, because there is
+ * nothing under a bot to nest.
+ *
+ * It is a `project` row in the sidebar's own vocabulary, and that is not a
+ * hedge: that kind is how the sidebar draws a place work runs inside — an
+ * avatar in the leading lane, the name shimmering while something is running,
+ * a spinner in the trailing cell, and the unread dot on the face rather than at
+ * the far edge. A bot is exactly that place. The `agent` kind is for a row that
+ * *is* a correspondent rather than a place holding one, and it reports itself
+ * in words instead, which left a bot saying "working" beside a column of
+ * projects that spin.
+ */
+function botSidebarItem(bot: HappyAgentBot, titleShimmerEnabled: boolean): SidebarItem {
+    return {
+        id: bot.workspaceId,
+        kind: "project",
+        label: bot.name,
+        labelShimmer: titleShimmerEnabled,
+        initials: bot.name.slice(0, 1).toUpperCase(),
+        ...(bot.avatar ? { imageUrl: bot.avatar.url } : {}),
+        ...(bot.conversation.activity === "running"
+            ? { status: "working" as const }
+            : bot.conversation.activity === "waiting"
+              ? { status: "waiting" as const }
+              : {}),
+        ...(bot.conversation.unread ? { unread: true } : {}),
+    };
+}
+
 function sidebarItems(
     project: HappyAgentProjectGroup,
     titleShimmerEnabled: boolean,
@@ -646,14 +693,29 @@ const ROW_MENU_ARCHIVE = "archive";
 const ROW_MENU_RENAME = "rename";
 
 /**
- * The context menu one sidebar row offers. Archiving is the only thing on it,
- * and it is a menu rather than a visible control because it throws work away:
- * archiving a project closes its conversations and removes every one of its
- * worktree checkouts. The home project is left out — it is the machine's default
- * place rather than a repository the reader adopted, so hiding it would only
- * bring it straight back the next time a session starts there.
+ * The context menu one sidebar row offers. Archiving is a menu action rather
+ * than a visible control because it takes the row and its running work out of
+ * the window. A bot keeps its dedicated folder for a later restore; archiving a
+ * project closes its conversations and removes every one of its worktree
+ * checkouts. The home project is left out — it is the machine's default place
+ * rather than a repository the reader adopted, so hiding it would only bring it
+ * straight back the next time a session starts there.
  */
-function rowMenuItems(projects: readonly HappyAgentProjectGroup[], item: SidebarItem): MenuItem[] {
+function rowMenuItems(
+    projects: readonly HappyAgentProjectGroup[],
+    bots: readonly HappyAgentBot[],
+    item: SidebarItem,
+): MenuItem[] {
+    if (bots.some((bot) => bot.workspaceId === item.id))
+        return [
+            {
+                kind: "item",
+                id: ROW_MENU_ARCHIVE,
+                label: "Archive bot",
+                icon: "archive",
+                danger: true,
+            },
+        ];
     const owner = rowOwnerFind(projects, item.id);
     if (!owner) return [];
     if (owner.worktreeId)
@@ -781,6 +843,25 @@ function sessionTabs(group: OpenGroup, titleShimmerEnabled: boolean): TabItem[] 
         waiting: summary.activity === "waiting",
         unread: summary.unread === true,
     }));
+}
+
+/**
+ * Keeps a bot's one conversation first in the strip and refuses to close it.
+ *
+ * A bot *is* that conversation: it was created with the bot, it is the only one
+ * there will ever be, and there is no control anywhere that could bring it back.
+ * So it does not take its chances in the reader's tab order the way an ordinary
+ * session does — it holds the leading position whatever else is opened beside
+ * it, and the files and tools a reader opens from it arrange themselves after.
+ *
+ * Every other group passes through untouched: `sessionId` is absent unless the
+ * open group is a bot's.
+ */
+function botTabPin(items: readonly TabItem[], sessionId: string | undefined): TabItem[] {
+    if (sessionId === undefined) return items as TabItem[];
+    const pinned = items.find((item) => item.id === sessionId);
+    if (pinned === undefined) return items as TabItem[];
+    return [{ ...pinned, closable: false }, ...items.filter((item) => item.id !== sessionId)];
 }
 
 /**
@@ -975,12 +1056,36 @@ function documentLinkResolve(from: string, href: string): string {
     return segments.join("/");
 }
 
-/** Resolves an addressed group id against the list, matching projects and worktrees alike. */
+/**
+ * Resolves an addressed group id against the list, matching projects, worktrees
+ * and bots alike.
+ *
+ * A bot resolves to its own dedicated workspace holding its one conversation.
+ * It is a group in every way this surface cares about — it is addressed, it has
+ * a directory, it renders a chat — and it is only the sidebar that keeps bots
+ * apart from projects, so the whole screen below reads one shape rather than
+ * asking at every turn which kind of thing is open.
+ */
 function openGroupFind(
     projects: readonly HappyAgentProjectGroup[],
+    bots: readonly HappyAgentBot[],
     groupId: string | undefined,
 ): OpenGroup | undefined {
     if (groupId === undefined) return undefined;
+    const bot = bots.find((candidate) => candidate.workspaceId === groupId);
+    if (bot)
+        return {
+            id: bot.workspaceId,
+            name: bot.name,
+            home: false,
+            conversations: [bot.conversation],
+            changes: [],
+            // The bot's folder, so files and attachments land in it. Starting a
+            // second conversation here is refused separately: a bot has exactly
+            // one, and `sessionCreateAvailable` is what withholds that control.
+            create: { cwd: bot.path, worktreeId: bot.workspaceId },
+            path: bot.displayPath,
+        };
     for (const project of projects) {
         if (project.id === groupId)
             return {
@@ -1033,6 +1138,47 @@ function conversationLockedPlaceholder(title: string | undefined): string {
 /** A sidebar row's id: which Happy Agent it belongs to, then the group inside it. */
 function happyAgentItemId(happyAgentId: string, id: string): string {
     return `${happyAgentId}/${id}`;
+}
+
+/**
+ * One Happy Agent contributes two headed lists, and a section id says which of
+ * them a heading control or a drag came from.
+ *
+ * They are separate sections rather than one list with the bots at the top,
+ * because a section is exactly what the sidebar arranges rows within: rows in
+ * one section are peers a drag rearranges among each other, and a bot and a
+ * project are not peers — a bot dropped past the last one has no meaning
+ * against a project, and the drop had to be bent into "first among the bots" to
+ * mean anything at all. Given a section of their own, bots are dragged among
+ * bots and projects among projects, and neither list has to know about the
+ * other.
+ */
+const HAPPY_AGENT_SECTION_PREFIX = "happy-agent:";
+const HAPPY_AGENT_BOTS_SECTION_PREFIX = "happy-agent-bots:";
+
+function happyAgentSectionId(happyAgentId: string): string {
+    return `${HAPPY_AGENT_SECTION_PREFIX}${happyAgentId}`;
+}
+
+function happyAgentBotsSectionId(happyAgentId: string): string {
+    return `${HAPPY_AGENT_BOTS_SECTION_PREFIX}${happyAgentId}`;
+}
+
+/** Which of a Happy Agent's two lists a section id names, and whose it is. */
+function happyAgentSectionParse(
+    sectionId: string,
+): { readonly happyAgentId: string; readonly kind: "bots" | "projects" } | undefined {
+    if (sectionId.startsWith(HAPPY_AGENT_BOTS_SECTION_PREFIX))
+        return {
+            happyAgentId: sectionId.slice(HAPPY_AGENT_BOTS_SECTION_PREFIX.length),
+            kind: "bots",
+        };
+    if (sectionId.startsWith(HAPPY_AGENT_SECTION_PREFIX))
+        return {
+            happyAgentId: sectionId.slice(HAPPY_AGENT_SECTION_PREFIX.length),
+            kind: "projects",
+        };
+    return undefined;
 }
 
 function happyAgentItemParse(value: string): {
@@ -1122,10 +1268,36 @@ function happyAgentSections(
     titleShimmerEnabled: boolean,
     shortcutProject?: { readonly projectId: HappyAgentProjectId; readonly happyAgentId: string },
 ): SidebarSection[] {
-    return directory.happyAgents.map((happyAgent) => ({
-        id: `happy-agent:${happyAgent.id}`,
+    return directory.happyAgents.flatMap((happyAgent) => [
+        // The bots head the machine's part of the sidebar, under a heading of
+        // their own. They are the assistants the reader keeps around rather
+        // than places work happens, and a machine with none says nothing at
+        // all: an empty heading would announce a kind of thing this reader has
+        // never made.
+        ...(happyAgent.bots.length === 0
+            ? []
+            : [
+                  {
+                      id: happyAgentBotsSectionId(happyAgent.id),
+                      label: "Bots",
+                      items: happyAgent.bots.map((bot) => {
+                          const item = botSidebarItem(bot, titleShimmerEnabled);
+                          return { ...item, id: happyAgentItemId(happyAgent.id, item.id) };
+                      }),
+                  },
+              ]),
+        happyAgentProjectsSection(happyAgent, titleShimmerEnabled, shortcutProject),
+    ]);
+}
+
+function happyAgentProjectsSection(
+    happyAgent: AppHappyAgentEntry,
+    titleShimmerEnabled: boolean,
+    shortcutProject?: { readonly projectId: HappyAgentProjectId; readonly happyAgentId: string },
+): SidebarSection {
+    return {
+        id: happyAgentSectionId(happyAgent.id),
         label: happyAgent.label,
-        status: happyAgentConnectionState(happyAgent),
         items: happyAgent.projects
             .flatMap((project) =>
                 sidebarItems(
@@ -1175,7 +1347,7 @@ function happyAgentSections(
                             },
               }
             : {}),
-    }));
+    };
 }
 
 /**
@@ -1201,7 +1373,7 @@ function projectShortcutTargets(
         id: HappyAgentProjectId | HappyAgentWorktreeId,
     ): SidebarNumberShortcutTarget => ({
         itemId: happyAgentItemId(happyAgent.id, id),
-        sectionId: `happy-agent:${happyAgent.id}`,
+        sectionId: happyAgentSectionId(happyAgent.id),
     });
     return [
         ...(activeHappyAgent && activeProject
@@ -1220,13 +1392,6 @@ function projectShortcutTargets(
             ),
         ),
     ];
-}
-
-/**
- * One Happy Agent's heading marker, projected from its connection state.
- */
-function happyAgentConnectionState(happyAgent: AppHappyAgentEntry) {
-    return happyAgent.status;
 }
 
 /** One directory entry's unified inner-health and outer-route availability. */
@@ -1492,7 +1657,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const row = happyAgentItemParse(item.id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
                 if (happyAgent?.status !== "connected") return [];
-                return rowMenuItems(happyAgent.projects, { ...item, id: row.id });
+                return rowMenuItems(happyAgent.projects, happyAgent.bots, {
+                    ...item,
+                    id: row.id,
+                });
             }}
             // Create is the window's, not a screen's: the dialog is mounted
             // beside whatever is showing, so this row answers from every route.
@@ -1501,9 +1669,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             {...(activeAvailability?.online === true && active?.session?.workspace
                 ? { onCompose: () => active.session?.workspace.createOpen() }
                 : {})}
-            // The section action adds a project to the Happy Agent named by that section.
+            // The section action adds a project to the Happy Agent named by that
+            // section. Only a projects section offers one — a bots heading has
+            // nothing to add, because a bot is made by the agent rather than here.
             onSectionAction={(sectionId) => {
-                const happyAgent = happyAgentOf(sectionId.slice("happy-agent:".length));
+                const section = happyAgentSectionParse(sectionId);
+                if (section?.kind !== "projects") return;
+                const happyAgent = happyAgentOf(section.happyAgentId);
                 if (happyAgent?.status !== "connected") {
                     props.onSettingsOpen();
                     return;
@@ -1518,8 +1690,15 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 if (!happyAgent) return;
                 if (happyAgent.status !== "connected") return;
                 const workspace = happyAgent.session?.workspace;
+                if (!workspace) return;
+                const bot = happyAgent.bots.find((candidate) => candidate.workspaceId === row.id);
+                if (bot) {
+                    if (actionId === ROW_MENU_ARCHIVE)
+                        void workspace.botArchive(bot.id).catch(() => undefined);
+                    return;
+                }
                 const owner = rowOwnerFind(happyAgent.projects, row.id);
-                if (!owner || !workspace) return;
+                if (!owner) return;
                 if (actionId === ROW_MENU_RENAME) {
                     workspace.renameOpen(owner.project.id, owner.worktreeId);
                     return;
@@ -1557,7 +1736,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     // left falls back to its most recent conversation, which is
                     // also what a workspace without the memory at all does.
                     happyAgent.session?.workspace.get().groupResume?.get(groupId) ??
-                        openGroupFind(happyAgent.projects, row.id)?.conversations[0]?.id,
+                        openGroupFind(happyAgent.projects, happyAgent.bots, row.id)
+                            ?.conversations[0]?.id,
                 );
             }}
             onItemAction={(id) => {
@@ -1600,12 +1780,29 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                   }
                 : {})}
             onItemReorder={(sectionId, move) => {
-                const happyAgent = happyAgentOf(sectionId.slice("happy-agent:".length));
+                const section = happyAgentSectionParse(sectionId);
+                if (!section) return;
+                const happyAgent = happyAgentOf(section.happyAgentId);
                 if (happyAgent?.status !== "connected") return;
-                const workspace = happyAgent?.session?.workspace;
+                const workspace = happyAgent.session?.workspace;
                 if (!workspace) return;
                 const moved = happyAgentItemParse(move.id).id;
                 const after = move.afterId === null ? null : happyAgentItemParse(move.afterId).id;
+                // A bot's row is addressed by its workspace, so the move the
+                // sidebar reports names workspaces and the bots behind them are
+                // what is actually arranged.
+                if (section.kind === "bots") {
+                    const botOf = (workspaceId: string | null) =>
+                        workspaceId === null
+                            ? undefined
+                            : happyAgent.bots.find((bot) => bot.workspaceId === workspaceId);
+                    const movedBot = botOf(moved);
+                    if (!movedBot) return;
+                    void workspace
+                        .botReorder(movedBot.id, botOf(after)?.id ?? null)
+                        .catch(() => undefined);
+                    return;
+                }
                 // A drag inside a project rearranges its worktrees; a drag
                 // at the top level rearranges the projects themselves.
                 void (
@@ -1641,6 +1838,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // offered only once it is downloaded and there is something to apply it
     // with, which is the same test the sidebar's own update control makes.
     const paletteSubject: HappyAgentPaletteSubject = {
+        bots: active?.bots ?? [],
         chatId: props.chatId,
         groupId: props.groupId,
         happyAgentId: active?.id ?? props.happyAgentId,
@@ -1864,6 +2062,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
 interface HappyAgentPaletteSubject {
     happyAgentId: string;
     projects: readonly HappyAgentProjectGroup[];
+    bots: readonly HappyAgentBot[];
     groupId?: string;
     chatId?: string;
     /** Whether the machine can be asked to do anything at this moment. */
@@ -1957,7 +2156,7 @@ function paletteFacts(
     online: boolean,
 ): HappyAgentPaletteFacts {
     const rows = workspace.list.projects.type === "ready" ? workspace.list.projects.value : [];
-    const openGroup = openGroupFind(rows, groupId);
+    const openGroup = openGroupFind(rows, workspace.list.bots, groupId);
     return {
         archivedSessions: workspace.list.archivedSessions,
         groupResume: workspace.groupResume,
@@ -2330,7 +2529,7 @@ function paletteCommandRun(
             // sidebar row does; one never visited falls back to its first chat.
             const resume =
                 props.facts.groupResume?.get(command.groupId as HappyAgentGroupId) ??
-                openGroupFind(props.projects, command.groupId)?.conversations[0]?.id;
+                openGroupFind(props.projects, props.bots, command.groupId)?.conversations[0]?.id;
             props.onChatSelect(command.happyAgentId, command.groupId, resume);
             return;
         }
@@ -2345,7 +2544,7 @@ function paletteCommandRun(
             return;
         case "sessionCreate": {
             const workspace = props.workspace;
-            const group = openGroupFind(props.projects, props.groupId);
+            const group = openGroupFind(props.projects, props.bots, props.groupId);
             if (!workspace || !group?.create || !props.happyAgentOnline()) return;
             void workspace.conversationCreate(group.id, group.create).catch(() => undefined);
             return;
@@ -2554,7 +2753,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // reasons are kept apart all the way down to the controls: a composer reads
     // this one, while file and terminal actions read the write refusal above it.
     const openGroupChatRefusal = access.conversationRefusal;
-    const openGroup = openGroupFind(rows, props.groupId);
+    const openGroup = openGroupFind(rows, workspace.list.bots, props.groupId);
+    // A bot is opened as its own dedicated workspace, so the open group is a bot
+    // exactly when one of them owns this workspace.
+    const openBot = workspace.list.bots.find((bot) => bot.workspaceId === props.groupId);
     // Whether another session may be added here. A workspace whose checkout is
     // still being prepared already has the one it was made with and can take no
     // second: Happy Agent does not queue an agent against a checkout that is not there,
@@ -2562,6 +2764,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // that could not open.
     const sessionCreateAvailable =
         openGroup?.create !== undefined &&
+        // A bot has exactly one conversation and can never have a second, so
+        // the control that would start one is not offered here at all.
+        openBot === undefined &&
         connectionRefusal === undefined &&
         openGroupChatRefusal === undefined &&
         workspaceLifecyclePhase(openGroup.lifecycle) !== "creating";
@@ -2683,17 +2888,20 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // the single order the reader arranged. A detached subagent is addressed by
     // id rather than listed, so it is not part of that order and follows it.
     const groupTabs: TabItem[] = [
-        ...tabsOrdered(
-            openGroup
-                ? [
-                      ...sessionTabs(openGroup, props.titleShimmerEnabled).map((tab) =>
-                          availability.online ? tab : { ...tab, closable: false },
-                      ),
-                      ...groupFileTabs.map(fileTabItem),
-                      ...toolTabItems(mainTools),
-                  ]
-                : [],
-            workspace.tabOrder,
+        ...botTabPin(
+            tabsOrdered(
+                openGroup
+                    ? [
+                          ...sessionTabs(openGroup, props.titleShimmerEnabled).map((tab) =>
+                              availability.online ? tab : { ...tab, closable: false },
+                          ),
+                          ...groupFileTabs.map(fileTabItem),
+                          ...toolTabItems(mainTools),
+                      ]
+                    : [],
+                workspace.tabOrder,
+            ),
+            openBot?.conversation.id,
         ),
         ...(detachedConversationTab ? [detachedConversationTab] : []),
     ];
@@ -2759,7 +2967,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         const current = props.workspace.get();
         const currentRows =
             current.list.projects.type === "ready" ? current.list.projects.value : [];
-        const currentGroup = openGroupFind(currentRows, current.address.groupId);
+        const currentGroup = openGroupFind(currentRows, current.list.bots, current.address.groupId);
         if (!currentGroup) return;
         const panelNow = props.workspace.panel.get();
         const online = happyAgentOnline();
@@ -3303,17 +3511,25 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                    same strip throughout a checkout being
                                    prepared, so the button goes grey for a moment
                                    rather than appearing out of nowhere when it
-                                   arrives. */
-                                <Button
-                                    aria-label="Create a session in this project"
-                                    disabled={!sessionCreateAvailable}
-                                    icon="plus"
-                                    iconOnly
-                                    onClick={() => groupConversationCreate(openGroup)}
-                                    shortcut={APP_SHORTCUTS.sessionCreate}
-                                    size="small"
-                                    variant="ghost"
-                                />
+                                   arrives.
+
+                                   A bot is the exception, and it is not left
+                                   grey: a checkout is only briefly unable to
+                                   take a session, while a bot can never take a
+                                   second one at all, and a control that will
+                                   never come back is a control to leave out. */
+                                openBot ? null : (
+                                    <Button
+                                        aria-label="Create a session in this project"
+                                        disabled={!sessionCreateAvailable}
+                                        icon="plus"
+                                        iconOnly
+                                        onClick={() => groupConversationCreate(openGroup)}
+                                        shortcut={APP_SHORTCUTS.sessionCreate}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                )
                             }
                             trailing={
                                 /* The strip's own control, not the next thing

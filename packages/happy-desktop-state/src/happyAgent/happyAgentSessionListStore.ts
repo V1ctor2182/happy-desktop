@@ -20,6 +20,8 @@ import { referencesPreserve, happyAgentUserError } from "./happyAgentSupport.js"
 import { happyAgentComputeRequest, happyAgentProjectComputeProject } from "./happyAgentProject.js";
 import { happyAgentWorkspaceGeneratedName } from "./happyAgentWorkspaceNames.js";
 import type {
+    HappyAgentBot,
+    HappyAgentBotId,
     HappyAgentGroupId,
     HappyAgentProjectCatalog,
     HappyAgentProjectCompute,
@@ -45,6 +47,13 @@ const PENDING_MUTATION_LIMIT = 256;
  */
 export interface HappyAgentSessionListSnapshot {
     readonly projects: Loadable<readonly HappyAgentProjectGroup[]>;
+    /**
+     * The host's bots, in its own order. They are listed apart from the projects
+     * because they are not projects: a bot is one permanent conversation with
+     * nothing to add to it, and it is shown above the project list rather than
+     * inside it.
+     */
+    readonly bots: readonly HappyAgentBot[];
     /** Sessions the host still holds but has taken out of their workspace strips. */
     readonly archivedSessions: readonly HappyAgentSessionSummary[];
     /** Last failed create/fork/reset, surfaced without rejecting the action. */
@@ -195,6 +204,11 @@ export interface HappyAgentSessionListStore {
         projectId: HappyAgentProjectId,
         afterId: HappyAgentProjectId | null,
     ): Promise<void>;
+
+    /** Archives a bot, preserving its dedicated folder for a later restore. */
+    botArchive(botId: HappyAgentBotId): Promise<void>;
+    /** Moves one bot after `afterId`, or to the front of the bot list when null. */
+    botReorder(botId: HappyAgentBotId, afterId: HappyAgentBotId | null): Promise<void>;
     /** Starts one peer-owned managed project and returns its optimistic identity. */
     projectCloneGithub(repository: string, name: string): HappyAgentProjectId;
 
@@ -349,11 +363,13 @@ export interface HappyAgentSessionListDeps {
      */
     readonly connectActions: Pick<
         HappyAgentConnection,
+        | "archiveBot"
         | "archiveWorkspace"
         | "createSession"
         | "createWorkspace"
         | "markSessionRead"
         | "renameGroup"
+        | "reorderBot"
         | "reorderProject"
         | "reorderSession"
         | "reorderWorkspace"
@@ -410,6 +426,7 @@ export function happyAgentSessionListStoreCreate(
 
     const store = createStore<HappyAgentSessionListSnapshot>()(() => ({
         archivedSessions: [],
+        bots: [],
         catalogRevision: 0,
         projectCreateFailures: NO_PROJECT_CREATE_FAILURES,
         projects: { type: "loading" },
@@ -417,7 +434,7 @@ export function happyAgentSessionListStoreCreate(
         worktreeCreateFailures: NO_WORKTREE_CREATE_FAILURES,
     }));
 
-    const EMPTY_CATALOG: HappyAgentProjectCatalog = { projects: [], worktrees: [] };
+    const EMPTY_CATALOG: HappyAgentProjectCatalog = { bots: [], projects: [], worktrees: [] };
 
     /**
      * The durable rows this surface last reconciled, kept apart from the public
@@ -746,6 +763,9 @@ export function happyAgentSessionListStoreCreate(
     ): void => {
         const { catalogRevision } = internal.getState();
         const ordered = optimisticOrderApply(projected);
+        // Bots are taken straight from the catalog: the host owns their order,
+        // and nothing in this surface rearranges or nests them.
+        const bots = internal.getState().catalog.bots;
         store.setState((previous) => {
             // An unchanged project keeps its previous object — and with it the
             // identity of the worktrees and conversation rows nested inside it — so a
@@ -763,6 +783,7 @@ export function happyAgentSessionListStoreCreate(
             if (
                 previous.projects.type === "ready" &&
                 previous.projects.value === projects &&
+                previous.bots === bots &&
                 previous.archivedSessions === archivedSessions &&
                 previous.catalogRevision === catalogRevision
             )
@@ -770,6 +791,7 @@ export function happyAgentSessionListStoreCreate(
             return {
                 ...previous,
                 archivedSessions,
+                bots,
                 catalogRevision,
                 projects: { type: "ready", value: projects },
             };
@@ -1137,7 +1159,11 @@ export function happyAgentSessionListStoreCreate(
         const { catalog } = internal.getState();
         return (
             catalog.projects.some((project) => project.id === groupId) ||
-            catalog.worktrees.some((worktree) => worktree.id === groupId)
+            catalog.worktrees.some((worktree) => worktree.id === groupId) ||
+            // A bot is addressed through its own workspace, which belongs to no
+            // project and so appears in neither list above. It is listed for as
+            // long as the bot is.
+            catalog.bots.some((bot) => bot.workspaceId === groupId)
         );
     };
 
@@ -1260,6 +1286,7 @@ export function happyAgentSessionListStoreCreate(
             if (worktree !== undefined) return happyAgentWorktreeWriteRefusal(worktree);
             const project = catalog.projects.find((entry) => entry.id === groupId);
             if (project !== undefined) return happyAgentProjectWriteRefusal(project);
+            if (catalog.bots.some((bot) => bot.workspaceId === groupId)) return undefined;
             return catalogListed
                 ? HAPPY_AGENT_GROUP_UNLISTED_REFUSAL
                 : HAPPY_AGENT_GROUP_UNREAD_REFUSAL;
@@ -1273,6 +1300,11 @@ export function happyAgentSessionListStoreCreate(
             // is making, so there is no interval where it can take a chat but
             // not a change: the same sentence answers both questions.
             if (project !== undefined) return happyAgentProjectWriteRefusal(project);
+            // A bot's workspace exists from the moment the bot does — the daemon
+            // makes the two together — so there is no phase in which it is being
+            // prepared and nothing to refuse. It answers both questions the same
+            // way for the same reason a project does.
+            if (catalog.bots.some((bot) => bot.workspaceId === groupId)) return undefined;
             return catalogListed
                 ? HAPPY_AGENT_GROUP_UNLISTED_REFUSAL
                 : HAPPY_AGENT_GROUP_UNREAD_REFUSAL;
@@ -1304,9 +1336,21 @@ export function happyAgentSessionListStoreCreate(
             return groupListed(location.groupId) ? location : undefined;
         },
         sessionRead(sessionId, knownUnread) {
-            const { sessions } = internal.getState();
+            const { catalog, sessions } = internal.getState();
             const session = sessions.find((candidate) => candidate.id === sessionId);
-            if (session?.unreadReason === undefined && knownUnread !== true) return;
+            // A bot's one conversation is carried on the bot itself and never
+            // joins the flat session list, so both halves of reading it happen
+            // on the catalog copy instead. Both halves matter: the open chat is
+            // asked to report itself read on every list update, and a bot
+            // looked for among the sessions is never found — so a bot whose
+            // reply arrives while its chat is on screen would keep its dot
+            // until something else cleared it.
+            const bot = catalog.bots.find((candidate) => candidate.conversation.id === sessionId);
+            const unread =
+                session === undefined
+                    ? bot?.conversation.unread === true
+                    : session.unreadReason !== undefined;
+            if (!unread && knownUnread !== true) return;
             if (session?.unreadReason !== undefined) {
                 internal.setState({
                     sessions: sessions.map((candidate) =>
@@ -1315,6 +1359,21 @@ export function happyAgentSessionListStoreCreate(
                             : candidate,
                     ),
                 });
+                publish();
+            } else if (bot?.conversation.unread === true) {
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        bots: state.catalog.bots.map((candidate) =>
+                            candidate.id === bot.id
+                                ? {
+                                      ...candidate,
+                                      conversation: { ...candidate.conversation, unread: false },
+                                  }
+                                : candidate,
+                        ),
+                    },
+                }));
                 publish();
             }
             deps.connectActions.markSessionRead(sessionId);
@@ -1542,6 +1601,37 @@ export function happyAgentSessionListStoreCreate(
                     deps.connectActions.reorderProject(projectId, afterId),
                 );
                 reorderMutations.set(mutationId, { kind: "project", order });
+            }),
+        botArchive: (botId) =>
+            mutate(async () => {
+                if (!internal.getState().catalog.bots.some((bot) => bot.id === botId)) return;
+                connectMutationTrack(deps.connectActions.archiveBot(botId));
+            }),
+        botReorder: (botId, afterId) =>
+            mutate(async () => {
+                const { bots } = internal.getState().catalog;
+                if (!bots.some((bot) => bot.id === botId)) return;
+                // The row moves under the hand that dragged it. The catalog is
+                // the one place bots are held, so reordering it there is what
+                // the next publish reads; the host's own answer replaces the
+                // whole catalog on the next reconcile.
+                const order = reorderedIds(
+                    bots.map((bot) => bot.id),
+                    botId,
+                    afterId,
+                );
+                const byId = new Map(bots.map((bot) => [bot.id, bot]));
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        bots: order.flatMap((id) => {
+                            const bot = byId.get(id);
+                            return bot === undefined ? [] : [bot];
+                        }),
+                    },
+                }));
+                publish();
+                connectMutationTrack(deps.connectActions.reorderBot(botId, afterId));
             }),
         projectRename: (projectId, name) =>
             mutate(async () => {

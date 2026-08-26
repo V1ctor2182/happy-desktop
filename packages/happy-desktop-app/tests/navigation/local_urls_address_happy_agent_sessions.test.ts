@@ -47,6 +47,7 @@ function directory(store: HappyAgentWorkspaceStore): AppHappyAgentDirectoryStore
     const snapshot: AppHappyAgentDirectorySnapshot = {
         happyAgents: [
             {
+                bots: [],
                 id: "local",
                 label: "This Mac",
                 projects: [],
