@@ -18,11 +18,15 @@ import {
     scenePixelRatio,
 } from "./lottie/dotLottieRuntime";
 import alienMonsterUrl from "./assets/animations/alien-monster.json?url";
+import cherryBlossomUrl from "./assets/animations/cherry-blossom.json?url";
 import closedLockUrl from "./assets/animations/closed-lock.json?url";
 import confettiBallUrl from "./assets/animations/confetti-ball.json?url";
 import disguisedFaceUrl from "./assets/animations/disguised-face.json?url";
+import frontFacingBabyChickUrl from "./assets/animations/front-facing-baby-chick.json?url";
 import hatchingChickUrl from "./assets/animations/hatching-chick.json?url";
 import llamaUrl from "./assets/animations/llama.json?url";
+import mirrorBallUrl from "./assets/animations/mirror-ball.json?url";
+import openHandsUrl from "./assets/animations/open-hands.json?url";
 import owlUrl from "./assets/animations/owl.json?url";
 import partyUrl from "./assets/animations/party.json?url";
 import robotUrl from "./assets/animations/robot.json?url";
@@ -36,11 +40,15 @@ import wandUrl from "./assets/animations/wand.json?url";
  * and every name here carries exactly one meaning:
  *
  * - `alien-monster` — people and agents are together in one live session.
+ * - `cherry-blossom` — a new friendship has begun.
  * - `closed-lock` — access is secured.
  * - `confetti-ball` — one milestone has just completed.
  * - `disguised-face` — this machine's identity is being defined.
+ * - `front-facing-baby-chick` — a new social identity is ready to meet people.
  * - `hatching-chick` — something new has been created.
  * - `llama` — several models are being combined on one job.
+ * - `mirror-ball` — a social circle is celebrating together.
+ * - `open-hands` — a social invitation is waiting for a response.
  * - `owl` — we are looking, and there is nothing found yet (search).
  * - `party` — a group is celebrating a shared completion.
  * - `robot` — an agent is ready to work, and waiting to be told what to do.
@@ -53,11 +61,15 @@ import wandUrl from "./assets/animations/wand.json?url";
  */
 export type LottieSceneName =
     | "alien-monster"
+    | "cherry-blossom"
     | "closed-lock"
     | "confetti-ball"
     | "disguised-face"
+    | "front-facing-baby-chick"
     | "hatching-chick"
     | "llama"
+    | "mirror-ball"
+    | "open-hands"
     | "owl"
     | "party"
     | "robot"
@@ -76,11 +88,15 @@ export type LottieScenePlay = "on-appear" | "on-demand";
 
 const SOURCES: Record<LottieSceneName, string> = {
     "alien-monster": alienMonsterUrl,
+    "cherry-blossom": cherryBlossomUrl,
     "closed-lock": closedLockUrl,
     "confetti-ball": confettiBallUrl,
     "disguised-face": disguisedFaceUrl,
+    "front-facing-baby-chick": frontFacingBabyChickUrl,
     "hatching-chick": hatchingChickUrl,
     llama: llamaUrl,
+    "mirror-ball": mirrorBallUrl,
+    "open-hands": openHandsUrl,
     owl: owlUrl,
     party: partyUrl,
     robot: robotUrl,
@@ -120,7 +136,7 @@ export type LottieSceneProps = {
  * and no React render per frame. All scenes share one worker.
  *
  * It never loops. The scene plays once when the state it illustrates appears,
- * and then holds its last frame — which for all twelve animations is the pose
+ * and then holds its last frame — which for all sixteen animations is the pose
  * they were drawn to return to, so the held picture is a picture worth holding.
  * After that it only moves when a reader asks: a click or tap, a fresh hover
  * entry, or Enter/Space while it has keyboard focus. A replay is refused while

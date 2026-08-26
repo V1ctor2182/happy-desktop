@@ -23,7 +23,7 @@ export function LottieScenePage() {
             title="LottieScene"
         >
             <Specimen
-                detail="The twelve shipped animations at the panel size, each holding its final frame. Alien monster: people and agents share one live session. Closed lock: access is secured. Confetti ball: a milestone just completed. Disguised face: this machine's identity is being defined. Hatching chick: something new was created. Llama: several models are combined on one job. Owl: we are looking and nothing is found yet. Party: a group shares a celebration. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Wand: the missing thing is one you can make here."
+                detail="The sixteen shipped animations at the panel size, each holding its final frame. Alien monster: people and agents share one live session. Cherry blossom: a new friendship began. Closed lock: access is secured. Confetti ball: a milestone just completed. Disguised face: this machine's identity is being defined. Front-facing baby chick: a new social identity is ready to meet people. Hatching chick: something new was created. Llama: several models are combined on one job. Mirror ball: a social circle celebrates together. Open hands: a social invitation awaits a response. Owl: we are looking and nothing is found yet. Party: a group shares a celebration. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Wand: the missing thing is one you can make here."
                 label="The vocabulary"
                 number="01"
                 stage="surface"
@@ -33,6 +33,12 @@ export function LottieScenePage() {
                         name="alien-monster"
                         play="on-demand"
                         replayLabel="Play the alien monster again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="cherry-blossom"
+                        play="on-demand"
+                        replayLabel="Play the cherry blossom again"
                         size={128}
                     />
                     <LottieScene
@@ -54,6 +60,12 @@ export function LottieScenePage() {
                         size={128}
                     />
                     <LottieScene
+                        name="front-facing-baby-chick"
+                        play="on-demand"
+                        replayLabel="Play the front-facing baby chick again"
+                        size={128}
+                    />
+                    <LottieScene
                         name="hatching-chick"
                         play="on-demand"
                         replayLabel="Play the hatching chick again"
@@ -63,6 +75,18 @@ export function LottieScenePage() {
                         name="llama"
                         play="on-demand"
                         replayLabel="Play the llama again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="mirror-ball"
+                        play="on-demand"
+                        replayLabel="Play the mirror ball again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="open-hands"
+                        play="on-demand"
+                        replayLabel="Play the open hands again"
                         size={128}
                     />
                     <LottieScene
