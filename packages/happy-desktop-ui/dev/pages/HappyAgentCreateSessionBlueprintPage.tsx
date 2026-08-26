@@ -1,30 +1,30 @@
 import type { ReactNode } from "react";
 import type { HappyAgentMenusSnapshot } from "happy-desktop-state";
 import {
-    HappyAgentCreateSessionDialog,
+    HappyAgentCreateSessionPage,
     type HappyAgentCreateSessionDestination,
-} from "../../src/HappyAgentCreateSessionDialog";
+} from "../../src/HappyAgentCreateSessionPage";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-238";
 
-/** Desktop canvas the dialog is reviewed on, and the Electron minimum window. */
-const FRAME = { height: "640px", width: "1000px" };
-const MINIMUM_WINDOW = { height: "480px", width: "720px" };
+/** The content region this surface is given in the 1280×800 design reference. */
+const REGION = { height: "640px", width: "1000px" };
+/** The same region in the 720×480 Electron minimum window, sidebar deducted. */
+const MINIMUM_REGION = { height: "480px", width: "470px" };
 
-/** The dialog is fixed to the window it is in, so a specimen gives it one. */
-function frame(children: ReactNode, size: { height: string; width: string } = FRAME) {
+/** The surface fills the window's content region, so a specimen gives it one. */
+function region(children: ReactNode, size: { height: string; width: string } = REGION) {
     return (
         <div
             style={{
                 background: "var(--groupped-background)",
                 border: "1px solid var(--surface-pressed-overlay)",
                 borderRadius: "8px",
+                display: "flex",
                 height: size.height,
                 overflow: "hidden",
-                position: "relative",
-                transform: "translateZ(0)",
                 width: size.width,
             }}
         >
@@ -92,20 +92,22 @@ const MENUS: HappyAgentMenusSnapshot = {
 };
 
 const LONG_TASK = [
-    "Move the create experience out of the workspace body and mount it once at the",
-    "application shell, so it answers from the conversation, Usage, Inbox, Notes and",
-    "Project routes alike.",
+    "Move the create experience out of the workspace body and give it the whole",
+    "content region, so choosing Create is going somewhere rather than opening a card",
+    "over wherever the reader happened to be standing.",
     "",
-    "Keep the draft while the surface behind it changes, clear it only once a session",
-    "has actually started, and prove the whole thing at 720×480 and 1280×800 in both",
-    "appearances before calling it done.",
+    "Keep the draft while the window goes elsewhere and comes back, clear it only once",
+    "a session has actually started, and prove the whole thing at 720×480 and 1280×800",
+    "in both appearances before calling it done.",
 ].join("\n");
 
 const HANDLERS = {
-    onClose: () => {},
+    botName: "",
+    kind: "task",
+    onBotNameChange: () => {},
     onDestinationSelect: () => {},
+    onKindSelect: () => {},
     onEffortChange: () => {},
-    onKeepOpenChange: () => {},
     onModelChange: () => {},
     onPermissionModeChange: () => {},
     onServiceTierChange: () => {},
@@ -113,31 +115,30 @@ const HANDLERS = {
     onTextChange: () => {},
 } as const;
 
-export function HappyAgentCreateSessionDialogPage() {
+export function HappyAgentCreateSessionBlueprintPage() {
     return (
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The window's global Create: the task, where it runs, and how the session that does it is configured."
-            title="HappyAgentCreateSessionDialog"
+            summary="The window's Create destination: an empty region holding the mark, the choice of task or bot, and whichever of the two is being written."
+            title="HappyAgentCreateSessionPage"
         >
             <Specimen
-                detail="640px · empty task · destination and configuration ready"
+                detail="640px column centred in the region · empty task · destination and configuration ready"
                 label="Opened"
                 number="01"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinationId="prj_happy"
                         destinations={DESTINATIONS}
-                        keepOpen={false}
                         menus={MENUS}
                         text=""
                     />,
                 )}
-                <DimensionRule label="modal large 640px · task field 160px" />
+                <DimensionRule label="640px column · 24px gutters · task field 160px" />
             </Specimen>
             <Specimen
                 detail="a written task in a worktree · the commit is live"
@@ -145,46 +146,43 @@ export function HappyAgentCreateSessionDialogPage() {
                 number="02"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinationId="wt_create"
                         destinations={DESTINATIONS}
-                        keepOpen
                         menus={MENUS}
                         text="Rebase onto origin/main and rerun the focused checks for the packages this touched."
                     />,
                 )}
             </Specimen>
             <Specimen
-                detail="a task longer than the field · the field scrolls, the card does not move"
+                detail="a task longer than the field · the field scrolls, the column does not move"
                 label="Long task"
                 number="03"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinationId="prj_happy"
                         destinations={DESTINATIONS}
-                        keepOpen={false}
                         menus={MENUS}
                         text={LONG_TASK}
                     />,
                 )}
             </Specimen>
             <Specimen
-                detail="the session is being started · the choices go inert and the commit says so, while the task keeps its caret and Cancel stays live"
+                detail="the session is being started · the choices go inert and the commit says so, while the task keeps its caret"
                 label="Starting"
                 number="04"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinationId="prj_happy"
                         destinations={DESTINATIONS}
-                        keepOpen={false}
                         menus={MENUS}
                         submitting
                         text="Add the missing provider row to the usage surface."
@@ -197,13 +195,12 @@ export function HappyAgentCreateSessionDialogPage() {
                 number="05"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinationId="wt_create"
                         destinations={DESTINATIONS}
                         error="The daemon could not prepare that workspace: git worktree add failed."
-                        keepOpen={false}
                         menus={MENUS}
                         text="Add the missing provider row to the usage surface."
                     />,
@@ -215,12 +212,11 @@ export function HappyAgentCreateSessionDialogPage() {
                 number="06"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinations={[]}
                         destinationsLoading
-                        keepOpen={false}
                         text=""
                     />,
                 )}
@@ -231,33 +227,31 @@ export function HappyAgentCreateSessionDialogPage() {
                 number="07"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinations={[]}
-                        keepOpen={false}
                         text="Look at why the daemon lists nothing."
                     />,
                 )}
             </Specimen>
             <Specimen
-                detail="the 720×480 Electron minimum · header and footer stay, the body scrolls · the field caps itself against the window rather than this frame, so in a real 480px window it gives up lines to keep the project in view"
+                detail="the content region of the 720×480 Electron minimum · the field caps itself against the window rather than this frame, so in a real 480px window it gives up lines to keep the project in view"
                 label="Minimum window"
                 number="08"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinationId="prj_happy"
                         destinations={DESTINATIONS}
-                        keepOpen={false}
                         menus={MENUS}
                         text="Reduce the panel's first paint to one layout pass."
                     />,
-                    MINIMUM_WINDOW,
+                    MINIMUM_REGION,
                 )}
-                <DimensionRule label="720 × 480 minimum window" />
+                <DimensionRule label="470 × 480 content region of the minimum window" />
             </Specimen>
             <Specimen
                 detail="known Happy Agent offline · task and choices stay editable · only starting the session is unavailable"
@@ -265,17 +259,86 @@ export function HappyAgentCreateSessionDialogPage() {
                 number="09"
                 stage="app"
             >
-                {frame(
-                    <HappyAgentCreateSessionDialog
+                {region(
+                    <HappyAgentCreateSessionPage
                         {...HANDLERS}
                         destinationId="prj_happy"
                         destinations={DESTINATIONS}
-                        keepOpen={false}
                         menus={MENUS}
                         submitDisabledReason="Happy Agent is offline. The draft is preserved."
                         text="Keep this task ready until the Happy Agent reconnects."
                     />,
                 )}
+            </Specimen>
+            <Specimen
+                detail="the other tab · a bot is made from a name alone, so the project and the model choices are not asked for · Enter alone commits it"
+                label="Bot · empty"
+                number="10"
+                stage="app"
+            >
+                {region(
+                    <HappyAgentCreateSessionPage
+                        {...HANDLERS}
+                        botName=""
+                        destinationId="prj_happy"
+                        destinations={DESTINATIONS}
+                        kind="bot"
+                        menus={MENUS}
+                        text=""
+                    />,
+                )}
+                <DimensionRule label="name field 36px · note 12px/18px" />
+            </Specimen>
+            <Specimen
+                detail="a named bot · the commit is live · the task written on the other tab is still there, untouched"
+                label="Bot · named"
+                number="11"
+                stage="app"
+            >
+                {region(
+                    <HappyAgentCreateSessionPage
+                        {...HANDLERS}
+                        botName="Nova"
+                        destinationId="prj_happy"
+                        destinations={DESTINATIONS}
+                        kind="bot"
+                        menus={MENUS}
+                        text="Rebase onto origin/main and rerun the focused checks."
+                    />,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the bot is being made · the name goes inert and the commit says so · and beside it, a name the machine refused"
+                label="Bot · creating and refused"
+                number="12"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {region(
+                        <HappyAgentCreateSessionPage
+                            {...HANDLERS}
+                            botName="Nova"
+                            destinations={DESTINATIONS}
+                            kind="bot"
+                            menus={MENUS}
+                            submitting
+                            text=""
+                        />,
+                        MINIMUM_REGION,
+                    )}
+                    {region(
+                        <HappyAgentCreateSessionPage
+                            {...HANDLERS}
+                            botName="Nova"
+                            destinations={DESTINATIONS}
+                            error="A bot called Nova already lives on this machine."
+                            kind="bot"
+                            menus={MENUS}
+                            text=""
+                        />,
+                        MINIMUM_REGION,
+                    )}
+                </div>
             </Specimen>
         </ComponentPage>
     );

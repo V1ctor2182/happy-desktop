@@ -1,8 +1,10 @@
+import { useId } from "react";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { FormRow } from "../../FormRow";
 import { Spinner } from "../../Spinner";
+import { TextField } from "../../TextField";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export type HappySocialStatus =
@@ -12,21 +14,41 @@ export type HappySocialStatus =
     | "connected"
     | "unavailable";
 
+export type HappySocialEnrollment =
+    | { readonly status: "inactive" }
+    | { readonly status: "loading" }
+    | {
+          readonly enrolling?: boolean;
+          readonly error?: string;
+          readonly status: "unenrolled";
+          readonly username: string;
+      }
+    | {
+          readonly displayName?: string;
+          readonly status: "enrolled";
+          readonly username: string;
+      }
+    | { readonly error: string; readonly status: "error" };
+
 export interface HappySocialSettingsProps {
     readonly authorizationCompleting?: boolean;
     readonly authorizationStarting?: boolean;
     readonly disconnecting?: boolean;
     readonly displayName?: string;
     readonly email?: string;
+    readonly enrollment: HappySocialEnrollment;
     readonly error?: string;
     readonly status: HappySocialStatus;
     readonly unavailable?: string;
     onConnect(): void;
     onDisconnect(): void;
+    onEnroll(): void;
+    onUsernameChange(value: string): void;
 }
 
 /** The Happy Social category: one daemon-owned identity and its session actions. */
 export function HappySocialSettings(props: HappySocialSettingsProps) {
+    const enrollmentUsernameId = `happy-social-username-${useId()}`;
     return (
         <HappyAgentSettingsSection
             description="Happy Agent owns this authentication and keeps its Happy Social session current."
@@ -77,6 +99,86 @@ export function HappySocialSettings(props: HappySocialSettingsProps) {
                 description={accountDescription(props)}
                 label="Happy Social account"
             />
+            {props.enrollment.status === "loading" ? (
+                <FormRow
+                    control={
+                        <Box className="happy-agent-settings__pending">
+                            <Spinner size={16} />
+                            <span>Checking…</span>
+                        </Box>
+                    }
+                    description="Reading the public profile linked to this account"
+                    label="Social username"
+                />
+            ) : props.enrollment.status === "unenrolled" ? (
+                <form
+                    className="happy-social-enrollment"
+                    data-happy-desktop-ui="happy-social-enrollment"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        props.onEnroll();
+                    }}
+                >
+                    <FormRow
+                        control={
+                            <Box className="happy-social-enrollment__controls">
+                                <TextField
+                                    autoComplete="username"
+                                    autoFocus
+                                    className="happy-social-enrollment__field"
+                                    disabled={
+                                        props.unavailable !== undefined ||
+                                        props.enrollment.enrolling
+                                    }
+                                    error={props.enrollment.error}
+                                    fullWidth
+                                    id={enrollmentUsernameId}
+                                    name="happy-social-username"
+                                    onValueChange={props.onUsernameChange}
+                                    placeholder="steve"
+                                    required
+                                    size="medium"
+                                    value={props.enrollment.username}
+                                />
+                                <Button
+                                    disabled={
+                                        props.unavailable !== undefined ||
+                                        props.enrollment.username.trim() === ""
+                                    }
+                                    loading={props.enrollment.enrolling}
+                                    size="medium"
+                                    type="submit"
+                                    variant="primary"
+                                >
+                                    Continue
+                                </Button>
+                            </Box>
+                        }
+                        description="Choose the @username people will use to find you. It cannot be changed later."
+                        htmlFor={enrollmentUsernameId}
+                        label="Choose a username"
+                        layout="stacked"
+                    />
+                </form>
+            ) : props.enrollment.status === "enrolled" ? (
+                <FormRow
+                    control={
+                        <span className="happy-social-enrollment__username">
+                            @{props.enrollment.username}
+                        </span>
+                    }
+                    description={
+                        props.enrollment.displayName
+                            ? `${props.enrollment.displayName} is visible to people you connect with`
+                            : "Visible to people you connect with"
+                    }
+                    label="Social username"
+                />
+            ) : props.enrollment.status === "error" ? (
+                <Banner tone="danger" title="Social profile unavailable">
+                    {props.enrollment.error}
+                </Banner>
+            ) : null}
         </HappyAgentSettingsSection>
     );
 }

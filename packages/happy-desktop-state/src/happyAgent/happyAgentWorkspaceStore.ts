@@ -324,6 +324,13 @@ const HAPPY_AGENT_WORKSPACE_FILE_TREE_MAX_CONCURRENT_LOADS = 3;
 /** Bounds speculative file reads started by pointer and keyboard intent. */
 const HAPPY_AGENT_FILE_PREPROCESS_MAX_CONCURRENT_LOADS = 2;
 /**
+ * How often a workspace that stays on screen asks the host again which
+ * applications a project can be opened in. Installing or removing one is rare
+ * and nothing announces it, so this is slow enough to be free and quick enough
+ * that an editor installed this morning is in the menu this afternoon.
+ */
+const OPEN_IN_TARGETS_REFRESH_MS = 60 * 60 * 1_000;
+/**
  * The renderer/UI uses the same ceiling when deciding whether to retain a
  * Pierre AST. A changed document at or above it must already carry the
  * daemon's authoritative base hash; it is never scanned just to make a cache
@@ -630,18 +637,37 @@ export interface HappyAgentProjectCloneSnapshot {
 export const HAPPY_AGENT_PANEL_FILE_VIEW_ID = "file";
 
 /**
+ * What the Create surface is currently making.
+ *
+ * A task is work in a project that ends: a session, its first message, and the
+ * checkout it runs in. A bot is a colleague that does not end: one permanent
+ * conversation with a folder of its own, made from a name alone. They are the
+ * two things this machine can be asked for, so they are one closed choice
+ * rather than two surfaces.
+ */
+export type HappyAgentCreateKind = "task" | "bot";
+
+/**
  * A session being composed before it exists. Everything a first message needs —
  * where to run, how it is configured, and what to say — decided in one place
  * rather than by starting a session and then correcting it.
+ *
+ * The bot half of the surface is held here too, for the same reason: what is
+ * being written is one draft with two forms, and switching between them must
+ * not throw away the other one.
  */
 export interface HappyAgentCreateSnapshot {
+    /** Which of the two things the surface is currently making. */
+    readonly kind: HappyAgentCreateKind;
+    /** The bot's display name. A blank one is not a bot, and cannot be created. */
+    readonly botName: string;
     /** The group it will start in; the last one used, until changed. */
     readonly groupId?: HappyAgentGroupId;
     /**
      * Every project and worktree it could start in, in list order. Kept current
-     * while the dialog is open: it may be opened from a route that has not read
-     * the machine's projects yet, and a list frozen at that moment would never
-     * offer anywhere to run.
+     * while the surface is materialized: it may be reached from a route that has
+     * not read the machine's projects yet, and a list frozen at that moment
+     * would never offer anywhere to run.
      */
     readonly groups: readonly HappyAgentCreateGroupOption[];
     /**
@@ -653,15 +679,9 @@ export interface HappyAgentCreateSnapshot {
     readonly text: string;
     /** Model, effort, access mode, tier, plus the menus behind them. */
     readonly draft?: HappyAgentSessionDraftSnapshot;
-    /**
-     * Whether the dialog stays open after starting a session, cleared and ready
-     * for the next one. Someone filing several tasks at once should not have to
-     * reopen it between them.
-     */
-    readonly keepOpen: boolean;
-    /** True while a session is being started; the dialog stays up and inert. */
+    /** True while a session or bot is being made; the surface stays up and inert. */
     readonly submitting: boolean;
-    /** A failed start, said in the dialog rather than thrown away. */
+    /** A failed start, said on the surface rather than thrown away. */
     readonly error?: string;
 }
 
@@ -1153,31 +1173,32 @@ export interface HappyAgentWorkspaceStore {
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
     /**
-     * Opens the create dialog, on the group last created in — or the one given,
-     * when it is being opened from somewhere that already knows where. A task
-     * that was written and then dismissed is offered back: closing the dialog is
-     * how it is put down, not how it is thrown away.
+     * Materializes the Create surface, on the group last created in — or the one
+     * given, when it is asked for from somewhere that already knows where. A task
+     * written on a previous visit is offered back: leaving the surface is how a
+     * draft is put down, not how it is thrown away, and only a session actually
+     * starting clears it.
      */
     createOpen(groupId?: HappyAgentGroupId): void;
+    /** Chooses whether the surface is making a task or a bot. */
+    createKindUpdate(kind: HappyAgentCreateKind): void;
     /** Chooses which project or worktree the session will start in. */
     createGroupUpdate(groupId: HappyAgentGroupId): void;
     /** Edits the first message. */
     createTextUpdate(text: string): void;
+    /** Edits the name the bot will be created with. */
+    createBotNameUpdate(name: string): void;
     /** Chooses how the session will be configured. */
     createModelUpdate(input: HappyAgentModelSelection): void;
     createEffortUpdate(effort?: HappyAgentThinkingLevel): void;
     createPermissionModeUpdate(permissionMode: HappyAgentPermissionMode): void;
     createServiceTierUpdate(serviceTier?: HappyAgentServiceTier): void;
-    /** Chooses whether the dialog stays open for another task. */
-    createKeepOpenUpdate(keepOpen: boolean): void;
     /**
-     * Closes the dialog, keeping what was typed for the next time it is opened.
-     * The task is the only copy of a piece of writing, and the dialog can be
-     * dismissed by a stray click on the backdrop, so it is put down rather than
-     * destroyed; starting the session is what clears it.
+     * Makes whatever the surface currently is: a task starts its session and
+     * sends the first message, a bot is created from its name. Either way the
+     * conversation it produced is reported through `conversationOpenRequested`,
+     * so the window lands in what it just made.
      */
-    createCancel(): void;
-    /** Starts the session and sends the first message. */
     createSubmit(): Promise<void>;
     /** Starts renaming a project, or one of its worktrees, from its current name. */
     renameOpen(projectId: HappyAgentProjectId, worktreeId: HappyAgentWorktreeId | undefined): void;
@@ -1346,12 +1367,15 @@ export function happyAgentWorkspaceStoreCreate(
     // An addressed group with nothing in it yet: its composer is live, and the
     // first thing sent into it is what creates the conversation.
     let openGroupId: HappyAgentGroupId | undefined;
-    /* Read once, lazily, when a surface first asks. Detecting installed
-       applications costs a process launch or several, and most sessions never
-       open the menu. */
+    /* Read while a surface is on screen. Detecting installed applications costs
+       a process launch or several, so it is not read at construction; but which
+       applications exist changes whenever the reader installs or removes one,
+       and nothing announces that, so it is re-read on a slow cadence rather
+       than remembered for the life of the window. */
     let openInTargets: readonly HappyAgentOpenInTarget[] = [];
     let openInRecent: HappyAgentOpenInTarget | undefined;
-    let openInTargetsRequested = false;
+    let openInTargetsReading = false;
+    let openInTargetsTimer: ReturnType<typeof setInterval> | undefined;
     let rename: HappyAgentRenameSnapshot | undefined;
     let projectArchive: HappyAgentProjectArchiveSnapshot | undefined;
     let groupArchive: HappyAgentGroupArchiveSnapshot | undefined;
@@ -1464,16 +1488,16 @@ export function happyAgentWorkspaceStoreCreate(
     /** The group the last created session started in, offered as the next default. */
     let lastCreateGroupId: HappyAgentGroupId | undefined;
     /**
-     * A task written into the dialog and then put down. The dialog closes on a
-     * stray backdrop click as readily as on Cancel, so the writing outlives the
-     * surface it was written on; starting the session is what clears it.
+     * A task written on the Create surface and then put down. The surface is
+     * released with the machine it belongs to, so the writing outlives it;
+     * starting the session is what clears it.
      */
     let createTextKept = "";
     /**
-     * Counts the dialogs that have been opened. A start is slow enough to be
-     * dismissed and a second one opened while it is still in flight, and the
-     * one that comes back must not close, clear, or put its error on a dialog
-     * someone is now writing in.
+     * Counts the Create surfaces that have been materialized. A start is slow
+     * enough for the surface to be released and another materialized while it is
+     * still in flight, and the one that comes back must not clear, or put its
+     * error on, a surface someone is now writing in.
      */
     let createInstance = 0;
     let workspaceFiles: HappyAgentWorkspaceFiles | undefined;
@@ -3512,13 +3536,13 @@ export function happyAgentWorkspaceStoreCreate(
         unsubscribeCreateDraft = undefined;
         createDraft = undefined;
         // Invalidates a catalog read still in flight, so its draft cannot attach
-        // itself to a dialog that has since been closed.
+        // itself to a surface that has since been released.
         createDraftGeneration += 1;
     };
 
     /**
-     * Attaches the model/effort/access draft to the open dialog from the one
-     * daemon-lifetime model store.
+     * Attaches the model/effort/access draft to the materialized Create surface
+     * from the one daemon-lifetime model store.
      */
     const createDraftEnsure = (): void => {
         createRelease();
@@ -3614,16 +3638,16 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
-     * Reads which applications this host can open a project in, once. Detecting
-     * them costs process launches, and the answer is a property of the machine
-     * rather than of anything being opened, so a failure only clears the flag —
-     * a host that arrives later can still be asked again.
+     * Reads which applications this host can open a project in. Detecting them
+     * costs process launches, so only one read is ever in flight; a failure
+     * simply clears that flag, and the next start or tick asks again.
      */
-    const openInTargetsEnsure = (): void => {
-        if (openInTargetsRequested) return;
-        openInTargetsRequested = true;
+    const openInTargetsRefresh = (): void => {
+        if (openInTargetsReading) return;
+        openInTargetsReading = true;
         void client.openInTargetsRead().then(
             (result) => {
+                openInTargetsReading = false;
                 if (disposed) return;
                 openInTargets = result.targets;
                 // What was opened last is the host's memory of this reader's
@@ -3637,7 +3661,7 @@ export function happyAgentWorkspaceStoreCreate(
                 recompute();
             },
             () => {
-                openInTargetsRequested = false;
+                openInTargetsReading = false;
             },
         );
     };
@@ -3945,8 +3969,13 @@ export function happyAgentWorkspaceStoreCreate(
         }
         // Which applications exist is a property of the host, not of anything
         // being opened, so it is read once the workspace is actually on screen
-        // rather than when it is constructed.
-        openInTargetsEnsure();
+        // rather than when it is constructed — and read again on every start,
+        // because an application installed since the last one belongs in the
+        // menu. There is no channel that announces an install, so a surface
+        // left open all day polls for it; the cadence is hours rather than
+        // seconds because that is how often the answer can change.
+        openInTargetsRefresh();
+        openInTargetsTimer ??= setInterval(openInTargetsRefresh, OPEN_IN_TARGETS_REFRESH_MS);
         recompute();
     };
 
@@ -3956,6 +3985,12 @@ export function happyAgentWorkspaceStoreCreate(
         acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
+        // A workspace nobody is looking at does not go asking the host what is
+        // installed; the next start reads it fresh anyway.
+        if (openInTargetsTimer !== undefined) {
+            clearInterval(openInTargetsTimer);
+            openInTargetsTimer = undefined;
+        }
         // The catalog is no longer being watched, so what was last known about
         // it is no longer a basis for reporting anything. Confirmation is
         // rebuilt from the reads taken after this store is on screen again,
@@ -4916,11 +4951,11 @@ export function happyAgentWorkspaceStoreCreate(
             return client.openIn(groupId, target);
         },
         createOpen(groupId) {
-            // Asking for the dialog while it is already open — a second Create,
-            // or the row action behind it — must not throw away what is being
-            // written into it. Only the addressed group is taken from the
-            // second ask, since that is the one thing it can be more specific
-            // about than the dialog already is.
+            // Asking for the surface while it is already materialized — coming
+            // back to it, or the row action behind it — must not throw away what
+            // is being written into it. Only the addressed group is taken from
+            // the second ask, since that is the one thing it can be more
+            // specific about than the surface already is.
             if (create) {
                 if (groupId !== undefined && groupId !== create.groupId) {
                     create = { ...create, groupId };
@@ -4932,17 +4967,28 @@ export function happyAgentWorkspaceStoreCreate(
             const chosen = groupId ?? createGroupDefault(groups);
             createInstance += 1;
             create = {
+                botName: "",
                 ...(chosen ? { groupId: chosen } : {}),
                 groups,
                 groupsLoading: createGroupsLoading(),
+                // A task is what this surface is for nearly every time it is
+                // reached; a bot is the deliberate other choice.
+                kind: "task",
                 // What was written the last time this was put down without
                 // starting anything. Usually empty; only a session actually
                 // starting clears it.
                 text: createTextKept,
-                keepOpen: false,
                 submitting: false,
             };
             createDraftEnsure();
+            recompute();
+        },
+        createKindUpdate(kind) {
+            if (!create || create.submitting || create.kind === kind) return;
+            // Both halves of the draft are kept. Switching to look at the other
+            // one is not abandoning this one, and an error belongs to the thing
+            // that failed rather than to the surface, so it goes with the switch.
+            create = { ...create, kind, error: undefined };
             recompute();
         },
         createGroupUpdate(groupId) {
@@ -4955,62 +5001,67 @@ export function happyAgentWorkspaceStoreCreate(
             create = { ...create, text };
             recompute();
         },
+        createBotNameUpdate(name) {
+            if (!create || create.submitting) return;
+            create = { ...create, botName: name };
+            recompute();
+        },
         createModelUpdate: (input) => createDraft?.modelUpdate(input),
         createEffortUpdate: (effort) => createDraft?.effortUpdate(effort),
         createPermissionModeUpdate: (mode) => createDraft?.permissionModeUpdate(mode),
         createServiceTierUpdate: (tier) => createDraft?.serviceTierUpdate(tier),
-        createKeepOpenUpdate(keepOpen) {
-            if (!create) return;
-            create = { ...create, keepOpen };
-            recompute();
-        },
-        createCancel() {
-            if (!create) return;
-            // Put down rather than thrown away: the backdrop and Escape close
-            // this as readily as Cancel does, and the task is the only copy of
-            // something the reader wrote.
-            createTextKept = create.text;
-            createRelease();
-            create = undefined;
-            recompute();
-        },
         async createSubmit() {
             const pending = create;
             if (!pending || pending.submitting) return;
+            const botName = pending.botName.trim();
             const text = pending.text.trim();
             const groupId = pending.groupId;
-            // A dialog with nothing to say and nowhere to run is not a session
-            // waiting to be started; it is an unfinished form.
-            if (text.length === 0 || groupId === undefined) return;
             const instance = createInstance;
+            // The one act this submit performs, or nothing at all. A surface
+            // with nothing to say and nowhere to run is not a session waiting to
+            // be started, and an unnamed bot is not a bot: both are unfinished
+            // forms, and an unfinished form is not a failure to report.
+            let commit: (() => Promise<void>) | undefined;
+            if (pending.kind === "bot") {
+                if (botName.length > 0)
+                    commit = async () => {
+                        // The bot's one conversation is where the reader wanted
+                        // to end up: it is what they will say the first thing to.
+                        const location = await list.botCreate(botName);
+                        if (instance !== createInstance) return;
+                        output({ type: "conversationOpenRequested", location });
+                        if (create) create = { ...create, botName: "", submitting: false };
+                    };
+            } else if (text.length > 0 && groupId !== undefined) {
+                commit = async () => {
+                    await groupSubmit(groupId, text, [], createDraft?.get().selection);
+                    lastCreateGroupId = groupId;
+                    // Released and materialized again while this was in flight:
+                    // the surface on screen is a different one, holding a task of
+                    // its own, and this start has nothing to say to it.
+                    if (instance !== createInstance) return;
+                    // The task has been filed, so there is nothing left to offer
+                    // back the next time this surface is reached — including when
+                    // it was released while the start was still in flight.
+                    createTextKept = "";
+                    // Cleared rather than released. The window follows the
+                    // session that just started, so what is left here is what
+                    // Create looks like when it is next arrived at: the same
+                    // project and the same configuration, ready for the next task.
+                    if (create) create = { ...create, text: "", submitting: false };
+                };
+            }
+            if (!commit) return;
             create = { ...pending, submitting: true, error: undefined };
             recompute();
             try {
-                await groupSubmit(groupId, text, [], createDraft?.get().selection);
-                lastCreateGroupId = groupId;
-                // Dismissed and opened again while this was in flight: the
-                // dialog on screen is a different one, holding a task of its
-                // own, and this start has nothing to say to it.
-                if (instance !== createInstance) return;
-                // The task has been filed, so there is nothing left to offer
-                // back the next time the dialog opens — including when it was
-                // dismissed while this was still in flight.
-                createTextKept = "";
-                if (create?.keepOpen) {
-                    // Cleared rather than reopened: the configuration and the
-                    // group are what someone filing several tasks wants to keep,
-                    // and only the task itself changes between them.
-                    create = { ...create, text: "", submitting: false };
-                } else {
-                    createRelease();
-                    create = undefined;
-                }
+                await commit();
             } catch (error) {
-                // The dialog stays open holding what was typed. It is the only
-                // copy of the task, and a session that failed to start is one
-                // the reader will want to try again rather than retype. A
-                // dialog opened since is a different task, and this failure is
-                // not its failure to report.
+                // The surface stays up holding what was typed. It is the only
+                // copy of the task or the name, and something that failed to be
+                // made is something the reader will want to try again rather
+                // than retype. A surface materialized since is a different
+                // draft, and this failure is not its failure to report.
                 if (instance !== createInstance) return;
                 if (create)
                     create = {

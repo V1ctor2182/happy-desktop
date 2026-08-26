@@ -12,6 +12,7 @@ import {
     type ReactNode,
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
+import { AvatarBrutalist } from "./AvatarBrutalist";
 import { compactCount, changeCountLabel } from "./countText";
 import { haptic } from "./haptics";
 import { CountBadge, KeyCap } from "./Badge";
@@ -71,6 +72,15 @@ export type SidebarItem = {
      * mark the reader picked outranks the one the caller fell back to.
      */
     emoji?: string;
+    /**
+     * Gives a `person`/`agent`/`project` row a generated brutalist mark derived
+     * from this string instead of an initials tile, so an entity that has no
+     * picture of its own still has a face the reader can pick out of the column.
+     * Supply the entity's own id — the bot's, the session's — and the mark
+     * survives every rename. A `imageUrl` outranks it, and so does `icon`: both
+     * are marks something chose, and this one is only ever a stand-in.
+     */
+    avatarId?: string;
     /** The row's glyph. A `person`/`agent`/`project` row paints it inside the avatar tile. */
     icon?: IconName;
     id: string;
@@ -135,6 +145,12 @@ export const SIDEBAR_ROW_HEIGHT = 32;
 export const SIDEBAR_ROW_GAP = 2;
 /** Width of the leading lane whose centre carries a tree stem. */
 export const SIDEBAR_LEADING_SLOT = 20;
+/**
+ * The box a row's identity mark occupies. It is the `xs` avatar's own edge, so
+ * a generated mark and an initials tile are the same square and a row swapping
+ * one for the other never moves its name.
+ */
+const SIDEBAR_AVATAR_SIZE = 20;
 /**
  * How far below the parent row's centre a stem begins, so it starts 2px under
  * that row's 16px glyph rather than at the row's midline.
@@ -270,6 +286,12 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      * Renders the product logo instead of a custom title row.
      */
     brand?: boolean;
+    /**
+     * Whether the compose row is the place the window is currently showing.
+     * Create is a destination rather than a card thrown over one, so the row
+     * that leads there wears the same selection every other row does.
+     */
+    composeActive?: boolean;
     composeLabel?: string;
     footer?: ReactNode;
     /** Stable product context rendered between the 56px heading and scrollport. */
@@ -1043,6 +1065,35 @@ function SidebarRow({
             </span>
         );
     };
+    /*
+     * The face a `person`/`agent`/`project` row wears.
+     *
+     * A picture or a glyph is a mark something chose, and either says more than
+     * a hash of an id can, so both outrank the generated tile. It is the row
+     * with neither that reaches for it — a bot, say — because an initials plaque
+     * gives every such row the same grey square, and a column of faces is picked
+     * out by shape and color long before it is read by name. Both marks are the
+     * same box, so which one a row wears never moves its name.
+     */
+    const identityMark = () => {
+        const generated =
+            item().imageUrl === undefined && item().icon === undefined
+                ? item().avatarId
+                : undefined;
+        if (generated !== undefined)
+            return <AvatarBrutalist id={generated} size={SIDEBAR_AVATAR_SIZE} />;
+        return (
+            <Avatar
+                icon={item().icon}
+                imageUrl={item().imageUrl}
+                initials={item().initials ?? item().label.slice(0, 1).toUpperCase()}
+                online={item().kind === "person" ? item().online : undefined}
+                size="xs"
+                tone={item().tone}
+                type={item().kind === "agent" || item().kind === "project" ? "agent" : "human"}
+            />
+        );
+    };
     const ariaKeyShortcuts = () =>
         [
             props.shortcutActive ? props.shortcut?.aria : undefined,
@@ -1136,19 +1187,7 @@ function SidebarRow({
                     ) : !showsLeadingSlot(item()) ? null : item().kind === "person" ||
                       item().kind === "agent" ||
                       item().kind === "project" ? (
-                        <Avatar
-                            icon={item().icon}
-                            imageUrl={item().imageUrl}
-                            initials={item().initials ?? item().label.slice(0, 1).toUpperCase()}
-                            online={item().kind === "person" ? item().online : undefined}
-                            size="xs"
-                            tone={item().tone}
-                            type={
-                                item().kind === "agent" || item().kind === "project"
-                                    ? "agent"
-                                    : "human"
-                            }
-                        />
+                        identityMark()
                     ) : item().emoji !== undefined ? (
                         /* The character the reader chose, in a fixed square the
                            same size as the glyph lane beside it, so a row whose
@@ -1347,6 +1386,7 @@ export function Sidebar(props: SidebarProps) {
         "brand",
         "bodyAccessory",
         "className",
+        "composeActive",
         "composeLabel",
         "footer",
         "headerAccessory",
@@ -1994,7 +2034,7 @@ export function Sidebar(props: SidebarProps) {
                 >
                     {local.onCompose ? (
                         <SidebarRow
-                            active={false}
+                            active={local.composeActive === true}
                             className="happy-sidebar__compose"
                             item={{
                                 icon: "plus",

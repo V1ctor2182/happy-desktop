@@ -1,5 +1,6 @@
 import type {
     Agent,
+    Bot,
     HappyAgentClient,
     HappyAgentEvent,
     MessageBlock,
@@ -790,6 +791,17 @@ export interface HappyAgentConnection {
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
+    /**
+     * Creates a bot, its dedicated workspace, and its one agent, and answers
+     * with the bot itself.
+     *
+     * A promise rather than a named mutation, because nothing here can be named
+     * in advance: the daemon derives the folder name and makes the one agent
+     * that *is* the bot's conversation, and a caller opening the bot it just
+     * asked for needs both. The id is supplied so a repeated attempt creates
+     * the same bot rather than a second one.
+     */
+    createBot(name: string): Promise<Bot>;
     archiveBot(botId: string): MutationId;
     reorderBot(botId: string, afterId: string | null): MutationId;
     reorderProject(projectId: string, afterId: string | null): MutationId;

@@ -454,8 +454,69 @@ export function HappyAgentSettingsBlueprintPage() {
                     <HappySocialSettings
                         displayName="Steve Korshakov"
                         email="steve@example.com"
+                        enrollment={{
+                            displayName: "Steve Korshakov",
+                            status: "enrolled",
+                            username: "steve",
+                        }}
                         onConnect={noop}
                         onDisconnect={noop}
+                        onEnroll={noop}
+                        onUsernameChange={noop}
+                        status="connected"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Social enrollment: WorkOS authentication is complete and the public username is the next required choice"
+                label="Happy Agent settings — Happy Social enrollment"
+                number="01aa"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <HappySocialSettings
+                        displayName="Steve Korshakov"
+                        email="steve@example.com"
+                        enrollment={{ status: "unenrolled", username: "" }}
+                        onConnect={noop}
+                        onDisconnect={noop}
+                        onEnroll={noop}
+                        onUsernameChange={noop}
+                        status="connected"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Social enrollment: a refused username remains editable with the server answer beside the field"
+                label="Happy Agent settings — Happy Social enrollment refused"
+                number="01ab"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="profile"
+                    categories={categories}
+                    description={profileDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Profile"
+                >
+                    <HappySocialSettings
+                        displayName="Steve Korshakov"
+                        email="steve@example.com"
+                        enrollment={{
+                            error: "That username is already taken.",
+                            status: "unenrolled",
+                            username: "steve",
+                        }}
+                        onConnect={noop}
+                        onDisconnect={noop}
+                        onEnroll={noop}
+                        onUsernameChange={noop}
                         status="connected"
                     />
                 </HappyAgentSettingsShell>
@@ -475,8 +536,11 @@ export function HappyAgentSettingsBlueprintPage() {
                 >
                     <HappySocialSettings
                         authorizationCompleting
+                        enrollment={{ status: "inactive" }}
                         onConnect={noop}
                         onDisconnect={noop}
+                        onEnroll={noop}
+                        onUsernameChange={noop}
                         status="authorizing"
                     />
                 </HappyAgentSettingsShell>
@@ -495,8 +559,11 @@ export function HappyAgentSettingsBlueprintPage() {
                     title="Profile"
                 >
                     <HappySocialSettings
+                        enrollment={{ status: "inactive" }}
                         onConnect={noop}
                         onDisconnect={noop}
+                        onEnroll={noop}
+                        onUsernameChange={noop}
                         status="authorizing"
                     />
                 </HappyAgentSettingsShell>
@@ -515,9 +582,12 @@ export function HappyAgentSettingsBlueprintPage() {
                     title="Profile"
                 >
                     <HappySocialSettings
+                        enrollment={{ status: "inactive" }}
                         error="Happy Agent could not complete Happy Social authentication."
                         onConnect={noop}
                         onDisconnect={noop}
+                        onEnroll={noop}
+                        onUsernameChange={noop}
                         status="disconnected"
                     />
                 </HappyAgentSettingsShell>
@@ -740,8 +810,15 @@ export function HappyAgentSettingsBlueprintPage() {
                     <HappySocialSettings
                         displayName="Steve Korshakov"
                         email="steve@example.com"
+                        enrollment={{
+                            displayName: "Steve Korshakov",
+                            status: "enrolled",
+                            username: "steve",
+                        }}
                         onConnect={noop}
                         onDisconnect={noop}
+                        onEnroll={noop}
+                        onUsernameChange={noop}
                         status="connected"
                     />
                 </HappyAgentSettingsShell>

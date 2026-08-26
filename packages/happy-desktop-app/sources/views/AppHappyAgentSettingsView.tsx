@@ -3,6 +3,7 @@ import type {
     AppearanceStore,
     ExperimentsStore,
     HappyAgentInstructionsSnapshot,
+    HappyAgentCloudEnrollment,
     HappyAgentDebugLogSnapshot,
     HappyAgentSecurityPolicySnapshot,
     HappyAgentModelCatalog,
@@ -46,6 +47,7 @@ import {
     providerAccountName,
     type HappyAgentProviderRow,
     type HappyAgentSettingsCategory,
+    type HappySocialEnrollment,
 } from "happy-desktop-ui";
 import type { SelectOption } from "happy-desktop-ui";
 import { hostHappyAgent, type AppHappyAgentDirectoryStore } from "../AppHappyAgentView";
@@ -355,9 +357,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         profileStore.get,
         profileStore.get,
     );
-    // The account is read on the Profile category with the profile itself,
-    // because that is the category that shows it. Subscribing is what starts the
-    // read, so it is not asked for while another category is open.
+    // The connection keeps both identities synchronized. This category only
+    // observes their already-warm snapshots while it is visible.
     const cloudStore =
         (props.section === "profile" ? host?.session?.cloud?.() : undefined) ??
         happyAgentCloudStoreNoop;
@@ -457,6 +458,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const cloudDisplayName = cloud.user
         ? [cloud.user.firstName, cloud.user.lastName].filter(Boolean).join(" ") || undefined
         : undefined;
+    const socialEnrollment = socialEnrollmentProject(cloud.enrollment);
     return (
         <HappyAgentSettingsShell
             activeCategoryId={props.section}
@@ -560,12 +562,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         authorizationCompleting={cloud.authorizationCompleting}
                         authorizationStarting={cloud.authorizationStarting}
                         disconnecting={cloud.disconnecting}
+                        enrollment={socialEnrollment}
                         onConnect={() => {
                             if (happyAgentOnline()) cloudStore.cloudAccountConnect();
                         }}
                         onDisconnect={() => {
                             if (happyAgentOnline()) cloudStore.cloudAccountDisconnect();
                         }}
+                        onEnroll={() => {
+                            if (happyAgentOnline()) cloudStore.cloudProfileEnroll();
+                        }}
+                        onUsernameChange={(value) => cloudStore.cloudProfileUsernameUpdate(value)}
                         status={cloud.status}
                         {...(cloud.error ? { error: cloud.error.message } : {})}
                         {...(cloud.user
@@ -729,6 +736,32 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             )}
         </HappyAgentSettingsShell>
     );
+}
+
+function socialEnrollmentProject(enrollment: HappyAgentCloudEnrollment): HappySocialEnrollment {
+    switch (enrollment.status) {
+        case "inactive":
+        case "loading":
+            return enrollment;
+        case "unenrolled":
+            return {
+                enrolling: enrollment.enrolling,
+                ...(enrollment.error ? { error: enrollment.error.message } : {}),
+                status: "unenrolled",
+                username: enrollment.username,
+            };
+        case "enrolled": {
+            const displayName =
+                [enrollment.firstName, enrollment.lastName].filter(Boolean).join(" ") || undefined;
+            return {
+                ...(displayName ? { displayName } : {}),
+                status: "enrolled",
+                username: enrollment.username,
+            };
+        }
+        case "error":
+            return { error: enrollment.error.message, status: "error" };
+    }
 }
 
 /**

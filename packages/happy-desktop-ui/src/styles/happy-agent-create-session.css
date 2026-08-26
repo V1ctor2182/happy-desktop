@@ -1,15 +1,30 @@
 /*
- * C-238 HappyAgentCreateSessionDialog — the window's global "Create", inside the large
- * (640px) modal card.
+ * C-238 HappyAgentCreateSessionPage — the window's "Create", holding the whole
+ * content region.
  *
- * One column, three parts: the task, where it runs, and how it is configured.
- * The task is given the full 600px content lane and eight 20px reading lines,
- * because it is the thing being decided; the two rows under it are quiet
- * controls on the same lane, so nothing competes with what is being written.
- * The well, hairline, radius, focus ring, and placeholder are the same inset
- * treatment TextField and Select wear, so the biggest field in the system still
- * reads as one of its fields.
+ * The region is a scrollport with nothing in it but one 640px column standing in
+ * its middle: the task, where it runs, how it is configured, and the commit. The
+ * task is given the full lane and eight 20px reading lines, because it is the
+ * thing being decided; everything under it is a quiet control on the same lane,
+ * so nothing competes with what is being written. The well, hairline, radius,
+ * focus ring, and placeholder are the same inset treatment TextField and Select
+ * wear, so the biggest field in the system still reads as one of its fields.
  */
+
+.happy-agent-create-session-page {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* The scrollport itself, full-bleed: all spacing belongs to the column inside
+   it, which `margin: auto` centres on both axes and which pushes the scrollport
+   past the region only when the window is too short to hold it. */
+.happy-agent-create-session-page__viewport {
+    display: flex;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
 
 .happy-agent-create-session,
 .happy-agent-create-session * {
@@ -18,11 +33,113 @@
 
 .happy-agent-create-session {
     display: flex;
+    flex: 0 1 auto;
     flex-direction: column;
     gap: 16px;
+    margin: auto;
+    padding: 24px;
+    width: 100%;
+    max-width: 688px; /* 640px column inside the 24px gutters on either side. */
+    /*
+     * The task field's height, named once because two rules need the same
+     * number: the field is drawn at it, and the body reserves room for it. Eight
+     * 20px reading lines where the window can spare them, down to five where it
+     * cannot.
+     *
+     * The region would happily scroll instead, but then a short window would
+     * open on a field and a scrollbar with the project the session runs in below
+     * the fold — so the field gives up its lines before the choices under it
+     * give up their place. 454px is everything else the column is, measured: the
+     * 48px gutters, the 96px stage and 32px title under an 8px gap, the five
+     * 16px gaps, the 28px pick, the two 52px control rows, the 36px commit row,
+     * and the 22px well around the field.
+     */
+    --happy-agent-create-field-height: min(160px, max(100px, calc(100vh - 454px)));
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
+}
+
+/* ---- The mark and the title -------------------------------------------- */
+
+.happy-agent-create-session__header {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+/*
+ * The chick's stage. A fixed square, held whether the animation's worker runtime
+ * arrives or not: `LottieScene` draws nothing until it does, and the column's
+ * geometry must not depend on when that happens.
+ */
+.happy-agent-create-session__stage {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 96px;
+    height: 96px;
+}
+
+.happy-agent-create-session__title {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 32px;
+    letter-spacing: -0.2px;
+    text-align: center;
+}
+
+/* The choice of what is being made, centred under the title rather than
+   stretched: two words do not need the whole 640px lane. */
+.happy-agent-create-session__kinds {
+    display: flex;
+    flex: none;
+    justify-content: center;
+}
+
+/* ---- The draft ---------------------------------------------------------- */
+
+/*
+ * Whichever draft is on screen, drawn into one box that always keeps the taller
+ * one's height. A bot is a name and a sentence; a task is a field and two rows
+ * of choices — without the reserved room the mark, the title, the pick, and the
+ * commit would all jump by a couple of hundred pixels every time the tabs are
+ * used. The reservation follows the field rather than being a constant, so a
+ * short window shrinks both drafts by the same amount and they still agree.
+ */
+.happy-agent-create-session__body {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 16px;
+    /* The task draft: the field in its 22px well, then the two 52px control
+       rows, with the column's 16px gaps between them. */
+    min-height: calc(var(--happy-agent-create-field-height) + 158px);
+}
+
+/* ---- The bot ------------------------------------------------------------ */
+
+.happy-agent-create-session__bot {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-create-session__note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+    letter-spacing: 0;
 }
 
 /* ---- The task ---------------------------------------------------------- */
@@ -43,24 +160,15 @@
 }
 
 /*
- * Eight 20px reading lines. The height is fixed rather than grown from the
- * content so the card's geometry does not move under the writer, and a task
- * longer than the field scrolls inside it; the field itself is the scrollport,
- * so its own padding stays on the well around it.
- *
- * The cap is what a short window can spare. The modal body would happily scroll
- * instead, but then the smallest window would open on a field and a scrollbar,
- * with the project the session runs in below the fold — so the field gives up
- * its lines, down to five, before the choices under it give up their place.
- * 437px is everything else the card is: the overlay's gutters and clearance
- * (128), the header and footer rows (131), the body inset (24), and the two
- * control rows with their gaps and the well around the field (154).
+ * The height is taken rather than grown from the content, so the column's
+ * geometry does not move under the writer; a task longer than the field scrolls
+ * inside it, and the field itself is the scrollport, so its own padding stays on
+ * the well around it.
  */
 .happy-agent-create-session__input {
     flex: 1 1 auto;
     min-width: 0;
-    height: 160px;
-    max-height: max(100px, calc(100vh - 437px));
+    height: var(--happy-agent-create-field-height);
     margin: 0;
     padding: 0;
     overflow-y: auto;
@@ -142,23 +250,15 @@
     flex: 1.7 1 0;
 }
 
-/* ---- Footer ------------------------------------------------------------ */
+/* ---- The commit -------------------------------------------------------- */
 
-/* The footer holds a setting at one end and the commit at the other, so it
-   takes the whole action row rather than sitting inside its right alignment. */
-.happy-agent-create-session__footer {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    min-width: 0;
-}
-
+/* The chord sits beside the button rather than under the field: the two are one
+   act, and the row ends where the column does. */
 .happy-agent-create-session__actions {
     display: flex;
     flex: none;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
 }
 

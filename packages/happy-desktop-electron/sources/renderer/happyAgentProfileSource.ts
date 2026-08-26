@@ -7,7 +7,7 @@ import {
     UserError,
 } from "happy-desktop-state";
 
-const POLL_MS = 5_000;
+const RETRY_MS = 1_000;
 
 export interface HappyAgentProfileAdapter {
     readonly actions: HappyAgentProfileActions;
@@ -15,11 +15,19 @@ export interface HappyAgentProfileAdapter {
 }
 
 /**
- * Adapts the daemon's installation profile to the profile surface. The source
- * polls only while that surface has a subscriber.
+ * Adapts the daemon's installation profile to the profile surface. One
+ * bootstrap establishes the authoritative value, then the daemon's complete
+ * `profile.updated` replacements keep it current.
  */
 export function happyAgentProfileSourceCreate(client: HappyAgentClient): HappyAgentProfileAdapter {
-    let latestUpdatedAt = 0;
+    const subscribers = new Map<
+        (profile: HappyAgentProfile | undefined) => void,
+        (error: unknown) => void
+    >();
+    let active: AbortController | undefined;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let latest: happyAgentProtocol.Profile | undefined;
+    let initialized = false;
 
     const profileProject = (profile: happyAgentProtocol.Profile): HappyAgentProfile | undefined => {
         if (profile.email === null && profile.name === null) return undefined;
@@ -30,10 +38,69 @@ export function happyAgentProfileSourceCreate(client: HappyAgentClient): HappyAg
         };
     };
 
+    const profileAdopt = (profile: happyAgentProtocol.Profile, force = false): void => {
+        if (
+            initialized &&
+            !force &&
+            (profile.updatedAt < (latest?.updatedAt ?? 0) || profile.version === latest?.version)
+        )
+            return;
+        latest = profile;
+        initialized = true;
+        const projected = profileProject(profile);
+        for (const listener of subscribers.keys()) listener(projected);
+    };
+
+    const follow = async (controller: AbortController): Promise<void> => {
+        for (;;) {
+            const bootstrap = await client.getDesktopBootstrap({ signal: controller.signal });
+            if (controller.signal.aborted) return;
+            profileAdopt(bootstrap.profile, true);
+
+            let reconcile = false;
+            for await (const update of client.updates({
+                after: bootstrap.cursor,
+                signal: controller.signal,
+            })) {
+                if (update.kind === "state_lost") {
+                    reconcile = true;
+                    break;
+                }
+                if (update.kind === "daemon_started" && update.replaced) {
+                    reconcile = true;
+                    break;
+                }
+                if (update.kind === "event" && update.event.type === "profile.updated")
+                    profileAdopt(update.event.payload.profile);
+            }
+            if (controller.signal.aborted) return;
+            if (!reconcile) throw new Error("Happy Agent profile updates stopped.");
+        }
+    };
+
+    const sourceStart = (): void => {
+        if (active || subscribers.size === 0) return;
+        const controller = new AbortController();
+        active = controller;
+        void follow(controller)
+            .catch((error: unknown) => {
+                if (controller.signal.aborted) return;
+                for (const onError of subscribers.values()) onError(error);
+            })
+            .finally(() => {
+                if (active === controller) active = undefined;
+                if (!controller.signal.aborted && subscribers.size > 0)
+                    retry = setTimeout(() => {
+                        retry = undefined;
+                        sourceStart();
+                    }, RETRY_MS);
+            });
+    };
+
     return {
         actions: {
             async profileSave(input) {
-                const current = (await client.getProfile()).profile;
+                const current = latest ?? (await client.getProfile()).profile;
                 const updated = await client.updateProfile(
                     {
                         email: input.email,
@@ -42,7 +109,7 @@ export function happyAgentProfileSourceCreate(client: HappyAgentClient): HappyAg
                     },
                     { ifMatch: current.version },
                 );
-                latestUpdatedAt = Math.max(latestUpdatedAt, updated.profile.updatedAt);
+                profileAdopt(updated.profile);
                 const projected = profileProject(updated.profile);
                 if (projected === undefined)
                     throw new UserError(
@@ -53,37 +120,19 @@ export function happyAgentProfileSourceCreate(client: HappyAgentClient): HappyAg
         },
         source: {
             subscribe(listener, onError) {
+                subscribers.set(listener, onError);
+                if (initialized && latest) listener(profileProject(latest));
+                sourceStart();
                 let closed = false;
-                let loading = false;
-                let request: AbortController | undefined;
-
-                const load = (): void => {
-                    if (closed || loading) return;
-                    loading = true;
-                    request = new AbortController();
-                    void client.getProfile({ signal: request.signal }).then(
-                        ({ profile }) => {
-                            loading = false;
-                            if (closed) return;
-                            if (profile.updatedAt < latestUpdatedAt) return;
-                            latestUpdatedAt = profile.updatedAt;
-                            listener(profileProject(profile));
-                        },
-                        (error: unknown) => {
-                            loading = false;
-                            if (closed || request?.signal.aborted) return;
-                            onError(error);
-                        },
-                    );
-                };
-
-                load();
-                const timer = setInterval(load, POLL_MS);
                 return () => {
                     if (closed) return;
                     closed = true;
-                    clearInterval(timer);
-                    request?.abort();
+                    subscribers.delete(listener);
+                    if (subscribers.size > 0) return;
+                    active?.abort();
+                    active = undefined;
+                    if (retry) clearTimeout(retry);
+                    retry = undefined;
                 };
             },
         },

@@ -259,6 +259,22 @@ const chatFileRoute = createRoute({
 });
 
 /**
+ * Where a session is started on one machine. Arriving materializes the draft —
+ * the task written on a previous visit is offered back, because the store keeps
+ * it until a session actually starts — and the surface then holds the whole
+ * content region until the reader goes somewhere else or the new session takes
+ * them there.
+ */
+const sessionCreateRoute = createRoute({
+    component: HappyAgentCreateRoute,
+    getParentRoute: () => rootRoute,
+    loader: ({ context, params }) => {
+        happyAgentWorkspace(context, params.happyAgentId)?.createOpen();
+    },
+    path: "/create/$happyAgentId",
+});
+
+/**
  * One machine's inbox of agent questions. The Happy Agent is in the address because the
  * queue is that machine's — its agents are the ones waiting — so the window's
  * back and forward move between machines' inboxes rather than between two views
@@ -323,6 +339,7 @@ const routeTree = rootRoute.addChildren([
         chatFileRoute,
     ]),
     inboxRoute,
+    sessionCreateRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
     settingsSectionRoute,
@@ -338,6 +355,15 @@ function HappyAgentInboxRoute() {
 }
 
 /**
+ * The Create address renders the same window a conversation does: the shell and
+ * its sidebar stay, and only the content area changes, so starting a session is
+ * not leaving the workspace.
+ */
+function HappyAgentCreateRoute() {
+    return <HappyAgentWorkspaceLayout create />;
+}
+
+/**
  * The workbench address renders the same window a conversation does: the shell
  * and its sidebar stay, and only the content area changes.
  */
@@ -348,6 +374,7 @@ function HappyAgentBlueprintRoute() {
 function HappyAgentWorkspaceLayout(
     props: {
         blueprint?: boolean;
+        create?: boolean;
         inbox?: boolean;
     } = {},
 ) {
@@ -379,6 +406,7 @@ function HappyAgentWorkspaceLayout(
             {...(context.commandPalette ? { commandPalette: context.commandPalette } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
             {...(context.sidebarCollapse ? { sidebarCollapse: context.sidebarCollapse } : {})}
+            createOpen={props.create}
             inboxOpen={props.inbox}
             blueprintOpen={props.blueprint}
             // Offered only where the route exists, which is what puts the
@@ -386,6 +414,12 @@ function HappyAgentWorkspaceLayout(
             {...(import.meta.env.DEV
                 ? { onBlueprintOpen: () => void navigate({ to: "/blueprint" }) }
                 : {})}
+            onCreateOpen={() =>
+                void navigate({
+                    params: { happyAgentId: params.happyAgentId ?? happyAgentDefaultId(context) },
+                    to: "/create/$happyAgentId",
+                })
+            }
             onInboxOpen={() =>
                 void navigate({
                     params: { happyAgentId: params.happyAgentId ?? happyAgentDefaultId(context) },

@@ -323,6 +323,15 @@ export function happyAgentConnectionOpen(input: {
         terminalDriverCreate,
         terminalColorScheme: input.terminalColorScheme,
     });
+    // Identity is connection state, not Settings state. Keep both stores alive
+    // so bootstrap and profile events have already populated their snapshots by
+    // the time the Profile category asks to render them.
+    const cloudStore = client.cloud();
+    const profileStore = client.profile();
+    const identityKeepWarm = [
+        cloudStore.subscribe(() => undefined),
+        ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
+    ];
 
     const modelsLoad = (): void => {
         debugEntry({
@@ -350,13 +359,13 @@ export function happyAgentConnectionOpen(input: {
                     source: "catalog",
                 });
                 session = {
-                    cloud: () => client.cloud(),
+                    cloud: () => cloudStore,
                     connection: streamConnectionStoreCreate(agentConnection),
                     debugLog,
                     host: input.host,
                     happyIntegration: () => client.happyIntegration(),
                     models: client.models,
-                    profile: () => client.profile(),
+                    profile: () => profileStore,
                     providerUsage: client.providerUsage(),
                     providers: client.providers(),
                     workspace: happyAgentWorkspaceStoreCreate(client, {
@@ -437,6 +446,7 @@ export function happyAgentConnectionOpen(input: {
                 session.clock[Symbol.dispose]();
                 session = undefined;
             }
+            for (const unsubscribe of identityKeepWarm) unsubscribe();
             client[Symbol.dispose]();
             mutationListeners.clear();
             agentConnection.close();

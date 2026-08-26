@@ -21,6 +21,13 @@ export type HappyAgentRoute =
           readonly chatId: string;
       }
     | { readonly kind: "chats" }
+    /**
+     * Where a session is started. The machine is in the address because the
+     * projects it can run in are that machine's, so the window's back and
+     * forward move between machines' Create surfaces rather than between two
+     * views of one ambiguous form.
+     */
+    | { readonly kind: "create"; readonly happyAgentId: string }
     | {
           readonly kind: "file";
           readonly happyAgentId: string;
@@ -54,6 +61,8 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}/${part(route.chatId)}`;
         case "chats":
             return "/chats";
+        case "create":
+            return `/create/${part(route.happyAgentId)}`;
         case "file": {
             const parent = route.chatId ? `/${part(route.chatId)}` : "";
             return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}${parent}/file/${part(route.fileKind)}/${part(route.path)}`;
@@ -139,6 +148,10 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
                     : undefined;
             }
             return undefined;
+        case "create":
+            return first !== undefined && segments.length === 2
+                ? { kind: "create", happyAgentId: first }
+                : undefined;
         case "inbox":
             return first !== undefined && segments.length === 2
                 ? { kind: "inbox", happyAgentId: first }
@@ -178,6 +191,10 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         }
         case "chats":
             return { kind: "chats" };
+        case "create": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            return happyAgentId ? { kind: "create", happyAgentId } : undefined;
+        }
         case "file": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             const groupId = fieldOf(record, "groupId");

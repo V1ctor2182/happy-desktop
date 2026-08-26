@@ -2749,6 +2749,22 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         renameGroup(target, name) {
             return renameGroup(target, name);
         },
+        async createBot(name) {
+            // One id for the whole attempt: the daemon takes it as the bot's
+            // own id and as the mutation key, so a request repeated after a
+            // dropped answer settles on the bot that was already made.
+            const botId = nextId();
+            const { bot } = await client.createBot(
+                { id: botId, mutationId: botId, name },
+                { signal: rootController.signal },
+            );
+            groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));
+            // The same delta `bot.created` publishes. The event will arrive too
+            // and land on the identical record; announcing it here is what puts
+            // the bot in the catalog for the caller that is about to open it.
+            publishGroups([{ type: "bot_added", botId: bot.id, workspaceId: bot.workspaceId }]);
+            return bot;
+        },
         archiveBot(botId) {
             const mutationId = nextId();
             const bot = botOf(botId);

@@ -306,10 +306,10 @@ export {
     type HappyAgentProjectSettingsDialogProps,
 } from "./HappyAgentProjectSettingsDialog";
 export {
-    HappyAgentCreateSessionDialog,
+    HappyAgentCreateSessionPage,
     type HappyAgentCreateSessionDestination,
-    type HappyAgentCreateSessionDialogProps,
-} from "./HappyAgentCreateSessionDialog";
+    type HappyAgentCreateSessionPageProps,
+} from "./HappyAgentCreateSessionPage";
 export {
     HappyAgentProjectCloneDialog,
     type HappyAgentProjectCloneDialogProps,
@@ -558,6 +558,7 @@ export {
 } from "./pages/settings/HappyAgentGeneralSettings";
 export {
     HappySocialSettings,
+    type HappySocialEnrollment,
     type HappySocialSettingsProps,
     type HappySocialStatus,
 } from "./pages/settings/HappySocialSettings";

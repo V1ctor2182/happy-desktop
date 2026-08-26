@@ -309,6 +309,30 @@ const treatmentSections: SidebarSection[] = [
                 label: "Agent — photo avatar",
                 tone: "mint",
             },
+            {
+                avatarId: "bot-nova",
+                id: "kind-project-generated",
+                initials: "N",
+                kind: "project",
+                label: "Bot — generated avatar",
+            },
+            {
+                avatarId: "bot-atlas",
+                id: "kind-project-generated-busy",
+                initials: "A",
+                kind: "project",
+                label: "Bot — generated avatar, working",
+                status: "working",
+                unread: true,
+            },
+            {
+                avatarId: "bot-orion",
+                id: "kind-project-generated-photo",
+                imageUrl: PHOTO,
+                initials: "O",
+                kind: "project",
+                label: "Bot — picture outranks the generated mark",
+            },
             { id: "kind-action", kind: "action", label: "Action — muted plus" },
         ],
         label: "Row kinds",
@@ -1490,6 +1514,42 @@ export function SidebarPage() {
                                     placement === "trailing"
                                         ? "trailing · default · the delta steps left by one cell"
                                         : "leading · the mark takes the identity lane"
+                                }
+                            />
+                        </div>
+                    ))}
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Create is a destination, so the row that leads to it takes the same selection every other row does while the window is showing it. Beside it, the same row leading somewhere the window is not."
+                label="Compose row · active and idle"
+                number="09"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {[true, false].map((composeActive) => (
+                        <div
+                            key={composeActive ? "active" : "idle"}
+                            style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                        >
+                            <Frame height={220}>
+                                <Sidebar
+                                    activeItemId={composeActive ? "" : "react-electron-plugin"}
+                                    composeActive={composeActive}
+                                    composeLabel="Create"
+                                    data-testid={`compose-${composeActive ? "active" : "idle"}`}
+                                    onCompose={() => {}}
+                                    onItemSelect={() => {}}
+                                    sections={alignmentSections({ rows: 3, working: false })}
+                                    title="happy-desktop"
+                                />
+                            </Frame>
+                            <DimensionRule
+                                label={
+                                    composeActive
+                                        ? "showing Create · the row is lit and no project is"
+                                        : "showing a project · the row is a plain action"
                                 }
                             />
                         </div>

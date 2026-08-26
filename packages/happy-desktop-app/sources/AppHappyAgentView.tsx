@@ -122,7 +122,7 @@ import {
     fileNameCompare,
     type FileTreeExpansion,
     type FileTreeBuildEntry,
-    HappyAgentCreateSessionDialog,
+    HappyAgentCreateSessionPage,
     HappyAgentProjectCloneDialog,
     HappyAgentProjectSettingsDialog,
     HappyAgentSessionControls,
@@ -462,6 +462,10 @@ export interface AppHappyAgentViewProps {
      * them. Absent in a host whose settings surface has no sections of its own.
      */
     onSettingsSectionOpen?(section: string): void;
+    /** Whether the URL addresses the addressed Happy Agent's Create surface. */
+    createOpen?: boolean;
+    /** Addresses that surface. Absent in a host with nowhere to put it. */
+    onCreateOpen?(): void;
     /** Whether the URL addresses the addressed Happy Agent's inbox of agent questions. */
     inboxOpen?: boolean;
     /** Addresses that inbox. */
@@ -543,7 +547,14 @@ function botSidebarItem(bot: HappyAgentBot, titleShimmerEnabled: boolean): Sideb
         kind: "project",
         label: bot.name,
         labelShimmer: titleShimmerEnabled,
-        initials: bot.name.slice(0, 1).toUpperCase(),
+        // A bot without a picture wears the same generated mark a session tab
+        // does — a circle, hashed from the bot's own id — rather than the first
+        // letter of its name. A column of bots is picked out by shape and color
+        // long before it is read, an initials plaque gives every one of them the
+        // same grey square, and hashing the id rather than the name keeps the
+        // face the reader learned through every rename. A picture the bot
+        // actually has still outranks it.
+        avatarId: bot.id,
         ...(bot.avatar ? { imageUrl: bot.avatar.url } : {}),
         ...(bot.conversation.activity === "running"
             ? { status: "working" as const }
@@ -1606,6 +1617,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // lane as the rows beneath it — rather than leaving the window's
             // top-left corner empty.
             brand={desktop ? windowState.fullScreen : true}
+            composeActive={props.createOpen === true}
             composeLabel="Create"
             footer={
                 <SidebarFooter
@@ -1662,12 +1674,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     id: row.id,
                 });
             }}
-            // Create is the window's, not a screen's: the dialog is mounted
-            // beside whatever is showing, so this row answers from every route.
-            // It is offered only while there is a machine to start a session on,
-            // because a Create that opened nothing would be worse than no row.
-            {...(activeAvailability?.online === true && active?.session?.workspace
-                ? { onCompose: () => active.session?.workspace.createOpen() }
+            // Create is a place this window goes rather than a card thrown over
+            // wherever it already was: the row addresses it, the content region
+            // becomes it, and the row stays lit while it is showing. It is
+            // offered only while there is a machine to start a session on and
+            // somewhere to address, because a Create that opened nothing would
+            // be worse than no row.
+            {...(activeAvailability?.online === true &&
+            active?.session?.workspace &&
+            props.onCreateOpen
+                ? { onCompose: props.onCreateOpen }
                 : {})}
             // The section action adds a project to the Happy Agent named by that
             // section. Only a projects section offers one — a bots heading has
@@ -1886,6 +1902,24 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <>
                     {desktop ? <WindowDragRegion /> : null}
                     <BlueprintView />
+                </>
+            );
+
+        // Create belongs to the addressed machine — the projects a session can be
+        // started in are that machine's — so it is shown only while that machine
+        // has a workspace to answer through. There is deliberately nothing else
+        // on the surface: the task is the only thing being decided here.
+        if (props.createOpen && active?.session?.workspace)
+            return (
+                <>
+                    {desktop ? <WindowDragRegion /> : null}
+                    <HappyAgentCreateSurface
+                        happyAgentOnline={activeHappyAgentOnline}
+                        workspace={active.session.workspace}
+                        {...(activeAvailability?.refusal === undefined
+                            ? {}
+                            : { unavailable: activeAvailability.refusal })}
+                    />
                 </>
             );
 
@@ -4834,12 +4868,6 @@ function HappyAgentWindowDialogs(props: {
                 props.happyAgentOnline,
                 props.unavailable,
             )}
-            {happyAgentCreateDialog(
-                workspace.create,
-                props.workspace,
-                props.happyAgentOnline,
-                props.unavailable,
-            )}
             {workspace.projectClone ? (
                 <HappyAgentProjectCloneDialog
                     repository={workspace.projectClone.repository}
@@ -5069,20 +5097,31 @@ function happyAgentNamingDialog(
 }
 
 /**
- * Create, as the window's own surface. The store owns what is being written, so
- * this is only a projection of `workspace.create` into the shared dialog and its
- * callbacks back into the same store — including the task, which lives there so
- * that closing the dialog puts it down rather than destroying it.
+ * Create, as the whole content region. The store owns what is being written, so
+ * this is only a projection of `workspace.create` into the shared surface and
+ * its callbacks back into the same store — including the task, which lives there
+ * so that going elsewhere in the window puts the draft down rather than
+ * destroying it.
+ *
+ * The route addressing this surface is what materialized the draft, so a render
+ * without one is the frame after a session started and before the window has
+ * followed it into the new conversation.
  */
-function happyAgentCreateDialog(
-    create: HappyAgentWorkspaceSnapshot["create"],
-    store: HappyAgentWorkspaceStore,
-    happyAgentOnline: () => boolean,
-    unavailable?: string,
-): ReactNode {
+function HappyAgentCreateSurface(props: {
+    happyAgentOnline: () => boolean;
+    unavailable?: string;
+    workspace: HappyAgentWorkspaceStore;
+}) {
+    const create = useSyncExternalStore(
+        reactFrameSubscribe(props.workspace),
+        props.workspace.get,
+        props.workspace.get,
+    ).create;
     if (!create) return null;
+    const store = props.workspace;
     return (
-        <HappyAgentCreateSessionDialog
+        <HappyAgentCreateSessionPage
+            botName={create.botName}
             destinations={create.groups.map((group) => ({
                 displayPath: group.displayPath,
                 id: group.id,
@@ -5093,20 +5132,30 @@ function happyAgentCreateDialog(
             {...(create.groupId === undefined ? {} : { destinationId: create.groupId })}
             {...(create.draft ? { menus: create.draft.menus } : {})}
             {...(create.error === undefined ? {} : { error: create.error })}
-            keepOpen={create.keepOpen}
-            onClose={() => store.createCancel()}
+            kind={create.kind}
+            // The name is a controlled field for the same reason the task is.
+            onBotNameChange={(name) =>
+                reactFrameInputUpdate(store, () => store.createBotNameUpdate(name))
+            }
+            onKindSelect={(kind) => store.createKindUpdate(kind)}
             onDestinationSelect={(id) => store.createGroupUpdate(id as HappyAgentGroupId)}
             onEffortChange={(effort) => store.createEffortUpdate(effort)}
-            onKeepOpenChange={(keepOpen) => store.createKeepOpenUpdate(keepOpen)}
             onModelChange={(selection) => store.createModelUpdate(selection)}
             onPermissionModeChange={(mode) => store.createPermissionModeUpdate(mode)}
             onServiceTierChange={(tier) => store.createServiceTierUpdate(tier)}
             onSubmit={() => {
-                if (happyAgentOnline()) void store.createSubmit().catch(() => undefined);
+                if (props.happyAgentOnline()) void store.createSubmit().catch(() => undefined);
             }}
-            onTextChange={(text) => store.createTextUpdate(text)}
+            // The task is a controlled field, so its new value has to reach React
+            // inside the event that produced it; left in the frame queue, React
+            // restores the old value and takes the caret to the end of it.
+            onTextChange={(text) =>
+                reactFrameInputUpdate(store, () => store.createTextUpdate(text))
+            }
             submitting={create.submitting}
-            {...(unavailable === undefined ? {} : { submitDisabledReason: unavailable })}
+            {...(props.unavailable === undefined
+                ? {}
+                : { submitDisabledReason: props.unavailable })}
             text={create.text}
         />
     );

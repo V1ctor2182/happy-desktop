@@ -108,6 +108,32 @@
     line-height: 20px;
 }
 
+.happy-social-enrollment {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+}
+
+.happy-social-enrollment__controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy-social-enrollment__field {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+
+.happy-social-enrollment__username {
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-synthesis: none;
+    line-height: 20px;
+}
+
 .happy-agent-settings__agent-control {
     display: flex;
     align-items: center;
