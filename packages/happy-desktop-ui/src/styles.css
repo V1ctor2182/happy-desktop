@@ -67,7 +67,9 @@
 @import "./styles/modal-overlay.css";
 @import "./styles/compose-modal.css";
 @import "./styles/command-palette.css";
+@import "./styles/command-palette-results.css";
 @import "./styles/command-picker.css";
+@import "./styles/quick-actions.css";
 @import "./styles/lightbox.css";
 @import "./styles/form-row.css";
 @import "./styles/data-table.css";

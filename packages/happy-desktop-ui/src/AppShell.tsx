@@ -60,6 +60,18 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      */
     shortcutHints?: "display" | "interactive";
     /**
+     * A card shown in the middle of the window for as long as Command is held —
+     * what the reader could do next, on the same gesture that reveals the caps.
+     * It rides the existing hold: the same 500ms, the same boolean, the same
+     * exits, and no listener or timer of its own.
+     *
+     * The layer is pointer-transparent and decorative. Anything modal here —
+     * `role="dialog"`, `role="menu"`, a ModalOverlay — would read as a modal to
+     * `windowShortcutBlocked()` and switch off the held-Command detection that
+     * put it on screen. Pass `QuickActionsCard`, not a Modal.
+     */
+    shortcutHintsSurface?: ReactNode;
+    /**
      * Enables pointer/keyboard resize of the right inspector panel. When omitted the
      * panel keeps its existing `panelWidth`/clamp contract and renders no handle.
      */
@@ -316,6 +328,7 @@ export function AppShell(props: AppShellProps) {
         "sidebarExpandLabel",
         "sidebarResizeLabel",
         "shortcutHints",
+        "shortcutHintsSurface",
         "panelResizable",
         "onPanelWidthChange",
         "panelDefaultWidth",
@@ -760,6 +773,24 @@ export function AppShell(props: AppShellProps) {
                 a control that punches a hole in one has to come after it — the
                 same order the sidebar's own toggle already sits in. */}
                 {revealFloating ? reveal : null}
+                {/* The held-Command read-out. It hangs on the window rather than
+                in the layout because it covers the window, and it is mounted
+                only while the hold lasts — every way out of the gesture above
+                (chord, keyup, blur, pointerdown, tab hidden) takes it away with
+                it. It draws nothing and takes no room otherwise. */}
+                {shortcutHintsVisible && local.shortcutHintsSurface ? (
+                    <div
+                        className="happy-desktop-app-shell__shortcut-hints"
+                        data-happy-desktop-ui="app-shell-shortcut-hints"
+                    >
+                        <div
+                            className="happy-desktop-app-shell__shortcut-hints-layout"
+                            data-happy-desktop-ui="app-shell-shortcut-hints-layout"
+                        >
+                            {local.shortcutHintsSurface}
+                        </div>
+                    </div>
+                ) : null}
                 {/* The window's overlay lane. A modal-class surface written
                 deep in the product hangs here instead, so its z-index is
                 resolved against the window rather than against whatever

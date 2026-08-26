@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type {
     AppearanceStore,
+    CommandPaletteStore,
     ConversationEntry,
     ComposerSnapshot,
     ExperimentsStore,
@@ -45,6 +46,9 @@ import type {
     HappyAgentServiceTier,
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
+    HappyAgentSessionSummary,
+    ScrollbarVisibility,
+    ThemeMode,
     SubagentSummary,
     HappyAgentTerminalStore,
     HappyAgentThinkingLevel,
@@ -58,6 +62,7 @@ import type {
 import {
     HAPPY_AGENT_PANEL_FILE_VIEW_ID,
     agentAuthor,
+    commandPaletteStoreNoop,
     experimentsStoreNoop,
     happyAgentInboxStoreNoop,
     happyAgentNavigationOrderApply,
@@ -84,6 +89,11 @@ import {
     type MediaWindowOpener,
     Button,
     ChannelHeader,
+    CommandPalette,
+    CommandPaletteResults,
+    type CommandPaletteResultsRow,
+    type CommandPaletteResultsSection,
+    commandPaletteResultsRows,
     ContextMeter,
     ChangedFileDiff,
     ComposerFooterBar,
@@ -94,6 +104,7 @@ import {
     FileBrowser,
     FileEditor,
     FilePreview,
+    FormRow,
     type FilePreviewKind,
     filePreviewKind,
     Lightbox,
@@ -117,9 +128,13 @@ import {
     type HappyAgentUserInputAnswerMap,
     HappyAgentUsagePanel,
     PanelHeader,
+    QuickActionsCard,
+    type QuickActionsCardItem,
+    SegmentedControl,
     Sidebar,
     SidebarFooter,
     SidebarUpdateAction,
+    Switch,
     HappyAgentInboxPage,
     TabbedPane,
     TextField,
@@ -142,8 +157,20 @@ import {
     WorkspaceLifecycleLane,
     WorkspaceLifecycleNotice,
     type WorkspaceLifecyclePhase,
-    commandShortcut,
 } from "happy-desktop-ui";
+import { APP_SHORTCUTS } from "./appShortcuts";
+import {
+    COMMAND_PALETTE_PREVIEW_LIMIT,
+    commandPaletteIndexMove,
+    commandPaletteResults,
+    commandPaletteRowAt,
+    commandPaletteSuggestionRows,
+    type CommandPaletteCommand,
+    type CommandPaletteContext,
+    type CommandPaletteRow,
+    type CommandPaletteSettingRow,
+    type CommandPaletteTab,
+} from "./commandPaletteResults";
 import { openExternalLink } from "./externalLink";
 import { reactFrameInputUpdate, reactFrameSubscribe } from "./reactFrameSubscribe";
 import { BlueprintView } from "./views/BlueprintView";
@@ -352,6 +379,12 @@ export interface AppHappyAgentViewProps {
      * without this preference uses the current product default.
      */
     titleShimmer?: TitleShimmerStore;
+    /**
+     * What the command palette is showing and asking. A host that supplies none
+     * has no palette, and Command-K does nothing rather than opening a surface
+     * whose query nothing is keeping.
+     */
+    commandPalette?: CommandPaletteStore;
     /** Native or hosted-renderer update projected by the desktop host. */
     update?: AppHappyAgentUpdate;
     /** Applies the ready update. Absent in a plain browser surface. */
@@ -416,6 +449,11 @@ export interface AppHappyAgentViewProps {
     ): void;
     /** Opens the local settings destination from the pinned sidebar footer. */
     onSettingsOpen(): void;
+    /**
+     * Opens one settings category by id, as the palette's settings rows name
+     * them. Absent in a host whose settings surface has no sections of its own.
+     */
+    onSettingsSectionOpen?(section: string): void;
     /** Whether the URL addresses the addressed Happy Agent's inbox of agent questions. */
     inboxOpen?: boolean;
     /** Addresses that inbox. */
@@ -453,13 +491,6 @@ interface OpenGroup {
     readonly path: string;
 }
 
-const APP_SHORTCUTS = {
-    panelToggle: commandShortcut("j"),
-    panelToggleAlternate: commandShortcut("b", { alt: true }),
-    sessionCreate: commandShortcut("t"),
-    tabClose: commandShortcut("w"),
-    workspaceCreate: commandShortcut("n"),
-} as const;
 const PANEL_TOGGLE_HINT = {
     aria: `${APP_SHORTCUTS.panelToggle.aria} ${APP_SHORTCUTS.panelToggleAlternate.aria}`,
     caps: APP_SHORTCUTS.panelToggle.caps,
@@ -718,6 +749,9 @@ function rowOwnerFind(
 /** A group with no conversation has no transcript; the constant keeps the prop stable. */
 const NO_ENTRIES: readonly ConversationEntry[] = [];
 
+/** A window with no machine yet holds no projects; the constant keeps the prop stable. */
+const NO_PROJECTS: readonly HappyAgentProjectGroup[] = [];
+
 /** Resolves the selected preview against the current immutable conversation snapshot. */
 function previewToolFind(
     conversation: HappyAgentWorkspaceSnapshot["conversation"],
@@ -754,7 +788,10 @@ function sessionTabs(group: OpenGroup, titleShimmerEnabled: boolean): TabItem[] 
  * for follow in the order they arrived, so one opened this instant lands at the
  * end of the strip instead of appearing somewhere in the middle of it.
  */
-function tabsOrdered(items: readonly TabItem[], order: readonly string[]): TabItem[] {
+function tabsOrdered<Item extends { readonly id: string }>(
+    items: readonly Item[],
+    order: readonly string[],
+): Item[] {
     const remaining = new Map(items.map((item) => [item.id, item]));
     const placed = order.flatMap((id) => {
         const item = remaining.get(id);
@@ -1291,6 +1328,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         sidebarCollapseStore.get,
         sidebarCollapseStore.get,
     );
+    // The palette is opened from anywhere in the window, so the key that opens
+    // it is bound here rather than inside a workspace. Only whether it is open
+    // is read here: what it holds is the palette's own business, and reading
+    // the query at this level would re-render the whole window per keystroke.
+    const commandPaletteStore = props.commandPalette ?? commandPaletteStoreNoop;
+    const commandPaletteOpen = useSyncExternalStore(
+        commandPaletteStore.subscribe,
+        () => commandPaletteStore.get().open,
+        () => commandPaletteStore.get().open,
+    );
     const windowStateStore = props.windowState ?? happyAgentWindowStoreNoop;
     const windowState = useSyncExternalStore(
         windowStateStore.subscribe,
@@ -1590,6 +1637,45 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         />
     );
 
+    // What the palette and the held-Command card are both about. The update is
+    // offered only once it is downloaded and there is something to apply it
+    // with, which is the same test the sidebar's own update control makes.
+    const paletteSubject: HappyAgentPaletteSubject = {
+        chatId: props.chatId,
+        groupId: props.groupId,
+        happyAgentId: active?.id ?? props.happyAgentId,
+        online: activeAvailability?.online === true,
+        projects: active?.projects ?? NO_PROJECTS,
+        updateReady:
+            props.update?.status === "downloaded" && props.onUpdateApply
+                ? { action: props.update.action, version: props.update.version }
+                : undefined,
+        workspace: active?.session?.workspace,
+        workspaceCreateProjectId: workspaceCreateTarget?.projectId,
+    };
+    // The same suggestions the empty palette offers, on the gesture the reader
+    // already has for discovering chords. The shell mounts it only while
+    // Command is held, so this card's own reading of the workspace lasts
+    // exactly as long as the hold. A window with no palette shows no card: its
+    // footer promises ⌘K, and a promise nothing answers is worse than silence.
+    const paletteHints = !props.commandPalette ? undefined : active?.session?.workspace ? (
+        <HappyAgentQuickActionsSurface {...paletteSubject} workspace={active.session.workspace} />
+    ) : (
+        <HappyAgentQuickActions {...paletteSubject} facts={PALETTE_WORKSPACE_ABSENT} />
+    );
+    const paletteActions: HappyAgentPaletteActions = {
+        appearance: props.appearance,
+        experiments: experimentsStore,
+        happyAgentOnline: activeHappyAgentOnline,
+        onChatSelect: props.onChatSelect,
+        onFileSelect: props.onFileSelect,
+        onSettingsOpen: props.onSettingsOpen,
+        onSettingsSectionOpen: props.onSettingsSectionOpen,
+        onUpdateApply: props.onUpdateApply,
+        store: commandPaletteStore,
+        titleShimmer: titleShimmerStore,
+    };
+
     // Which screen the window is showing. It is a value rather than a set of
     // early returns because the window's own dialogs are mounted beside it: a
     // surface that answers on one route and not another is not a window-level
@@ -1704,12 +1790,32 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             <AppShell
                 sidebarCollapsible
                 shortcutHints="interactive"
+                shortcutHintsSurface={paletteHints}
                 windowControls={desktop}
                 windowFullScreen={windowState.fullScreen}
                 sidebar={sidebar}
             >
                 {routeContent()}
             </AppShell>
+            {/* Command-K belongs to the window rather than to a workspace: it is
+                offered on every route, including the ones no machine is behind.
+                It only opens. The dispatcher stands down while any dialog is
+                showing, so the palette's own key closes it from inside the card
+                and the two never fight over one chord.
+
+                A host that keeps no palette binds nothing: swallowing the chord
+                to do nothing with it is worse than leaving it to whatever else
+                the reader has bound Command-K to. */}
+            {props.commandPalette ? (
+                <WindowShortcuts
+                    actions={[
+                        {
+                            run: () => commandPaletteStore.paletteOpen(),
+                            shortcut: APP_SHORTCUTS.paletteOpen,
+                        },
+                    ]}
+                />
+            ) : null}
             {/* The window's own dialogs, mounted once beside whatever screen is
                 showing rather than inside one of them. Naming a row belongs to
                 the sidebar, and Create belongs to the window: both are reached
@@ -1727,8 +1833,541 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         : { unavailable: activeAvailability.refusal })}
                 />
             ) : null}
+            {/* The palette is mounted only while it is open, so nothing in the
+                window pays for a surface nobody has asked for, and its own
+                subscriptions — the workspace above all — start with it. */}
+            {commandPaletteOpen ? (
+                active?.session?.workspace ? (
+                    <HappyAgentCommandPaletteSurface
+                        {...paletteSubject}
+                        workspace={active.session.workspace}
+                        {...paletteActions}
+                    />
+                ) : (
+                    <HappyAgentCommandPalette
+                        {...paletteSubject}
+                        {...paletteActions}
+                        facts={PALETTE_WORKSPACE_ABSENT}
+                    />
+                )
+            ) : null}
         </>
     );
+}
+
+/**
+ * What the palette and its held-Command preview are both about: the machine on
+ * screen, where in it the reader is standing, and what this window could do
+ * from there. Both surfaces answer the same question, so neither is given its
+ * own idea of the subject.
+ */
+interface HappyAgentPaletteSubject {
+    happyAgentId: string;
+    projects: readonly HappyAgentProjectGroup[];
+    groupId?: string;
+    chatId?: string;
+    /** Whether the machine can be asked to do anything at this moment. */
+    online: boolean;
+    /** The project a new workspace would be made in, when there is one. */
+    workspaceCreateProjectId?: HappyAgentProjectId;
+    updateReady?: { readonly action: "refresh" | "restart"; readonly version?: string };
+    workspace?: HappyAgentWorkspaceStore;
+}
+
+/** The window acts the palette can commit to. */
+interface HappyAgentPaletteActions {
+    appearance: AppearanceStore;
+    experiments: ExperimentsStore;
+    titleShimmer: TitleShimmerStore;
+    store: CommandPaletteStore;
+    happyAgentOnline: () => boolean;
+    onChatSelect(happyAgentId: string, groupId: string | undefined, chatId?: string): void;
+    onFileSelect(
+        happyAgentId: string,
+        groupId: string,
+        chatId: string | undefined,
+        path: string,
+        kind: HappyAgentFileTabKind,
+    ): void;
+    onSettingsOpen(): void;
+    onSettingsSectionOpen?(section: string): void;
+    onUpdateApply?(): void;
+}
+
+/**
+ * The part of the offer only the open workspace can answer: which sessions it
+ * has closed, what its strip currently holds, whether it can take another chat,
+ * and which session each of its groups would resume.
+ */
+interface HappyAgentPaletteFacts {
+    readonly archivedSessions: readonly HappyAgentSessionSummary[];
+    readonly tabs: readonly CommandPaletteTab[];
+    readonly sessionCreateAvailable: boolean;
+    readonly groupResume?: ReadonlyMap<HappyAgentGroupId, HappyAgentSessionId>;
+}
+
+/**
+ * What a window with no workspace behind it can say. It offers no chats it
+ * would not be able to open and no creation it could not perform, which leaves
+ * the palette its workspaces, its settings, and the way into them.
+ */
+const PALETTE_WORKSPACE_ABSENT: HappyAgentPaletteFacts = {
+    archivedSessions: [],
+    sessionCreateAvailable: false,
+    tabs: [],
+};
+
+/** The open workspace's strip, sessions and files together in the reader's order. */
+function paletteTabs(
+    workspace: HappyAgentWorkspaceSnapshot,
+    openGroup: OpenGroup | undefined,
+): CommandPaletteTab[] {
+    if (!openGroup) return [];
+    return tabsOrdered<CommandPaletteTab>(
+        [
+            ...openGroup.conversations.map((summary) => ({
+                kind: "session" as const,
+                id: summary.id,
+                title: summary.title,
+            })),
+            ...workspace.fileTabs
+                .filter((tab) => tab.groupId === openGroup.id && tab.placement === "main")
+                .map((tab) => ({
+                    kind: "file" as const,
+                    id: tab.id,
+                    path: tab.path,
+                    fileKind: tab.kind,
+                    icon: fileTabIcon(tab.path, tab.kind),
+                })),
+        ],
+        workspace.tabOrder,
+    );
+}
+
+/**
+ * The workspace's answer, read once for whichever palette surface is showing.
+ *
+ * Whether another chat may be started here is the workspace's own rule, taken
+ * from the same three facts the workspace surface's own control reads, so the
+ * palette never offers a New chat that screen would have greyed out.
+ */
+function paletteFacts(
+    workspace: HappyAgentWorkspaceSnapshot,
+    groupId: string | undefined,
+    online: boolean,
+): HappyAgentPaletteFacts {
+    const rows = workspace.list.projects.type === "ready" ? workspace.list.projects.value : [];
+    const openGroup = openGroupFind(rows, groupId);
+    return {
+        archivedSessions: workspace.list.archivedSessions,
+        groupResume: workspace.groupResume,
+        sessionCreateAvailable:
+            online &&
+            openGroup?.create !== undefined &&
+            workspace.groupAccess.conversationRefusal === undefined &&
+            workspaceLifecyclePhase(openGroup.lifecycle) !== "creating",
+        tabs: paletteTabs(workspace, openGroup),
+    };
+}
+
+/**
+ * The palette over an open workspace. It exists to hold that one subscription:
+ * the workspace repaints as fast as a transcript does, and reading it here
+ * keeps those frames inside the palette instead of re-rendering the window
+ * around it. Frame-coalesced for the same reason the window's dialogs are.
+ */
+function HappyAgentCommandPaletteSurface(
+    props: HappyAgentPaletteSubject &
+        HappyAgentPaletteActions & { workspace: HappyAgentWorkspaceStore },
+) {
+    const workspace = useSyncExternalStore(
+        reactFrameSubscribe(props.workspace),
+        props.workspace.get,
+        props.workspace.get,
+    );
+    return (
+        <HappyAgentCommandPalette
+            {...props}
+            facts={paletteFacts(workspace, props.groupId, props.online)}
+        />
+    );
+}
+
+/** The same reading, for the held-Command card. */
+function HappyAgentQuickActionsSurface(
+    props: HappyAgentPaletteSubject & { workspace: HappyAgentWorkspaceStore },
+) {
+    const workspace = useSyncExternalStore(
+        reactFrameSubscribe(props.workspace),
+        props.workspace.get,
+        props.workspace.get,
+    );
+    return (
+        <HappyAgentQuickActions
+            {...props}
+            facts={paletteFacts(workspace, props.groupId, props.online)}
+        />
+    );
+}
+
+/** Everything the results are computed from, assembled once for either surface. */
+function paletteContext(
+    subject: HappyAgentPaletteSubject,
+    facts: HappyAgentPaletteFacts,
+): CommandPaletteContext {
+    return {
+        archivedSessions: facts.archivedSessions,
+        groupId: subject.groupId,
+        happyAgentId: subject.happyAgentId,
+        projects: subject.projects,
+        sessionCreateAvailable: facts.sessionCreateAvailable,
+        tabs: facts.tabs,
+        updateReady: subject.updateReady,
+        workspaceCreateAvailable:
+            subject.online &&
+            subject.workspace !== undefined &&
+            subject.workspaceCreateProjectId !== undefined,
+    };
+}
+
+/**
+ * What holding Command puts in the middle of the window: the rows the empty
+ * palette would offer, each wearing the chord that runs it.
+ *
+ * It is the same list, from the same transform, so the card is a preview of the
+ * palette rather than a second opinion about what matters. Rows the card cannot
+ * draw — a workspace's picture, a live settings control — are left out rather
+ * than approximated; suggestions produce none today.
+ */
+function HappyAgentQuickActions(
+    props: HappyAgentPaletteSubject & { facts: HappyAgentPaletteFacts },
+) {
+    const items = commandPaletteSuggestionRows(paletteContext(props, props.facts))
+        .slice(0, COMMAND_PALETTE_PREVIEW_LIMIT)
+        .flatMap((row): QuickActionsCardItem[] =>
+            row.kind !== "command" || row.glyph.kind === "avatar"
+                ? []
+                : [
+                      {
+                          id: row.id,
+                          title: row.title,
+                          ...(row.glyph.kind === "emphasis"
+                              ? { emphasis: row.glyph.emphasis }
+                              : { icon: row.glyph.name }),
+                          ...(row.shortcut ? { shortcut: row.shortcut } : {}),
+                      },
+                  ],
+        );
+    return <QuickActionsCard items={items} />;
+}
+
+/**
+ * The window's command palette: one query over everything this machine holds,
+ * and the settings it can change without going anywhere.
+ *
+ * The card owns its own focus, its Escape, and its ⌘K; the list owns nothing
+ * but drawing. What is left here is the middle: which rows are offered, which
+ * one Enter would run, and what running it does. The highlight is an index in
+ * the state store rather than local state, and the rows are recomputed from
+ * live snapshots on every render, so a session that finishes or a setting
+ * changed from its own row moves under the reader without being asked to.
+ */
+function HappyAgentCommandPalette(
+    props: HappyAgentPaletteSubject & HappyAgentPaletteActions & { facts: HappyAgentPaletteFacts },
+) {
+    const palette = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
+    const experiments = useSyncExternalStore(
+        props.experiments.subscribe,
+        props.experiments.get,
+        props.experiments.get,
+    );
+    const titleShimmer = useSyncExternalStore(
+        props.titleShimmer.subscribe,
+        props.titleShimmer.get,
+        props.titleShimmer.get,
+    );
+    const results = commandPaletteResults({
+        ...paletteContext(props, props.facts),
+        experimentalFeaturesEnabled: experiments.experimentalFeaturesEnabled,
+        query: palette.query,
+        scrollbarVisibility: appearance.scrollbarVisibility,
+        themeMode: appearance.mode,
+        titleShimmerEnabled: titleShimmer.titleShimmerEnabled,
+    });
+    const sections = results.sections.map(
+        (section): CommandPaletteResultsSection => ({
+            caption: section.label,
+            id: section.id,
+            rows: section.rows.map((row) => paletteResultsRow(row, props)),
+        }),
+    );
+    // The list's own flat order, so the index the reader arrows through and the
+    // order they are looking at cannot come apart.
+    const length = commandPaletteResultsRows(sections).length;
+
+    /** Runs one row. A settings row answers in place; anything else is a departure. */
+    const rowCommit = (index: number) => {
+        const row = commandPaletteRowAt(results, index);
+        if (!row) return;
+        if (row.kind === "setting") {
+            paletteSettingCommit(row, props);
+            return;
+        }
+        // The palette closes before the act rather than after it: navigation
+        // moves the window under it, and a surface that goes away as a result
+        // of what it did looks like it failed to.
+        props.store.paletteClose();
+        paletteCommandRun(row.command, props);
+    };
+
+    return (
+        <ModalOverlay onDismiss={() => props.store.paletteClose()} placement="top">
+            <CommandPalette
+                onClose={() => props.store.paletteClose()}
+                onQueryChange={(value) => props.store.queryUpdate(value)}
+                onSelectionCommit={() => rowCommit(palette.activeIndex)}
+                onSelectionMove={(direction) =>
+                    props.store.activeIndexUpdate(
+                        commandPaletteIndexMove(palette.activeIndex, direction, length),
+                    )
+                }
+                placeholder="Search chats, workspaces, and settings…"
+                query={palette.query}
+            >
+                <CommandPaletteResults
+                    activeIndex={palette.activeIndex}
+                    emptyDescription="Try a different search."
+                    emptyLabel="No results"
+                    label="Command palette results"
+                    onActiveIndexChange={(index) => props.store.activeIndexUpdate(index)}
+                    onSelect={(_id, index) => rowCommit(index)}
+                    sections={sections}
+                />
+            </CommandPalette>
+        </ModalOverlay>
+    );
+}
+
+/** One computed row as the list draws it: a command, or a settings row itself. */
+function paletteResultsRow(
+    row: CommandPaletteRow,
+    actions: HappyAgentPaletteActions,
+): CommandPaletteResultsRow {
+    if (row.kind === "setting")
+        return {
+            control: paletteSettingControl(row, actions),
+            description: row.description,
+            id: row.id,
+            kind: "control",
+            // The control is opaque to the list, so what it is called has to be
+            // given: the same words the hosted FormRow shows.
+            label: row.label,
+        };
+    return {
+        id: row.id,
+        kind: "command",
+        title: row.title,
+        ...(row.meta === undefined ? {} : { meta: row.meta }),
+        // The lane the computed row already decided: a glyph, the thing's own
+        // picture, or the product's mark for what kind of news this row is.
+        ...(row.glyph.kind === "icon"
+            ? { icon: row.glyph.name }
+            : row.glyph.kind === "emphasis"
+              ? { emphasis: row.glyph.emphasis }
+              : {
+                    avatar: {
+                        initials: row.glyph.initials,
+                        ...(row.glyph.imageUrl === undefined
+                            ? {}
+                            : { imageUrl: row.glyph.imageUrl }),
+                    },
+                }),
+        ...(row.shortcut ? { shortcut: row.shortcut } : {}),
+    };
+}
+
+/**
+ * A settings row, as the settings page itself renders it — the same `FormRow`,
+ * the same control, the same words, wired to the same store action. The row in
+ * the palette is that row, so changing it here is changing it there.
+ */
+function paletteSettingControl(
+    row: CommandPaletteSettingRow,
+    actions: HappyAgentPaletteActions,
+): ReactNode {
+    switch (row.setting) {
+        case "themeMode":
+            return (
+                <FormRow
+                    control={
+                        <SegmentedControl
+                            aria-label={row.label}
+                            onChange={(value) =>
+                                actions.appearance.appearanceSelect(value as ThemeMode)
+                            }
+                            segments={[...row.control.segments]}
+                            size="small"
+                            value={row.control.value}
+                        />
+                    }
+                    description={row.description}
+                    label={row.label}
+                />
+            );
+        case "scrollbarVisibility":
+            return (
+                <FormRow
+                    control={
+                        <SegmentedControl
+                            aria-label={row.label}
+                            onChange={(value) =>
+                                actions.appearance.scrollbarVisibilitySelect(
+                                    value as ScrollbarVisibility,
+                                )
+                            }
+                            segments={[...row.control.segments]}
+                            size="small"
+                            value={row.control.value}
+                        />
+                    }
+                    description={row.description}
+                    label={row.label}
+                />
+            );
+        case "titleShimmer":
+            return (
+                <FormRow
+                    control={
+                        <Switch
+                            aria-label={row.label}
+                            checked={row.control.checked}
+                            id={row.controlId}
+                            onChange={(checked) => actions.titleShimmer.titleShimmerUpdate(checked)}
+                            size="small"
+                        />
+                    }
+                    description={row.description}
+                    htmlFor={row.controlId}
+                    label={row.label}
+                />
+            );
+        case "experimentalFeatures":
+            return (
+                <FormRow
+                    control={
+                        <Switch
+                            aria-label={row.label}
+                            checked={row.control.checked}
+                            id={row.controlId}
+                            onChange={(checked) =>
+                                actions.experiments.experimentalFeaturesUpdate(checked)
+                            }
+                            size="small"
+                        />
+                    }
+                    description={row.description}
+                    htmlFor={row.controlId}
+                    label={row.label}
+                />
+            );
+    }
+}
+
+/**
+ * Enter on a settings row. It moves the setting to the value the row already
+ * carries and leaves the palette exactly where it was: the reader is looking at
+ * the thing they changed, and taking the window away would be the one answer
+ * they did not ask for.
+ */
+function paletteSettingCommit(row: CommandPaletteSettingRow, actions: HappyAgentPaletteActions) {
+    switch (row.setting) {
+        case "themeMode":
+            actions.appearance.appearanceSelect(row.control.next);
+            return;
+        case "scrollbarVisibility":
+            actions.appearance.scrollbarVisibilitySelect(row.control.next);
+            return;
+        case "titleShimmer":
+            actions.titleShimmer.titleShimmerUpdate(row.control.next);
+            return;
+        case "experimentalFeatures":
+            actions.experiments.experimentalFeaturesUpdate(row.control.next);
+            return;
+    }
+}
+
+/** What committing a row does, once the palette has stood down. */
+function paletteCommandRun(
+    command: CommandPaletteCommand,
+    props: HappyAgentPaletteSubject & HappyAgentPaletteActions & { facts: HappyAgentPaletteFacts },
+) {
+    switch (command.kind) {
+        case "chatOpen": {
+            if (!command.archived) {
+                props.onChatSelect(command.happyAgentId, command.groupId, command.chatId);
+                return;
+            }
+            // A closed session is asked of the host by id: it stopped listing
+            // the agent when it was archived, so it is restored before it is
+            // addressed — the same order the workspace's recents menu uses.
+            const workspace = props.workspace;
+            if (!workspace || !props.happyAgentOnline()) return;
+            void workspace
+                .conversationRestore(command.chatId as HappyAgentSessionId)
+                .then(() =>
+                    props.onChatSelect(command.happyAgentId, command.groupId, command.chatId),
+                )
+                .catch(() => undefined);
+            return;
+        }
+        case "workspaceOpen": {
+            // A workspace opens where the reader left it, exactly as its
+            // sidebar row does; one never visited falls back to its first chat.
+            const resume =
+                props.facts.groupResume?.get(command.groupId as HappyAgentGroupId) ??
+                openGroupFind(props.projects, command.groupId)?.conversations[0]?.id;
+            props.onChatSelect(command.happyAgentId, command.groupId, resume);
+            return;
+        }
+        case "fileOpen":
+            props.onFileSelect(
+                command.happyAgentId,
+                command.groupId,
+                props.chatId,
+                command.path,
+                command.fileKind,
+            );
+            return;
+        case "sessionCreate": {
+            const workspace = props.workspace;
+            const group = openGroupFind(props.projects, props.groupId);
+            if (!workspace || !group?.create || !props.happyAgentOnline()) return;
+            void workspace.conversationCreate(group.id, group.create).catch(() => undefined);
+            return;
+        }
+        case "workspaceCreate": {
+            const workspace = props.workspace;
+            const projectId = props.workspaceCreateProjectId;
+            if (!workspace || projectId === undefined || !props.happyAgentOnline()) return;
+            void workspace.worktreeCreate(projectId).catch(() => undefined);
+            return;
+        }
+        case "settingsOpen":
+            props.onSettingsOpen();
+            return;
+        case "settingsSectionOpen":
+            if (props.onSettingsSectionOpen) props.onSettingsSectionOpen(command.section);
+            else props.onSettingsOpen();
+            return;
+        case "updateApply":
+            props.onUpdateApply?.();
+            return;
+    }
 }
 
 /**

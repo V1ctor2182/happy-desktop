@@ -1,12 +1,143 @@
 import { type ReactNode } from "react";
 import { Banner } from "../../src/Banner";
 import { CommandPalette } from "../../src/CommandPalette";
+import {
+    CommandPaletteResults,
+    type CommandPaletteResultsSection,
+} from "../../src/CommandPaletteResults";
 import { EmptyState } from "../../src/EmptyState";
+import { FormRow } from "../../src/FormRow";
+import { commandShortcut } from "../../src/keyboardShortcut";
 import { SearchResults, type SearchResultGroup } from "../../src/SearchResults";
+import { SegmentedControl } from "../../src/SegmentedControl";
+import { Switch } from "../../src/Switch";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-060";
+
+const suggestions: CommandPaletteResultsSection[] = [
+    {
+        id: "update",
+        rows: [
+            {
+                kind: "command",
+                id: "update",
+                emphasis: "update",
+                meta: "Version 2.6.1 · restart to apply",
+                title: "Update Happy",
+            },
+        ],
+    },
+    {
+        id: "recent",
+        caption: "Recent",
+        rows: [
+            {
+                kind: "command",
+                id: "chat-relay",
+                avatar: { initials: "S", tone: "ocean" },
+                meta: "seville · main",
+                title: "Palette results list",
+            },
+            {
+                kind: "command",
+                id: "chat-updater",
+                avatar: { initials: "H", tone: "violet" },
+                meta: "happy-desktop · main",
+                title: "Updater restart phases",
+            },
+        ],
+    },
+    {
+        id: "actions",
+        caption: "Actions",
+        rows: [
+            {
+                kind: "command",
+                id: "chat-new",
+                icon: "plus",
+                shortcut: commandShortcut("t"),
+                title: "New chat",
+            },
+            {
+                kind: "command",
+                id: "workspace-new",
+                icon: "branch",
+                shortcut: commandShortcut("n"),
+                title: "New workspace",
+            },
+            { kind: "command", id: "settings-open", icon: "settings", title: "Open settings" },
+        ],
+    },
+];
+
+const typed: CommandPaletteResultsSection[] = [
+    {
+        id: "settings",
+        caption: "Settings",
+        rows: [
+            {
+                kind: "control",
+                id: "theme",
+                label: "Theme",
+                description: "Match the system appearance or pin one",
+                control: (
+                    <FormRow
+                        control={
+                            <SegmentedControl
+                                aria-label="Theme"
+                                onChange={() => undefined}
+                                segments={[
+                                    { label: "System", value: "system" },
+                                    { label: "Light", value: "light" },
+                                    { label: "Dark", value: "dark" },
+                                ]}
+                                size="small"
+                                value="system"
+                            />
+                        }
+                        description="Match the system appearance or pin one"
+                        label="Theme"
+                    />
+                ),
+            },
+            {
+                kind: "control",
+                id: "shimmer",
+                label: "Shimmer active titles",
+                description: "Animates running session, project, and workspace names",
+                control: (
+                    <FormRow
+                        control={
+                            <Switch
+                                aria-label="Shimmer active titles"
+                                checked
+                                onChange={() => undefined}
+                                size="small"
+                            />
+                        }
+                        description="Animates running session, project, and workspace names"
+                        label="Shimmer active titles"
+                    />
+                ),
+            },
+        ],
+    },
+    {
+        id: "settings-jump",
+        caption: "Settings sections",
+        rows: [
+            {
+                kind: "command",
+                id: "settings-general",
+                icon: "settings",
+                meta: "Settings › General",
+                title: "General",
+            },
+        ],
+    },
+];
 
 const overflowGroups: SearchResultGroup[] = (["channel", "user", "message", "file"] as const).map(
     (type) => ({
@@ -57,6 +188,28 @@ export function CommandPalettePage() {
             summary="Top-anchored Slack-style ⌘K palette — a fixed 640 × 461 card with its own focused search input over a stable-gutter scrollport. Renders the card only; ModalOverlay owns its dim, stacking, and placement."
             title="Command palette"
         >
+            <div className="specimen-grid">
+                <PaletteSpecimen
+                    detail="what ⌘K opens on: a waiting update, recents, and actions with their chords, first row highlighted"
+                    label="Suggestions"
+                    number="CP-06"
+                    query=""
+                >
+                    <CommandPaletteResults activeIndex={0} sections={suggestions} />
+                </PaletteSpecimen>
+            </div>
+
+            <div className="specimen-grid">
+                <PaletteSpecimen
+                    detail="settings rows are the settings page's own FormRows, live and highlighted in place"
+                    label="Typed query"
+                    number="CP-07"
+                    query="the"
+                >
+                    <CommandPaletteResults activeIndex={0} sections={typed} />
+                </PaletteSpecimen>
+            </div>
+
             <div className="specimen-grid">
                 <PaletteSpecimen
                     detail="genuinely overflowing grouped results · stable thin scrollbar · 5px nested last corner"

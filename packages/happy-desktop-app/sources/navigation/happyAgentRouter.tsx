@@ -13,6 +13,7 @@ import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAg
 import { happyAgentRoutePathParse } from "./happyAgentRoute";
 import type {
     AppearanceStore,
+    CommandPaletteStore,
     ExperimentsStore,
     HappyAgentGroupId,
     HappyAgentFileTabKind,
@@ -91,6 +92,11 @@ export interface HappyAgentRouterContext {
     readonly experiments?: ExperimentsStore;
     /** Window-local preference for animated activity titles. */
     readonly titleShimmer?: TitleShimmerStore;
+    /**
+     * What the window's command palette is showing and asking. Absent in a host
+     * that offers no palette, which leaves Command-K unbound.
+     */
+    readonly commandPalette?: CommandPaletteStore;
     /**
      * Which shell hosts this router. The Electron window has no native title bar,
      * so the workspace draws the traffic-light inset and drag lanes itself; the
@@ -370,6 +376,7 @@ function HappyAgentWorkspaceLayout(
             {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
+            {...(context.commandPalette ? { commandPalette: context.commandPalette } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
             {...(context.sidebarCollapse ? { sidebarCollapse: context.sidebarCollapse } : {})}
             inboxOpen={props.inbox}
@@ -442,6 +449,19 @@ function HappyAgentWorkspaceLayout(
             onSettingsOpen={() =>
                 void navigate({
                     params: { section: HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY },
+                    to: "/settings/$section",
+                })
+            }
+            // Settings has one destination per category, and the palette offers
+            // them by name. The address stays this file's business: the view is
+            // handed the one destination it asked for and never the router.
+            onSettingsSectionOpen={(section) =>
+                void navigate({
+                    params: {
+                        section: happyAgentSettingsCategoryExists(section)
+                            ? section
+                            : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY,
+                    },
                     to: "/settings/$section",
                 })
             }

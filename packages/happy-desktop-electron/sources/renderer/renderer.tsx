@@ -18,6 +18,7 @@ import {
 import {
     HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
     appearanceStoreCreate,
+    commandPaletteStoreCreate,
     experimentsStoreCreate,
     titleShimmerStoreCreate,
     welcomeStoreCreate,
@@ -25,6 +26,7 @@ import {
     happyAgentSidebarCollapseStoreCreate,
     happyAgentSettingsStoreCreate,
     type AppearanceStore,
+    type CommandPaletteStore,
     type ExperimentsStore,
     type WelcomeStore,
     type HappyAgentNavigationOrderStore,
@@ -230,6 +232,7 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
  */
 function HappyAgentBoundary(props: {
     appearance: AppearanceStore;
+    commandPalette: CommandPaletteStore;
     daemon?: AppHappyAgentDaemonStore;
     debug: AppHappyAgentDebugStore;
     profiler: AppHappyAgentProfilerStore;
@@ -257,6 +260,7 @@ function HappyAgentBoundary(props: {
                 // A development window says which checkout it came from; the
                 // packaged product supplies nothing and shows nothing.
                 buildIdentity: props.bridge.buildIdentity,
+                commandPalette: props.commandPalette,
                 ...(props.daemon ? { daemon: props.daemon } : {}),
                 debug: props.debug,
                 profiler: props.profiler,
@@ -408,6 +412,7 @@ function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
 
 interface DesktopRendererProps {
     appearance: AppearanceStore;
+    commandPalette: CommandPaletteStore;
     daemon?: AppHappyAgentDaemonStore;
     debug: AppHappyAgentDebugStore;
     profiler: AppHappyAgentProfilerStore;
@@ -794,6 +799,7 @@ function DesktopRuntimeContent(
                 <HappyAgentBoundary
                     appearance={props.appearance}
                     bridge={props.bridge}
+                    commandPalette={props.commandPalette}
                     {...(props.daemon ? { daemon: props.daemon } : {})}
                     debug={props.debug}
                     profiler={props.profiler}
@@ -1052,6 +1058,11 @@ if (mediaPreviewBridge) {
         // the product default in memory and writes only after the reader changes
         // the switch, so untouched installations follow future defaults.
         const titleShimmer = titleShimmerStoreCreate(preferences.titleShimmerPersistence);
+        // What the command palette is currently showing and asking. It is this
+        // window's transient view state, so it is created here beside the other
+        // window-lifetime stores and deliberately given nothing to persist: an
+        // open palette is a question in progress, not a place to come back to.
+        const commandPalette = commandPaletteStoreCreate();
         // Every Happy Agent in this window, each with its own product stores. The router is
         // told to resolve its address again whenever the set of connected Happy Agents
         // changes, so a machine that connects after the URL already named it opens
@@ -1099,6 +1110,7 @@ if (mediaPreviewBridge) {
                 <CodeHighlightWorkers>
                     <DesktopRenderer
                         appearance={appearance}
+                        commandPalette={commandPalette}
                         {...(daemon ? { daemon } : {})}
                         debug={debug}
                         profiler={profiler}

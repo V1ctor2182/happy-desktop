@@ -9,14 +9,30 @@ import {
 import { KeyCap } from "./Badge";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
+import { commandShortcut, commandShortcutMatches } from "./keyboardShortcut";
 import { ScrollArea } from "./Scrollbar";
+/**
+ * The chord that opens the palette, owned here as well so it can close it. The
+ * window dispatcher cannot: an open palette is a dialog, and every window
+ * shortcut is deliberately switched off while one is up.
+ */
+const PALETTE_SHORTCUT = commandShortcut("k");
 export type CommandPaletteProps = {
     /** The current query text; the palette input is a controlled reflection of it. */
     query: string;
     /** Emits the committed query text (IME composition is coalesced to its end). */
     onQueryChange: (value: string) => void;
-    /** Dismisses the palette from Escape or the close button. */
+    /** Dismisses the palette from Escape, ⌘K again, or the close button. */
     onClose: () => void;
+    /**
+     * Moves the owner's highlighted row: 1 for ArrowDown, -1 for ArrowUp typed
+     * in the input. The card does not own the selection — the rows and their
+     * order belong to whoever supplied the body — so it reports the intent,
+     * keeps the caret where it is, and never moves focus out of the input.
+     */
+    onSelectionMove?: (direction: 1 | -1) => void;
+    /** Runs the owner's highlighted row from Enter typed in the input. */
+    onSelectionCommit?: () => void;
     /** Result/command body rendered under the input row. */
     children: ReactNode;
     placeholder?: string;
@@ -34,19 +50,23 @@ export type CommandPaletteProps = {
  * C-060 CommandPalette — a Slack-style ⌘K palette card with its own focused
  * search input over a scrollable result/command body, hosted by ModalOverlay.
  *
- * The card owns three behaviors application code should not re-implement: it
+ * The card owns four behaviors application code should not re-implement: it
  * focuses (and selects) its input on mount, returns focus to whatever control
- * was focused when it opened once it unmounts, and closes on Escape. Typing is
- * IME-safe — intermediate composition text is left to the browser's buffer and
- * only the committed value is emitted, so a controlled `query` never interrupts
- * an active composition. It renders the card only (no scrim/stacking); compose
- * it inside `ModalOverlay` so the host owns its dim, stacking, and placement.
+ * was focused when it opened once it unmounts, closes on Escape and on ⌘K
+ * again, and reads ArrowUp/ArrowDown/Enter out of its input for the owner's
+ * result list without ever surrendering focus. Typing is IME-safe —
+ * intermediate composition text is left to the browser's buffer and only the
+ * committed value is emitted, so a controlled `query` never interrupts an
+ * active composition. It renders the card only (no scrim/stacking); compose it
+ * inside `ModalOverlay` so the host owns its dim, stacking, and placement.
  */
 export function CommandPalette(props: CommandPaletteProps) {
     const [local, rest] = partitionComponentProps(props, [
         "query",
         "onQueryChange",
         "onClose",
+        "onSelectionMove",
+        "onSelectionCommit",
         "children",
         "placeholder",
         "closeLabel",
@@ -92,6 +112,16 @@ export function CommandPalette(props: CommandPaletteProps) {
                     event.preventDefault();
                     event.stopPropagation();
                     local.onClose();
+                    return;
+                }
+                // The chord that opened it closes it again, from anywhere in
+                // the card. It is handled here rather than in the window
+                // dispatcher because that dispatcher stands down for a dialog,
+                // which is exactly what this card is while it is open.
+                if (commandShortcutMatches(event.nativeEvent, PALETTE_SHORTCUT)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    local.onClose();
                 }
             }}
             role="dialog"
@@ -128,6 +158,28 @@ export function CommandPalette(props: CommandPaletteProps) {
                         // the sole commit — a value is never emitted twice.
                         if (composingRef.current || event.nativeEvent.isComposing) return;
                         local.onQueryChange(event.currentTarget.value);
+                    }}
+                    onKeyDown={(event) => {
+                        // Travelling the result list is typing, so it is read
+                        // here rather than on the card: the list never takes
+                        // focus, and Escape keeps the card-level path above.
+                        if (isComposing(event) || event.metaKey || event.ctrlKey || event.altKey)
+                            return;
+                        if (event.key === "ArrowDown" && local.onSelectionMove) {
+                            // Without this the caret jumps to the end of the query.
+                            event.preventDefault();
+                            local.onSelectionMove(1);
+                            return;
+                        }
+                        if (event.key === "ArrowUp" && local.onSelectionMove) {
+                            event.preventDefault();
+                            local.onSelectionMove(-1);
+                            return;
+                        }
+                        if (event.key === "Enter" && local.onSelectionCommit) {
+                            event.preventDefault();
+                            local.onSelectionCommit();
+                        }
                     }}
                     placeholder={label()}
                     ref={inputRef}

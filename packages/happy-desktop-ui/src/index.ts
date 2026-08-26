@@ -418,6 +418,17 @@ export {
     DEFAULT_AGENT_LUCKY_LABEL,
 } from "./DefaultAgentForm";
 export { CommandPalette, type CommandPaletteProps } from "./CommandPalette";
+export {
+    CommandPaletteResults,
+    commandPaletteResultsRows,
+    type CommandPaletteCommandRow,
+    type CommandPaletteControlRow,
+    type CommandPaletteResultsAvatar,
+    type CommandPaletteResultsProps,
+    type CommandPaletteResultsRow,
+    type CommandPaletteResultsSection,
+    type CommandPaletteRowEmphasis,
+} from "./CommandPaletteResults";
 export { FormRow, type FormRowAlign, type FormRowLayout, type FormRowProps } from "./FormRow";
 export {
     DocumentSurface,
@@ -521,6 +532,11 @@ export {
     type BrowserFailure,
     type BrowserPanelProps,
 } from "./BrowserPanel";
+export {
+    QuickActionsCard,
+    type QuickActionsCardItem,
+    type QuickActionsCardProps,
+} from "./QuickActionsCard";
 export { ZoomIndicator } from "./ZoomIndicator";
 export {
     HappyAgentInboxPage,
