@@ -277,7 +277,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     /**
      * Pinned rows beneath the compose row, for the few acts that belong to the
      * window rather than to any one row in the list. They are reported through
-     * `onItemSelect` like any other row and are never active.
+     * `onItemSelect` like any other row and match `activeItemId` when they open
+     * a durable destination of their own.
      */
     actions?: SidebarItem[];
     /** Agent-authored menu content between the pinned actions and project sections. */
@@ -2061,7 +2062,7 @@ export function Sidebar(props: SidebarProps) {
                                 const dragging = drag?.moved === true;
                                 return (
                                     <SidebarRow
-                                        active={false}
+                                        active={local.activeItemId === action.id}
                                         className="happy-sidebar__compose"
                                         dragging={
                                             (dragging && drag.from === index) ||

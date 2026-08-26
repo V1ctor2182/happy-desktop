@@ -15,7 +15,7 @@ export const MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION = HAPPY_AGENT_PROTOCOL_VERSION
  * the first daemon version that speaks it; the screens quote this version, not
  * the protocol number.
  */
-export const MINIMUM_HAPPY_AGENT_VERSION = "0.4.11";
+export const MINIMUM_HAPPY_AGENT_VERSION = "0.4.14";
 
 /**
  * Orders two daemon product versions by their dotted numeric fields. A

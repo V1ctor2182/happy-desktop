@@ -88,6 +88,10 @@ import {
     type HappyAgentCloudHost,
     type HappyAgentCloudStore,
 } from "./happyAgentCloudStore.js";
+import {
+    happyAgentSocialStoreCreate,
+    type HappyAgentSocialStore,
+} from "./happyAgentSocialStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface HappyAgentChatHandle {
@@ -129,6 +133,8 @@ export interface HappyAgentWorkspaceClient {
     happyIntegration(): HappyAgentIntegrationStore;
     /** The installation-wide Happy Social account, materialized on first access. */
     cloud(): HappyAgentCloudStore;
+    /** Friends and requests for the enrolled Happy Social account. */
+    social(): HappyAgentSocialStore;
     /** The one host-owned identity work is authored as. */
     profile(): HappyAgentProfileStore | undefined;
     /**
@@ -395,6 +401,7 @@ export function happyAgentWorkspaceClientCreate(
     let providerUsageStore: HappyAgentProviderUsageStore | undefined;
     let happyIntegrationStore: HappyAgentIntegrationStore | undefined;
     let cloudStore: HappyAgentCloudStore | undefined;
+    let socialStore: HappyAgentSocialStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
     let instructionsStore: HappyAgentInstructionsStore | undefined;
@@ -533,6 +540,11 @@ export function happyAgentWorkspaceClientCreate(
             });
             return cloudStore;
         },
+        social() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            socialStore ??= happyAgentSocialStoreCreate({ client: deps.client });
+            return socialStore;
+        },
         profile() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!deps.profileSource || !deps.profileActions) return undefined;
@@ -653,8 +665,10 @@ export function happyAgentWorkspaceClientCreate(
             providerUsageStore = undefined;
             happyIntegrationStore?.[Symbol.dispose]();
             cloudStore?.[Symbol.dispose]();
+            socialStore?.[Symbol.dispose]();
             happyIntegrationStore = undefined;
             cloudStore = undefined;
+            socialStore = undefined;
             profileStore?.[Symbol.dispose]();
             profileStore = undefined;
             providersStore?.[Symbol.dispose]();

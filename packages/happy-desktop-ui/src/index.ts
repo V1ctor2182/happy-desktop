@@ -311,6 +311,12 @@ export {
     type HappyAgentCreateSessionPageProps,
 } from "./HappyAgentCreateSessionPage";
 export {
+    HappySocialPage,
+    type HappySocialOperation,
+    type HappySocialPageProps,
+    type HappySocialPerson,
+} from "./HappySocialPage";
+export {
     HappyAgentProjectCloneDialog,
     type HappyAgentProjectCloneDialogProps,
 } from "./HappyAgentProjectCloneDialog";

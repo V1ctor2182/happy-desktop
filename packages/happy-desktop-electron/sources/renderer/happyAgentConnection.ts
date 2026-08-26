@@ -13,6 +13,7 @@ import {
     type HappyAgentClockStore,
     type HappyAgentCloudHost,
     type HappyAgentCloudStore,
+    type HappyAgentSocialStore,
     type HappyAgentConnection,
     type HappyAgentConnectionSnapshot,
     type HappyAgentConnectionStore,
@@ -91,6 +92,7 @@ function workspaceMemoryPersistence(happyAgentId: string): HappyAgentWorkspaceMe
 export interface HappyAgentSession {
     readonly connection: HappyAgentConnectionStore;
     readonly cloud: () => HappyAgentCloudStore;
+    readonly social: () => HappyAgentSocialStore;
     readonly debugLog: HappyAgentDebugLogStore;
     readonly host: HappyAgentHost;
     readonly models: HappyAgentModelStore;
@@ -360,6 +362,7 @@ export function happyAgentConnectionOpen(input: {
                 });
                 session = {
                     cloud: () => cloudStore,
+                    social: () => client.social(),
                     connection: streamConnectionStoreCreate(agentConnection),
                     debugLog,
                     host: input.host,

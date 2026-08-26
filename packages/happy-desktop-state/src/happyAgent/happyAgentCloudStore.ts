@@ -42,6 +42,8 @@ export interface HappyAgentCloudSnapshot {
     readonly enrollment: HappyAgentCloudEnrollment;
     readonly environment?: CloudEnvironment;
     readonly error?: UserError;
+    /** Enrollment authority carried by desktop bootstrap's Cloud Social snapshot. */
+    readonly socialEnrollment?: "enrolled" | "unenrolled";
     readonly status: HappyAgentCloudStatus;
     readonly user?: {
         readonly email: string;
@@ -79,6 +81,7 @@ export interface HappyAgentCloudStoreDeps {
         | "enrollCloudProfile"
         | "getDesktopBootstrap"
         | "getCloudProfile"
+        | "getCloudSocial"
         | "startCloudAuthorization"
         | "updates"
     >;
@@ -108,6 +111,7 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
     let disposed = false;
     let profileReadingFor: string | undefined;
     let profileRequest = 0;
+    let socialRequest = 0;
     let version: string | undefined;
 
     const lifecycleNeeded = (): boolean => {
@@ -200,6 +204,18 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             });
     };
 
+    const socialEnrollmentRead = (signal?: AbortSignal): void => {
+        const request = ++socialRequest;
+        void deps.client.getCloudSocial({ signal }).then(
+            (response) => {
+                if (disposed || signal?.aborted || request !== socialRequest) return;
+                if (store.getState().status !== "connected") return;
+                store.setState({ socialEnrollment: response.cloudSocial.status }, false);
+            },
+            () => undefined,
+        );
+    };
+
     const cloudAdopt = (cloud: Cloud): void => {
         if (version !== undefined && version.localeCompare(cloud.version) >= 0) {
             const { error: _cleared, ...current } = store.getState();
@@ -211,8 +227,10 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
         const projected = cloudProject(cloud);
         const connectedUserChanged =
             projected.status === "connected" && projected.user?.id !== current.user?.id;
+        if (connectedUserChanged) socialRequest += 1;
         if (projected.status !== "connected") {
             profileRequest += 1;
+            socialRequest += 1;
             profileReadingFor = undefined;
         }
         store.setState(
@@ -227,6 +245,11 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                             ? { status: "loading" }
                             : current.enrollment
                         : { status: "inactive" },
+                ...(projected.status === "connected" &&
+                !connectedUserChanged &&
+                current.socialEnrollment
+                    ? { socialEnrollment: current.socialEnrollment }
+                    : {}),
             },
             true,
         );
@@ -274,6 +297,9 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                 return;
             }
             cloudAdopt(bootstrap.cloud);
+            if (bootstrap.cloudSocial)
+                store.setState({ socialEnrollment: bootstrap.cloudSocial.status }, false);
+            else if (bootstrap.cloud.status === "connected") socialEnrollmentRead(active.signal);
             if (bootstrap.cloud.status === "connected") profileRead();
 
             let reconcile = false;
@@ -293,6 +319,8 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                     if (update.event.type === "cloud.updated")
                         cloudAdopt(update.event.payload.cloud);
                     if (update.event.type === "cloud.profile.updated") profileRead();
+                    if (update.event.type === "cloud.social.updated")
+                        socialEnrollmentRead(active.signal);
                 }
             }
             if (active.signal.aborted) return;
@@ -458,6 +486,7 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                         const latest = store.getState();
                         if (latest.status !== "connected" || !latest.user) return;
                         profileAdopt(response.profile, latest.user.id);
+                        socialEnrollmentRead(controller?.signal);
                     },
                     (error: unknown) => {
                         if (disposed) return;
@@ -481,6 +510,7 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            socialRequest += 1;
             controller?.abort();
             controller = undefined;
             callbackUnsubscribe?.();
