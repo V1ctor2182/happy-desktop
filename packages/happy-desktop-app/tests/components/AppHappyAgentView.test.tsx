@@ -236,20 +236,17 @@ it("highlights the addressed project and asks to navigate into it when it is pic
 it("lists one row per project and its sessions as tabs", () => {
     const { container } = view({ groupId: "prj_one" });
 
-    // The shared sidebar renders its compose row ("New session") and the pinned
-    // window actions ahead of the list, so the project rows follow them.
+    // The sidebar list contains projects only; creating a session is an app-level
+    // action rather than another project-shaped row.
     const rows = [...container.querySelectorAll('[data-happy-desktop-ui="sidebar-item"]')];
     // The Blueprint workbench row is offered only to a window that hands the
     // View somewhere to open it, and this one does not, so it is absent here
     // rather than depending on which mode the test runner happens to build in.
-    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
-        "new-chat",
-        "local/prj_one",
-    ]);
+    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["local/prj_one"]);
     // The row is the project's name alone; its path would crowd the name out,
     // and the heading over the open project states it in full.
-    expect(rows[1]?.textContent).toContain("happy");
-    expect(rows[1]?.textContent).not.toContain("~/happy");
+    expect(rows[0]?.textContent).toContain("happy");
+    expect(rows[0]?.textContent).not.toContain("~/happy");
 
     // The sessions inside the addressed project are its tabs.
     const tabs = [...container.querySelectorAll('[data-happy-desktop-ui="tab"]')];
