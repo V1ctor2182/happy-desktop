@@ -134,6 +134,18 @@
     line-height: 20px;
 }
 
+.happy-social-raw-status {
+    display: block;
+    max-width: 420px;
+    overflow-wrap: anywhere;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-synthesis: none;
+    line-height: 18px;
+    text-align: right;
+}
+
 .happy-agent-settings__agent-control {
     display: flex;
     align-items: center;

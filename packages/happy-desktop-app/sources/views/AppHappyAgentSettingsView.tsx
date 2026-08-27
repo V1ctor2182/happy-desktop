@@ -559,6 +559,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
                     <HappySocialSettings
+                        appearance={appearance.mode}
                         authorizationCompleting={cloud.authorizationCompleting}
                         authorizationStarting={cloud.authorizationStarting}
                         disconnecting={cloud.disconnecting}
@@ -573,6 +574,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             if (happyAgentOnline()) cloudStore.cloudProfileEnroll();
                         }}
                         onUsernameChange={(value) => cloudStore.cloudProfileUsernameUpdate(value)}
+                        rawStatus={{
+                            cloud: cloud.status,
+                            enrollment: cloud.enrollment.status,
+                            keys: cloud.keys.status,
+                        }}
                         status={cloud.status}
                         {...(cloud.error ? { error: cloud.error.message } : {})}
                         {...(cloud.user
@@ -741,26 +747,25 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
 function socialEnrollmentProject(enrollment: HappyAgentCloudEnrollment): HappySocialEnrollment {
     switch (enrollment.status) {
         case "inactive":
-        case "loading":
-            return enrollment;
-        case "unenrolled":
+        case "unsupported":
+            return { status: "inactive" };
+        case "checking":
+            return { status: "loading" };
+        case "required":
             return {
-                enrolling: enrollment.enrolling,
+                enrolling: enrollment.submitting,
                 ...(enrollment.error ? { error: enrollment.error.message } : {}),
                 status: "unenrolled",
                 username: enrollment.username,
             };
-        case "enrolled": {
-            const displayName =
-                [enrollment.firstName, enrollment.lastName].filter(Boolean).join(" ") || undefined;
+        case "enrolling":
             return {
-                ...(displayName ? { displayName } : {}),
-                status: "enrolled",
+                enrolling: true,
+                status: "unenrolled",
                 username: enrollment.username,
             };
-        }
-        case "error":
-            return { error: enrollment.error.message, status: "error" };
+        case "enrolled":
+            return enrollment;
     }
 }
 

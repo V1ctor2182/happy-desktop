@@ -2,8 +2,9 @@ import {
     HappyAgentApiError,
     type ApiErrorBody,
     type Cloud,
+    type CloudEnrollment,
     type CloudEnvironment,
-    type CloudProfile,
+    type CloudKeys,
     type HappyAgentClient,
 } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
@@ -19,20 +20,23 @@ export type HappyAgentCloudStatus =
 
 export type HappyAgentCloudEnrollment =
     | { readonly status: "inactive" }
-    | { readonly status: "loading" }
+    | { readonly status: "checking" }
     | {
-          readonly enrolling: boolean;
           readonly error?: UserError;
-          readonly status: "unenrolled";
+          readonly status: "required";
+          readonly submitting: boolean;
           readonly username: string;
       }
-    | {
-          readonly firstName: string;
-          readonly lastName?: string;
-          readonly status: "enrolled";
-          readonly username: string;
-      }
-    | { readonly error: UserError; readonly status: "error" };
+    | { readonly status: "enrolling"; readonly username: string }
+    | { readonly status: "enrolled"; readonly username: string }
+    | { readonly status: "unsupported" };
+
+export type HappyAgentCloudKeys =
+    | { readonly status: "inactive" }
+    | { readonly status: "create_required" }
+    | { readonly status: "restore_required" }
+    | { readonly identityKey: string; readonly status: "ready" }
+    | { readonly status: "unsupported" };
 
 export interface HappyAgentCloudSnapshot {
     readonly authorizationCompleting: boolean;
@@ -42,6 +46,7 @@ export interface HappyAgentCloudSnapshot {
     readonly enrollment: HappyAgentCloudEnrollment;
     readonly environment?: CloudEnvironment;
     readonly error?: UserError;
+    readonly keys: HappyAgentCloudKeys;
     /** Enrollment authority carried by desktop bootstrap's Cloud Social snapshot. */
     readonly socialEnrollment?: "enrolled" | "unenrolled";
     readonly status: HappyAgentCloudStatus;
@@ -80,7 +85,6 @@ export interface HappyAgentCloudStoreDeps {
         | "disconnectCloud"
         | "enrollCloudProfile"
         | "getDesktopBootstrap"
-        | "getCloudProfile"
         | "getCloudSocial"
         | "startCloudAuthorization"
         | "updates"
@@ -93,6 +97,7 @@ const EMPTY: HappyAgentCloudSnapshot = {
     authorizationStarting: false,
     disconnecting: false,
     enrollment: { status: "inactive" },
+    keys: { status: "inactive" },
     status: "loading",
 };
 
@@ -109,8 +114,6 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
     let callbackUnsubscribe: (() => void) | undefined;
     let controller: AbortController | undefined;
     let disposed = false;
-    let profileReadingFor: string | undefined;
-    let profileRequest = 0;
     let socialRequest = 0;
     let version: string | undefined;
 
@@ -120,8 +123,7 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             listeners.size > 0 ||
             current.authorizationStarting ||
             current.authorizationCompleting ||
-            current.enrollment.status === "loading" ||
-            (current.enrollment.status === "unenrolled" && current.enrollment.enrolling) ||
+            (current.enrollment.status === "required" && current.enrollment.submitting) ||
             current.status === "authorizing"
         );
     };
@@ -132,76 +134,6 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
         controller = undefined;
         callbackUnsubscribe?.();
         callbackUnsubscribe = undefined;
-    };
-
-    const profileAdopt = (profile: CloudProfile, userId: string): void => {
-        const current = store.getState();
-        if (current.status !== "connected" || current.user?.id !== userId) return;
-        if (profile.username === null) {
-            const username =
-                current.enrollment.status === "unenrolled" ? current.enrollment.username : "";
-            store.setState(
-                {
-                    ...current,
-                    enrollment: {
-                        enrolling: false,
-                        status: "unenrolled",
-                        username,
-                    },
-                },
-                true,
-            );
-            return;
-        }
-        store.setState(
-            {
-                ...current,
-                enrollment: {
-                    firstName: profile.firstName,
-                    ...(profile.lastName ? { lastName: profile.lastName } : {}),
-                    status: "enrolled",
-                    username: profile.username,
-                },
-            },
-            true,
-        );
-    };
-
-    const profileRead = (): void => {
-        const current = store.getState();
-        if (disposed || current.status !== "connected" || !current.user) return;
-        const userId = current.user.id;
-        if (profileReadingFor === userId) return;
-        const request = ++profileRequest;
-        const signal = controller?.signal;
-        profileReadingFor = userId;
-        if (current.enrollment.status === "inactive" || current.enrollment.status === "error")
-            store.setState({ enrollment: { status: "loading" } }, false);
-        void deps.client
-            .getCloudProfile({ signal })
-            .then((response) => {
-                if (disposed || request !== profileRequest) return;
-                profileAdopt(response.profile, userId);
-            })
-            .catch((error: unknown) => {
-                if (disposed || request !== profileRequest || signal?.aborted) return;
-                const latest = store.getState();
-                if (latest.status !== "connected" || latest.user?.id !== userId) return;
-                if (latest.enrollment.status === "loading")
-                    store.setState(
-                        {
-                            enrollment: {
-                                error: happyAgentUserError(error),
-                                status: "error",
-                            },
-                        },
-                        false,
-                    );
-            })
-            .finally(() => {
-                if (request === profileRequest) profileReadingFor = undefined;
-                lifecycleStopIfIdle();
-            });
     };
 
     const socialEnrollmentRead = (signal?: AbortSignal): void => {
@@ -224,14 +156,15 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
         }
         version = cloud.version;
         const current = store.getState();
-        const projected = cloudProject(cloud);
         const connectedUserChanged =
-            projected.status === "connected" && projected.user?.id !== current.user?.id;
+            cloud.status === "connected" && cloud.user.id !== current.user?.id;
+        const projected = cloudProject(
+            cloud,
+            connectedUserChanged ? { status: "inactive" } : current.enrollment,
+        );
         if (connectedUserChanged) socialRequest += 1;
         if (projected.status !== "connected") {
-            profileRequest += 1;
             socialRequest += 1;
-            profileReadingFor = undefined;
         }
         store.setState(
             {
@@ -239,12 +172,6 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                 authorizationCompleting: current.authorizationCompleting,
                 authorizationStarting: current.authorizationStarting,
                 disconnecting: current.disconnecting,
-                enrollment:
-                    projected.status === "connected"
-                        ? connectedUserChanged || current.enrollment.status === "inactive"
-                            ? { status: "loading" }
-                            : current.enrollment
-                        : { status: "inactive" },
                 ...(projected.status === "connected" &&
                 !connectedUserChanged &&
                 current.socialEnrollment
@@ -253,7 +180,6 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             },
             true,
         );
-        if (projected.status === "connected") profileRead();
         lifecycleStopIfIdle();
     };
 
@@ -300,7 +226,6 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             if (bootstrap.cloudSocial)
                 store.setState({ socialEnrollment: bootstrap.cloudSocial.status }, false);
             else if (bootstrap.cloud.status === "connected") socialEnrollmentRead(active.signal);
-            if (bootstrap.cloud.status === "connected") profileRead();
 
             let reconcile = false;
             for await (const update of deps.client.updates({
@@ -318,7 +243,6 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                 if (update.kind === "event") {
                     if (update.event.type === "cloud.updated")
                         cloudAdopt(update.event.payload.cloud);
-                    if (update.event.type === "cloud.profile.updated") profileRead();
                     if (update.event.type === "cloud.social.updated")
                         socialEnrollmentRead(active.signal);
                 }
@@ -427,15 +351,15 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             const current = store.getState();
             if (
                 disposed ||
-                current.enrollment.status !== "unenrolled" ||
-                current.enrollment.enrolling
+                current.enrollment.status !== "required" ||
+                current.enrollment.submitting
             )
                 return;
             store.setState(
                 {
                     enrollment: {
-                        enrolling: false,
-                        status: "unenrolled",
+                        status: "required",
+                        submitting: false,
                         username: value,
                     },
                 },
@@ -447,8 +371,8 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             if (
                 disposed ||
                 current.status !== "connected" ||
-                current.enrollment.status !== "unenrolled" ||
-                current.enrollment.enrolling
+                current.enrollment.status !== "required" ||
+                current.enrollment.submitting
             )
                 return;
             const username = current.enrollment.username.trim();
@@ -470,8 +394,8 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             store.setState(
                 {
                     enrollment: {
-                        enrolling: true,
-                        status: "unenrolled",
+                        status: "required",
+                        submitting: true,
                         username,
                     },
                 },
@@ -484,20 +408,32 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                     (response) => {
                         if (disposed) return;
                         const latest = store.getState();
-                        if (latest.status !== "connected" || !latest.user) return;
-                        profileAdopt(response.profile, latest.user.id);
+                        if (latest.status !== "connected") return;
+                        const settledEnrollment =
+                            latest.enrollment.status === "required"
+                                ? { ...latest.enrollment, submitting: false }
+                                : latest.enrollment;
+                        store.setState(
+                            {
+                                enrollment: cloudEnrollmentProject(
+                                    response.enrollment,
+                                    settledEnrollment,
+                                ),
+                            },
+                            false,
+                        );
                         socialEnrollmentRead(controller?.signal);
                     },
                     (error: unknown) => {
                         if (disposed) return;
                         const latest = store.getState();
-                        if (latest.enrollment.status !== "unenrolled") return;
+                        if (latest.enrollment.status !== "required") return;
                         store.setState(
                             {
                                 enrollment: {
-                                    enrolling: false,
                                     error: happyAgentUserError(error),
-                                    status: "unenrolled",
+                                    status: "required",
+                                    submitting: false,
                                     username: latest.enrollment.username,
                                 },
                             },
@@ -528,7 +464,10 @@ function cloudApiErrorSnapshot(error: unknown): Cloud | undefined {
     return (error.body as CloudApiErrorBody).cloud;
 }
 
-function cloudProject(cloud: Cloud): Omit<HappyAgentCloudSnapshot, "enrollment"> {
+function cloudProject(
+    cloud: Cloud,
+    currentEnrollment: HappyAgentCloudEnrollment,
+): Omit<HappyAgentCloudSnapshot, "socialEnrollment"> {
     const base = {
         authorizationCompleting: false,
         authorizationStarting: false,
@@ -537,7 +476,9 @@ function cloudProject(cloud: Cloud): Omit<HappyAgentCloudSnapshot, "enrollment">
     if (cloud.status === "connected")
         return {
             ...base,
+            enrollment: cloudEnrollmentProject(cloud.enrollment, currentEnrollment),
             environment: cloud.environment,
+            keys: cloudKeysProject(cloud.keys),
             status: "connected",
             user: {
                 email: cloud.user.email,
@@ -550,14 +491,43 @@ function cloudProject(cloud: Cloud): Omit<HappyAgentCloudSnapshot, "enrollment">
         return {
             ...base,
             authorizationExpiresAt: cloud.authorization.expiresAt,
+            enrollment: { status: "inactive" },
             environment: cloud.environment,
+            keys: { status: "inactive" },
             status: "authorizing",
         };
     return {
         ...base,
+        enrollment: { status: "inactive" },
+        keys: { status: "inactive" },
         status: "disconnected",
         ...(cloud.error ? { error: happyAgentUserError(new Error(cloud.error.message)) } : {}),
     };
+}
+
+/** Projects an explicitly reported daemon state without reconstructing it from profile data. */
+function cloudEnrollmentProject(
+    enrollment: CloudEnrollment | undefined,
+    current: HappyAgentCloudEnrollment,
+): HappyAgentCloudEnrollment {
+    if (!enrollment) return { status: "unsupported" };
+    switch (enrollment.status) {
+        case "inactive":
+        case "checking":
+            return enrollment;
+        case "required":
+            return current.status === "required"
+                ? current
+                : { status: "required", submitting: false, username: "" };
+        case "enrolling":
+        case "enrolled":
+            return enrollment;
+    }
+}
+
+/** Missing means the connected daemon predates the explicit Cloud-key protocol. */
+function cloudKeysProject(keys: CloudKeys | undefined): HappyAgentCloudKeys {
+    return keys ?? { status: "unsupported" };
 }
 
 const UNAVAILABLE: HappyAgentCloudSnapshot = { ...EMPTY, status: "unavailable" };
