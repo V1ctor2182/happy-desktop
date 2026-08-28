@@ -1,0 +1,72 @@
+/* Beautiful Mermaid supplies intrinsic width and height. The diagram keeps that
+ * natural size until the reading measure constrains it, then scales both axes
+ * proportionally; no fixed viewport crops or pads the authored geometry. */
+
+.happy-mermaid-diagram {
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface-pressed);
+}
+
+.happy-mermaid-diagram__canvas {
+    display: none;
+    flex: none;
+    max-width: 100%;
+    height: auto;
+    --happy-mermaid-accent: var(--text-link);
+    --happy-mermaid-background: var(--surface-pressed);
+    --happy-mermaid-border: var(--divider);
+    --happy-mermaid-line: var(--text-secondary);
+    --happy-mermaid-muted: var(--text-secondary);
+    --happy-mermaid-surface: var(--surface);
+    --happy-mermaid-text: var(--text);
+}
+
+.happy-mermaid-diagram--message {
+    margin: 12px 0;
+}
+
+.happy-mermaid-diagram__fallback {
+    flex: 1 1 auto;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-mermaid-diagram__fallback-viewport {
+    overflow: auto;
+}
+
+.happy-mermaid-diagram__source {
+    min-width: 100%;
+    margin: 0;
+}
+
+.happy-mermaid-diagram__source code {
+    display: block;
+    width: fit-content;
+    min-width: 100%;
+    padding: 16px;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 13px;
+    line-height: 20px;
+    white-space: pre;
+}
+
+.happy-mermaid-diagram[data-render-state="ready"] .happy-mermaid-diagram__fallback {
+    display: none;
+}
+
+.happy-mermaid-diagram[data-render-state="ready"] .happy-mermaid-diagram__canvas {
+    display: block;
+}

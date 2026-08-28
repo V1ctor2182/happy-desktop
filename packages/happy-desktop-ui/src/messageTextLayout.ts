@@ -13,6 +13,12 @@ import {
     type PreparedRichInline,
     type RichInlineItem,
 } from "@chenglou/pretext/rich-inline";
+import {
+    MERMAID_DIAGRAM_BORDER,
+    mermaidDiagramMeasure,
+    mermaidDiagramNaturalHeight,
+    type MermaidDiagramDimensions,
+} from "./mermaidDiagramRender";
 import { messageMarkdownParse, type MessageMarkdownAst } from "./messageMarkdownAst";
 
 /**
@@ -79,6 +85,8 @@ export interface MessageTextLayoutCache {
     prepared: Dictionary<Dictionary<PreparedText>>;
     /** Final Markdown body heights, grouped by source text then wrapping measure. */
     markdownHeights: Dictionary<Dictionary<number>>;
+    /** Intrinsic Beautiful Mermaid geometry, or null for an invalid fence. */
+    mermaidDimensions: Dictionary<MermaidDiagramDimensions | null>;
     /** Parsed remark/GFM documents, grouped by immutable message source. */
     markdownTrees: Dictionary<MessageMarkdownAst>;
     /** Footnote numbering and generated-footer geometry from each parsed document. */
@@ -101,6 +109,7 @@ export function messageTextLayoutCacheCreate(): MessageTextLayoutCache {
         generation: fontGeneration,
         prepared: dictionaryCreate(),
         markdownHeights: dictionaryCreate(),
+        mermaidDimensions: dictionaryCreate(),
         markdownTrees: dictionaryCreate(),
         markdownFootnotes: dictionaryCreate(),
         runHeights: dictionaryCreate(),
@@ -764,10 +773,20 @@ function markdownBlocksHeight(
     gap: number,
     codeMargins: boolean,
     trailing: MarkdownTrailingInline | undefined,
+    mermaidEnabled: boolean,
 ): number {
     const blocks = nodes
         .map((node) =>
-            markdownBlockHeight(node, measure, cache, footnotes, codeMargins, trailing, false),
+            markdownBlockHeight(
+                node,
+                measure,
+                cache,
+                footnotes,
+                codeMargins,
+                trailing,
+                false,
+                mermaidEnabled,
+            ),
         )
         .filter((block) => block.height > 0);
     const first = blocks[0];
@@ -786,6 +805,7 @@ function markdownListHeight(
     cache: MessageTextLayoutCache,
     footnotes: MarkdownFootnotes,
     trailing: MarkdownTrailingInline | undefined,
+    mermaidEnabled: boolean,
 ): number {
     const itemMeasure = measure - LIST_INDENT;
     let total = 0;
@@ -800,6 +820,7 @@ function markdownListHeight(
                     false,
                     trailing,
                     childIndex === 0 && item.checked !== null,
+                    mermaidEnabled,
                 ),
             )
             .filter((block) => block.height > 0);
@@ -821,6 +842,28 @@ function markdownListHeight(
     }
     return total;
 }
+
+function mermaidBlockHeight(
+    source: string,
+    measure: number,
+    cache: MessageTextLayoutCache,
+    enabled: boolean,
+): number {
+    const lines = Math.max(1, source.split("\n").length);
+    const sourceHeight = MERMAID_DIAGRAM_BORDER + CODE_PADDING * 2 + lines * CODE_LINE;
+    if (!enabled) return sourceHeight;
+    let dimensions = cache.mermaidDimensions[source];
+    if (dimensions === undefined) {
+        try {
+            dimensions = mermaidDiagramMeasure(source);
+        } catch {
+            dimensions = null;
+        }
+        cache.mermaidDimensions[source] = dimensions;
+    }
+    return dimensions === null ? sourceHeight : mermaidDiagramNaturalHeight(dimensions, measure);
+}
+
 /** Measures one actual remark/GFM block node with the same type ramp as its renderer. */
 function markdownBlockHeight(
     node: MarkdownRootContent,
@@ -830,6 +873,7 @@ function markdownBlockHeight(
     codeMargins: boolean,
     trailing: MarkdownTrailingInline | undefined,
     task: boolean,
+    mermaidEnabled: boolean,
     suffixText = "",
 ): Block {
     if (node.type === "paragraph") {
@@ -865,6 +909,12 @@ function markdownBlockHeight(
         );
     }
     if (node.type === "code") {
+        if (node.lang?.trim().toLowerCase() === "mermaid")
+            return {
+                height: mermaidBlockHeight(node.value, measure, cache, mermaidEnabled),
+                marginTop: codeMargins ? CODE_GAP : 0,
+                marginBottom: codeMargins ? CODE_GAP : 0,
+            };
         const lines = Math.max(1, node.value.split("\n").length);
         return {
             height: CODE_PADDING * 2 + lines * CODE_LINE,
@@ -885,10 +935,11 @@ function markdownBlockHeight(
                 BLOCK_GAP,
                 false,
                 trailing,
+                mermaidEnabled,
             ),
         );
     if (node.type === "list")
-        return flow(markdownListHeight(node, measure, cache, footnotes, trailing));
+        return flow(markdownListHeight(node, measure, cache, footnotes, trailing, mermaidEnabled));
     /* Definitions and raw HTML do not create rendered message boxes without a
        raw-HTML transform. Any future AST node starts at zero until its renderer
        receives an explicit geometry contract. */
@@ -906,6 +957,7 @@ function markdownFootnoteDefinitionHeight(
     measure: number,
     cache: MessageTextLayoutCache,
     footnotes: MarkdownFootnotes,
+    mermaidEnabled: boolean,
 ): number {
     const itemMeasure = measure - LIST_INDENT;
     const last = definition.children.at(-1);
@@ -921,6 +973,7 @@ function markdownFootnoteDefinitionHeight(
                 false,
                 undefined,
                 false,
+                mermaidEnabled,
                 node === last && suffixAttached ? suffix : "",
             ),
         )
@@ -939,6 +992,7 @@ function markdownFootnotesHeight(
     footnotes: MarkdownFootnotes,
     measure: number,
     cache: MessageTextLayoutCache,
+    mermaidEnabled: boolean,
 ): number {
     let total = 0;
     let rendered = 0;
@@ -952,6 +1006,7 @@ function markdownFootnotesHeight(
             measure,
             cache,
             footnotes,
+            mermaidEnabled,
         );
         rendered += 1;
     }
@@ -970,6 +1025,7 @@ export function markdownBodyHeight(
     measure: number,
     cache: MessageTextLayoutCache = sharedCache,
     trailingExtraWidth = 0,
+    mermaidEnabled = true,
 ): number {
     const ready = cacheReady(cache);
     let byMeasure = ready.markdownHeights[text];
@@ -977,7 +1033,7 @@ export function markdownBodyHeight(
         byMeasure = dictionaryCreate();
         ready.markdownHeights[text] = byMeasure;
     }
-    const measureKey = `${String(measure)}:${String(trailingExtraWidth)}`;
+    const measureKey = `${String(measure)}:${String(trailingExtraWidth)}:${mermaidEnabled ? "diagram" : "source"}`;
     const cached = byMeasure[measureKey];
     if (cached !== undefined) return cached;
     const tree = messageMarkdownTree(text, ready);
@@ -995,8 +1051,9 @@ export function markdownBodyHeight(
         BLOCK_GAP,
         true,
         trailing,
+        mermaidEnabled,
     );
-    const footnotesHeight = markdownFootnotesHeight(footnotes, measure, ready);
+    const footnotesHeight = markdownFootnotesHeight(footnotes, measure, ready, mermaidEnabled);
     const height =
         contentHeight +
         (contentHeight > 0 && footnotesHeight > 0 ? BLOCK_GAP : 0) +

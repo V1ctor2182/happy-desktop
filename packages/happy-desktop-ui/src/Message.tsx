@@ -450,6 +450,7 @@ export function Message(props: MessageProps) {
                           local.body,
                           inlineIncomingHoverMeta ?? undefined,
                           local.onFileOpen,
+                          local.generationStatus,
                       )
                     : null}
                 {/* An empty generated reply keeps a non-breaking-space line box

@@ -10,7 +10,9 @@ import {
 } from "react";
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CodeBlock, codeBlockLanguage } from "./CodeBlock";
+import { CodeBlock } from "./CodeBlock";
+import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
+import { MermaidDiagram } from "./MermaidDiagram";
 import { ScrollArea } from "./Scrollbar";
 
 // react-markdown reparses the document when this plugin list changes identity.
@@ -166,39 +168,6 @@ const DocumentImage = ({ alt, src }: ComponentPropsWithoutRef<"img"> & ExtraProp
 };
 
 /**
- * The code inside a fence, with the language its author labelled it with.
- *
- * Returns nothing for anything that is not a fenced block — a `<pre>` reached
- * some other way still has a document to appear in, and falling back to plain
- * text is the honest answer for content whose shape was not what was expected.
- */
-function documentFence(
-    node: ExtraProps["node"],
-): { lang?: string; text: string; offset?: number } | undefined {
-    const code = node?.children.find(
-        (child) => child.type === "element" && child.tagName === "code",
-    );
-    if (code === undefined || code.type !== "element") return undefined;
-    const text = code.children
-        .map((child) => (child.type === "text" ? child.value : ""))
-        .join("")
-        // Markdown always terminates a fence's last line; the renderer draws
-        // that as an extra empty row nobody wrote.
-        .replace(/\n$/, "");
-    if (text.length === 0) return undefined;
-    const names = code.properties["className"];
-    const label = (Array.isArray(names) ? names.map(String) : [])
-        .find((name) => name.startsWith("language-"))
-        ?.slice("language-".length);
-    const offset = node?.position?.start.offset;
-    return {
-        lang: codeBlockLanguage(label),
-        text,
-        ...(offset === undefined ? {} : { offset }),
-    };
-}
-
-/**
  * Fenced code is highlighted with the product's one code renderer, so a `ts`
  * block in a document reads exactly like the same lines opened as a file. The
  * wrapper keeps the block's spacing in the document flow.
@@ -208,12 +177,14 @@ const DocumentPre = ({
     node,
     ...props
 }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => {
-    const fence = documentFence(node);
+    const fence = markdownFence(node);
     const documentCacheKey = useContext(MarkdownCacheKeyContext);
     const cacheKey =
         fence?.offset === undefined || documentCacheKey === undefined
             ? undefined
             : `${documentCacheKey}:f${String(fence.offset)}`;
+    if (markdownFenceIsMermaid(fence))
+        return <MermaidDiagram source={fence!.text} variant="document" />;
     return (
         <div
             className="happy-markdown-document__code"
@@ -284,8 +255,9 @@ const documentComponents: Components = {
  * This is the reading end of the file viewer: a full-bleed scrollport with the
  * document set on a reading measure inside it, in the document type ramp rather
  * than the tighter chat one. GitHub-flavoured tables, task lists, and fenced
- * code are supported; raw HTML is never activated, since no raw-HTML plugin is
- * present and the document's author is not necessarily the reader.
+ * code and Mermaid diagrams are supported; raw HTML is never activated, since
+ * no raw-HTML plugin is present and the document's author is not necessarily
+ * the reader. Mermaid runs in the component's isolated DOM-free renderer.
  *
  * Props only: the caller has already read the file and decides what a link to
  * another file does.

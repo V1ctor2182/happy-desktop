@@ -36,6 +36,12 @@ export function filePreviewKind(path: string): FilePreviewKind {
 }
 \`\`\`
 
+\`\`\`mermaid
+flowchart LR
+    Markdown --> Render[Beautiful Mermaid]
+    Render --> SVG[Validated themed SVG]
+\`\`\`
+
 Inline \`code\` keeps the mono face, and a rule closes the document.
 
 ---
@@ -75,7 +81,7 @@ export function MarkdownDocumentPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="A Markdown file read as a document: a full-bleed scrollport with the document set on a 768px reading measure inside it. Headings, tables, task lists, quotes, and fenced code render in the document type ramp; a link to another file is a click the caller handles."
+            summary="A Markdown file read as a document: a full-bleed scrollport with the document set on a 768px reading measure inside it. Headings, tables, task lists, quotes, fenced code, and securely isolated Mermaid diagrams render in the document type ramp; a link to another file is a click the caller handles."
             title="Markdown document"
         >
             <Specimen

@@ -181,6 +181,7 @@ export {
     markdownDocumentLinkPath,
     type MarkdownDocumentProps,
 } from "./MarkdownDocument";
+export { MermaidDiagram, type MermaidDiagramProps } from "./MermaidDiagram";
 export { Icon, type IconName, iconNames, type IconProps } from "./Icon";
 export {
     Ionicon,

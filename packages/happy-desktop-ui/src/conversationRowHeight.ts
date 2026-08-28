@@ -330,6 +330,7 @@ export function messageRowHeight(input: {
     readonly body: string;
     readonly bodyVisible: boolean;
     readonly grouped: boolean;
+    readonly mermaidEnabled?: boolean;
     readonly metaAccessory: boolean;
     readonly surface: ConversationSurface;
     readonly textCache?: MessageTextLayoutCache;
@@ -353,7 +354,16 @@ export function messageRowHeight(input: {
               uiTextNaturalWidth("\u00a0", 16, input.textCache) +
               asideTimeWidth(input.time, input.textCache)
             : 0;
-    return chrome + markdownBodyHeight(input.body, measure, input.textCache, trailingExtraWidth);
+    return (
+        chrome +
+        markdownBodyHeight(
+            input.body,
+            measure,
+            input.textCache,
+            trailingExtraWidth,
+            input.mermaidEnabled,
+        )
+    );
 }
 
 /** Height of the structured question form or its compact answered history. */
@@ -613,6 +623,7 @@ export function conversationRowHeight(
             body: message.text,
             bodyVisible: hasBody || message.generationStatus !== undefined || traceCollapsible,
             grouped,
+            mermaidEnabled: message.generationStatus !== "streaming",
             metaAccessory: !own && traceCollapsible,
             surface: context.surface,
             textCache: cache?.text,

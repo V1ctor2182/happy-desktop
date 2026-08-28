@@ -9,7 +9,9 @@ import {
 } from "react";
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import { filePreviewKind } from "./FilePreview";
+import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
 import { markdownDocumentLinkPath } from "./MarkdownDocument";
+import { MermaidDiagram } from "./MermaidDiagram";
 import { MESSAGE_MARKDOWN_REMARK_PLUGINS } from "./messageMarkdownAst";
 import { ScrollArea } from "./Scrollbar";
 
@@ -56,6 +58,9 @@ const MarkdownTrailingContext = createContext<{
     endOffset: number;
     node: ReactNode;
 } | null>(null);
+const MarkdownGenerationStatusContext = createContext<MessageGenerationStatus | undefined>(
+    undefined,
+);
 type MarkdownImageProps = ComponentPropsWithoutRef<"img"> & ExtraProps;
 /**
  * A Markdown image is rendered as a safe labelled link, never an `<img>`: an
@@ -186,17 +191,33 @@ const MarkdownParagraph = ({
         </p>
     );
 };
-const MarkdownPre = ({ children, ...props }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => (
-    <ScrollArea
-        axes="horizontal"
-        className="happy-message__code-block"
-        data-happy-desktop-ui="message-code-block"
-        placement="overlay"
-        viewportClassName="happy-message__code-block-viewport"
-    >
-        <pre {...props}>{children}</pre>
-    </ScrollArea>
-);
+const MarkdownPre = ({
+    children,
+    node,
+    ...props
+}: ComponentPropsWithoutRef<"pre"> & ExtraProps) => {
+    const fence = markdownFence(node);
+    const generationStatus = useContext(MarkdownGenerationStatusContext);
+    if (markdownFenceIsMermaid(fence))
+        return (
+            <MermaidDiagram
+                enabled={generationStatus !== "streaming"}
+                source={fence!.text}
+                variant="message"
+            />
+        );
+    return (
+        <ScrollArea
+            axes="horizontal"
+            className="happy-message__code-block"
+            data-happy-desktop-ui="message-code-block"
+            placement="overlay"
+            viewportClassName="happy-message__code-block-viewport"
+        >
+            <pre {...props}>{children}</pre>
+        </ScrollArea>
+    );
+};
 const MarkdownTable = ({
     children,
     node: _node,
@@ -260,22 +281,27 @@ export function renderMessageMarkdown(
     text: string,
     trailing?: ReactNode,
     onFileOpen?: (path: string) => void,
+    generationStatus?: MessageGenerationStatus,
 ): ReactNode {
     return (
-        <MarkdownTrailingContext.Provider
-            value={
-                trailing === undefined ? null : { endOffset: text.trimEnd().length, node: trailing }
-            }
-        >
-            <MarkdownFileOpenContext.Provider value={onFileOpen}>
-                <MemoMarkdown
-                    components={markdownComponents}
-                    remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
-                    skipHtml
-                >
-                    {text}
-                </MemoMarkdown>
-            </MarkdownFileOpenContext.Provider>
-        </MarkdownTrailingContext.Provider>
+        <MarkdownGenerationStatusContext.Provider value={generationStatus}>
+            <MarkdownTrailingContext.Provider
+                value={
+                    trailing === undefined
+                        ? null
+                        : { endOffset: text.trimEnd().length, node: trailing }
+                }
+            >
+                <MarkdownFileOpenContext.Provider value={onFileOpen}>
+                    <MemoMarkdown
+                        components={markdownComponents}
+                        remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
+                        skipHtml
+                    >
+                        {text}
+                    </MemoMarkdown>
+                </MarkdownFileOpenContext.Provider>
+            </MarkdownTrailingContext.Provider>
+        </MarkdownGenerationStatusContext.Provider>
     );
 }

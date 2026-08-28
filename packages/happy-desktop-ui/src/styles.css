@@ -82,6 +82,7 @@
 @import "./styles/file-browser.css";
 @import "./styles/file-path-label.css";
 @import "./styles/markdown-document.css";
+@import "./styles/mermaid-diagram.css";
 @import "./styles/file-preview.css";
 @import "./styles/image-viewer.css";
 @import "./styles/video-viewer.css";

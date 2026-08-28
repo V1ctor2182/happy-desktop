@@ -357,7 +357,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="String body renders as Markdown — headings, lists, emphasis, inline + fenced code, and safe links, all on theme tokens"
+                detail="String body renders as Markdown — headings, lists, emphasis, inline + fenced code, isolated Mermaid diagrams, and safe links, all on theme tokens"
                 label="Message — Markdown body (complete)"
                 number="08"
                 stage="app"
@@ -372,6 +372,7 @@ export function MessagePage() {
                             "- Registers after `handshake.settled`\n" +
                             "- Retries once on `isColdStart()`\n\n" +
                             "```ts\nawait handshake.settled;\nconst token = await requestPushToken({ retry: isColdStart() });\n```\n\n" +
+                            "```mermaid\nflowchart LR\n  Handshake --> Token\n  Token --> Retry\n```\n\n" +
                             "See the [launch checklist](https://example.com/launch) for the rollout steps."
                         }
                         generationStatus="complete"
