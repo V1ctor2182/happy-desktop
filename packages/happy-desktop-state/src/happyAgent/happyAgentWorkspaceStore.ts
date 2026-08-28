@@ -10,7 +10,11 @@ import {
     type ComposerSnapshot,
     type ComposerStore,
 } from "../modules/composer/composerState.js";
-import type { HappyAgentChatHandle, HappyAgentWorkspaceClient } from "./happyAgentClient.js";
+import type {
+    HappyAgentChatHandle,
+    HappyAgentWorkspaceClient,
+    HappyAgentWorkspaceFilesChanged,
+} from "./happyAgentClient.js";
 import type { HappyAgentRecentTabMemory } from "./happyAgentWorkspaceMemory.js";
 import {
     HAPPY_AGENT_VIEW_PREFERENCES_EMPTY,
@@ -1390,6 +1394,9 @@ export function happyAgentWorkspaceStoreCreate(
     let active = false;
     let disposed = false;
     let unsubscribeList: (() => void) | undefined;
+    let unsubscribeWorkspaceFiles: (() => void) | undefined;
+    /** Ready bytes may have changed while this store had no live file-hint subscription. */
+    let fileDocumentsReconcileOnStart = false;
 
     // Open conversation lease. `acquisitionGeneration` invalidates an in-flight
     // acquisition when the addressed conversation changes or the store stops.
@@ -1681,6 +1688,42 @@ export function happyAgentWorkspaceStoreCreate(
 
     const fileLoadRequestOwns = (owner: string, request: HappyAgentFileLoadRequest): boolean =>
         fileLoadOwnerRequests.get(owner) === request;
+
+    /** Retires cached and pending reads covered by one filesystem hint. */
+    const fileAddressesInvalidate = (
+        groupId: HappyAgentGroupId,
+        paths: readonly string[] | null,
+    ): void => {
+        const changedPaths = paths === null ? undefined : new Set(paths);
+        const affected = (baseKey: string): boolean => {
+            const [candidateGroupId, path] = baseKey.split("\u0000");
+            return (
+                candidateGroupId === groupId &&
+                path !== undefined &&
+                (changedPaths === undefined || changedPaths.has(path))
+            );
+        };
+        for (const [key, entry] of readyDocumentCache) {
+            if (!affected(entry.baseKey)) continue;
+            readyDocumentCache.delete(key);
+            readyDocumentCacheWeight -= entry.weight;
+        }
+        for (const [key, request] of fileLoadRequests) {
+            if (!affected(key)) continue;
+            fileLoadRequests.delete(key);
+            request.controller.abort();
+            for (const owner of request.consumers) {
+                if (fileLoadOwnerRequests.get(owner) !== request) continue;
+                fileLoadOwnerKeys.delete(owner);
+                fileLoadOwnerRequests.delete(owner);
+            }
+        }
+        filePreprocessQueue = filePreprocessQueue.filter(
+            (request) =>
+                request.groupId !== groupId ||
+                (changedPaths !== undefined && !changedPaths.has(request.path)),
+        );
+    };
 
     const fileLoadRequestAcquire = (
         owner: string,
@@ -2727,6 +2770,18 @@ export function happyAgentWorkspaceStoreCreate(
                 recompute();
             },
         );
+    };
+
+    /** Reconciles durable bytes after the daemon reports a filesystem change. */
+    const workspaceFilesChanged = (change: HappyAgentWorkspaceFilesChanged): void => {
+        const affected = (path: string): boolean =>
+            change.paths === null || change.paths.includes(path);
+        fileAddressesInvalidate(change.groupId, change.paths);
+        for (const tab of fileTabs) {
+            if (tab.groupId !== change.groupId || !affected(tab.path)) continue;
+            fileTabLoadedIdentities.delete(tab.id);
+            fileLoad(tab.id, fileChangeFind(tab.groupId, tab.path)?.revision ?? tab.revision);
+        }
     };
 
     /**
@@ -4011,6 +4066,13 @@ export function happyAgentWorkspaceStoreCreate(
 
     const start = (): void => {
         active = true;
+        const reconcileFileDocuments = fileDocumentsReconcileOnStart;
+        fileDocumentsReconcileOnStart = false;
+        if (reconcileFileDocuments) {
+            readyDocumentCache.clear();
+            readyDocumentCacheWeight = 0;
+            fileTabLoadedIdentities.clear();
+        }
         workspaceFilesDirectoryLoadPump();
         filePreprocessLoadPump();
         unsubscribeList = list.subscribe(() => {
@@ -4025,13 +4087,14 @@ export function happyAgentWorkspaceStoreCreate(
             catalogAuthoritativeApply();
             recompute();
         });
+        unsubscribeWorkspaceFiles = client.workspaceFilesSubscribe(workspaceFilesChanged);
         // The addressed conversation survives losing every subscriber (the URL
         // still names it), so remounting re-acquires it rather than opening
         // nothing.
         if (openId) acquireConversation(openId);
         for (const tab of fileTabs) {
             const revalidation = fileTabRevalidations.get(tab.id);
-            if (tab.loading || revalidation !== undefined)
+            if (reconcileFileDocuments || tab.loading || revalidation !== undefined)
                 fileLoad(tab.id, revalidation?.revision ?? tab.revision);
         }
         // Which applications exist is a property of the host, not of anything
@@ -4052,6 +4115,9 @@ export function happyAgentWorkspaceStoreCreate(
         acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
+        unsubscribeWorkspaceFiles?.();
+        unsubscribeWorkspaceFiles = undefined;
+        fileDocumentsReconcileOnStart = true;
         // A workspace nobody is looking at does not go asking the host what is
         // installed; the next start reads it fresh anyway.
         if (openInTargetsTimer !== undefined) {

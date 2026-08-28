@@ -1112,7 +1112,6 @@ function gitSnapshot(git: GitState): GitChangeSnapshot {
         files: git.files,
         generation: `${git.facts.head}:${String(git.scannedAt)}`,
         version: git.scannedAt,
-        revision: git.facts.head,
         ...(git.comparison === "ready" && git.base !== null ? { baseRevision: git.base } : {}),
     };
 }

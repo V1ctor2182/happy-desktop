@@ -494,6 +494,7 @@ export interface GitChangeSnapshot {
     }[];
     generation: string;
     version: number;
+    /** Source-owned working-tree identity, when it is stronger than generation/version. */
     revision?: string;
     /** Comparison revision already held by the live Git watcher. */
     baseRevision?: string;
@@ -608,6 +609,7 @@ export interface GroupsState {
 export type GroupDelta =
     | { type: "projects_changed"; projects: readonly ProjectGroup[] }
     | { type: "groups_state_changed"; state: GroupsState }
+    | { type: "files_changed"; workspaceId: string; paths: readonly string[] | null }
     | { type: "project_added"; projectId: string }
     | { type: "workspace_added"; projectId: string; workspaceId: string }
     | { type: "bot_added"; botId: string; workspaceId: string }

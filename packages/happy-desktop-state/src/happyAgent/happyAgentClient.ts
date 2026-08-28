@@ -107,6 +107,13 @@ export interface HappyAgentChatHandle {
     [Symbol.dispose](): void;
 }
 
+/** One daemon hint that says which workspace files must be read again. */
+export interface HappyAgentWorkspaceFilesChanged {
+    readonly groupId: HappyAgentGroupId;
+    /** Relative paths, or `null` when every materialized path may have changed. */
+    readonly paths: readonly string[] | null;
+}
+
 export interface HappyAgentWorkspaceClient {
     /** One model/capability/default/last-used authority for this daemon connection. */
     readonly models: HappyAgentModelStore;
@@ -189,6 +196,10 @@ export interface HappyAgentWorkspaceClient {
         path: string,
         signal?: AbortSignal,
     ): Promise<HappyAgentWorkspaceFileDocument>;
+    /** Follows file-change hints only while a workspace surface is materialized. */
+    workspaceFilesSubscribe(
+        listener: (change: HappyAgentWorkspaceFilesChanged) => void,
+    ): () => void;
     /**
      * Reads one workspace file as bytes, for showing it rather than editing it.
      * Makes no claim that the file is text, so an image or a video arrives whole.
@@ -473,6 +484,20 @@ export function happyAgentWorkspaceClientCreate(
         workspaceFileRead: async (groupId, path, signal) => {
             const file = await deps.client.readFile(groupId, path, { signal });
             return { path, content: happyAgentTextDecodeBase64(file.content), hash: file.hash };
+        },
+        workspaceFilesSubscribe(listener) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const connection = deps.connection.connectGroups({
+                onChange: () => undefined,
+                onDelta: (delta) => {
+                    if (delta.type !== "files_changed") return;
+                    listener({
+                        groupId: delta.workspaceId as HappyAgentGroupId,
+                        paths: delta.paths,
+                    });
+                },
+            });
+            return () => connection.close();
         },
         workspaceFileBytesRead: (groupId, path, signal) =>
             deps.hostServices.workspaceFileBytesRead(groupId, path, signal),

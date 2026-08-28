@@ -296,6 +296,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         sessionsComplete: config !== undefined,
     });
 
+    const publishGroupDeltas = (deltas: readonly GroupDelta[]): void => {
+        for (const subscriber of groupSubscribers) {
+            if (subscriber.closed) continue;
+            for (const delta of deltas) subscriber.onDelta?.(delta);
+        }
+    };
+
     const publishGroups = (deltas: readonly GroupDelta[] = []): void => {
         if (config !== undefined) {
             const daemonConfig = config;
@@ -848,19 +855,26 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     entry.workspace = workspaceOf(known.workspaceId);
                 }
             }
+            const projectedProjects = projectGroups(
+                bootstrap.projects,
+                bootstrap.workspaces,
+                endpoint,
+                config,
+                gitStates,
+                agentDrafts,
+                agentModes,
+            );
             publishGroups([
-                {
-                    type: "projects_changed",
-                    projects: projectGroups(
-                        bootstrap.projects,
-                        bootstrap.workspaces,
-                        endpoint,
-                        config,
-                        gitStates,
-                        agentDrafts,
-                        agentModes,
-                    ),
-                },
+                { type: "projects_changed", projects: projectedProjects },
+                ...(reconcileSessions
+                    ? activeGitWorkspaceIds(bootstrap.projects, bootstrap.workspaces).map(
+                          (workspaceId): GroupDelta => ({
+                              type: "files_changed",
+                              workspaceId,
+                              paths: null,
+                          }),
+                      )
+                    : []),
             ]);
             // Startup has no missing journal interval: a session that was
             // materialized concurrently owns its own cursor-bounded snapshot.
@@ -1348,6 +1362,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     ),
                 }));
                 publishGroups();
+                return;
+            }
+            case "files.updated": {
+                const delta: GroupDelta = {
+                    type: "files_changed",
+                    workspaceId: event.payload.workspaceId,
+                    paths: event.payload.paths,
+                };
+                publishGroupDeltas([delta]);
                 return;
             }
             case "profile.updated":
