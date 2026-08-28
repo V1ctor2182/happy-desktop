@@ -13,7 +13,8 @@ re-drawn, re-timed, or otherwise modified. `cat-face.json`, `closed-lock.json`,
 August 2026. `disguised-face.json` was supplied by the project owner on 23
 August 2026. `cherry-blossom.json`, `front-facing-baby-chick.json`,
 `mirror-ball.json`, and `open-hands.json` were supplied by the project owner on
-26 August 2026. Their upstream sources are not recorded in the files.
+26 August 2026, and `cloud-variation.json` and `monkey-hear-no-evil.json` on 27
+August 2026. Their upstream sources are not recorded in the files.
 
 | File                           | SHA-256                                                            | Format                                        | Size              |
 | ------------------------------ | ------------------------------------------------------------------ | --------------------------------------------- | ----------------- |
@@ -21,6 +22,7 @@ August 2026. `cherry-blossom.json`, `front-facing-baby-chick.json`,
 | `cat-face.json`                | `21d629ce58ad92bf140bfb7f5534e553232376a56c6bdddd0e527523a89c4d90` | Lottie 5.5.2, 512×512, 60fps, 180f, 17 layers | 367 KB / 66 KB gz |
 | `cherry-blossom.json`          | `4b6c31349911d268c4509e184aac61d877269d7e57745a32c750c851d8a25153` | Lottie 5.5.2, 512×512, 60fps, 180f, 30 layers | 309 KB / 42 KB gz |
 | `closed-lock.json`             | `f6087f51de1ccc7dea5cfb9853292bc14271e86e9390a8fbc9514b31b32a0ad8` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 146 KB / 14 KB gz |
+| `cloud-variation.json`         | `4833ea8c714e353818667d8c8e39ce807273e86c79c2d473f2331a00526600aa` | Lottie 5.5.2, 512×512, 60fps, 180f, 39 layers | 143 KB / 12 KB gz |
 | `confetti-ball.json`           | `65e82eafe12ac295ce747336f8453e3c500d3c130f77db97581431bf1c7d9fc5` | Lottie 5.5.2, 512×512, 60fps, 180f, 41 layers | 193 KB / 20 KB gz |
 | `disguised-face.json`          | `2f4aa4452a5b785882bee5435a26774443b1a8232bfaa79136c22f2f4a2fa0d1` | Lottie 5.5.2, 512×512, 60fps, 180f, 17 layers | 281 KB / 41 KB gz |
 | `fox.json`                     | `7206bf1b9c34fd7d149e79747b48f7c9a1f51fd42ca92f4f344dee53eed0cd70` | Lottie 5.5.2, 512×512, 60fps, 180f, 20 layers | 368 KB / 38 KB gz |
@@ -28,6 +30,7 @@ August 2026. `cherry-blossom.json`, `front-facing-baby-chick.json`,
 | `hatching-chick.json`          | `1a693cca609409e3bf79c3c997801346bc083fd9ef2e6fa90689a1288be901dd` | Lottie 5.5.2, 512×512, 60fps, 180f, 3 layers  | 309 KB / 25 KB gz |
 | `llama.json`                   | `ff16ee4b8a19a782b5e5b12dbe103d145410f16b8801af5723b6636c56a0a0ff` | Lottie 5.5.2, 512×512, 60fps, 180f, 27 layers | 462 KB / 60 KB gz |
 | `mirror-ball.json`             | `58f32f20c8ac9d81f1cc403f6a473e1ff4480cd6aff986d1327efcc95d060a81` | Lottie 5.5.2, 512×512, 60fps, 180f, 36 layers | 836 KB / 41 KB gz |
+| `monkey-hear-no-evil.json`     | `ac6eb10983eba058156d8ec1b34e5a1239a6378fb83a8ad11f7a5d61cb61634b` | Lottie 5.5.2, 512×512, 60fps, 137f, 15 layers | 143 KB / 17 KB gz |
 | `open-hands.json`              | `7b5b9d98156057d2fb4cb895f0a462e943942be190dd0a302935e2ef306420b4` | Lottie 5.5.2, 512×512, 60fps, 179f, 3 layers  | 331 KB / 36 KB gz |
 | `owl.json`                     | `95402270d116a310aa4b1606f88a2bbc79d2b4d947b5d84181c0b126c7aaba59` | Lottie 5.5.2, 512×512, 60fps, 131f, 18 layers | 284 KB / 47 KB gz |
 | `party.json`                   | `de4ac9e38f2c7c3bc1e4022be841ec0c26b9b75cca51df43aaf9c0e97aaa1492` | Lottie 5.5.2, 512×512, 60fps, 180f, 40 layers | 131 KB / 15 KB gz |
@@ -38,7 +41,9 @@ August 2026. `cherry-blossom.json`, `front-facing-baby-chick.json`,
 | `wand.json`                    | `8de70508fe1ebdeb08fc7005820329696f28ec84adc94f3cc4362cf7d3e72870` | Lottie 5.5.2, 512×512, 60fps, 176f, 30 layers | 193 KB / 16 KB gz |
 
 None embeds a raster asset and none references an external image, so a scene is
-one JSON fetch and nothing else. Each is imported by URL, so a screen only
+one JSON fetch and nothing else. `monkey-hear-no-evil.json` is the only one with
+an `assets` entry at all, and it is a precomposition — vector layers inside the
+same file, not a picture fetched from somewhere. Each is imported by URL, so a screen only
 downloads the animation it actually shows.
 
 The repository formatter is told to leave this directory's JSON alone
@@ -59,7 +64,8 @@ Contributors`. That is a
 - **Licence for `cat-face.json`, `closed-lock.json`, `confetti-ball.json`,
   `disguised-face.json`, `fox.json`, `hatching-chick.json`, `llama.json`,
   `party.json`, `unicorn.json`, `cherry-blossom.json`,
-  `front-facing-baby-chick.json`, `mirror-ball.json`, and `open-hands.json`** not
+  `front-facing-baby-chick.json`, `mirror-ball.json`, `open-hands.json`,
+  `cloud-variation.json`, and `monkey-hear-no-evil.json`** not
   recorded in the supplied files. Their upstream licensing has not been
   independently established here.
 
@@ -72,12 +78,12 @@ Plain JSON stays diffable and needs no tooling.
 
 ## What each one means
 
-The complete source set is twenty-one glossy 3D emoji: 👾 game, 🐱 cat face, 🌸
-cherry blossom, 🔒 closed lock, 🎊 confetti ball, 🥸 disguised face, 🦊 fox, 🐥
-front-facing baby chick, 🐣 hatching chick, 🦙 llama, 🪩 mirror ball, 👐 open
-hands, 🦄 unicorn, 🦉 owl, 🎉 party, 🍿 popcorn, 🤖 robot, 🐌 snail, ✨ sparkles,
-🗿 stone, 🪄 wand. Sixteen carry a meaning Happy actually needs, and each is
-used for that one meaning and nothing else:
+The complete source set is twenty-three glossy 3D emoji: 👾 game, 🐱 cat face, 🌸
+cherry blossom, 🔒 closed lock, ☁️ cloud, 🎊 confetti ball, 🥸 disguised face, 🦊
+fox, 🐥 front-facing baby chick, 🐣 hatching chick, 🦙 llama, 🪩 mirror ball, 🙉
+hear-no-evil monkey, 👐 open hands, 🦄 unicorn, 🦉 owl, 🎉 party, 🍿 popcorn, 🤖
+robot, 🐌 snail, ✨ sparkles, 🗿 stone, 🪄 wand. Eighteen carry a meaning Happy
+actually needs, and each is used for that one meaning and nothing else:
 
 - 👾 **alien monster** — _people and agents are together in one live session._
   Multiplayer is a shared working room, not a transcript handed around after
@@ -86,6 +92,9 @@ used for that one meaning and nothing else:
   connection, not a request that still needs an answer.
 - 🔒 **closed lock** — _access is secured._ It is the settled state after a
   private boundary has been established, not a warning or an access error.
+- ☁️ **cloud** — _work runs on hardware that is not this machine._ An agent
+  hosted for you, or one on a machine of your own that others can reach. It is
+  about where the work happens, never about a sync or an upload.
 - 🎊 **confetti ball** — _one milestone has just completed._ It marks the
   specific completion rather than a group celebration.
 - 🥸 **disguised face** — _this machine's identity is being defined._ It belongs
@@ -99,8 +108,14 @@ used for that one meaning and nothing else:
 - 🦙 **llama** — _several models are being combined on one job._ One harness
   turns an unusual mix of Claude, Codex, Grok, or anything else into one
   coherent workflow.
-- 🪩 **mirror ball** — _a social circle is celebrating together._ It is the
-  friendship-specific celebration rather than a general team completion.
+- 🪩 **mirror ball** — _one thing shared across a whole circle at once._ A ball
+  of many mirrors throwing the same light everywhere in the room: one session,
+  one channel, one moment that a circle of people is in together rather than
+  each on their own. Not a completion — the party and the confetti ball own
+  those.
+- 🙉 **hear-no-evil monkey** — _nobody outside can listen to this._ It belongs
+  beside a promise about privacy that is actually kept, never beside a warning
+  that something is exposed.
 - 👐 **open hands** — _a social invitation is waiting for a response._ It belongs
   to an incoming friend request, where accepting or declining is the next act.
 - 🎉 **party** — _a group is celebrating a shared completion._ It is the social

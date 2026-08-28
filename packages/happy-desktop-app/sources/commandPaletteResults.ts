@@ -259,12 +259,12 @@ const SETTINGS_JUMPS: readonly {
         keywords: "appearance theme scrollbars new sessions experimental",
     },
     {
-        id: "settings:profile",
-        title: "Settings › Profile",
-        section: "profile",
-        sectionLabel: "Profile",
+        id: "settings:account",
+        title: "Settings › Account",
+        section: "account",
+        sectionLabel: "Account",
         icon: "users",
-        keywords: "name email photo account happy social",
+        keywords: "profile name email photo happy social encryption secret key devices",
     },
     {
         id: "settings:instructions",

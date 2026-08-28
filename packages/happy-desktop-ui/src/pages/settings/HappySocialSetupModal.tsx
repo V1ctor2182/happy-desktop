@@ -12,7 +12,15 @@ export interface HappySocialSetupModalProps {
     readonly motion?: "animated" | "settled";
     readonly children: ReactNode;
     readonly description: string;
-    readonly status?: string;
+    /**
+     * How the stage is divided. `copy` is the default: the heading and its
+     * sentence are drawn and the children take the lane beneath them. `full`
+     * hands the whole stage to the children, for a step that brings its own
+     * words — the slide deck that explains the product. The heading and the
+     * sentence stay in the tree either way, so the dialog keeps one steady
+     * accessible name and description across every step of the flow.
+     */
+    readonly presentation?: "copy" | "full";
     readonly title: string;
     onClose(): void;
 }
@@ -21,10 +29,20 @@ export interface HappySocialSetupModalProps {
  * The immersive Happy Social setup surface. It uses the first-run sky as one
  * continuous window background and owns both its explicit close control and
  * its bottom-edge entrance/exit motion.
+ *
+ * The surface is two layers: the scenery travels, the window furniture does
+ * not. The drag lane and the close control are siblings of the sliding layer
+ * rather than passengers inside it, because a native drag rectangle is recorded
+ * from the *transformed* position of its box and is not recollected while a
+ * composited transform animation runs — furniture written inside the sliding
+ * layer is registered a full window below the screen, subtracts nothing from
+ * the app header underneath, and leaves the top of the close control unclickable.
  */
 export function HappySocialSetupModal(props: HappySocialSetupModalProps) {
     const [closing, closingSet] = useState(false);
     const motion = props.motion ?? "animated";
+    const presentation = props.presentation ?? "copy";
+    const hidden = presentation === "full" ? "happy-visually-hidden" : undefined;
     const close = () => {
         if (closing) return;
         if (motion === "settled") {
@@ -35,49 +53,63 @@ export function HappySocialSetupModal(props: HappySocialSetupModalProps) {
     };
     return (
         <WindowOverlay>
-            <div
-                className="happy-social-setup-modal__motion"
-                data-closing={closing ? "" : undefined}
-                data-motion={motion}
-                onAnimationEnd={(event) => {
-                    if (event.target === event.currentTarget && closing) props.onClose();
-                }}
+            <ModalOverlay
+                className="happy-social-setup-modal__overlay"
+                onDismiss={close}
+                placement="fill"
             >
-                <ModalOverlay onDismiss={close} placement="fill">
-                    <section
-                        aria-describedby="happy-social-setup-modal-description"
-                        aria-labelledby="happy-social-setup-modal-title"
-                        aria-modal="true"
-                        className="happy-social-setup-modal"
-                        data-happy-desktop-ui="happy-social-setup-modal"
-                        role="dialog"
+                <section
+                    aria-describedby="happy-social-setup-modal-description"
+                    aria-labelledby="happy-social-setup-modal-title"
+                    aria-modal="true"
+                    className="happy-social-setup-modal"
+                    data-closing={closing ? "" : undefined}
+                    data-happy-desktop-ui="happy-social-setup-modal"
+                    data-motion={motion}
+                    role="dialog"
+                >
+                    <div
+                        className="happy-social-setup-modal__motion"
+                        onAnimationEnd={(event) => {
+                            if (event.target === event.currentTarget && closing) props.onClose();
+                        }}
                     >
                         <OnboardingSky appearance={props.appearance} />
-                        <WindowDragRegion />
-                        <Button
-                            aria-label="Close Happy Social setup"
-                            className="happy-social-setup-modal__close"
-                            icon="close"
-                            iconOnly
-                            onClick={close}
-                            size="medium"
-                            variant="ghost"
-                        />
                         <div
                             className="happy-social-setup-modal__content"
                             data-happy-desktop-ui="happy-social-setup-modal-content"
+                            data-presentation={presentation}
                         >
-                            <span className="happy-social-setup-modal__eyebrow">Happy Social</span>
-                            <h1 id="happy-social-setup-modal-title">{props.title}</h1>
-                            <p id="happy-social-setup-modal-description">{props.description}</p>
-                            {props.status ? <code>{props.status}</code> : null}
+                            <span
+                                className={["happy-social-setup-modal__eyebrow", hidden]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                            >
+                                Happy Social
+                            </span>
+                            <h1 className={hidden} id="happy-social-setup-modal-title">
+                                {props.title}
+                            </h1>
+                            <p className={hidden} id="happy-social-setup-modal-description">
+                                {props.description}
+                            </p>
                             <div className="happy-social-setup-modal__controls">
                                 {props.children}
                             </div>
                         </div>
-                    </section>
-                </ModalOverlay>
-            </div>
+                    </div>
+                    <WindowDragRegion />
+                    <Button
+                        aria-label="Close Happy Social setup"
+                        className="happy-social-setup-modal__close"
+                        icon="close"
+                        iconOnly
+                        onClick={close}
+                        size="medium"
+                        variant="ghost"
+                    />
+                </section>
+            </ModalOverlay>
         </WindowOverlay>
     );
 }

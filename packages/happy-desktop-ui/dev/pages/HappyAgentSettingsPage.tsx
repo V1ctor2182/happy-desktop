@@ -3,6 +3,8 @@ import {
     HappySocialSettings,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
+    HappyAgentDeviceSettings,
+    HappyAgentEncryptionSettings,
     HappyAgentGeneralSettings,
     HappyAgentInstructionsSettings,
     HappyAgentMobileSettings,
@@ -11,6 +13,7 @@ import {
     HappyAgentProfileSettings,
     HappyAgentSettingsShell,
     HappyAgentUsageSettings,
+    type HappyAgentDevice,
     type HappyAgentProviderRow,
     type HappyAgentSettingsCategory,
 } from "../../src";
@@ -21,7 +24,7 @@ export const componentNumber = "P-012";
 
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
-    { icon: "users", id: "profile", label: "Profile" },
+    { icon: "users", id: "account", label: "Account" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "globe", id: "providers", label: "Providers" },
     { icon: "zap", id: "usage", label: "Usage" },
@@ -31,10 +34,35 @@ const categories: readonly HappyAgentSettingsCategory[] = [
 
 const usageDescription = "How much of each provider account's plan this machine has spent";
 
-const profileDescription =
-    "Who this machine is when it authors work, and the account it signs into";
+const accountDescription =
+    "Who this machine is when it authors work, and the devices signed in with it";
 
 const mobileDescription = "This Happy Agent's connection to Happy Mobile";
+
+const accountDevices: readonly HappyAgentDevice[] = [
+    {
+        agentVersion: "0.4.22",
+        architecture: "arm64",
+        current: true,
+        id: "device-1",
+        lastAccessed: "27 Aug 2026, 02:14",
+        name: "Steve's MacBook Pro",
+        osVersion: "26.5.0",
+        platform: "macOS",
+        removing: false,
+    },
+    {
+        agentVersion: "0.4.21",
+        architecture: "x64",
+        current: false,
+        id: "device-2",
+        lastAccessed: "26 Aug 2026, 19:03",
+        name: "tashkent-build",
+        osVersion: "6.8.0",
+        platform: "Linux",
+        removing: false,
+    },
+];
 
 const usageAccounts: readonly HappyAgentProviderUsageEntry[] = [
     {
@@ -371,6 +399,38 @@ const providers: readonly HappyAgentProviderRow[] = [
 
 const noop = () => undefined;
 
+/**
+ * The Happy Social row is the specimen here, so every fixture keeps the join
+ * surface closed and settled. Its own screens are specimens of C-275.
+ */
+const happySocialJoinFixture = {
+    join: { step: "checking" } as const,
+    keys: "inactive" as const,
+    joinActions: {
+        onAccountConnect: noop,
+        onAcknowledgementChange: noop,
+        onConfirmationChange: noop,
+        onConfirmationSubmit: noop,
+        onPasswordChange: noop,
+        onPasswordSubmit: noop,
+        onRestorePasswordChange: noop,
+        onRestoreSecretChange: noop,
+        onRestoreSubmit: noop,
+        onSecretSubmit: noop,
+        onUsernameChange: noop,
+        onUsernameSubmit: noop,
+        onVaultDeleteCancel: noop,
+        onVaultDeleteConfirmationChange: noop,
+        onVaultDeleteOpen: noop,
+        onVaultDeleteSubmit: noop,
+    },
+    joinable: true,
+    joinOpen: false,
+    onDisconnect: noop,
+    onJoinClose: noop,
+    onJoinOpen: noop,
+};
+
 export function HappyAgentSettingsBlueprintPage() {
     return (
         <ComponentPage
@@ -444,12 +504,12 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="01a"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappySocialSettings
                         displayName="Steve Korshakov"
@@ -459,10 +519,96 @@ export function HappyAgentSettingsBlueprintPage() {
                             status: "enrolled",
                             username: "steve",
                         }}
-                        onConnect={noop}
-                        onDisconnect={noop}
-                        onEnroll={noop}
-                        onUsernameChange={noop}
+                        {...happySocialJoinFixture}
+                        keys="ready"
+                        status="connected"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Signed in, but the errand is unfinished: one row, and the only act available is to resume it"
+                label="Happy Agent settings — Happy Social keys required"
+                number="01ac"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="account"
+                    categories={categories}
+                    description={accountDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Account"
+                >
+                    <HappySocialSettings
+                        displayName="Steve Korshakov"
+                        email="steve@example.com"
+                        enrollment={{
+                            displayName: "Steve Korshakov",
+                            status: "enrolled",
+                            username: "steve",
+                        }}
+                        {...happySocialJoinFixture}
+                        keys="create_required"
+                        status="connected"
+                    />
+                    <HappyAgentEncryptionSettings
+                        encryption={{ status: "create_required" }}
+                        onKeysContinue={noop}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Unfinished work switched off and no account yet: the category is withheld entirely rather than shown with nothing to press"
+                label="Happy Agent settings — Happy Social not offered"
+                number="01ad"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="account"
+                    categories={categories}
+                    description={accountDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Account"
+                >
+                    <HappyAgentProfileSettings
+                        email="steve@korshakov.com"
+                        name="Steve Korshakov"
+                        onEmailChange={noop}
+                        onNameChange={noop}
+                        onRevert={noop}
+                        onSave={noop}
+                    />
+                    <HappySocialSettings
+                        enrollment={{ status: "inactive" }}
+                        {...happySocialJoinFixture}
+                        joinable={false}
+                        status="disconnected"
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="An account already made before the switch went off: it keeps every control it needs, so nobody is stranded mid-errand"
+                label="Happy Agent settings — Happy Social kept when not offered"
+                number="01ae"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="account"
+                    categories={categories}
+                    description={accountDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Account"
+                >
+                    <HappySocialSettings
+                        displayName="Steve Korshakov"
+                        email="steve@example.com"
+                        enrollment={{
+                            displayName: "Steve Korshakov",
+                            status: "enrolled",
+                            username: "steve",
+                        }}
+                        {...happySocialJoinFixture}
+                        joinable={false}
+                        keys="create_required"
                         status="connected"
                     />
                 </HappyAgentSettingsShell>
@@ -473,21 +619,18 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="01aa"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappySocialSettings
                         displayName="Steve Korshakov"
                         email="steve@example.com"
                         enrollment={{ status: "unenrolled", username: "" }}
-                        onConnect={noop}
-                        onDisconnect={noop}
-                        onEnroll={noop}
-                        onUsernameChange={noop}
+                        {...happySocialJoinFixture}
                         status="connected"
                     />
                 </HappyAgentSettingsShell>
@@ -498,12 +641,12 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="01ab"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappySocialSettings
                         displayName="Steve Korshakov"
@@ -513,10 +656,7 @@ export function HappyAgentSettingsBlueprintPage() {
                             status: "unenrolled",
                             username: "steve",
                         }}
-                        onConnect={noop}
-                        onDisconnect={noop}
-                        onEnroll={noop}
-                        onUsernameChange={noop}
+                        {...happySocialJoinFixture}
                         status="connected"
                     />
                 </HappyAgentSettingsShell>
@@ -527,20 +667,17 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="01b"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappySocialSettings
                         authorizationCompleting
                         enrollment={{ status: "inactive" }}
-                        onConnect={noop}
-                        onDisconnect={noop}
-                        onEnroll={noop}
-                        onUsernameChange={noop}
+                        {...happySocialJoinFixture}
                         status="authorizing"
                     />
                 </HappyAgentSettingsShell>
@@ -551,19 +688,16 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="01c"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappySocialSettings
                         enrollment={{ status: "inactive" }}
-                        onConnect={noop}
-                        onDisconnect={noop}
-                        onEnroll={noop}
-                        onUsernameChange={noop}
+                        {...happySocialJoinFixture}
                         status="authorizing"
                     />
                 </HappyAgentSettingsShell>
@@ -574,20 +708,17 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="01d"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappySocialSettings
                         enrollment={{ status: "inactive" }}
                         error="Happy Agent could not complete Happy Social authentication."
-                        onConnect={noop}
-                        onDisconnect={noop}
-                        onEnroll={noop}
-                        onUsernameChange={noop}
+                        {...happySocialJoinFixture}
                         status="disconnected"
                     />
                 </HappyAgentSettingsShell>
@@ -787,17 +918,17 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Profile category in full: the identity this machine authors work as, then the Happy Social account that identity signs into"
-                label="Happy Agent settings — profile"
+                detail="Account category in full, in the order the four are true in: who this machine authors as, the account it signs into, what that account's data is locked with, and every installation sharing it"
+                label="Happy Agent settings — account"
                 number="02a"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappyAgentProfileSettings
                         email="steve@korshakov.com"
@@ -806,6 +937,7 @@ export function HappyAgentSettingsBlueprintPage() {
                         onNameChange={noop}
                         onRevert={noop}
                         onSave={noop}
+                        username="steve"
                     />
                     <HappySocialSettings
                         displayName="Steve Korshakov"
@@ -815,11 +947,100 @@ export function HappyAgentSettingsBlueprintPage() {
                             status: "enrolled",
                             username: "steve",
                         }}
-                        onConnect={noop}
-                        onDisconnect={noop}
-                        onEnroll={noop}
-                        onUsernameChange={noop}
+                        {...happySocialJoinFixture}
+                        keys="ready"
                         status="connected"
+                    />
+                    <HappyAgentEncryptionSettings
+                        encryption={{
+                            identityKey: "TTYFvS8PBRw760IXOVgI24YAx8qiV9Zxmb9HdZ5F2Ss",
+                            secret: { status: "hidden" },
+                            status: "ready",
+                        }}
+                        onKeysContinue={noop}
+                        onSecretHide={noop}
+                        onSecretReveal={noop}
+                    />
+                    <HappyAgentDeviceSettings
+                        devices={accountDevices}
+                        onDeviceRemove={noop}
+                        read={{ status: "ready" }}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="An account whose encryption is unfinished: the way to resume it sits under the account it protects, above the devices that would share it"
+                label="Happy Agent settings — encryption required"
+                number="02aa"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="account"
+                    categories={categories}
+                    description={accountDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Account"
+                >
+                    <HappyAgentProfileSettings
+                        email="steve@korshakov.com"
+                        name="Steve Korshakov"
+                        onEmailChange={noop}
+                        onNameChange={noop}
+                        onRevert={noop}
+                        onSave={noop}
+                        username="steve"
+                    />
+                    <HappySocialSettings
+                        displayName="Steve Korshakov"
+                        email="steve@example.com"
+                        enrollment={{
+                            displayName: "Steve Korshakov",
+                            status: "enrolled",
+                            username: "steve",
+                        }}
+                        {...happySocialJoinFixture}
+                        keys="create_required"
+                        status="connected"
+                    />
+                    <HappyAgentEncryptionSettings
+                        encryption={{ status: "create_required" }}
+                        onKeysContinue={noop}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The retained secret key on demand: read from Happy Agent, shown once, and copyable"
+                label="Happy Agent settings — secret key revealed"
+                number="02ab"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="account"
+                    categories={categories}
+                    description={accountDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Account"
+                >
+                    <HappyAgentProfileSettings
+                        email="steve@korshakov.com"
+                        name="Steve Korshakov"
+                        onEmailChange={noop}
+                        onNameChange={noop}
+                        onRevert={noop}
+                        onSave={noop}
+                        username="steve"
+                    />
+                    <HappyAgentEncryptionSettings
+                        encryption={{
+                            identityKey: "TTYFvS8PBRw760IXOVgI24YAx8qiV9Zxmb9HdZ5F2Ss",
+                            secret: {
+                                secret: "H1-4K2QW-9XZTM-7NPDV-3JHRB-8CFGL2",
+                                status: "revealed",
+                            },
+                            status: "ready",
+                        }}
+                        onSecretHide={noop}
+                        onSecretReveal={noop}
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
@@ -829,12 +1050,12 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="02b"
             >
                 <HappyAgentSettingsShell
-                    activeCategoryId="profile"
+                    activeCategoryId="account"
                     categories={categories}
-                    description={profileDescription}
+                    description={accountDescription}
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Profile"
+                    title="Account"
                 >
                     <HappyAgentProfileSettings
                         dirty

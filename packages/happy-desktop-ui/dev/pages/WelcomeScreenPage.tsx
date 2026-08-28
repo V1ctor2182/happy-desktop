@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import type { HappyAgentAppearanceChoice } from "../../src/pages/settings/HappyAgentGeneralSettings";
 import { ThemeScope } from "../../src/ThemeScope";
-import { WelcomeScreen, type WelcomeSlide } from "../../src/WelcomeScreen";
+import { WelcomeScreen } from "../../src/WelcomeScreen";
+import { type WelcomeSlide } from "../../src/WelcomeDeck";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */

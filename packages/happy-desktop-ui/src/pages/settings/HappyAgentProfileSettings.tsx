@@ -2,6 +2,7 @@ import { Avatar } from "../../Avatar";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
+import { FormRow } from "../../FormRow";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
@@ -11,6 +12,12 @@ export interface HappyAgentProfileSettingsProps {
     readonly name: string;
     readonly email: string;
     readonly imageUrl?: string;
+    /**
+     * The public Happy Social handle, when this machine's account has claimed
+     * one. It is shown beside the name because it is part of the same identity,
+     * and it is not editable here: it is claimed once, during joining.
+     */
+    readonly username?: string;
     /** True while the fields differ from what this machine has stored. */
     readonly dirty?: boolean;
     readonly loading?: boolean;
@@ -40,14 +47,22 @@ const initials = (name: string): string =>
  * The Profile category: the one identity this machine authors work as, edited
  * where it is shown. There is no list and no separate editor — the fields are
  * the profile, and a save is offered only once they differ from what is stored.
+ *
+ * The fields are ordinary settings rows rather than a bordered card. Every other
+ * category in this window is a block of hairline-separated rows, and a card here
+ * made the profile look like an object sitting inside settings instead of a part
+ * of them. What remains above the rows is the identity itself — the avatar, the
+ * name, the social handle beside it, the email — which is a summary of who this
+ * machine is, not a control.
+ *
+ * The block carries no title of its own. The category header directly above it
+ * already reads "Profile", and a second heading saying the same word was the
+ * only thing between it and the first field.
  */
 export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps) {
     const blocked = props.unavailable !== undefined;
     return (
-        <HappyAgentSettingsSection
-            description="Who this Mac is when it authors work. The name and email become the Git identity on every commit an agent makes here."
-            title="Profile"
-        >
+        <HappyAgentSettingsSection>
             {props.unavailable ? <Banner tone="warning">{props.unavailable}</Banner> : null}
             {props.error ? (
                 <Banner tone="danger" title="Profile unavailable">
@@ -75,9 +90,19 @@ export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps)
                             size="lg"
                         />
                         <Box className="happy-agent-profile__naming">
-                            <span className="happy-agent-profile__name">
-                                {props.name.trim() === "" ? "Unnamed" : props.name}
-                            </span>
+                            <Box className="happy-agent-profile__line">
+                                <span className="happy-agent-profile__name">
+                                    {props.name.trim() === "" ? "Unnamed" : props.name}
+                                </span>
+                                {props.username ? (
+                                    <span
+                                        className="happy-agent-profile__username"
+                                        data-happy-desktop-ui="happy-agent-profile-username"
+                                    >
+                                        @{props.username}
+                                    </span>
+                                ) : null}
+                            </Box>
                             <span className="happy-agent-profile__status">
                                 {props.email.trim() === "" ? "No Git email yet" : props.email}
                             </span>
@@ -88,33 +113,40 @@ export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps)
                             {props.saveError}
                         </Banner>
                     ) : null}
-                    <TextField
-                        disabled={blocked}
-                        fullWidth
+                    <FormRow
+                        control={
+                            <TextField
+                                className="happy-agent-profile__field"
+                                disabled={blocked}
+                                onValueChange={props.onNameChange}
+                                placeholder="Your name"
+                                size="medium"
+                                value={props.name}
+                            />
+                        }
+                        description="Shown on work this machine authors"
                         label="Name"
-                        onValueChange={props.onNameChange}
-                        placeholder="Your name"
-                        size="medium"
-                        value={props.name}
                     />
-                    <TextField
-                        disabled={blocked}
-                        fullWidth
+                    <FormRow
+                        control={
+                            <TextField
+                                className="happy-agent-profile__field"
+                                disabled={blocked}
+                                onValueChange={props.onEmailChange}
+                                placeholder="you@example.com"
+                                size="medium"
+                                type="email"
+                                value={props.email}
+                            />
+                        }
+                        description="The Git author address on every commit made here"
                         label="Git email"
-                        onValueChange={props.onEmailChange}
-                        placeholder="you@example.com"
-                        size="medium"
-                        type="email"
-                        value={props.email}
                     />
+                    {/* No saved-state line: both controls are disabled until
+                        the fields differ from what is stored, so the pair
+                        already says whether there is anything unsaved, and Save
+                        carries its own spinner while the write is in flight. */}
                     <Box className="happy-agent-profile__actions">
-                        <span className="happy-agent-profile__state">
-                            {props.saving
-                                ? "Saving…"
-                                : props.dirty
-                                  ? "Unsaved changes"
-                                  : "Saved on this Mac"}
-                        </span>
                         <Button
                             disabled={!props.dirty || props.saving}
                             onClick={props.onRevert}

@@ -7,8 +7,10 @@ import type {
     ExperimentsStore,
     ConversationToolCall,
     HappyAgentClockStore,
+    HappyAgentCloudDevicesStore,
     HappyAgentCloudStore,
     HappyAgentSocialSnapshot,
+    HappyAgentSocialJoinStore,
     HappyAgentSocialStore,
     HappyAgentFileTabKind,
     HappyAgentFileTabSnapshot,
@@ -272,8 +274,12 @@ export interface AppHappyAgentSession {
     readonly connection: HappyAgentConnectionStore;
     /** This Happy Agent installation's Happy Social account. */
     readonly cloud?: () => HappyAgentCloudStore;
+    /** Every installation signed into that account. */
+    readonly cloudDevices?: () => HappyAgentCloudDevicesStore;
     /** Friends and requests for this installation's enrolled Social account. */
     readonly social?: () => HappyAgentSocialStore;
+    /** The ordered errand that carries this account from signed out to live. */
+    readonly socialJoin?: () => HappyAgentSocialJoinStore;
     /** This Happy Agent's retained connection, reconciliation, and SSE diagnostics. */
     readonly debugLog?: HappyAgentDebugLogStore;
     readonly host: HappyAgentHost;

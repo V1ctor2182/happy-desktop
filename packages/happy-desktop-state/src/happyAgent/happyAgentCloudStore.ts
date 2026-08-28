@@ -3,6 +3,7 @@ import {
     type ApiErrorBody,
     type Cloud,
     type CloudEnrollment,
+    type CloudSocial,
     type CloudEnvironment,
     type CloudKeys,
     type HappyAgentClient,
@@ -28,15 +29,44 @@ export type HappyAgentCloudEnrollment =
           readonly username: string;
       }
     | { readonly status: "enrolling"; readonly username: string }
-    | { readonly status: "enrolled"; readonly username: string }
-    | { readonly status: "unsupported" };
+    | { readonly status: "enrolled"; readonly username: string };
 
+/**
+ * Where the account's end-to-end encryption keys stand.
+ *
+ * `checking` is what a connected account reports before the daemon has decided.
+ * The daemon omits `keys` from its Cloud object entirely while it reconciles a
+ * freshly enrolled account against the vault — until that finishes it cannot say
+ * whether they must be created or restored — and that absence is a wait, not a
+ * refusal.
+ */
 export type HappyAgentCloudKeys =
     | { readonly status: "inactive" }
+    | { readonly status: "checking" }
     | { readonly status: "create_required" }
     | { readonly status: "restore_required" }
-    | { readonly identityKey: string; readonly status: "ready" }
-    | { readonly status: "unsupported" };
+    | { readonly status: "resetting" }
+    | { readonly identityKey: string; readonly status: "ready" };
+
+/**
+ * The account's recovery material, as this window is currently showing it.
+ *
+ * It is never part of the ordinary account snapshot. Happy Agent retains the
+ * root and the generated secret key for an account whose keys it made, and hands
+ * them over only when someone on this machine asks to see them, so reading them
+ * is an act with its own state rather than a field that is always there.
+ */
+export type HappyAgentCloudKeyBackup =
+    | { readonly status: "hidden" }
+    | { readonly status: "reading" }
+    | { readonly error: UserError; readonly status: "failed" }
+    | {
+          /** The `H1-…` secret key the account was created with. */
+          readonly generatedSecret: string;
+          /** The account root the identity key is derived from. */
+          readonly rootSecret: string;
+          readonly status: "revealed";
+      };
 
 export interface HappyAgentCloudSnapshot {
     readonly authorizationCompleting: boolean;
@@ -47,6 +77,14 @@ export interface HappyAgentCloudSnapshot {
     readonly environment?: CloudEnvironment;
     readonly error?: UserError;
     readonly keys: HappyAgentCloudKeys;
+    /** Whether the retained recovery material is currently being shown. */
+    readonly keyBackup: HappyAgentCloudKeyBackup;
+    /**
+     * Whether the account's own encrypted connection has been started. Reported
+     * only for an enrolled account, it is what says the account is live rather
+     * than merely fully configured.
+     */
+    readonly socialConnection?: "connecting" | "connected";
     /** Enrollment authority carried by desktop bootstrap's Cloud Social snapshot. */
     readonly socialEnrollment?: "enrolled" | "unenrolled";
     readonly status: HappyAgentCloudStatus;
@@ -65,6 +103,10 @@ export interface HappyAgentCloudStore {
     cloudAccountDisconnect(): void;
     cloudProfileUsernameUpdate(value: string): void;
     cloudProfileEnroll(): void;
+    /** Asks Happy Agent for the retained recovery material and shows it. */
+    cloudKeyBackupReveal(): void;
+    /** Puts it away again, and forgets it. */
+    cloudKeyBackupHide(): void;
     [Symbol.dispose](): void;
 }
 
@@ -84,6 +126,7 @@ export interface HappyAgentCloudStoreDeps {
         | "completeCloudAuthorization"
         | "disconnectCloud"
         | "enrollCloudProfile"
+        | "getCloudKeyBackup"
         | "getDesktopBootstrap"
         | "getCloudSocial"
         | "startCloudAuthorization"
@@ -97,6 +140,7 @@ const EMPTY: HappyAgentCloudSnapshot = {
     authorizationStarting: false,
     disconnecting: false,
     enrollment: { status: "inactive" },
+    keyBackup: { status: "hidden" },
     keys: { status: "inactive" },
     status: "loading",
 };
@@ -114,6 +158,7 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
     let callbackUnsubscribe: (() => void) | undefined;
     let controller: AbortController | undefined;
     let disposed = false;
+    let keyBackupRequest = 0;
     let socialRequest = 0;
     let version: string | undefined;
 
@@ -142,7 +187,7 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             (response) => {
                 if (disposed || signal?.aborted || request !== socialRequest) return;
                 if (store.getState().status !== "connected") return;
-                store.setState({ socialEnrollment: response.cloudSocial.status }, false);
+                store.setState(socialProject(response.cloudSocial), false);
             },
             () => undefined,
         );
@@ -166,16 +211,27 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
         if (projected.status !== "connected") {
             socialRequest += 1;
         }
+        // Recovery material belongs to the account that was asked for it. A
+        // different account, or none, puts it away rather than leaving one
+        // account's secret key on screen above another's name.
+        const keyBackupKept = projected.status === "connected" && !connectedUserChanged;
+        if (!keyBackupKept) keyBackupRequest += 1;
         store.setState(
             {
                 ...projected,
+                keyBackup: keyBackupKept ? current.keyBackup : { status: "hidden" },
                 authorizationCompleting: current.authorizationCompleting,
                 authorizationStarting: current.authorizationStarting,
                 disconnecting: current.disconnecting,
                 ...(projected.status === "connected" &&
                 !connectedUserChanged &&
                 current.socialEnrollment
-                    ? { socialEnrollment: current.socialEnrollment }
+                    ? {
+                          socialEnrollment: current.socialEnrollment,
+                          ...(current.socialConnection
+                              ? { socialConnection: current.socialConnection }
+                              : {}),
+                      }
                     : {}),
             },
             true,
@@ -223,8 +279,7 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                 return;
             }
             cloudAdopt(bootstrap.cloud);
-            if (bootstrap.cloudSocial)
-                store.setState({ socialEnrollment: bootstrap.cloudSocial.status }, false);
+            if (bootstrap.cloudSocial) store.setState(socialProject(bootstrap.cloudSocial), false);
             else if (bootstrap.cloud.status === "connected") socialEnrollmentRead(active.signal);
 
             let reconcile = false;
@@ -443,9 +498,50 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
                 )
                 .finally(() => lifecycleStopIfIdle());
         },
+        cloudKeyBackupReveal() {
+            const current = store.getState();
+            if (
+                disposed ||
+                current.status !== "connected" ||
+                current.keys.status !== "ready" ||
+                current.keyBackup.status === "reading" ||
+                current.keyBackup.status === "revealed"
+            )
+                return;
+            const request = ++keyBackupRequest;
+            store.setState({ keyBackup: { status: "reading" } }, false);
+            void deps.client.getCloudKeyBackup().then(
+                (response) => {
+                    if (disposed || request !== keyBackupRequest) return;
+                    store.setState(
+                        {
+                            keyBackup: {
+                                generatedSecret: response.backup.generatedSecret,
+                                rootSecret: response.backup.rootSecret,
+                                status: "revealed",
+                            },
+                        },
+                        false,
+                    );
+                },
+                (error: unknown) => {
+                    if (disposed || request !== keyBackupRequest) return;
+                    store.setState(
+                        { keyBackup: { error: happyAgentUserError(error), status: "failed" } },
+                        false,
+                    );
+                },
+            );
+        },
+        cloudKeyBackupHide() {
+            if (disposed || store.getState().keyBackup.status === "hidden") return;
+            keyBackupRequest += 1;
+            store.setState({ keyBackup: { status: "hidden" } }, false);
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            keyBackupRequest += 1;
             socialRequest += 1;
             controller?.abort();
             controller = undefined;
@@ -453,6 +549,16 @@ export function happyAgentCloudStoreCreate(deps: HappyAgentCloudStoreDeps): Happ
             callbackUnsubscribe = undefined;
             listeners.clear();
         },
+    };
+}
+
+/** The two account-wide facts the social snapshot carries: enrolled, and live. */
+function socialProject(
+    cloudSocial: CloudSocial,
+): Pick<HappyAgentCloudSnapshot, "socialConnection" | "socialEnrollment"> {
+    return {
+        socialEnrollment: cloudSocial.status,
+        ...(cloudSocial.connection === null ? {} : { socialConnection: cloudSocial.connection }),
     };
 }
 
@@ -467,7 +573,7 @@ function cloudApiErrorSnapshot(error: unknown): Cloud | undefined {
 function cloudProject(
     cloud: Cloud,
     currentEnrollment: HappyAgentCloudEnrollment,
-): Omit<HappyAgentCloudSnapshot, "socialEnrollment"> {
+): Omit<HappyAgentCloudSnapshot, "keyBackup" | "socialEnrollment"> {
     const base = {
         authorizationCompleting: false,
         authorizationStarting: false,
@@ -501,7 +607,9 @@ function cloudProject(
         enrollment: { status: "inactive" },
         keys: { status: "inactive" },
         status: "disconnected",
-        ...(cloud.error ? { error: happyAgentUserError(new Error(cloud.error.message)) } : {}),
+        ...(cloud.error && cloud.error.code !== "authorization_expired"
+            ? { error: happyAgentUserError(new Error(cloud.error.message)) }
+            : {}),
     };
 }
 
@@ -510,7 +618,8 @@ function cloudEnrollmentProject(
     enrollment: CloudEnrollment | undefined,
     current: HappyAgentCloudEnrollment,
 ): HappyAgentCloudEnrollment {
-    if (!enrollment) return { status: "unsupported" };
+    // Absent means the daemon has not said yet, never that it cannot.
+    if (!enrollment) return { status: "checking" };
     switch (enrollment.status) {
         case "inactive":
         case "checking":
@@ -525,9 +634,17 @@ function cloudEnrollmentProject(
     }
 }
 
-/** Missing means the connected daemon predates the explicit Cloud-key protocol. */
+/**
+ * Missing means the daemon has not decided yet, not that it cannot.
+ *
+ * A daemon drops `keys` from its Cloud object for exactly as long as a connected,
+ * enrolled account is being reconciled against the vault: it has started that
+ * work and will report `create_required`, `restore_required`, or `ready` when it
+ * lands. Reading the gap as a refusal put a fully working account on a dead-end
+ * "Happy Social is unavailable" screen it could never leave.
+ */
 function cloudKeysProject(keys: CloudKeys | undefined): HappyAgentCloudKeys {
-    return keys ?? { status: "unsupported" };
+    return keys ?? { status: "checking" };
 }
 
 const UNAVAILABLE: HappyAgentCloudSnapshot = { ...EMPTY, status: "unavailable" };
@@ -540,5 +657,7 @@ export const happyAgentCloudStoreNoop: HappyAgentCloudStore = {
     cloudAccountDisconnect: () => undefined,
     cloudProfileUsernameUpdate: () => undefined,
     cloudProfileEnroll: () => undefined,
+    cloudKeyBackupReveal: () => undefined,
+    cloudKeyBackupHide: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

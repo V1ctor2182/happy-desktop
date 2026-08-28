@@ -17,7 +17,7 @@ const cloudAuthCallbackPath = "/cloud-auth/callback";
 let cloudAuthCallback =
     window.location.pathname === cloudAuthCallbackPath ? window.location.href : undefined;
 if (cloudAuthCallback)
-    window.history.replaceState(null, "", `${window.location.origin}/#/settings/profile`);
+    window.history.replaceState(null, "", `${window.location.origin}/#/settings/account`);
 
 const unsupportedDebugSnapshot: DesktopDebugSnapshot = {
     daemon: { status: "stopped" },

@@ -166,6 +166,25 @@
     background: var(--button-primary-tint);
 }
 
+/* The same progress mark can sit directly on another dark photographic
+   surface, such as the Happy Social setup modal, without inheriting the page
+   shell that normally supplies this treatment. */
+.happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-line,
+.happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-label,
+.happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-detail {
+    color: var(--button-primary-tint);
+}
+
+.happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-track {
+    background: color-mix(in srgb, var(--button-primary-tint) 28%, transparent);
+}
+
+.happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-fill,
+.happy-setup-page__progress[data-tone="inverse"][data-state="waiting"]
+    .happy-setup-page__progress-track::after {
+    background: var(--button-primary-tint);
+}
+
 .happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="primary"] {
     background: var(--button-primary-tint);
     color: var(--button-primary-background);

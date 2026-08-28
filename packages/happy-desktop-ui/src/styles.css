@@ -97,6 +97,7 @@
 @import "./styles/splash-screen.css";
 @import "./styles/splash-cover.css";
 @import "./styles/onboarding-sky.css";
+@import "./styles/welcome-deck.css";
 @import "./styles/welcome-screen.css";
 @import "./styles/split-column.css";
 @import "./styles/setup-page.css";
@@ -128,7 +129,9 @@
 @import "./styles/happy-agent-activity.css";
 @import "./styles/happy-agent-settings.css";
 @import "./styles/happy-social-setup-modal.css";
+@import "./styles/happy-social-join.css";
 @import "./styles/happy-agent-debug-log.css";
+@import "./styles/happy-agent-raw-state.css";
 @import "./styles/happy-agent-usage-settings.css";
 @import "./styles/happy-agent-inbox.css";
 @import "./styles/happy-social-page.css";

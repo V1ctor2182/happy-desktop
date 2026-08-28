@@ -1006,8 +1006,13 @@ if (mediaPreviewBridge) {
             persistence: desktopHistoryPersistence(),
         });
         const happyAgentRouter = happyAgentRouterCreate(happyAgentHistory);
-        // Where the Happy Social account is shown, which is the Profile category.
-        const cloudAuthCallbackOpen = (): void => happyAgentHistory.replace("/settings/profile");
+        // Returning from the browser resumes the one Account flow. If it is
+        // already on screen, leave the route (and therefore the modal tree)
+        // untouched; otherwise put its owning category back on screen.
+        const cloudAuthCallbackOpen = (): void => {
+            if (happyAgentHistory.location.pathname === "/settings/account") return;
+            happyAgentHistory.replace("/settings/account");
+        };
         appDisposers.push(desktopBridge.cloudAuthCallbackSubscribe(cloudAuthCallbackOpen));
         desktopAction(
             desktopBridge.cloudAuthCallbackPending().then((pending) => {

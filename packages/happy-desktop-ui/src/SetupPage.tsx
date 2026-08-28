@@ -227,6 +227,8 @@ export function SetupPage(props: SetupPageProps) {
 export interface SetupProgressProps {
     readonly label: string;
     readonly progress: SetupPageProgress;
+    /** Uses the light ink intended for a photographic or dark backdrop. */
+    readonly tone?: "default" | "inverse";
 }
 
 export function SetupProgress(props: SetupProgressProps) {
@@ -237,6 +239,7 @@ export function SetupProgress(props: SetupProgressProps) {
             className="happy-setup-page__progress"
             data-happy-desktop-ui="setup-page-progress"
             data-state={props.progress.kind}
+            data-tone={props.tone ?? "default"}
         >
             <span
                 aria-label={props.label}

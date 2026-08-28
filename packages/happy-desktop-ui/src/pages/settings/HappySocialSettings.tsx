@@ -1,12 +1,18 @@
-import { useId, useState } from "react";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { FormRow } from "../../FormRow";
 import { Spinner } from "../../Spinner";
-import { TextField } from "../../TextField";
 import type { ThemeMode } from "../../ThemeScope";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import {
+    HappySocialJoin,
+    happySocialJoinDescription,
+    happySocialJoinPresentation,
+    happySocialJoinTitle,
+    type HappySocialJoinProps,
+    type HappySocialJoinState,
+} from "./HappySocialJoin";
 import { HappySocialSetupModal } from "./HappySocialSetupModal";
 
 export type HappySocialStatus =
@@ -16,17 +22,19 @@ export type HappySocialStatus =
     | "connected"
     | "unavailable";
 
-export interface HappySocialRawStatus {
-    readonly cloud: HappySocialStatus;
-    readonly enrollment:
-        | "inactive"
-        | "checking"
-        | "required"
-        | "enrolling"
-        | "enrolled"
-        | "unsupported";
-    readonly keys: "inactive" | "create_required" | "restore_required" | "ready" | "unsupported";
-}
+/**
+ * Where this account's end-to-end encryption keys stand on this machine.
+ * `checking` is a connected account whose keys Happy Agent has not decided about
+ * yet, and `resetting` is one clearing a bundle it cannot open; both are waits
+ * rather than something to offer the reader.
+ */
+export type HappySocialKeysStatus =
+    | "inactive"
+    | "checking"
+    | "create_required"
+    | "restore_required"
+    | "resetting"
+    | "ready";
 
 export type HappySocialEnrollment =
     | { readonly status: "inactive" }
@@ -53,25 +61,50 @@ export interface HappySocialSettingsProps {
     readonly email?: string;
     readonly enrollment: HappySocialEnrollment;
     readonly error?: string;
-    readonly rawStatus?: HappySocialRawStatus;
+    /** The join flow's own state, and whether its surface is on screen. */
+    readonly join: HappySocialJoinState;
+    readonly joinActions: Omit<HappySocialJoinProps, "state">;
+    /**
+     * Whether joining is offered at all. Happy Social is still being built, so a
+     * reader who has not asked for unfinished work is not invited into it.
+     *
+     * The gate is only about starting. An account that already exists keeps
+     * every control it needs — resuming an unfinished setup, and disconnecting —
+     * because turning the switch back off must not strand somebody mid-errand
+     * with an account they cannot finish or leave.
+     */
+    readonly joinable: boolean;
+    readonly joinOpen: boolean;
+    readonly keys: HappySocialKeysStatus;
     readonly status: HappySocialStatus;
     readonly unavailable?: string;
-    onConnect(): void;
     onDisconnect(): void;
-    onEnroll(): void;
-    onUsernameChange(value: string): void;
+    onJoinClose(): void;
+    onJoinOpen(): void;
 }
 
-/** The Happy Social category: one daemon-owned identity and its session actions. */
+/**
+ * The Happy Social category: one daemon-owned identity, and one control.
+ *
+ * Joining is a single errand with several steps, and the setup surface already
+ * owns every one of them. This category therefore says where the account stands
+ * and offers the one act available from here — start or resume the errand, or
+ * disconnect a finished one. It does not restate the steps as separate rows: a
+ * screen listing "social username" and "cloud encryption" beside their own
+ * buttons was describing the internals of a flow the reader never sees in those
+ * terms, and gave three different places to press for one outcome.
+ *
+ * With one row left there is nothing for a section heading to introduce: the
+ * row's own label names the account and its description says where it stands,
+ * so a title and a sentence above it were saying the same thing a third time.
+ */
 export function HappySocialSettings(props: HappySocialSettingsProps) {
-    const enrollmentUsernameId = `happy-social-username-${useId()}`;
-    const [setupOpen, setupOpenSet] = useState(false);
-    const keysRequirement = happySocialKeysRequirement(props);
+    // No account, and no way to start one: there is nothing to report. A row
+    // describing what Happy Social would do, under a control that is not there,
+    // is furniture rather than information.
+    if (!props.joinable && !accountExists(props)) return null;
     return (
-        <HappyAgentSettingsSection
-            description="Happy Agent owns this authentication and keeps its Happy Social session current."
-            title="Happy Social"
-        >
+        <HappyAgentSettingsSection>
             {props.unavailable ? (
                 <Banner tone="warning" title="Happy Agent unavailable">
                     {props.unavailable}
@@ -82,14 +115,19 @@ export function HappySocialSettings(props: HappySocialSettingsProps) {
                     {props.error}
                 </Banner>
             ) : null}
+            {props.enrollment.status === "error" ? (
+                <Banner tone="danger" title="Social profile unavailable">
+                    {props.enrollment.error}
+                </Banner>
+            ) : null}
             <FormRow
                 control={
-                    props.status === "loading" ? (
+                    props.status === "loading" || props.enrollment.status === "loading" ? (
                         <Box className="happy-agent-settings__pending">
                             <Spinner size={16} />
                             <span>Checking…</span>
                         </Box>
-                    ) : props.status === "connected" ? (
+                    ) : happySocialComplete(props) ? (
                         <Button
                             disabled={props.unavailable !== undefined}
                             icon="unlink"
@@ -105,241 +143,83 @@ export function HappySocialSettings(props: HappySocialSettingsProps) {
                             disabled={
                                 props.unavailable !== undefined || props.status === "unavailable"
                             }
-                            icon="link"
-                            loading={props.authorizationStarting || props.authorizationCompleting}
-                            onClick={() => setupOpenSet(true)}
+                            loading={
+                                props.authorizationStarting ||
+                                props.authorizationCompleting ||
+                                (props.enrollment.status === "unenrolled" &&
+                                    props.enrollment.enrolling === true)
+                            }
+                            onClick={props.onJoinOpen}
                             size="small"
                         >
-                            {props.status === "authorizing" ? "Continue" : "Join Happy Social"}
+                            {props.status === "disconnected"
+                                ? "Join Happy Social"
+                                : "Continue setup"}
                         </Button>
                     )
                 }
                 description={accountDescription(props)}
                 label="Happy Social account"
             />
-            {props.rawStatus ? (
-                <FormRow
-                    control={
-                        <code
-                            className="happy-social-raw-status"
-                            data-happy-desktop-ui="happy-social-raw-status"
-                        >
-                            {JSON.stringify(props.rawStatus)}
-                        </code>
-                    }
-                    description="Current protocol state reported by Happy Agent"
-                    label="Raw status"
-                />
-            ) : null}
-            {props.enrollment.status === "loading" ? (
-                <FormRow
-                    control={
-                        <Box className="happy-agent-settings__pending">
-                            <Spinner size={16} />
-                            <span>Checking…</span>
-                        </Box>
-                    }
-                    description="Reading the public profile linked to this account"
-                    label="Social username"
-                />
-            ) : props.enrollment.status === "unenrolled" ? (
-                <FormRow
-                    control={
-                        <Button
-                            disabled={props.unavailable !== undefined || props.enrollment.enrolling}
-                            loading={props.enrollment.enrolling}
-                            onClick={() => setupOpenSet(true)}
-                            size="small"
-                        >
-                            Continue enrollment
-                        </Button>
-                    }
-                    description="Choose the @username people will use to find you"
-                    label="Social username"
-                />
-            ) : props.enrollment.status === "enrolled" ? (
-                <FormRow
-                    control={
-                        <span className="happy-social-enrollment__username">
-                            @{props.enrollment.username}
-                        </span>
-                    }
-                    description={
-                        props.enrollment.displayName
-                            ? `${props.enrollment.displayName} is visible to people you connect with`
-                            : "Visible to people you connect with"
-                    }
-                    label="Social username"
-                />
-            ) : props.enrollment.status === "error" ? (
-                <Banner tone="danger" title="Social profile unavailable">
-                    {props.enrollment.error}
-                </Banner>
-            ) : null}
-            {keysRequirement ? (
-                <FormRow
-                    control={
-                        <Button onClick={() => setupOpenSet(true)} size="small">
-                            Continue setup
-                        </Button>
-                    }
-                    description={
-                        keysRequirement === "create_required"
-                            ? "Create the encrypted key bundle for this account"
-                            : "Restore this account’s encrypted key bundle on this machine"
-                    }
-                    label="Cloud encryption"
-                />
-            ) : null}
-            {setupOpen ? (
+            {props.joinOpen ? (
                 <HappySocialSetupModal
                     appearance={props.appearance ?? "system"}
-                    description={setupDescription(props)}
-                    onClose={() => setupOpenSet(false)}
-                    status={props.rawStatus ? JSON.stringify(props.rawStatus) : props.status}
-                    title={setupTitle(props)}
+                    description={happySocialJoinDescription(props.join)}
+                    onClose={props.onJoinClose}
+                    presentation={happySocialJoinPresentation(props.join)}
+                    title={happySocialJoinTitle(props.join)}
                 >
-                    <HappySocialSetupContent
-                        enrollmentUsernameId={enrollmentUsernameId}
-                        props={props}
-                    />
+                    <HappySocialJoin {...props.joinActions} state={props.join} />
                 </HappySocialSetupModal>
             ) : null}
         </HappyAgentSettingsSection>
     );
 }
 
-function HappySocialSetupContent(props: {
-    readonly enrollmentUsernameId: string;
-    readonly props: HappySocialSettingsProps;
-}) {
-    const social = props.props;
-    if (social.unavailable)
-        return (
-            <Banner tone="warning" title="Happy Agent unavailable">
-                {social.unavailable}
-            </Banner>
-        );
-    if (social.status === "loading")
-        return (
-            <Box className="happy-agent-settings__pending">
-                <Spinner size={16} />
-                <span>Checking…</span>
-            </Box>
-        );
-    if (social.status !== "connected")
-        return (
-            <Button
-                icon="link"
-                loading={social.authorizationStarting || social.authorizationCompleting}
-                onClick={social.onConnect}
-                size="large"
-            >
-                {social.status === "authorizing" ? "Open browser" : "Connect"}
-            </Button>
-        );
-    if (social.enrollment.status === "loading")
-        return (
-            <Box className="happy-agent-settings__pending">
-                <Spinner size={16} />
-                <span>Checking enrollment…</span>
-            </Box>
-        );
-    if (social.enrollment.status === "unenrolled")
-        return (
-            <form
-                className="happy-social-enrollment"
-                data-happy-desktop-ui="happy-social-enrollment"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    social.onEnroll();
-                }}
-            >
-                <Box className="happy-social-enrollment__controls">
-                    <TextField
-                        autoComplete="username"
-                        autoFocus
-                        className="happy-social-enrollment__field"
-                        disabled={social.enrollment.enrolling}
-                        error={social.enrollment.error}
-                        fullWidth
-                        id={props.enrollmentUsernameId}
-                        name="happy-social-username"
-                        onValueChange={social.onUsernameChange}
-                        placeholder="steve"
-                        required
-                        size="medium"
-                        value={social.enrollment.username}
-                    />
-                    <Button
-                        disabled={social.enrollment.username.trim() === ""}
-                        loading={social.enrollment.enrolling}
-                        size="medium"
-                        type="submit"
-                    >
-                        Continue
-                    </Button>
-                </Box>
-            </form>
-        );
-    if (social.enrollment.status === "error")
-        return (
-            <Banner tone="danger" title="Social profile unavailable">
-                {social.enrollment.error}
-            </Banner>
-        );
-    return null;
+/**
+ * Whether the account is finished and nothing is left to do here. Signing in is
+ * only the first of the join errand's steps, so a connected account that has
+ * not claimed a username or made its keys is still mid-errand and must offer to
+ * resume rather than to disconnect.
+ */
+/**
+ * Whether this machine already carries a Happy Social account, however far
+ * through the errand it is. `loading` counts as not yet: a saved session that
+ * turns out to exist adds the row, which is better than showing one that
+ * vanishes when the read comes back empty.
+ */
+function accountExists(props: HappySocialSettingsProps): boolean {
+    return props.status === "connected" || props.status === "authorizing";
 }
 
-function setupTitle(props: HappySocialSettingsProps): string {
-    const keysRequirement = happySocialKeysRequirement(props);
-    if (keysRequirement === "create_required") return "Create encryption keys";
-    if (keysRequirement === "restore_required") return "Restore encryption keys";
-    if (props.status === "connected")
-        return props.enrollment.status === "enrolled"
-            ? "Happy Social is ready"
-            : "Continue enrollment";
-    return "Join Happy Social";
+function happySocialComplete(props: HappySocialSettingsProps): boolean {
+    return (
+        props.status === "connected" &&
+        props.enrollment.status === "enrolled" &&
+        props.keys !== "create_required" &&
+        props.keys !== "restore_required"
+    );
 }
 
-function setupDescription(props: HappySocialSettingsProps): string {
-    const keysRequirement = happySocialKeysRequirement(props);
-    if (keysRequirement === "create_required")
-        return "Create an encrypted key bundle before Happy Cloud can protect synced data.";
-    if (keysRequirement === "restore_required")
-        return "Restore this account’s encrypted key bundle to unlock protected data on this machine.";
-    if (props.status !== "connected")
-        return "Connect this Happy Agent to carry your identity and encrypted Cloud data.";
-    if (props.enrollment.status === "enrolled")
-        return `@${props.enrollment.username} is connected on this Happy Agent.`;
-    return "Choose the public username people will use to find you. It cannot be changed later.";
-}
-
-function happySocialKeysRequirement(
-    props: HappySocialSettingsProps,
-): "create_required" | "restore_required" | undefined {
-    return props.rawStatus?.keys === "create_required" ||
-        props.rawStatus?.keys === "restore_required"
-        ? props.rawStatus.keys
-        : undefined;
-}
-
+/** What the one row says about the account, under its label. */
 function accountDescription(props: HappySocialSettingsProps): string {
-    switch (props.status) {
-        case "loading":
-            return "Reading the saved Happy Social session from Happy Agent";
-        case "disconnected":
-            return "Connect this Happy Agent to Happy Social";
-        case "authorizing":
-            return props.authorizationCompleting
-                ? "Completing authentication with Happy Agent"
-                : "Finish authentication in your browser, or reopen it with Connect";
-        case "connected":
-            return (
-                [props.displayName, props.email].filter(Boolean).join(" · ") ||
-                "Connected through Happy Agent"
-            );
-        case "unavailable":
-            return "This Happy Agent does not support Happy Social authentication";
-    }
+    if (props.status === "loading")
+        return "Reading the saved Happy Social session from Happy Agent";
+    if (props.status === "unavailable")
+        return "This Happy Agent does not support Happy Social authentication";
+    if (props.status === "disconnected")
+        return "Share sessions, work with other people, and sync this machine";
+    if (props.status === "authorizing")
+        return props.authorizationCompleting
+            ? "Completing authentication with Happy Agent"
+            : "Finish signing in through your browser";
+    // Connected, but the rest of the errand may still be unfinished.
+    if (props.enrollment.status === "unenrolled")
+        return "Choose the username people will find you by";
+    if (props.keys === "create_required") return "Create the encryption keys for this account";
+    if (props.keys === "restore_required") return "Unlock this machine with your secret key";
+    return (
+        [props.displayName, props.email].filter(Boolean).join(" · ") ||
+        "Connected through Happy Agent"
+    );
 }

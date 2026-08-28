@@ -108,44 +108,6 @@
     line-height: 20px;
 }
 
-.happy-social-enrollment {
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-}
-
-.happy-social-enrollment__controls {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    width: 100%;
-}
-
-.happy-social-enrollment__field {
-    flex: 1 1 0%;
-    min-width: 0;
-}
-
-.happy-social-enrollment__username {
-    color: var(--text);
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-    font-synthesis: none;
-    line-height: 20px;
-}
-
-.happy-social-raw-status {
-    display: block;
-    max-width: 420px;
-    overflow-wrap: anywhere;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-    font-synthesis: none;
-    line-height: 18px;
-    text-align: right;
-}
-
 .happy-agent-settings__agent-control {
     display: flex;
     align-items: center;
@@ -469,14 +431,17 @@
     white-space: nowrap;
 }
 
+/*
+ * No card. The profile is a category of settings like every other one in this
+ * window, so its fields are hairline-separated rows and the block carries no
+ * border, fill, or radius of its own — a frame here read as an object placed
+ * inside settings rather than a part of them. The rows tile themselves, so the
+ * only gap is the one under the identity summary above them.
+ */
 .happy-agent-profile {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 16px;
-    background: var(--surface-high);
-    border: 1px solid var(--divider);
-    border-radius: 10px;
+    margin: 0;
 }
 
 .happy-agent-profile__identity {
@@ -484,6 +449,22 @@
     align-items: center;
     min-width: 0;
     gap: 12px;
+    padding-bottom: 16px;
+}
+
+/* Trailing, and never squeezed: the naming column absorbs a narrow window. */
+.happy-agent-profile__keys.happy-button {
+    flex: none;
+    margin-left: auto;
+}
+
+/* The name and the handle are one identity on one line: the handle sits beside
+   the name rather than under it, and gives way first when the line is short. */
+.happy-agent-profile__line {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    gap: 8px;
 }
 
 .happy-agent-profile__naming {
@@ -504,6 +485,18 @@
     white-space: nowrap;
 }
 
+/* Quieter than the name and set in the mono face, because it is an exact
+   handle someone will read character by character rather than a display name. */
+.happy-agent-profile__username {
+    flex: none;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-synthesis: none;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
 .happy-agent-profile__status {
     overflow: hidden;
     color: var(--text-secondary);
@@ -513,19 +506,41 @@
     white-space: nowrap;
 }
 
+/* Wide enough for an email address, which is the longest thing either field
+   holds, and fixed so the two rows' controls line up with each other. */
+.happy-agent-profile__field {
+    width: 260px;
+}
+
+/* The revealed secret key. It is the one piece of text on this screen that must
+   be transcribed exactly, so it is set in the mono face and given a frame of its
+   own rather than sitting inline in a row's description. */
+.happy-agent-profile__secret {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 8px 10px 12px;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    background: var(--surface-high);
+}
+
+.happy-agent-profile__secret > code {
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
 .happy-agent-profile__actions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
-}
-
-.happy-agent-profile__state {
-    flex: 1 1 0%;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    padding-top: 16px;
 }

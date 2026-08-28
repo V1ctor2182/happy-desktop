@@ -107,32 +107,41 @@ export interface HappyAgentSettingsSectionProps {
      * block adds no gap. `cards` separates free-standing cards instead.
      */
     rows?: "form" | "cards";
-    title: string;
+    /**
+     * Omitted when the category's own header already names the block — the
+     * first section of a one-subject category would otherwise repeat the title
+     * printed directly above it.
+     */
+    title?: string;
 }
 
-/** One titled block of settings rows inside a category body. */
+/** One block of settings rows inside a category body, titled or not. */
 export function HappyAgentSettingsSection(props: HappyAgentSettingsSectionProps) {
     return (
         <section
             className="happy-agent-settings__section"
             data-happy-desktop-ui="happy-agent-settings-section"
         >
-            <Box className="happy-agent-settings__section-heading">
-                <h2
-                    className="happy-agent-settings__section-title"
-                    data-happy-desktop-ui="happy-agent-settings-section-title"
-                >
-                    {props.title}
-                </h2>
-                {props.description ? (
-                    <p
-                        className="happy-agent-settings__section-description"
-                        data-happy-desktop-ui="happy-agent-settings-section-description"
-                    >
-                        {props.description}
-                    </p>
-                ) : null}
-            </Box>
+            {props.title === undefined && props.description === undefined ? null : (
+                <Box className="happy-agent-settings__section-heading">
+                    {props.title === undefined ? null : (
+                        <h2
+                            className="happy-agent-settings__section-title"
+                            data-happy-desktop-ui="happy-agent-settings-section-title"
+                        >
+                            {props.title}
+                        </h2>
+                    )}
+                    {props.description ? (
+                        <p
+                            className="happy-agent-settings__section-description"
+                            data-happy-desktop-ui="happy-agent-settings-section-description"
+                        >
+                            {props.description}
+                        </p>
+                    ) : null}
+                </Box>
+            )}
             <Box className="happy-agent-settings__section-rows" data-rows={props.rows ?? "form"}>
                 {props.children}
             </Box>

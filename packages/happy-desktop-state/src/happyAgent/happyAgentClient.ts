@@ -89,9 +89,17 @@ import {
     type HappyAgentCloudStore,
 } from "./happyAgentCloudStore.js";
 import {
+    happyAgentCloudDevicesStoreCreate,
+    type HappyAgentCloudDevicesStore,
+} from "./happyAgentCloudDevicesStore.js";
+import {
     happyAgentSocialStoreCreate,
     type HappyAgentSocialStore,
 } from "./happyAgentSocialStore.js";
+import {
+    happyAgentSocialJoinStoreCreate,
+    type HappyAgentSocialJoinStore,
+} from "./happyAgentSocialJoinStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface HappyAgentChatHandle {
@@ -133,8 +141,12 @@ export interface HappyAgentWorkspaceClient {
     happyIntegration(): HappyAgentIntegrationStore;
     /** The installation-wide Happy Social account, materialized on first access. */
     cloud(): HappyAgentCloudStore;
+    /** Every installation signed into that account, read while a surface watches. */
+    cloudDevices(): HappyAgentCloudDevicesStore;
     /** Friends and requests for the enrolled Happy Social account. */
     social(): HappyAgentSocialStore;
+    /** The ordered errand that carries this account from signed out to live. */
+    socialJoin(): HappyAgentSocialJoinStore;
     /** The one host-owned identity work is authored as. */
     profile(): HappyAgentProfileStore | undefined;
     /**
@@ -401,7 +413,9 @@ export function happyAgentWorkspaceClientCreate(
     let providerUsageStore: HappyAgentProviderUsageStore | undefined;
     let happyIntegrationStore: HappyAgentIntegrationStore | undefined;
     let cloudStore: HappyAgentCloudStore | undefined;
+    let cloudDevicesStore: HappyAgentCloudDevicesStore | undefined;
     let socialStore: HappyAgentSocialStore | undefined;
+    let socialJoinStore: HappyAgentSocialJoinStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
     let instructionsStore: HappyAgentInstructionsStore | undefined;
@@ -540,10 +554,27 @@ export function happyAgentWorkspaceClientCreate(
             });
             return cloudStore;
         },
+        cloudDevices() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            cloudDevicesStore ??= happyAgentCloudDevicesStoreCreate({ client: deps.client });
+            return cloudDevicesStore;
+        },
         social() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             socialStore ??= happyAgentSocialStoreCreate({ client: deps.client });
             return socialStore;
+        },
+        socialJoin() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            cloudStore ??= happyAgentCloudStoreCreate({
+                client: deps.client,
+                host: deps.cloudHost,
+            });
+            socialJoinStore ??= happyAgentSocialJoinStoreCreate({
+                client: deps.client,
+                cloud: cloudStore,
+            });
+            return socialJoinStore;
         },
         profile() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -665,10 +696,14 @@ export function happyAgentWorkspaceClientCreate(
             providerUsageStore = undefined;
             happyIntegrationStore?.[Symbol.dispose]();
             cloudStore?.[Symbol.dispose]();
+            cloudDevicesStore?.[Symbol.dispose]();
             socialStore?.[Symbol.dispose]();
+            socialJoinStore?.[Symbol.dispose]();
             happyIntegrationStore = undefined;
             cloudStore = undefined;
+            cloudDevicesStore = undefined;
             socialStore = undefined;
+            socialJoinStore = undefined;
             profileStore?.[Symbol.dispose]();
             profileStore = undefined;
             providersStore?.[Symbol.dispose]();

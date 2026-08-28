@@ -477,9 +477,14 @@ export {
     WelcomeScreen,
     type WelcomeScreenBackdrop,
     type WelcomeScreenProps,
+} from "./WelcomeScreen";
+export {
+    WelcomeDeck,
+    type WelcomeDeckProps,
+    type WelcomeDeckTint,
     type WelcomeSlide,
     type WelcomeSlideArt,
-} from "./WelcomeScreen";
+} from "./WelcomeDeck";
 export { SetupChoice, type SetupChoiceOption, type SetupChoiceProps } from "./SetupChoice";
 export {
     SetupAssistants,
@@ -567,9 +572,19 @@ export {
     type HappySocialSetupModalProps,
 } from "./pages/settings/HappySocialSetupModal";
 export {
+    HappySocialJoin,
+    happySocialJoinDescription,
+    happySocialJoinPresentation,
+    happySocialJoinTitle,
+    type HappySocialJoinPasswordRule,
+    type HappySocialJoinProps,
+    type HappySocialJoinStage,
+    type HappySocialJoinState,
+} from "./pages/settings/HappySocialJoin";
+export {
     HappySocialSettings,
     type HappySocialEnrollment,
-    type HappySocialRawStatus,
+    type HappySocialKeysStatus,
     type HappySocialSettingsProps,
     type HappySocialStatus,
 } from "./pages/settings/HappySocialSettings";
@@ -610,6 +625,24 @@ export {
     HappyAgentProfileSettings,
     type HappyAgentProfileSettingsProps,
 } from "./pages/settings/HappyAgentProfileSettings";
+export {
+    HappyAgentEncryptionSettings,
+    type HappyAgentEncryption,
+    type HappyAgentEncryptionSecret,
+    type HappyAgentEncryptionSettingsProps,
+} from "./pages/settings/HappyAgentEncryptionSettings";
+export {
+    HappyAgentDeviceSettings,
+    type HappyAgentDevice,
+    type HappyAgentDevicePlatform,
+    type HappyAgentDeviceRead,
+    type HappyAgentDeviceSettingsProps,
+} from "./pages/settings/HappyAgentDeviceSettings";
+export {
+    HappyAgentStateSettings,
+    type HappyAgentStateDocument,
+    type HappyAgentStateSettingsProps,
+} from "./pages/settings/HappyAgentStateSettings";
 export {
     HappyAgentUsageSettings,
     type HappyAgentUsageSettingsProps,
