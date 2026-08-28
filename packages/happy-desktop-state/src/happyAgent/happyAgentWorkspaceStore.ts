@@ -137,7 +137,7 @@ export const happyAgentComposerCommands: readonly ComposerCommand[] = [
     },
 ];
 
-/** Preserves the daemon's order, then adds desktop-only commands without shadowing it. */
+/** Groups commands ahead of skills while preserving the daemon's order within each group. */
 function composerCommandsProject(
     commands: HappyAgentChatSnapshot["slashCommands"],
 ): readonly ComposerCommand[] {
@@ -149,9 +149,12 @@ function composerCommandsProject(
         ...(command.kind === undefined ? {} : { kind: command.kind }),
     }));
     const providedIds = new Set(provided.map((command) => command.id));
+    const commandsProvided = provided.filter((command) => command.kind !== "skill");
+    const skillsProvided = provided.filter((command) => command.kind === "skill");
     return [
-        ...provided,
+        ...commandsProvided,
         ...happyAgentComposerCommands.filter((command) => !providedIds.has(command.id)),
+        ...skillsProvided,
     ];
 }
 

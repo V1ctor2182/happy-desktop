@@ -141,6 +141,17 @@ export function ConversationDock(props: ConversationDockProps) {
         setPreviewAttachmentId(null);
         props.onComposerSend();
     };
+    const commandSelect = (commandId: string) => {
+        const command = composer.capabilities.commands.find(
+            (candidate) => candidate.id === commandId,
+        );
+        if (command?.kind === "skill") {
+            const slash = command.label.startsWith("/") ? command.label : `/${command.id}`;
+            props.onComposerValueChange(`${slash} `);
+            return;
+        }
+        props.onCommandInvoke?.(commandId);
+    };
     const attachmentRemoveEnabled =
         !props.disabled && props.onComposerAttachmentRemove !== undefined;
     const mediaOverlay = previewAttachment ? (
@@ -224,7 +235,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     modelControl={props.composerControls}
                     onAttachmentPreviewOpen={setPreviewAttachmentId}
                     onAttachmentsSelect={props.onComposerAttachmentsSelect}
-                    onCommandSelect={(commandId) => props.onCommandInvoke?.(commandId)}
+                    onCommandSelect={commandSelect}
                     onContextRemove={attachmentRemoveEnabled ? attachmentRemove : undefined}
                     onFocusChange={props.onComposerFocusChange}
                     onSend={composerSend}

@@ -13,6 +13,12 @@ const commands: ComposerCommand[] = [
         hasArguments: false,
         kind: "compaction",
     },
+    { id: "usage", label: "/usage" },
+    { id: "tasks", label: "/tasks" },
+    { id: "agents", label: "/agents" },
+    { id: "goal", label: "/goal" },
+    { id: "ps", label: "/ps" },
+    { id: "abort", label: "/abort" },
     {
         id: "code-review",
         label: "/code-review",
@@ -27,12 +33,6 @@ const commands: ComposerCommand[] = [
         hasArguments: true,
         kind: "skill",
     },
-    { id: "usage", label: "/usage" },
-    { id: "tasks", label: "/tasks" },
-    { id: "agents", label: "/agents" },
-    { id: "goal", label: "/goal" },
-    { id: "ps", label: "/ps" },
-    { id: "abort", label: "/abort" },
 ];
 
 const items = commandPickerItems(commands);

@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { useCallback, type CSSProperties } from "react";
 import type { ComposerCommand } from "happy-desktop-state";
 import { Icon, type IconName } from "./Icon";
 import { ScrollArea } from "./Scrollbar";
@@ -34,6 +34,13 @@ export type CommandPickerProps = {
  * Props only — the owner filters, highlights, and commits.
  */
 export function CommandPicker(props: CommandPickerProps) {
+    // Focus stays in the composer textarea while the owner moves this visual
+    // highlight. Attach a stable ref only to the active row so each keyboard
+    // move brings that row into the nearest visible part of the scrollport
+    // without moving DOM focus away from the draft.
+    const activeRowRef = useCallback((element: HTMLButtonElement | null) => {
+        element?.scrollIntoView({ block: "nearest" });
+    }, []);
     return (
         <div
             aria-label={props.label ?? "Commands"}
@@ -60,39 +67,43 @@ export function CommandPicker(props: CommandPickerProps) {
                     >
                         {props.label ?? "Commands"}
                     </div>
-                    {props.items.map((item) => (
-                        <button
-                            aria-selected={item.id === props.activeId ? "true" : "false"}
-                            className="happy-command-picker__row"
-                            data-active={item.id === props.activeId ? "" : undefined}
-                            data-command-id={item.id}
-                            data-happy-desktop-ui="command-picker-row"
-                            key={item.id}
-                            onClick={() => props.onSelect(item.id)}
-                            role="option"
-                            type="button"
-                        >
-                            <span
-                                aria-hidden="true"
-                                className="happy-command-picker__icon"
-                                data-happy-desktop-ui="command-picker-icon"
+                    {props.items.map((item) => {
+                        const active = item.id === props.activeId;
+                        return (
+                            <button
+                                aria-selected={active ? "true" : "false"}
+                                className="happy-command-picker__row"
+                                data-active={active ? "" : undefined}
+                                data-command-id={item.id}
+                                data-happy-desktop-ui="command-picker-row"
+                                key={item.id}
+                                onClick={() => props.onSelect(item.id)}
+                                ref={active ? activeRowRef : undefined}
+                                role="option"
+                                type="button"
                             >
-                                <Icon name={item.icon} size={16} />
-                            </span>
-                            <span
-                                className="happy-command-picker__slash"
-                                data-happy-desktop-ui="command-picker-slash"
-                            >
-                                {item.slash}
-                            </span>
-                            <span
-                                className="happy-command-picker__description"
-                                data-happy-desktop-ui="command-picker-description"
-                            >
-                                {item.description}
-                            </span>
-                        </button>
-                    ))}
+                                <span
+                                    aria-hidden="true"
+                                    className="happy-command-picker__icon"
+                                    data-happy-desktop-ui="command-picker-icon"
+                                >
+                                    <Icon name={item.icon} size={16} />
+                                </span>
+                                <span
+                                    className="happy-command-picker__slash"
+                                    data-happy-desktop-ui="command-picker-slash"
+                                >
+                                    {item.slash}
+                                </span>
+                                <span
+                                    className="happy-command-picker__description"
+                                    data-happy-desktop-ui="command-picker-description"
+                                >
+                                    {item.description}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
             </ScrollArea>
         </div>

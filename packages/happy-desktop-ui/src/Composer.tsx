@@ -241,7 +241,7 @@ export type ComposerProps = {
      * popover and gives the arrow keys, Enter, and Tab to it.
      */
     commands?: readonly CommandPickerItem[];
-    /** Chooses a command from the popover; the owner clears the draft. */
+    /** Chooses a command from the popover; the owner may invoke it or expand it in the draft. */
     onCommandSelect?: (id: string) => void;
     "data-testid"?: string;
     disabled?: boolean;
