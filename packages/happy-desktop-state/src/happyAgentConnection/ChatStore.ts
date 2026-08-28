@@ -55,6 +55,7 @@ export class ChatStore {
                 "backgroundProcesses",
                 previous.backgroundProcesses,
             ),
+            slashCommands: presentOr(snapshot, "slashCommands", previous.slashCommands),
             subagents: presentOr(snapshot, "subagents", previous.subagents),
             tasks: presentOr(snapshot, "tasks", previous.tasks),
             ...(Object.hasOwn(snapshot, "goal")
@@ -126,6 +127,7 @@ function emptySession(sessionId: string): SessionState {
         models: [],
         pendingUserInputs: [],
         pendingSteeringMessages: [],
+        slashCommands: [],
         tasks: [],
         subagents: [],
         backgroundProcesses: [],

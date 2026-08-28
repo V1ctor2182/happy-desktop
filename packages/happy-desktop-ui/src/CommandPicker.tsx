@@ -128,7 +128,7 @@ export function commandPickerItems(
         return {
             id: command.id,
             slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
-            description: meta?.description ?? command.description ?? "",
+            description: command.description ?? meta?.description ?? "",
             icon: meta?.icon ?? "spark",
         };
     });

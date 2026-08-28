@@ -6,6 +6,10 @@ export interface ComposerCommand {
     readonly id: string;
     readonly label: string;
     readonly description?: string;
+    /** Whether opaque text may follow the command name when it is submitted. */
+    readonly hasArguments?: boolean;
+    /** Presentation category supplied by the command owner, such as `skill`. */
+    readonly kind?: string;
 }
 
 /** One `@`-mention candidate offered for the active mention token. */
@@ -143,7 +147,13 @@ export type ComposerOutput =
           readonly scopeId: string;
           readonly query?: string;
       }
-    | { readonly type: "commandInvoked"; readonly scopeId: string; readonly commandId: string }
+    | {
+          readonly type: "commandInvoked";
+          readonly scopeId: string;
+          readonly commandId: string;
+          readonly arguments?: string;
+          readonly revision?: number;
+      }
     | {
           readonly type: "shellCommandSubmitted";
           readonly scopeId: string;
@@ -162,6 +172,7 @@ export type ComposerOutput =
 
 export type ComposerInput =
     | { readonly type: "textReconciled"; readonly text: string }
+    | { readonly type: "commandsReconciled"; readonly commands: readonly ComposerCommand[] }
     | {
           readonly type: "mentionCandidatesReconciled";
           readonly query: string;
@@ -221,7 +232,7 @@ function mentionTokenOf(text: string): string | undefined {
  */
 function commandQueryOf(text: string, commands: readonly ComposerCommand[]): string | undefined {
     if (commands.length === 0) return undefined;
-    const match = /^\/([\w-]*)$/.exec(text);
+    const match = /^\/([A-Za-z0-9._:-]*)$/.exec(text);
     if (!match) return undefined;
     const query = match[1]!;
     const needle = query.toLowerCase();
@@ -232,7 +243,48 @@ function commandQueryOf(text: string, commands: readonly ComposerCommand[]): str
 function commandMatches(command: ComposerCommand, needle: string): boolean {
     if (needle.length === 0) return true;
     return (
-        command.id.toLowerCase().includes(needle) || command.label.toLowerCase().includes(needle)
+        command.id.toLowerCase().startsWith(needle) ||
+        command.label.replace(/^\//, "").toLowerCase().startsWith(needle)
+    );
+}
+
+/** An exact offered command at the start of a submitted draft, plus its opaque arguments. */
+function commandInvocationOf(
+    text: string,
+    commands: readonly ComposerCommand[],
+): { readonly command: ComposerCommand; readonly arguments?: string } | undefined {
+    const match = /^\/([A-Za-z0-9][A-Za-z0-9._:-]*)(?:\s([\s\S]*))?$/.exec(text);
+    if (!match) return undefined;
+    const name = match[1]!;
+    const command = commands.find(
+        (candidate) => candidate.id === name || candidate.label.replace(/^\//, "") === name,
+    );
+    if (!command) return undefined;
+    const argumentsValue = match[2];
+    return {
+        command,
+        ...(argumentsValue === undefined ? {} : { arguments: argumentsValue }),
+    };
+}
+
+/** Whether two complete command catalogs say the same thing in the same order. */
+function commandsEqual(
+    left: readonly ComposerCommand[],
+    right: readonly ComposerCommand[],
+): boolean {
+    return (
+        left.length === right.length &&
+        left.every((command, index) => {
+            const candidate = right[index];
+            return (
+                candidate !== undefined &&
+                command.id === candidate.id &&
+                command.label === candidate.label &&
+                command.description === candidate.description &&
+                command.hasArguments === candidate.hasArguments &&
+                command.kind === candidate.kind
+            );
+        })
     );
 }
 
@@ -376,7 +428,7 @@ export function composerStoreCreate(
             });
             // The command draft is persisted by the same output as ordinary
             // text. Clearing only this in-memory store lets a later durable
-            // draft reconciliation restore `/agents` and reopen its picker.
+            // draft reconciliation restore it and reopen its picker.
             output({ type: "textUpdated", scopeId, text: "" });
             output({ type: "commandInvoked", scopeId, commandId });
         },
@@ -388,6 +440,23 @@ export function composerStoreCreate(
                 (previous.text.length === 0 && previous.attachments.length === 0)
             )
                 return;
+            const commandInvocation =
+                previous.attachments.length === 0
+                    ? commandInvocationOf(previous.text, previous.capabilities.commands)
+                    : undefined;
+            if (commandInvocation !== undefined) {
+                set({ submission: { status: "pending", revision: previous.revision } });
+                output({
+                    type: "commandInvoked",
+                    scopeId,
+                    commandId: commandInvocation.command.id,
+                    ...(commandInvocation.arguments === undefined
+                        ? {}
+                        : { arguments: commandInvocation.arguments }),
+                    revision: previous.revision,
+                });
+                return;
+            }
             // An open command palette is an affordance, not a message: Enter picks
             // nothing and sends nothing until the caller invokes a command.
             if (previous.commandQuery !== undefined) return;
@@ -426,6 +495,16 @@ export function composerStoreCreate(
                             ...draftDerive(event.text, snapshot.capabilities),
                         });
                     return;
+                case "commandsReconciled": {
+                    if (commandsEqual(snapshot.capabilities.commands, event.commands)) return;
+                    const commands = event.commands.map((command) => ({ ...command }));
+                    const capabilities = { ...snapshot.capabilities, commands };
+                    set({
+                        capabilities,
+                        ...draftDerive(snapshot.text, capabilities),
+                    });
+                    return;
+                }
                 case "mentionCandidatesReconciled":
                     // A response for a token the reader has already left is stale.
                     if (snapshot.mentionQuery === event.query)

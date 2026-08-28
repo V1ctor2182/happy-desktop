@@ -19,6 +19,7 @@ import {
     type Run,
     type SendMessageRequest,
     type SendMessageResponse,
+    type SlashCommand,
     type UsageBreakdown,
     type Workspace,
 } from "@slopus/happy-agent-client";
@@ -134,6 +135,7 @@ interface SessionEntry {
     context?: AgentContextUsage | null;
     draft?: AgentDraftSnapshot;
     mode?: MessageMode | null;
+    slashCommands: readonly SlashCommand[];
 }
 
 interface GroupsSubscriber extends HappyAgentGroupsSubscriptionOptions {
@@ -355,6 +357,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             ...(entry.context === undefined ? {} : { context: entry.context }),
             ...(entry.activity === undefined ? {} : { activity: entry.activity }),
             ...(entry.question === undefined ? {} : { question: entry.question }),
+            slashCommands: entry.slashCommands,
             runs: runsOrderedOf(entry),
             runFinalContextTokens: entry.runFinalContextTokens,
             ...(entry.usage === undefined ? {} : { usage: entry.usage }),
@@ -711,6 +714,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 entry.context = bootstrap.context;
                 entry.draft = bootstrap.draft;
                 entry.mode = bootstrap.mode;
+                entry.slashCommands = bootstrap.slashCommands;
                 entry.usage = bootstrap.usage;
                 agentDrafts.set(entry.id, bootstrap.draft);
                 agentModes.set(entry.id, bootstrap.mode);
@@ -1222,6 +1226,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             case "agent.draft.updated":
                 adoptDraft(event.payload.agentId, event.payload.draft);
                 return;
+            case "agent.slash_commands.updated": {
+                const entry = sessions.get(event.payload.agentId);
+                if (entry !== undefined) {
+                    entry.slashCommands = event.payload.slashCommands;
+                    publishSession(entry);
+                }
+                return;
+            }
             case "run.started":
                 acceptMessages(
                     event.payload.agentId,
@@ -2082,6 +2094,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     reconcileRequired: false,
                     corruptedMessageIds: new Set(),
                     questionRecovery: undefined,
+                    slashCommands: [],
                 };
                 const known = agentOf(subscription.sessionId);
                 if (known !== undefined) {
@@ -2545,6 +2558,44 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     // into a visible failure.
                     return message === undefined;
                 },
+                sessionId,
+                `agent:${sessionId}`,
+            );
+        },
+        invokeSlashCommand(sessionId, name, argumentsValue) {
+            const mutationId = nextId();
+            const agent = sessions.get(sessionId)?.agent ?? agentOf(sessionId);
+            if (agent === undefined || config === undefined) {
+                reportMutationFailure(
+                    "invoke_slash_command",
+                    mutationId,
+                    new Error("The agent is not loaded."),
+                    sessionId,
+                );
+                return mutationId;
+            }
+            const mode = modeOf(
+                config,
+                agentDrafts.get(sessionId),
+                agentModes.get(sessionId),
+                intendedModes.get(sessionId),
+            );
+            return mutation(
+                "invoke_slash_command",
+                mutationId,
+                () =>
+                    client.invokeSlashCommand(
+                        sessionId,
+                        name,
+                        {
+                            ...(argumentsValue === undefined ? {} : { arguments: argumentsValue }),
+                            mode,
+                            mutationId,
+                        },
+                        { signal: deadlineSignal() },
+                    ),
+                ({ agent: updated }) => adoptAgent(updated),
+                undefined,
                 sessionId,
                 `agent:${sessionId}`,
             );
@@ -3228,6 +3279,7 @@ function agentIdOfEvent(event: HappyAgentEvent): string | undefined {
         case "agent.updated":
         case "agent.context.updated":
         case "agent.draft.updated":
+        case "agent.slash_commands.updated":
         case "run.started":
         case "run.boundary":
         case "run.finished":

@@ -43,6 +43,7 @@ import type {
     HappyAgentSessionId,
     HappyAgentSessionStatus,
     HappyAgentSessionUsage,
+    HappyAgentSlashCommand,
     SubagentSummary,
     HappyAgentTask,
     HappyAgentThinkingLevel,
@@ -487,6 +488,8 @@ export interface HappyAgentChatSnapshot {
     readonly requestSubmissions: readonly ConversationRequestSubmission[];
     readonly requestSelections: ReadonlyMap<string, Readonly<Record<string, readonly string[]>>>;
     readonly queuedMessages: readonly HappyAgentQueuedMessage[];
+    /** Complete ordered slash-command catalog projected from the focused agent. */
+    readonly slashCommands: readonly HappyAgentSlashCommand[];
     readonly tasks: readonly HappyAgentTask[];
     readonly goal?: HappyAgentGoal;
     readonly subagents: readonly SubagentSummary[];
@@ -523,6 +526,7 @@ export interface HappyAgentChatStore {
     sessionRetry(): void;
     historyLoadMore(): void;
     messageSend(text: string, images?: readonly HappyAgentImageInput[]): Promise<void>;
+    slashCommandInvoke(name: string, argumentsValue?: string): Promise<void>;
     draftSet(draft: string, updatedAt: number, origin: string): Promise<void>;
     runAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
@@ -556,6 +560,7 @@ export interface HappyAgentChatDeps {
         HappyAgentConnection,
         | "answerUserInput"
         | "compactSession"
+        | "invokeSlashCommand"
         | "sendMessage"
         | "setDraft"
         | "setEffort"
@@ -621,6 +626,7 @@ export function happyAgentChatStoreCreate(
         requestSubmissions: [],
         requestSelections: new Map(),
         queuedMessages: [],
+        slashCommands: [],
         tasks: [],
         subagents: [],
         backgroundProcesses: [],
@@ -638,6 +644,8 @@ export function happyAgentChatStoreCreate(
     let error: UserError | undefined;
     let transcriptElements: readonly ChatElement[] | undefined;
     let transcriptSession: SessionState | undefined;
+    let slashCommandSource: SessionState["slashCommands"] | undefined;
+    let slashCommands: readonly HappyAgentSlashCommand[] = [];
     let transcriptAnsweredUserInputs: readonly HappyAgentAnsweredUserInput[] = [];
     let transcriptConnection: HappyAgentChatTranscriptConnection | undefined;
     let detachedBackgroundProcessIds: ReadonlySet<number> = new Set();
@@ -677,6 +685,15 @@ export function happyAgentChatStoreCreate(
         const elements = transcriptElements ?? [];
         const pendingUserInputs =
             connected === undefined ? [] : transcriptPendingUserInputsProject(connected);
+        if (connected?.slashCommands !== slashCommandSource) {
+            slashCommandSource = connected?.slashCommands;
+            slashCommands = (connected?.slashCommands ?? []).map((command) => ({
+                name: command.name,
+                description: command.description,
+                hasArguments: command.hasArguments,
+                ...(command.kind === undefined ? {} : { kind: command.kind }),
+            }));
+        }
         const subagents = connected === undefined ? [] : transcriptSubagentsProject(connected);
         const tasks = connected === undefined ? [] : transcriptTasksProject(connected);
         const goal = connected === undefined ? undefined : transcriptGoalProject(connected);
@@ -775,6 +792,7 @@ export function happyAgentChatStoreCreate(
             requestSelections: new Map(requestSelections),
             queuedMessages:
                 connected === undefined ? [] : transcriptQueuedMessagesProject(connected),
+            slashCommands,
             tasks,
             ...(goal === undefined ? {} : { goal }),
             subagents,
@@ -998,6 +1016,12 @@ export function happyAgentChatStoreCreate(
                 if (images && images.length > 0) sentImagesRemember(mutationId, images);
                 connectMutationTrack(mutationId);
                 output({ type: "messageSent", sessionId, steered });
+            }),
+        slashCommandInvoke: (name, argumentsValue) =>
+            rejecting(() => {
+                connectMutationTrack(
+                    deps.connectActions.invokeSlashCommand(sessionId, name, argumentsValue),
+                );
             }),
         draftSet: (draft, updatedAt, origin) =>
             rejecting(() => {

@@ -7,6 +7,7 @@ import type {
     MessageMode,
     MutationId,
     Project,
+    SlashCommand,
 } from "@slopus/happy-agent-client";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
@@ -414,6 +415,8 @@ export interface SessionState {
     pendingSteeringMessages: readonly {
         message: { id: string; blocks: readonly MessageBlock[] };
     }[];
+    /** Complete ordered command catalog for this focused agent. */
+    slashCommands: readonly SlashCommand[];
     tasks: readonly {
         id: string;
         subject: string;
@@ -620,6 +623,7 @@ export type MutationAction =
     | "archive_workspace"
     | "create_session"
     | "send_message"
+    | "invoke_slash_command"
     | "stop_background_process"
     | "stop_run"
     | "switch_model"
@@ -780,6 +784,8 @@ export interface HappyAgentConnection {
     createSession(input: CreateSessionInput, checkoutReady?: Promise<unknown>): MutationId;
     markSessionRead(sessionId: string): MutationId;
     sendMessage(sessionId: string, message: string | SendMessageInput): MutationId;
+    /** Invokes one slash command under the session's current composer selection. */
+    invokeSlashCommand(sessionId: string, name: string, argumentsValue?: string): MutationId;
     stopBackgroundProcess(sessionId: string, projectedProcessId: number): MutationId;
     stopRun(sessionId: string): MutationId;
     compactSession(sessionId: string): MutationId;

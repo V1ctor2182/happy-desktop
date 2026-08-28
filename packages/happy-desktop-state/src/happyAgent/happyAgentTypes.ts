@@ -640,6 +640,16 @@ export interface HappyAgentSession {
     readonly updatedAt: number;
 }
 
+/** One slash command the selected Happy Agent currently offers for this session. */
+export interface HappyAgentSlashCommand {
+    /** The command without its leading slash. */
+    readonly name: string;
+    readonly description: string;
+    readonly hasArguments: boolean;
+    /** Presentation category supplied by the owning agent module. */
+    readonly kind?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Menus (pickers derived from catalog + current session selection)
 // ---------------------------------------------------------------------------

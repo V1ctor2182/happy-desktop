@@ -6,18 +6,34 @@ import { ComponentPage, Specimen } from "../kit";
 export const componentNumber = "C-152";
 
 const commands: ComposerCommand[] = [
-    "model",
-    "effort",
-    "permissions",
-    "fast",
-    "usage",
-    "tasks",
-    "agents",
-    "goal",
-    "ps",
-    "compact",
-    "abort",
-].map((id) => ({ id, label: `/${id}` }));
+    {
+        id: "compact",
+        label: "/compact",
+        description: "Summarize older messages to free context space.",
+        hasArguments: false,
+        kind: "compaction",
+    },
+    {
+        id: "code-review",
+        label: "/code-review",
+        description: "Review the current changes.",
+        hasArguments: true,
+        kind: "skill",
+    },
+    {
+        id: "frontend-design",
+        label: "/frontend-design",
+        description: "Create a polished production interface.",
+        hasArguments: true,
+        kind: "skill",
+    },
+    { id: "usage", label: "/usage" },
+    { id: "tasks", label: "/tasks" },
+    { id: "agents", label: "/agents" },
+    { id: "goal", label: "/goal" },
+    { id: "ps", label: "/ps" },
+    { id: "abort", label: "/abort" },
+];
 
 const items = commandPickerItems(commands);
 
@@ -51,7 +67,7 @@ export function CommandPickerPage() {
             >
                 <div style={{ display: "flex", width: "420px" }}>
                     <CommandPicker
-                        activeId="model"
+                        activeId="frontend-design"
                         items={items.filter((item) => item.slash.startsWith("/f"))}
                         onSelect={() => undefined}
                     />

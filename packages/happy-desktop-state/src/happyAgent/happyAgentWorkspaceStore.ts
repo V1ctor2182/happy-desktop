@@ -97,19 +97,63 @@ import type {
     HappyAgentWorktreeId,
 } from "./happyAgentTypes.js";
 
-/**
- * Commands a local composer offers behind `/`. Only ids wired to a real action
- * appear, so an offered command always does something.
- */
+/** Desktop-owned commands appended after the selected agent's ordered catalog. */
 export const happyAgentComposerCommands: readonly ComposerCommand[] = [
-    { id: "usage", label: "/usage", description: "Token usage for the session." },
-    { id: "tasks", label: "/tasks", description: "Show the session task list." },
-    { id: "agents", label: "/agents", description: "Monitor delegated subagents." },
-    { id: "goal", label: "/goal", description: "Show the session goal." },
-    { id: "ps", label: "/ps", description: "List background terminals." },
-    { id: "compact", label: "/compact", description: "Compact the conversation." },
-    { id: "abort", label: "/abort", description: "Stop the current run." },
+    {
+        id: "usage",
+        label: "/usage",
+        description: "Token usage for the session.",
+        hasArguments: false,
+    },
+    {
+        id: "tasks",
+        label: "/tasks",
+        description: "Show the session task list.",
+        hasArguments: false,
+    },
+    {
+        id: "agents",
+        label: "/agents",
+        description: "Monitor delegated subagents.",
+        hasArguments: false,
+    },
+    {
+        id: "goal",
+        label: "/goal",
+        description: "Show the session goal.",
+        hasArguments: false,
+    },
+    {
+        id: "ps",
+        label: "/ps",
+        description: "List background terminals.",
+        hasArguments: false,
+    },
+    {
+        id: "abort",
+        label: "/abort",
+        description: "Stop the current run.",
+        hasArguments: false,
+    },
 ];
+
+/** Preserves the daemon's order, then adds desktop-only commands without shadowing it. */
+function composerCommandsProject(
+    commands: HappyAgentChatSnapshot["slashCommands"],
+): readonly ComposerCommand[] {
+    const provided = commands.map((command) => ({
+        id: command.name,
+        label: `/${command.name}`,
+        description: command.description,
+        hasArguments: command.hasArguments,
+        ...(command.kind === undefined ? {} : { kind: command.kind }),
+    }));
+    const providedIds = new Set(provided.map((command) => command.id));
+    return [
+        ...provided,
+        ...happyAgentComposerCommands.filter((command) => !providedIds.has(command.id)),
+    ];
+}
 
 /** Number of `@`-mention candidates a local composer asks the workspace for. */
 const MENTION_LIMIT = 8;
@@ -2947,36 +2991,47 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
-    const commandRun = (commandId: string): void => {
-        const store = chatStore;
-        if (!store) return;
-        const swallow = (operation: Promise<unknown>): void => {
-            void operation.catch(() => undefined);
-        };
-        // The commands that start work go through the same guard the buttons
-        // for them do; `abort` and the panels do not, because none of
-        // them touches the checkout. Both of the guarded ones speak to the
-        // session rather than to the directory, so a workspace still being
-        // prepared takes them and the host runs them when it is ready.
-        const refused = openGroupConversationRefusal() !== undefined;
-        switch (commandId) {
-            case "compact":
-                if (!refused) swallow(store.compact());
-                return;
-            case "abort":
-                swallow(store.runAbort());
-                return;
-            case "usage":
-                panel.usageSelect();
-                return;
-            case "tasks":
-            case "agents":
-            case "goal":
-            case "ps":
-                store.activityPanelShow();
-                panel.activitySelect();
-                return;
-        }
+    const commandRun = (
+        target: ComposerStore,
+        commandId: string,
+        argumentsValue: string | undefined,
+        revision: number | undefined,
+    ): void => {
+        const run = () =>
+            withChatStore((store) => {
+                const provided = store
+                    .get()
+                    .slashCommands.find((command) => command.name === commandId);
+                if (provided !== undefined) {
+                    if (argumentsValue !== undefined && !provided.hasArguments)
+                        return Promise.reject(
+                            new Error(`/${commandId} does not accept arguments.`),
+                        );
+                    return writeGuard(openGroupConversationRefusal(), () =>
+                        store.slashCommandInvoke(commandId, argumentsValue),
+                    );
+                }
+                if (argumentsValue !== undefined)
+                    return Promise.reject(new Error(`/${commandId} does not accept arguments.`));
+                switch (commandId) {
+                    case "abort":
+                        return store.runAbort();
+                    case "usage":
+                        panel.usageSelect();
+                        return Promise.resolve();
+                    case "tasks":
+                    case "agents":
+                    case "goal":
+                    case "ps":
+                        store.activityPanelShow();
+                        panel.activitySelect();
+                        return Promise.resolve();
+                    default:
+                        return Promise.reject(new Error(`/${commandId} is no longer available.`));
+                }
+            });
+        if (revision === undefined) void run().catch(() => undefined);
+        else submitting(target, revision, run);
     };
 
     /**
@@ -3146,7 +3201,11 @@ export function happyAgentWorkspaceStoreCreate(
                         );
                         return;
                     case "commandInvoked":
-                        commandRun(event.commandId);
+                        if (event.revision !== undefined)
+                            void withChatStore((store) =>
+                                store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
+                            ).catch(() => undefined);
+                        commandRun(created, event.commandId, event.arguments, event.revision);
                         return;
                     case "mentionQueryUpdated": {
                         const requestGeneration = ++mentionGeneration;
@@ -3235,10 +3294,15 @@ export function happyAgentWorkspaceStoreCreate(
                 acquiringId = undefined;
                 handle = acquired;
                 chatStore = acquired.store;
-                const reconcileDraft = (): void => {
+                const reconcileComposer = (): void => {
                     const state = acquired.store.get();
                     const currentComposer = composer;
-                    if (!state.ready || !currentComposer) return;
+                    if (!currentComposer) return;
+                    currentComposer.getState().composerInput({
+                        type: "commandsReconciled",
+                        commands: composerCommandsProject(state.slashCommands),
+                    });
+                    if (!state.ready) return;
                     // A send in flight has already cleared the stored draft, and
                     // that empty draft arrives back here while the message is
                     // still going out. Reconciling it would count as a new
@@ -3256,9 +3320,9 @@ export function happyAgentWorkspaceStoreCreate(
                             .getState()
                             .composerInput({ type: "textReconciled", text: remote });
                 };
-                reconcileDraft();
+                reconcileComposer();
                 unsubscribeChat = acquired.store.subscribe(() => {
-                    reconcileDraft();
+                    reconcileComposer();
                     recompute();
                 });
                 recompute();

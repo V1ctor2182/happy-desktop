@@ -13,6 +13,7 @@ import type {
     Project,
     Question,
     Run,
+    SlashCommand,
     UsageBreakdown,
     Workspace,
 } from "@slopus/happy-agent-client";
@@ -53,6 +54,7 @@ export interface SessionProjectionInput {
     context?: AgentContextUsage | null;
     activity?: AgentActivityResponse;
     question?: Question | null;
+    slashCommands: readonly SlashCommand[];
     runs: readonly Run[];
     /** Final conversation-context measurements captured at exact run boundaries. */
     runFinalContextTokens?: ReadonlyMap<string, number>;
@@ -167,6 +169,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
             .map((entry) => ({
                 message: { id: entry.message.id, blocks: entry.message.content },
             })),
+        slashCommands: input.slashCommands,
         tasks: [],
         subagents: projectSubagents(agent, input.activity),
         backgroundProcesses: (input.activity?.processes ?? [])
