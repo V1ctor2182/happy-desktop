@@ -32,6 +32,8 @@ the macOS application is archived under a new version in
 - `0.5.0` — Inbox, Settings, Documents, and Terminal surfaces.
 - `0.6.0` — Rust-owned daemon lifecycle, authenticated in-process capability
   boundary, typed health/bootstrap contracts, and live connection status.
+- `0.7.0` — authoritative project/agent navigation projected from daemon
+  bootstrap with exact hierarchy-row geometry.
 
 A phase may be split into numbered subphases when it would otherwise stop being
 an independently reviewable commit. No later phase is allowed to replace an

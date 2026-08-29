@@ -7,7 +7,9 @@ use crate::components::file_preview::file_preview;
 use crate::components::inbox::inbox;
 use crate::components::rail::{interactive_rail, rail};
 use crate::components::settings::settings;
-use crate::components::sidebar::{interactive_sidebar, sidebar};
+use crate::components::sidebar::{
+    interactive_project_sidebar, interactive_sidebar, project_sidebar_items, sidebar,
+};
 use crate::components::terminal_panel::terminal_panel;
 use crate::components::title_bar::title_bar;
 use crate::design::geometry::sidebar_width;
@@ -75,6 +77,15 @@ fn interactive_shell(
         .child(interactive_rail(theme, selected_rail, dark, cx))
         .child(if selected_rail == 1 {
             file_browser(theme, sidebar_width)
+        } else if !runtime.projects.is_empty() {
+            interactive_project_sidebar(
+                theme,
+                selected_sidebar,
+                sidebar_width,
+                &runtime.projects,
+                &runtime.workspaces,
+                cx,
+            )
         } else {
             interactive_sidebar(theme, selected_sidebar, sidebar_width, cx)
         })
@@ -149,19 +160,33 @@ fn workspace(
     selected_sidebar: usize,
     runtime: Option<&RuntimeSnapshot>,
 ) -> Div {
+    let live_items =
+        runtime.map(|snapshot| project_sidebar_items(&snapshot.projects, &snapshot.workspaces));
+    let selected_live_item = live_items
+        .as_ref()
+        .and_then(|items| items.get(selected_sidebar));
+    let documents_selected = selected_live_item.is_some_and(|item| item.id == "documents")
+        || live_items.is_none() && selected_sidebar == 6;
     let body = match selected_rail {
-        0 if selected_sidebar == 6 => document_surface(theme),
+        0 if documents_selected => document_surface(theme),
         0 => conversation(theme),
         1 => file_editor(theme),
         2 => inbox(theme),
         _ => settings(theme),
     };
-    let (title, fixture_subtitle, action) = match selected_rail {
-        0 if selected_sidebar == 6 => ("Documents", "Owned by this Happy Agent", "New document"),
+    let (fixture_title, fixture_subtitle, action) = match selected_rail {
+        0 if documents_selected => ("Documents", "Owned by this Happy Agent", "New document"),
         0 => ("Rust rewrite", "Native GPUI app parity", "New session"),
         1 => ("Files", "Changes and all files", "New file"),
         2 => ("Inbox", "Activity across Happy Agents", "Mark all read"),
         _ => ("Settings", "Local and remote Happy Agents", "Done"),
+    };
+    let title = if selected_rail == 0 {
+        selected_live_item
+            .map(|item| item.label.as_str())
+            .unwrap_or(fixture_title)
+    } else {
+        fixture_title
     };
     let subtitle = runtime
         .map(|snapshot| snapshot.message.as_ref())

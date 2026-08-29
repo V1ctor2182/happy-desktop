@@ -24,7 +24,11 @@ pub enum DaemonStatus {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct AgentSnapshot {
+    #[serde(rename = "archivedAt")]
+    pub archived_at: Option<i64>,
     pub id: String,
+    #[serde(rename = "orderKey")]
+    pub order_key: Option<String>,
     pub title: Option<String>,
     pub status: AgentStatus,
     #[serde(rename = "workspaceId")]
@@ -43,11 +47,30 @@ pub enum AgentStatus {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ProjectSnapshot {
+    #[serde(rename = "archivedAt")]
+    pub archived_at: Option<i64>,
     pub id: String,
     pub name: String,
+    #[serde(rename = "orderKey")]
+    pub order_key: String,
     pub status: CatalogStatus,
     #[serde(default)]
     pub agents: Vec<AgentSnapshot>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WorkspaceSnapshot {
+    #[serde(rename = "archivedAt")]
+    pub archived_at: Option<i64>,
+    #[serde(default)]
+    pub agents: Vec<AgentSnapshot>,
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "orderKey")]
+    pub order_key: String,
+    #[serde(rename = "projectId")]
+    pub project_id: Option<String>,
+    pub status: CatalogStatus,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
@@ -62,6 +85,8 @@ pub enum CatalogStatus {
 pub struct BootstrapSnapshot {
     pub cursor: String,
     pub projects: Vec<ProjectSnapshot>,
+    #[serde(default)]
+    pub workspaces: Vec<WorkspaceSnapshot>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -76,6 +101,7 @@ pub struct RuntimeSnapshot {
     pub connection: ConnectionState,
     pub message: Arc<str>,
     pub projects: Arc<[ProjectSnapshot]>,
+    pub workspaces: Arc<[WorkspaceSnapshot]>,
 }
 
 impl RuntimeSnapshot {
@@ -84,19 +110,44 @@ impl RuntimeSnapshot {
             connection: ConnectionState::Connecting,
             message: Arc::from("Connecting to your local Happy Agent…"),
             projects: Arc::from([]),
+            workspaces: Arc::from([]),
         }
     }
 
     pub fn online(bootstrap: BootstrapSnapshot) -> Self {
-        let active = bootstrap
+        let mut active = bootstrap
             .projects
             .into_iter()
-            .filter(|project| project.status == CatalogStatus::Active)
+            .filter(|project| {
+                project.status == CatalogStatus::Active && project.archived_at.is_none()
+            })
             .collect::<Vec<_>>();
+        active.sort_by(|left, right| left.order_key.cmp(&right.order_key));
+        for project in &mut active {
+            project.agents.retain(|agent| agent.archived_at.is_none());
+            project
+                .agents
+                .sort_by(|left, right| left.order_key.cmp(&right.order_key));
+        }
+        let mut workspaces = bootstrap
+            .workspaces
+            .into_iter()
+            .filter(|workspace| {
+                workspace.status == CatalogStatus::Active && workspace.archived_at.is_none()
+            })
+            .collect::<Vec<_>>();
+        workspaces.sort_by(|left, right| left.order_key.cmp(&right.order_key));
+        for workspace in &mut workspaces {
+            workspace.agents.retain(|agent| agent.archived_at.is_none());
+            workspace
+                .agents
+                .sort_by(|left, right| left.order_key.cmp(&right.order_key));
+        }
         Self {
             connection: ConnectionState::Online,
             message: Arc::from(format!("Online · {} projects", active.len())),
             projects: active.into(),
+            workspaces: workspaces.into(),
         }
     }
 
@@ -105,6 +156,7 @@ impl RuntimeSnapshot {
             connection: ConnectionState::Error,
             message: Arc::from(message),
             projects: Arc::from([]),
+            workspaces: Arc::from([]),
         }
     }
 
@@ -113,6 +165,7 @@ impl RuntimeSnapshot {
             connection: ConnectionState::Online,
             message: Arc::from("Online · fixture"),
             projects: Arc::from([]),
+            workspaces: Arc::from([]),
         }
     }
 }
@@ -127,9 +180,10 @@ mod tests {
             r#"{
                 "cursor":"0009",
                 "projects":[
-                    {"id":"p1","name":"Happy","status":"active","agents":[]},
-                    {"id":"p2","name":"Old","status":"archived","agents":[]}
-                ]
+                    {"archivedAt":null,"id":"p1","name":"Happy","orderKey":"a","status":"active","agents":[]},
+                    {"archivedAt":1,"id":"p2","name":"Old","orderKey":"b","status":"archived","agents":[]}
+                ],
+                "workspaces":[]
             }"#,
         )
         .unwrap();
@@ -142,7 +196,7 @@ mod tests {
 
     #[test]
     fn malformed_owned_fields_are_rejected_instead_of_guessed() {
-        let malformed = r#"{"cursor":"1","projects":[{"id":"p","name":"P","status":"unknown"}]}"#;
+        let malformed = r#"{"cursor":"1","projects":[{"archivedAt":null,"id":"p","name":"P","orderKey":"a","status":"unknown"}],"workspaces":[]}"#;
         assert!(serde_json::from_str::<BootstrapSnapshot>(malformed).is_err());
     }
 }
