@@ -1,5 +1,8 @@
 use crate::components::channel_header::channel_header;
 use crate::components::conversation::conversation;
+use crate::components::file_browser::file_browser;
+use crate::components::file_editor::file_editor;
+use crate::components::file_preview::file_preview;
 use crate::components::rail::{interactive_rail, rail};
 use crate::components::route_surface::route_surface;
 use crate::components::sidebar::{interactive_sidebar, sidebar};
@@ -57,14 +60,17 @@ fn interactive_shell(
         .min_h_0()
         .w_full()
         .child(interactive_rail(theme, selected_rail, dark, cx))
-        .child(interactive_sidebar(
-            theme,
-            selected_sidebar,
-            sidebar_width,
-            cx,
-        ))
+        .child(if selected_rail == 1 {
+            file_browser(theme, sidebar_width)
+        } else {
+            interactive_sidebar(theme, selected_sidebar, sidebar_width, cx)
+        })
         .child(workspace(theme, selected_rail))
-        .child(inspector(theme, sidebar_width));
+        .child(if selected_rail == 1 {
+            file_preview(theme, sidebar_width)
+        } else {
+            inspector(theme, sidebar_width)
+        });
 
     div()
         .debug_selector(|| "app-shell".to_owned())
@@ -122,12 +128,7 @@ pub fn shell(
 fn workspace(theme: Theme, selected_rail: usize) -> Div {
     let body = match selected_rail {
         0 => conversation(theme),
-        1 => route_surface(
-            theme,
-            "Files",
-            "Browse changes, edit files, and preview media.",
-            "Open Files",
-        ),
+        1 => file_editor(theme),
         2 => route_surface(
             theme,
             "Inbox",
@@ -249,7 +250,12 @@ mod tests {
         // The Files rail item is x=6…58, y=160…208 in the complete window.
         cx.simulate_click(point_px(32.0, 184.0), Modifiers::default());
         assert_eq!(cx.read(|app_cx| app.read(app_cx).selected_rail), 1);
-        assert!(cx.debug_bounds("route-surface").is_some());
+        assert!(cx.debug_bounds("file-browser").is_some());
+        assert!(cx.debug_bounds("file-editor").is_some());
+
+        // Return to Chats so the chat hierarchy owns the navigation lane again.
+        cx.simulate_click(point_px(32.0, 132.0), Modifiers::default());
+        assert_eq!(cx.read(|app_cx| app.read(app_cx).selected_rail), 0);
 
         // Sidebar row 3 is x=70…418, y=280…312 in the complete window.
         cx.simulate_click(point_px(100.0, 296.0), Modifiers::default());
