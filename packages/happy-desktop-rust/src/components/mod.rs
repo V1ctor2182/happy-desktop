@@ -6,6 +6,7 @@ pub mod composer;
 pub mod conversation;
 pub mod message;
 pub mod rail;
+pub mod route_surface;
 pub mod sidebar;
 pub mod title_bar;
 pub mod tool_call;

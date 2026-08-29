@@ -1,6 +1,7 @@
+use crate::HappyApp;
 use crate::design::geometry::RAIL_WIDTH;
 use crate::design::theme::{Theme, UI_FONT};
-use gpui::{Div, FontWeight, IntoElement, div, prelude::*, px, rgba};
+use gpui::{Context, Div, FontWeight, IntoElement, Stateful, div, prelude::*, px, rgba};
 
 const ITEMS: [(&str, &str); 4] = [
     ("◉", "Chats"),
@@ -20,7 +21,57 @@ pub fn rail(theme: Theme, selected: usize) -> Div {
     for (index, (icon, label)) in ITEMS.into_iter().enumerate() {
         items = items.child(rail_item(theme, index, icon, label, index == selected));
     }
+    rail_root(theme, items, appearance_toggle(theme).child("◐"))
+}
 
+pub fn interactive_rail(
+    theme: Theme,
+    selected: usize,
+    dark: bool,
+    cx: &mut Context<HappyApp>,
+) -> Div {
+    let mut items = div()
+        .debug_selector(|| "rail-items".to_owned())
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(4.0))
+        .w_full();
+    for (index, (icon, label)) in ITEMS.into_iter().enumerate() {
+        items = items.child(
+            rail_item(theme, index, icon, label, index == selected).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    this.selected_rail = index;
+                    cx.notify();
+                },
+            )),
+        );
+    }
+    let appearance = appearance_toggle(theme)
+        .child(if dark { "☀" } else { "◐" })
+        .on_click(cx.listener(|this, _, _, cx| {
+            this.dark = !this.dark;
+            cx.notify();
+        }));
+    rail_root(theme, items, appearance)
+}
+
+fn appearance_toggle(theme: Theme) -> Stateful<Div> {
+    div()
+        .id("rail-appearance-action")
+        .debug_selector(|| "rail-appearance".to_owned())
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(28.0))
+        .mb(px(10.0))
+        .rounded(px(999.0))
+        .text_size(px(16.0))
+        .text_color(theme.text_secondary)
+}
+
+fn rail_root(theme: Theme, items: Div, appearance: impl IntoElement) -> Div {
     div()
         .debug_selector(|| "rail".to_owned())
         .flex()
@@ -50,6 +101,7 @@ pub fn rail(theme: Theme, selected: usize) -> Div {
         )
         .child(items)
         .child(div().flex_1())
+        .child(appearance)
         .child(
             div()
                 .debug_selector(|| "rail-create".to_owned())
@@ -65,13 +117,7 @@ pub fn rail(theme: Theme, selected: usize) -> Div {
         )
 }
 
-fn rail_item(
-    theme: Theme,
-    index: usize,
-    icon: &str,
-    label: &str,
-    selected: bool,
-) -> impl IntoElement {
+fn rail_item(theme: Theme, index: usize, icon: &str, label: &str, selected: bool) -> Stateful<Div> {
     let selector = format!("rail-item-{index}");
     div()
         .id(index)
@@ -135,6 +181,10 @@ mod tests {
         assert_eq!(
             cx.debug_bounds("rail-create"),
             Some(rect(14.0, 692.0, 36.0, 36.0))
+        );
+        assert_eq!(
+            cx.debug_bounds("rail-appearance"),
+            Some(rect(18.0, 654.0, 28.0, 28.0))
         );
     }
 }

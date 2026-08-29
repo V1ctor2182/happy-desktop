@@ -1,6 +1,7 @@
+use crate::HappyApp;
 use crate::design::geometry::{SIDEBAR_ROW_GAP, SIDEBAR_ROW_HEIGHT};
 use crate::design::theme::{Theme, UI_FONT};
-use gpui::{Div, FontWeight, IntoElement, div, prelude::*, px, rgba};
+use gpui::{Context, Div, FontWeight, Stateful, div, prelude::*, px, rgba};
 
 const ROWS: [(&str, &str); 7] = [
     ("⌂", "All chats"),
@@ -22,7 +23,35 @@ pub fn sidebar(theme: Theme, selected: usize, width: f32) -> Div {
     for (index, (icon, label)) in ROWS.into_iter().enumerate() {
         rows = rows.child(sidebar_row(theme, index, icon, label, index == selected));
     }
+    sidebar_root(theme, width, rows)
+}
 
+pub fn interactive_sidebar(
+    theme: Theme,
+    selected: usize,
+    width: f32,
+    cx: &mut Context<HappyApp>,
+) -> Div {
+    let mut rows = div()
+        .debug_selector(|| "sidebar-rows".to_owned())
+        .flex()
+        .flex_col()
+        .gap(px(SIDEBAR_ROW_GAP))
+        .px(px(6.0));
+    for (index, (icon, label)) in ROWS.into_iter().enumerate() {
+        rows = rows.child(
+            sidebar_row(theme, index, icon, label, index == selected).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    this.selected_sidebar = index;
+                    cx.notify();
+                },
+            )),
+        );
+    }
+    sidebar_root(theme, width, rows)
+}
+
+fn sidebar_root(theme: Theme, width: f32, rows: Div) -> Div {
     div()
         .debug_selector(|| "sidebar".to_owned())
         .flex()
@@ -80,7 +109,7 @@ fn sidebar_row(
     icon: &str,
     label: &str,
     selected: bool,
-) -> impl IntoElement {
+) -> Stateful<Div> {
     let selector = format!("sidebar-row-{index}");
     div()
         .id(("sidebar-row", index))
