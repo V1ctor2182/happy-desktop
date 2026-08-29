@@ -1,3 +1,4 @@
+mod connectivity;
 mod fonts;
 mod shell;
 mod theme;

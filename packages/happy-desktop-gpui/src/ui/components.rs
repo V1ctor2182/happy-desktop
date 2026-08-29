@@ -64,6 +64,7 @@ impl ControlSize {
 #[derive(Clone, Copy)]
 pub enum ButtonVariant {
     Primary,
+    Inverse,
     Secondary,
     Ghost,
     Danger,
@@ -99,6 +100,11 @@ impl RenderOnce for Button {
             ButtonVariant::Primary => (
                 theme.role(ThemeRole::ButtonPrimaryBackground).into(),
                 theme.role(ThemeRole::ButtonPrimaryTint).into(),
+                transparent_black(),
+            ),
+            ButtonVariant::Inverse => (
+                theme.role(ThemeRole::ButtonPrimaryTint).into(),
+                theme.role(ThemeRole::ButtonPrimaryBackground).into(),
                 transparent_black(),
             ),
             ButtonVariant::Secondary => (
@@ -1066,6 +1072,7 @@ pub struct Composer {
     pub input: Entity<TextInput>,
     pub width: Option<f32>,
     pub metadata: Vec<SharedString>,
+    pub submit_disabled: bool,
     pub on_submit: ActivateHandler,
 }
 impl RenderOnce for Composer {
@@ -1118,7 +1125,7 @@ impl RenderOnce for Composer {
                         variant: ButtonVariant::Primary,
                         icon: Some(IconName::ArrowUp),
                         icon_only: true,
-                        disabled: false,
+                        disabled: self.submit_disabled,
                         force_focused: false,
                         focus_handle: None,
                         on_activate: Some(self.on_submit),
@@ -1384,6 +1391,7 @@ mod geometry_tests {
         ButtonSmall,
         ButtonMedium,
         ButtonLarge,
+        ButtonInverse,
         Field,
         Row,
         Badge,
@@ -1449,6 +1457,20 @@ mod geometry_tests {
                     icon_only: false,
                     disabled: false,
                     force_focused: false,
+                    focus_handle: None,
+                    on_activate: None,
+                }
+                .into_any_element(),
+                FixtureKind::ButtonInverse => Button {
+                    id: "test-button".into(),
+                    theme,
+                    label: "Go Happy".into(),
+                    size: ControlSize::Large,
+                    variant: ButtonVariant::Inverse,
+                    icon: None,
+                    icon_only: false,
+                    disabled: false,
+                    force_focused: true,
                     focus_handle: None,
                     on_activate: None,
                 }
@@ -1630,6 +1652,7 @@ mod geometry_tests {
                     input: self.input.clone(),
                     width: Some(320.0),
                     metadata: vec!["Codex".into(), "High".into()],
+                    submit_disabled: false,
                     on_submit: Rc::new(|_, _| {}),
                 }
                 .into_any_element(),
@@ -1812,11 +1835,11 @@ mod geometry_tests {
             (FixtureKind::ButtonSmall, 28.0, 11.0, 14.0),
             (FixtureKind::ButtonMedium, 36.0, 15.0, 16.0),
             (FixtureKind::ButtonLarge, 44.0, 19.0, 18.0),
+            (FixtureKind::ButtonInverse, 44.0, 19.0, 0.0),
         ] {
             let cx = render(cx, kind, 320.0, 80.0);
             let root = bounds(cx, "test-button.root");
             let content = bounds(cx, "test-button.content");
-            let glyph = bounds(cx, "test-button.icon");
             let label = bounds(cx, "test-button.label");
             assert_eq!(root.size.height, px(height));
             assert_eq!(
@@ -1824,8 +1847,16 @@ mod geometry_tests {
                 px(padding),
                 "1px border plus declared x padding"
             );
-            assert_eq!(glyph.size, size(px(icon), px(icon)));
-            assert_eq!(label.origin.x - glyph.right(), px(6.0), "icon-label gap");
+            if icon > 0.0 {
+                let glyph = bounds(cx, "test-button.icon");
+                assert_eq!(glyph.size, size(px(icon), px(icon)));
+                assert_eq!(label.origin.x - glyph.right(), px(6.0), "icon-label gap");
+            } else {
+                assert_eq!(label.size.height, px(23.0));
+                let ring = bounds(cx, "test-button.focus-ring");
+                assert_eq!(root.origin.x - ring.origin.x, px(4.0));
+                assert_eq!(ring.right() - root.right(), px(4.0));
+            }
             if matches!(kind, FixtureKind::ButtonMedium) {
                 let ring = bounds(cx, "test-button.focus-ring");
                 assert_eq!(

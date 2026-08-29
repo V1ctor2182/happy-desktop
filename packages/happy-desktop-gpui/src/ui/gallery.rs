@@ -1,15 +1,23 @@
 use std::rc::Rc;
 
-use gpui::{AnyElement, App, Entity, FontWeight, IntoElement, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, App, Entity, FocusHandle, FontWeight, IntoElement, Window, div, prelude::*, px,
+};
 
 use super::theme_roles::ThemeRole;
 use super::{
-    Avatar, AvatarSize, Badge, BadgeVariant, Button, ButtonVariant, ControlSize, Icon, IconName,
+    Avatar, AvatarSize, Badge, BadgeVariant, Button, ButtonVariant, ConnectionNotice,
+    ConnectionNoticeState, ControlSize, Icon, IconName, InstallProgress, InstallProgressState,
     ListRow, Menu, MenuItem, Modal, ModalFocus, ModalOverlay, ModalSize, OverlayPlacement,
-    ScrollSurface, ScrollbarState, Splitter, SplitterDragState, TabItem, TabSelectHandler, Tabs,
-    TabsSize, TextField, TextInput, Toolbar,
+    ProfileOnboardingSurface, ProviderOnboardingSurface, ScrollSurface, ScrollbarState, Splitter,
+    SplitterDragState, StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler, Tabs,
+    TabsSize, TextField, TextInput, Toolbar, WELCOME_SLIDES, WelcomeDeck,
 };
-use crate::{fonts, theme::Theme};
+use crate::{
+    connectivity::{OnboardingProviderId, ProviderAuthenticationState, ProviderOnboardingRow},
+    fonts,
+    theme::Theme,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GalleryPage {
@@ -25,10 +33,16 @@ pub enum GalleryPage {
     Scrolling,
     Splitters,
     Icons,
+    ConnectionNotice,
+    Startup,
+    Welcome,
+    ProfileOnboarding,
+    ProviderOnboarding,
+    InstallProgress,
     Theme,
 }
 impl GalleryPage {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 19] = [
         Self::Buttons,
         Self::Fields,
         Self::Rows,
@@ -41,6 +55,12 @@ impl GalleryPage {
         Self::Scrolling,
         Self::Splitters,
         Self::Icons,
+        Self::ConnectionNotice,
+        Self::Startup,
+        Self::Welcome,
+        Self::ProfileOnboarding,
+        Self::ProviderOnboarding,
+        Self::InstallProgress,
         Self::Theme,
     ];
     pub const fn id(self) -> &'static str {
@@ -57,6 +77,12 @@ impl GalleryPage {
             Self::Scrolling => "scrolling",
             Self::Splitters => "splitters",
             Self::Icons => "icons",
+            Self::ConnectionNotice => "connection-notice",
+            Self::Startup => "startup",
+            Self::Welcome => "welcome",
+            Self::ProfileOnboarding => "profile-onboarding",
+            Self::ProviderOnboarding => "provider-onboarding",
+            Self::InstallProgress => "install-progress",
             Self::Theme => "theme",
         }
     }
@@ -74,6 +100,12 @@ impl GalleryPage {
             Self::Scrolling => "Scrolling",
             Self::Splitters => "Splitters",
             Self::Icons => "Icons",
+            Self::ConnectionNotice => "Connection",
+            Self::Startup => "Startup",
+            Self::Welcome => "Welcome",
+            Self::ProfileOnboarding => "Profile",
+            Self::ProviderOnboarding => "Providers",
+            Self::InstallProgress => "Install",
             Self::Theme => "Theme",
         }
     }
@@ -159,11 +191,337 @@ fn modal_stage(
         .into_any_element()
 }
 
+fn onboarding_stage(theme: Theme, child: AnyElement) -> AnyElement {
+    div()
+        .w(px(720.0))
+        .h(px(480.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(child)
+        .into_any_element()
+}
+
+fn connectivity_specimens(
+    page: GalleryPage,
+    theme: Theme,
+    profile_name: Entity<TextInput>,
+    profile_email: Entity<TextInput>,
+    scrollbars: &[Entity<ScrollbarState>; 24],
+    welcome_focus: &[FocusHandle; 25],
+) -> AnyElement {
+    let action = || Some(Rc::new(|_: &mut Window, _: &mut App| {}) as _);
+    match page {
+        GalleryPage::ConnectionNotice => {
+            let states = vec![
+                ("connecting", ConnectionNoticeState::Connecting),
+                (
+                    "reconnecting",
+                    ConnectionNoticeState::Reconnecting {
+                        attempt: 3,
+                        reason: Some(
+                            "The authenticated stream ended; reconnecting automatically.".into(),
+                        ),
+                    },
+                ),
+                (
+                    "offline",
+                    ConnectionNoticeState::Offline {
+                        reason: "The owner-managed socket is unavailable; drafts remain local."
+                            .into(),
+                    },
+                ),
+                (
+                    "error",
+                    ConnectionNoticeState::Error {
+                        message: "The authenticated route closed unexpectedly.".into(),
+                    },
+                ),
+                (
+                    "restricted",
+                    ConnectionNoticeState::Restricted {
+                        reason: "Live mutations are unavailable on this route.".into(),
+                    },
+                ),
+            ];
+            section(
+                "ConnectionNotice · every agent-local availability state",
+                states
+                    .into_iter()
+                    .map(|(id, state)| {
+                        ConnectionNotice {
+                            id: format!("gallery-connection-{id}").into(),
+                            theme,
+                            agent_name: "Studio Mac".into(),
+                            state,
+                            on_action: action(),
+                        }
+                        .into_any_element()
+                    })
+                    .collect(),
+                theme,
+            )
+            .into_any_element()
+        }
+        GalleryPage::Startup => {
+            let states = vec![
+                StartupSurfaceState::Checking {
+                    detail: "Looking for the local Happy Agent.".into(),
+                },
+                StartupSurfaceState::AgentMissing {
+                    detail: "No running Happy Agent was found.".into(),
+                    installable: true,
+                },
+                StartupSurfaceState::ManagedUnavailable {
+                    detail: "The owner-managed route is unavailable; check its host.".into(),
+                },
+                StartupSurfaceState::Starting {
+                    detail: "Preparing the local service.".into(),
+                    progress: InstallProgressState::Determinate { fraction: 0.56 },
+                },
+                StartupSurfaceState::Connecting {
+                    detail: "Opening the authenticated local connection.".into(),
+                },
+                StartupSurfaceState::ProvidersMissing {
+                    detail: "Connect at least one supported AI provider.".into(),
+                },
+                StartupSurfaceState::ProfileRequired {
+                    detail: "Add the name and Git email used for your work.".into(),
+                },
+                StartupSurfaceState::FirstProject {
+                    detail: "Choose the first project folder.".into(),
+                },
+                StartupSurfaceState::CompletionRequired {
+                    detail: "Persist the explicit final onboarding acknowledgement.".into(),
+                },
+                StartupSurfaceState::Failed {
+                    message: "Happy Agent returned an incompatible protocol.".into(),
+                },
+                StartupSurfaceState::Retrying {
+                    message: "Automatic reconnect is in progress.".into(),
+                },
+            ];
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .gap(px(24.0))
+                .children(states.into_iter().enumerate().map(|(index, state)| {
+                    onboarding_stage(
+                        theme,
+                        StartupSurface {
+                            id: format!("gallery-startup-{index}").into(),
+                            theme,
+                            scrollbar: scrollbars[index].clone(),
+                            state,
+                            on_action: action(),
+                        }
+                        .into_any_element(),
+                    )
+                }))
+                .into_any_element()
+        }
+        GalleryPage::Welcome => div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(24.0))
+            .children((0..WELCOME_SLIDES.len()).map(|slide| {
+                let dot_focus =
+                    std::array::from_fn(|dot| welcome_focus[slide * 5 + dot].clone());
+                onboarding_stage(
+                    theme,
+                    WelcomeDeck {
+                        id: format!("gallery-welcome-{slide}").into(),
+                        theme,
+                        scrollbar: scrollbars[10 + slide].clone(),
+                        slide,
+                        error: (slide == 4).then(|| {
+                            "Happy could not save your welcome choice. Check Application Support and try again."
+                                .into()
+                        }),
+                        dot_focus,
+                        dark: slide % 2 == 1,
+                        appearance_icon: if slide % 2 == 1 {
+                            IconName::Moon
+                        } else {
+                            IconName::Contrast
+                        },
+                        on_select: Rc::new(|_, _, _| {}),
+                        on_action: Rc::new(|_, _| {}),
+                        on_appearance: Rc::new(|_, _| {}),
+                    }
+                    .into_any_element(),
+                )
+            }))
+            .into_any_element(),
+        GalleryPage::ProfileOnboarding => div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(24.0))
+            .children([
+                onboarding_stage(
+                    theme,
+                    ProfileOnboardingSurface {
+                        id: "gallery-profile-onboarding".into(),
+                        theme,
+                        scrollbar: scrollbars[15].clone(),
+                        name: profile_name.clone(),
+                        email: profile_email.clone(),
+                        error: None,
+                        busy: false,
+                        on_submit: Some(Rc::new(|_, _| {})),
+                    }
+                    .into_any_element(),
+                ),
+                onboarding_stage(
+                    theme,
+                    ProfileOnboardingSurface {
+                        id: "gallery-profile-error".into(),
+                        theme,
+                        scrollbar: scrollbars[19].clone(),
+                        name: profile_name.clone(),
+                        email: profile_email.clone(),
+                        error: Some(
+                            "The profile version changed. Review the current values and try again. "
+                                .repeat(10)
+                                .into(),
+                        ),
+                        busy: false,
+                        on_submit: Some(Rc::new(|_, _| {})),
+                    }
+                    .into_any_element(),
+                ),
+                onboarding_stage(
+                    theme,
+                    ProfileOnboardingSurface {
+                        id: "gallery-profile-busy".into(),
+                        theme,
+                        scrollbar: scrollbars[20].clone(),
+                        name: profile_name,
+                        email: profile_email,
+                        error: None,
+                        busy: true,
+                        on_submit: Some(Rc::new(|_, _| {})),
+                    }
+                    .into_any_element(),
+                ),
+            ])
+            .into_any_element(),
+        GalleryPage::ProviderOnboarding => {
+            let discovered_rows = |authentication: [Option<ProviderAuthenticationState>; 3]| {
+                OnboardingProviderId::ALL
+                    .into_iter()
+                    .zip(authentication)
+                    .map(|(id, authentication)| ProviderOnboardingRow {
+                        id,
+                        command_path: Some(std::path::PathBuf::from(format!(
+                            "/opt/happy/bin/{}",
+                            id.as_str()
+                        ))),
+                        scan: None,
+                        authentication,
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let checking = discovered_rows([None, None, None]);
+            let results = discovered_rows([
+                Some(ProviderAuthenticationState::Valid),
+                Some(ProviderAuthenticationState::Invalid),
+                Some(ProviderAuthenticationState::Error),
+            ]);
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .gap(px(24.0))
+                .children([
+                    onboarding_stage(
+                        theme,
+                        ProviderOnboardingSurface {
+                            id: "gallery-providers-checking".into(),
+                            theme,
+                            scrollbar: scrollbars[16].clone(),
+                            rows: checking,
+                            busy: true,
+                            continue_available: false,
+                            error: None,
+                            on_scan: Some(Rc::new(|_, _| {})),
+                            on_continue: Some(Rc::new(|_, _| {})),
+                        }
+                        .into_any_element(),
+                    ),
+                    onboarding_stage(
+                        theme,
+                        ProviderOnboardingSurface {
+                            id: "gallery-providers-results".into(),
+                            theme,
+                            scrollbar: scrollbars[17].clone(),
+                            rows: results,
+                            busy: false,
+                            continue_available: true,
+                            error: None,
+                            on_scan: Some(Rc::new(|_, _| {})),
+                            on_continue: Some(Rc::new(|_, _| {})),
+                        }
+                        .into_any_element(),
+                    ),
+                    onboarding_stage(
+                        theme,
+                        ProviderOnboardingSurface {
+                            id: "gallery-providers-error".into(),
+                            theme,
+                            scrollbar: scrollbars[18].clone(),
+                            rows: Vec::new(),
+                            busy: false,
+                            continue_available: false,
+                            error: Some(
+                                "Happy Agent could not verify the provider credentials.".into(),
+                            ),
+                            on_scan: Some(Rc::new(|_, _| {})),
+                            on_continue: None,
+                        }
+                        .into_any_element(),
+                    ),
+                ])
+                .into_any_element()
+        }
+        GalleryPage::InstallProgress => section(
+            "InstallProgress · indeterminate and bounded determinate",
+            vec![
+                InstallProgress {
+                    id: "gallery-progress-indeterminate".into(),
+                    theme,
+                    state: InstallProgressState::Indeterminate,
+                    label: "Installing Happy Agent".into(),
+                }
+                .into_any_element(),
+                div()
+                    .w(px(400.0))
+                    .child(InstallProgress {
+                        id: "gallery-progress-determinate".into(),
+                        theme,
+                        state: InstallProgressState::Determinate { fraction: 0.56 },
+                        label: "Downloading Happy Agent".into(),
+                    })
+                    .into_any_element(),
+            ],
+            theme,
+        )
+        .into_any_element(),
+        _ => unreachable!("connectivity specimen called for a non-connectivity page"),
+    }
+}
+
 fn specimens(
     theme: Theme,
     page: GalleryPage,
     inputs: &[Entity<TextInput>; 4],
     scrollbars: &[Entity<ScrollbarState>; 5],
+    connectivity_scrollbars: &[Entity<ScrollbarState>; 24],
+    welcome_focus: &[FocusHandle; 25],
     modal_states: &[GalleryModalState; 5],
 ) -> AnyElement {
     match page {
@@ -177,6 +535,17 @@ fn specimens(
                     ControlSize::Small,
                     ButtonVariant::Primary,
                     Some(IconName::Plus),
+                    false,
+                    false,
+                    false,
+                ),
+                button(
+                    theme,
+                    "gallery-button-inverse",
+                    "Sky action",
+                    ControlSize::Large,
+                    ButtonVariant::Inverse,
+                    None,
                     false,
                     false,
                     false,
@@ -714,6 +1083,19 @@ fn specimens(
             theme,
         )
         .into_any_element(),
+        page @ (GalleryPage::ConnectionNotice
+        | GalleryPage::Startup
+        | GalleryPage::Welcome
+        | GalleryPage::ProfileOnboarding
+        | GalleryPage::ProviderOnboarding
+        | GalleryPage::InstallProgress) => connectivity_specimens(
+            page,
+            theme,
+            inputs[0].clone(),
+            inputs[1].clone(),
+            connectivity_scrollbars,
+            welcome_focus,
+        ),
         GalleryPage::Theme => section(
             "All authoritative light/dark generated roles",
             ThemeRole::ALL
@@ -757,6 +1139,8 @@ pub fn gallery(
     theme: Theme,
     inputs: [Entity<TextInput>; 4],
     scrollbars: [Entity<ScrollbarState>; 5],
+    connectivity_scrollbars: [Entity<ScrollbarState>; 24],
+    welcome_focus: [FocusHandle; 25],
     modal_states: [GalleryModalState; 5],
     page: GalleryPage,
     on_select: TabSelectHandler,
@@ -784,7 +1168,15 @@ pub fn gallery(
         .flex()
         .flex_col()
         .p(px(24.0))
-        .child(specimens(theme, page, &inputs, &scrollbars, &modal_states))
+        .child(specimens(
+            theme,
+            page,
+            &inputs,
+            &scrollbars,
+            &connectivity_scrollbars,
+            &welcome_focus,
+            &modal_states,
+        ))
         .into_any_element();
     div()
         .debug_selector(|| "gallery-root".into())
@@ -853,6 +1245,8 @@ mod tests {
     struct Fixture {
         inputs: [Entity<TextInput>; 4],
         scrollbars: [Entity<ScrollbarState>; 5],
+        connectivity_scrollbars: [Entity<ScrollbarState>; 24],
+        welcome_focus: [FocusHandle; 25],
         modal_states: [GalleryModalState; 5],
         page: GalleryPage,
     }
@@ -862,6 +1256,8 @@ mod tests {
                 Theme::light(),
                 self.inputs.clone(),
                 self.scrollbars.clone(),
+                self.connectivity_scrollbars.clone(),
+                self.welcome_focus.clone(),
                 self.modal_states.clone(),
                 self.page,
                 Rc::new(|_, _, _| {}),
@@ -947,6 +1343,16 @@ mod tests {
                         )
                     }),
                 ],
+                connectivity_scrollbars: std::array::from_fn(|_| {
+                    cx.new(|_| {
+                        ScrollbarState::vertical(
+                            ScrollbarAppearance::Automatic,
+                            ScrollbarPlacement::Overlay,
+                            SharedScrollHandle::new(),
+                        )
+                    })
+                }),
+                welcome_focus: std::array::from_fn(|_| cx.focus_handle()),
                 modal_states,
                 page,
             }
@@ -1112,6 +1518,24 @@ mod tests {
             (GalleryPage::Scrolling, "gallery-scroll-overflow.root"),
             (GalleryPage::Splitters, "gallery-splitter.root"),
             (GalleryPage::Icons, "gallery-icon-0"),
+            (
+                GalleryPage::ConnectionNotice,
+                "gallery-connection-connecting.root",
+            ),
+            (GalleryPage::Startup, "gallery-startup-0.root"),
+            (GalleryPage::Welcome, "gallery-welcome-0.root"),
+            (
+                GalleryPage::ProfileOnboarding,
+                "gallery-profile-onboarding.root",
+            ),
+            (
+                GalleryPage::ProviderOnboarding,
+                "gallery-providers-checking.root",
+            ),
+            (
+                GalleryPage::InstallProgress,
+                "gallery-progress-determinate.root",
+            ),
             (GalleryPage::Theme, "gallery-content"),
         ] {
             let cx = render_page(cx, 900.0, 700.0, page);
@@ -1190,7 +1614,59 @@ mod tests {
     gallery_wiring_test!(
         gallery_icons_page_wires_complete_curated_range,
         GalleryPage::Icons,
-        ["gallery-icon-0", "gallery-icon-62"]
+        ["gallery-icon-0", "gallery-icon-63"]
+    );
+    gallery_wiring_test!(
+        gallery_connection_notice_page_wires_every_availability_state,
+        GalleryPage::ConnectionNotice,
+        [
+            "gallery-connection-connecting.root",
+            "gallery-connection-reconnecting.root",
+            "gallery-connection-offline.root",
+            "gallery-connection-error.root",
+            "gallery-connection-restricted.root"
+        ]
+    );
+    gallery_wiring_test!(
+        gallery_startup_page_wires_every_startup_state,
+        GalleryPage::Startup,
+        [
+            "gallery-startup-0.root",
+            "gallery-startup-2.root",
+            "gallery-startup-8.root",
+            "gallery-startup-10.root"
+        ]
+    );
+    gallery_wiring_test!(
+        gallery_welcome_page_wires_all_slides_and_persistence_error,
+        GalleryPage::Welcome,
+        ["gallery-welcome-0.root", "gallery-welcome-4.error"]
+    );
+    gallery_wiring_test!(
+        gallery_profile_onboarding_page_wires_normal_error_and_busy,
+        GalleryPage::ProfileOnboarding,
+        [
+            "gallery-profile-onboarding.root",
+            "gallery-profile-error.root",
+            "gallery-profile-busy.root"
+        ]
+    );
+    gallery_wiring_test!(
+        gallery_provider_onboarding_page_wires_checking_results_and_error,
+        GalleryPage::ProviderOnboarding,
+        [
+            "gallery-providers-checking.root",
+            "gallery-providers-results.root",
+            "gallery-providers-error.root"
+        ]
+    );
+    gallery_wiring_test!(
+        gallery_install_progress_page_wires_both_progress_modes,
+        GalleryPage::InstallProgress,
+        [
+            "gallery-progress-indeterminate.root",
+            "gallery-progress-determinate.root"
+        ]
     );
     gallery_wiring_test!(
         gallery_theme_page_wires_first_and_last_generated_roles,

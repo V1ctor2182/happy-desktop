@@ -107,6 +107,7 @@ pub enum IconName {
     Edit,
     Sun,
     Moon,
+    Contrast,
     SidebarCollapse,
     SidebarExpand,
     PanelCollapse,
@@ -119,7 +120,7 @@ pub enum IconName {
 }
 
 impl IconName {
-    pub const ALL: [Self; 63] = [
+    pub const ALL: [Self; 64] = [
         Self::Home,
         Self::Inbox,
         Self::Chat,
@@ -174,6 +175,7 @@ impl IconName {
         Self::Edit,
         Self::Sun,
         Self::Moon,
+        Self::Contrast,
         Self::SidebarCollapse,
         Self::SidebarExpand,
         Self::PanelCollapse,
@@ -240,6 +242,7 @@ impl IconName {
             Self::Filter => icon_data::ionicons::FUNNEL_OUTLINE,
             Self::Edit => icon_data::ionicons::CREATE_OUTLINE,
             Self::Sun => icon_data::ionicons::SUNNY_OUTLINE,
+            Self::Contrast => icon_data::ionicons::CONTRAST_OUTLINE,
             Self::Moon => icon_data::ionicons::MOON_OUTLINE,
             Self::SidebarCollapse
             | Self::SidebarExpand

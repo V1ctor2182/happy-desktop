@@ -1,13 +1,21 @@
-use gpui::{Context, Entity, IntoElement, Render, Window, WindowAppearance, div, prelude::*, px};
+use gpui::{
+    App, Context, Entity, FocusHandle, IntoElement, PathPromptOptions, Render, Subscription,
+    Window, WindowAppearance, div, prelude::*, px,
+};
 
+use crate::connectivity::{
+    AgentAvailability, ConnectivityController, InitialPhase, InitialRetry, OnboardingMutationKind,
+};
 use crate::ui::gallery::{GalleryModalState, GalleryPage};
 use crate::{
     theme::Theme,
     ui::{
-        ActivateHandler, Avatar, AvatarSize, Button, ButtonVariant, Composer, ControlSize, FileRow,
-        Icon, IconName, ListRow, MessageRow, ModalFocus, ScrollSurface, ScrollbarAppearance,
-        ScrollbarPlacement, ScrollbarState, SectionLabel, SharedScrollHandle, TabItem,
-        TabSelectHandler, Tabs, TabsSize, TextInput, TitleBar, theme_roles::ThemeRole,
+        ActivateHandler, Avatar, AvatarSize, Button, ButtonVariant, Composer, ConnectionNotice,
+        ConnectionNoticeState, ControlSize, FileRow, Icon, IconName, InstallProgressState, ListRow,
+        MessageRow, ModalFocus, ProfileOnboardingSurface, ProviderOnboardingSurface, ScrollSurface,
+        ScrollbarAppearance, ScrollbarPlacement, ScrollbarState, SectionLabel, SharedScrollHandle,
+        StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler, Tabs, TabsSize, TextInput,
+        TitleBar, WelcomeDeck, WelcomeSelectHandler, theme_roles::ThemeRole,
     },
 };
 use std::rc::Rc;
@@ -17,10 +25,27 @@ const SIDEBAR_WIDTH: f32 = 288.0;
 const PANEL_WIDTH: f32 = 340.0;
 
 pub struct HappyApp {
+    connectivity: Option<Entity<ConnectivityController>>,
+    _connectivity_subscription: Option<Subscription>,
     dark_override: Option<bool>,
+    persist_appearance: bool,
+    appearance_error: Option<gpui::SharedString>,
     show_gallery: bool,
     gallery_inputs: [Entity<TextInput>; 4],
+    profile_inputs: [Entity<TextInput>; 2],
+    profile_input_subscriptions: Vec<Subscription>,
+    profile_seeded: bool,
+    welcome_needed: bool,
+    welcome_error: Option<gpui::SharedString>,
+    welcome_slide: usize,
+    welcome_dot_focus: [FocusHandle; 5],
+    welcome_timer_lifecycle: u64,
+    welcome_timer_running: bool,
+    reduced_motion: bool,
     gallery_scrollbars: [Entity<ScrollbarState>; 5],
+    connectivity_gallery_scrollbars: [Entity<ScrollbarState>; 24],
+    gallery_welcome_dot_focus: [FocusHandle; 25],
+    onboarding_scrollbar: Entity<ScrollbarState>,
     gallery_modal_states: [GalleryModalState; 5],
     transcript_scrollbar: Entity<ScrollbarState>,
     workspace_tabs_scrollbar: Entity<ScrollbarState>,
@@ -35,13 +60,30 @@ impl HappyApp {
         let dark_override = match std::env::var("HAPPY_GPUI_APPEARANCE").as_deref() {
             Ok("dark") => Some(true),
             Ok("light") => Some(false),
-            _ => None,
+            Ok("system") => None,
+            _ => appearance_read(),
         };
-        Self::with_mode(
+        let mut app = Self::with_mode(
             dark_override,
             std::env::var_os("HAPPY_GPUI_GALLERY").is_some(),
             cx,
-        )
+        );
+        app.persist_appearance = true;
+        app.welcome_needed = !welcome_acknowledged();
+        if let Ok(page) = std::env::var("HAPPY_GPUI_GALLERY_PAGE")
+            && let Some(page) = GalleryPage::from_id(&page)
+        {
+            app.gallery_page = page;
+        }
+        for input in app.profile_inputs.clone() {
+            app.profile_input_subscriptions
+                .push(cx.observe(&input, |_, _, cx| cx.notify()));
+        }
+        let connectivity = cx.new(ConnectivityController::new);
+        let subscription = cx.observe(&connectivity, |_, _, cx| cx.notify());
+        app.connectivity = Some(connectivity);
+        app._connectivity_subscription = Some(subscription);
+        app
     }
 
     fn with_mode(dark_override: Option<bool>, show_gallery: bool, cx: &mut Context<Self>) -> Self {
@@ -96,6 +138,22 @@ impl HappyApp {
                 SharedScrollHandle::new(),
             )
         });
+        let onboarding_scrollbar = cx.new(|_| {
+            ScrollbarState::vertical(
+                ScrollbarAppearance::Automatic,
+                ScrollbarPlacement::Overlay,
+                SharedScrollHandle::new(),
+            )
+        });
+        let connectivity_gallery_scrollbars = std::array::from_fn(|_| {
+            cx.new(|_| {
+                ScrollbarState::vertical(
+                    ScrollbarAppearance::Automatic,
+                    ScrollbarPlacement::Overlay,
+                    SharedScrollHandle::new(),
+                )
+            })
+        });
         let gallery_modal_states = std::array::from_fn(|_| {
             let container = cx.focus_handle();
             let first = cx.focus_handle();
@@ -117,8 +175,25 @@ impl HappyApp {
             }
         });
         Self {
+            connectivity: None,
+            _connectivity_subscription: None,
             dark_override,
+            persist_appearance: false,
+            appearance_error: None,
             show_gallery,
+            profile_inputs: [
+                cx.new(|cx| TextInput::new("profile-name", "", "Name", Theme::light(), cx)),
+                cx.new(|cx| TextInput::new("profile-email", "", "Git email", Theme::light(), cx)),
+            ],
+            profile_input_subscriptions: Vec::new(),
+            profile_seeded: false,
+            welcome_needed: false,
+            welcome_error: None,
+            welcome_slide: 0,
+            welcome_dot_focus: std::array::from_fn(|_| cx.focus_handle()),
+            welcome_timer_lifecycle: 0,
+            welcome_timer_running: false,
+            reduced_motion: native_reduced_motion(),
             gallery_inputs: [
                 cx.new(|cx| TextInput::new("gallery-input-small", "", "Small", Theme::light(), cx)),
                 cx.new(|cx| {
@@ -150,6 +225,9 @@ impl HappyApp {
                 workbench_horizontal,
                 page_horizontal,
             ],
+            connectivity_gallery_scrollbars,
+            gallery_welcome_dot_focus: std::array::from_fn(|_| cx.focus_handle()),
+            onboarding_scrollbar,
             gallery_modal_states,
             transcript_scrollbar,
             workspace_tabs_scrollbar,
@@ -173,6 +251,52 @@ impl HappyApp {
             appearance,
             WindowAppearance::Dark | WindowAppearance::VibrantDark
         ))
+    }
+
+    fn welcome_timer_start(&mut self, cx: &mut Context<Self>) {
+        self.welcome_timer_lifecycle = self.welcome_timer_lifecycle.wrapping_add(1);
+        self.welcome_timer_running = false;
+        if self.reduced_motion || !self.welcome_needed || crate::ui::WELCOME_SLIDES.len() < 2 {
+            return;
+        }
+        self.welcome_timer_running = true;
+        let lifecycle = self.welcome_timer_lifecycle;
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |this, cx| {
+            executor.timer(std::time::Duration::from_secs(15)).await;
+            this.update(cx, |this, cx| {
+                if this.welcome_timer_lifecycle != lifecycle || !this.welcome_needed {
+                    return;
+                }
+                this.welcome_timer_running = false;
+                this.welcome_slide = (this.welcome_slide + 1) % crate::ui::WELCOME_SLIDES.len();
+                this.welcome_timer_start(cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn appearance_cycle(&mut self) {
+        let next = match self.dark_override {
+            None => Some(false),
+            Some(false) => Some(true),
+            Some(true) => None,
+        };
+        if self.persist_appearance && appearance_write(next).is_err() {
+            self.appearance_error = Some("Appearance not saved".into());
+            return;
+        }
+        self.dark_override = next;
+        self.appearance_error = None;
+    }
+
+    fn welcome_timer_stop(&mut self) {
+        if self.welcome_timer_running {
+            self.welcome_timer_lifecycle = self.welcome_timer_lifecycle.wrapping_add(1);
+            self.welcome_timer_running = false;
+        }
     }
 
     fn is_dark(&self, window: &Window) -> bool {
@@ -246,7 +370,10 @@ impl HappyApp {
         width: f32,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let toggle_label = Self::appearance_toggle_label(effective_dark);
+        let toggle_label: gpui::SharedString = self
+            .appearance_error
+            .clone()
+            .unwrap_or_else(|| Self::appearance_toggle_label(effective_dark).into());
         let entity = cx.entity();
         let gallery_action: ActivateHandler = Rc::new(move |_, cx| {
             entity.update(cx, |this, cx| {
@@ -255,9 +382,9 @@ impl HappyApp {
             });
         });
         let entity = cx.entity();
-        let theme_action: ActivateHandler = Rc::new(move |window, cx| {
+        let theme_action: ActivateHandler = Rc::new(move |_, cx| {
             entity.update(cx, |this, cx| {
-                this.dark_override = Some(!this.is_dark(window));
+                this.appearance_cycle();
                 cx.notify();
             });
         });
@@ -464,7 +591,7 @@ impl HappyApp {
             })
     }
 
-    fn composer(&self, theme: Theme) -> impl IntoElement {
+    fn composer(&self, theme: Theme, online: bool) -> impl IntoElement {
         let input = self.composer_input.clone();
         let submit: ActivateHandler = Rc::new(move |_, cx| {
             input.update(cx, |input, cx| input.set_value("", cx));
@@ -480,12 +607,23 @@ impl HappyApp {
                 theme,
                 input: self.composer_input.clone(),
                 width: None,
-                metadata: vec!["Codex".into(), "Full access".into(), "High".into()],
+                metadata: if online {
+                    vec!["Codex".into(), "Full access".into(), "High".into()]
+                } else {
+                    vec!["Offline".into(), "Live actions unavailable".into()]
+                },
+                submit_disabled: !online,
                 on_submit: submit,
             })
     }
 
-    fn workspace(&self, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
+    fn workspace(
+        &self,
+        theme: Theme,
+        notice: Option<ConnectionNotice>,
+        online: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         div()
             .debug_selector(|| "workspace-root".into())
             .flex_1()
@@ -498,8 +636,15 @@ impl HappyApp {
                 "happy-desktop  ·  /Users/steve/Happy/Workspaces/happy-desktop",
             ))
             .child(self.tabs(theme, cx))
+            .children(notice.map(|notice| {
+                div()
+                    .debug_selector(|| "workspace-connection-notice".into())
+                    .flex_none()
+                    .p(px(8.0))
+                    .child(notice)
+            }))
             .child(self.transcript(theme))
-            .child(self.composer(theme))
+            .child(self.composer(theme, online))
     }
 
     fn inspector(&self, theme: Theme, width: f32, cx: &mut Context<Self>) -> impl IntoElement {
@@ -590,13 +735,397 @@ impl Render for HappyApp {
         } else {
             Theme::light()
         };
-        let viewport_width: f32 = window.viewport_size().width.into();
-        let (sidebar_width, inspector_width) = Self::column_widths(viewport_width);
-        for input in &self.gallery_inputs {
+
+        for input in self.gallery_inputs.iter().chain(&self.profile_inputs) {
             input.update(cx, |input, _| input.theme_reconcile(theme));
         }
         self.composer_input
             .update(cx, |input, _| input.theme_reconcile(theme));
+
+        let mut connection_notice = None;
+        let mut agent_online = true;
+        if !self.show_gallery
+            && let Some(connectivity) = self.connectivity.clone()
+        {
+            let (mounted, initial_phase, host, onboarding_failure, profile_defaults, setup_owed) = {
+                let controller = connectivity.read(cx);
+                let (name, email) = controller.profile_defaults();
+                (
+                    controller.mounted(),
+                    controller.initial_phase().clone(),
+                    controller.agents().host().clone(),
+                    controller.onboarding_failure().cloned(),
+                    (name.map(str::to_owned), email.map(str::to_owned)),
+                    controller.setup_owed(),
+                )
+            };
+            if !mounted {
+                let live_mutations = connectivity.read(cx).live_mutations_available();
+                if setup_owed == Some(true) && self.welcome_needed {
+                    if !self.welcome_timer_running {
+                        self.welcome_timer_start(cx);
+                    }
+                    let entity = cx.entity();
+                    let on_select: WelcomeSelectHandler = Rc::new(move |slide, _, cx| {
+                        entity.update(cx, |this, cx| {
+                            this.welcome_slide = slide.min(crate::ui::WELCOME_SLIDES.len() - 1);
+                            this.welcome_timer_start(cx);
+                            cx.notify();
+                        });
+                    });
+                    let entity = cx.entity();
+                    let setup_controller = connectivity.clone();
+                    let install_after_welcome = matches!(
+                        &initial_phase,
+                        InitialPhase::AgentMissing {
+                            installable: true,
+                            ..
+                        }
+                    );
+                    let on_action: ActivateHandler = Rc::new(move |_, cx| {
+                        let completed = entity
+                            .update(cx, |this, cx| match welcome_marker_write() {
+                                Ok(()) => {
+                                    this.welcome_needed = false;
+                                    this.welcome_error = None;
+                                    this.welcome_timer_lifecycle =
+                                        this.welcome_timer_lifecycle.wrapping_add(1);
+                                    this.welcome_timer_running = false;
+                                    cx.notify();
+                                    true
+                                }
+                                Err(_) => {
+                                    this.welcome_error = Some(
+                                        "Happy could not save your welcome choice. Check that Application Support is writable, then try again."
+                                            .into(),
+                                    );
+                                    cx.notify();
+                                    false
+                                }
+                            });
+                        if completed && install_after_welcome {
+                            setup_controller.update(cx, |controller, _| controller.install_start());
+                        }
+                    });
+                    let entity = cx.entity();
+                    let on_appearance: ActivateHandler = Rc::new(move |_, cx| {
+                        entity.update(cx, |this, cx| {
+                            this.appearance_cycle();
+                            cx.notify();
+                        });
+                    });
+                    let appearance_icon = match self.dark_override {
+                        None => IconName::Contrast,
+                        Some(false) => IconName::Sun,
+                        Some(true) => IconName::Moon,
+                    };
+                    return WelcomeDeck {
+                        id: "native-welcome".into(),
+                        theme,
+                        scrollbar: self.onboarding_scrollbar.clone(),
+                        slide: self.welcome_slide,
+                        error: self
+                            .welcome_error
+                            .clone()
+                            .or_else(|| self.appearance_error.clone()),
+                        dot_focus: self.welcome_dot_focus.clone(),
+                        dark: self.is_dark(window),
+                        appearance_icon,
+                        on_select,
+                        on_action,
+                        on_appearance,
+                    }
+                    .into_any_element();
+                }
+                self.welcome_timer_stop();
+                if matches!(&initial_phase, InitialPhase::ProfileRequired) {
+                    if !self.profile_seeded {
+                        if let Some(name) = profile_defaults.0 {
+                            self.profile_inputs[0]
+                                .update(cx, |input, cx| input.set_value(name, cx));
+                        }
+                        if let Some(email) = profile_defaults.1 {
+                            self.profile_inputs[1]
+                                .update(cx, |input, cx| input.set_value(email, cx));
+                        }
+                        self.profile_seeded = true;
+                    }
+                    let name = self.profile_inputs[0].clone();
+                    let email = self.profile_inputs[1].clone();
+                    let controller = connectivity.clone();
+                    let on_submit: ActivateHandler = Rc::new(move |_, cx| {
+                        let name = name.read(cx).value().trim().to_owned();
+                        let email = email.read(cx).value().trim().to_owned();
+                        controller.update(cx, |controller, _| {
+                            controller.profile_update(name, email);
+                        });
+                    });
+                    return ProfileOnboardingSurface {
+                        id: "native-profile-onboarding".into(),
+                        theme,
+                        scrollbar: self.onboarding_scrollbar.clone(),
+                        name: self.profile_inputs[0].clone(),
+                        email: self.profile_inputs[1].clone(),
+                        error: onboarding_failure
+                            .as_ref()
+                            .filter(|failure| failure.kind == OnboardingMutationKind::Profile)
+                            .map(|failure| failure.error.message.clone().into()),
+                        busy: connectivity
+                            .read(cx)
+                            .mutation_pending(OnboardingMutationKind::Profile),
+                        on_submit: live_mutations.then_some(on_submit),
+                    }
+                    .into_any_element();
+                }
+                if matches!(&initial_phase, InitialPhase::ProvidersMissing) {
+                    let (rows, busy, continue_available, error) = {
+                        let controller = connectivity.read(cx);
+                        (
+                            controller.provider_rows().to_vec(),
+                            controller.mutation_pending(OnboardingMutationKind::Providers),
+                            controller.providers_continue_available(),
+                            controller
+                                .onboarding_failure()
+                                .filter(|failure| failure.kind == OnboardingMutationKind::Providers)
+                                .map(|failure| failure.error.message.clone().into()),
+                        )
+                    };
+                    let scan_controller = connectivity.clone();
+                    let on_scan: ActivateHandler = Rc::new(move |_, cx| {
+                        scan_controller.update(cx, |controller, _| {
+                            controller.providers_scan();
+                        });
+                    });
+                    let continue_controller = connectivity.clone();
+                    let on_continue: ActivateHandler = Rc::new(move |_, cx| {
+                        continue_controller.update(cx, |controller, cx| {
+                            if controller.providers_continue() {
+                                cx.notify();
+                            }
+                        });
+                    });
+                    return ProviderOnboardingSurface {
+                        id: "native-provider-onboarding".into(),
+                        theme,
+                        scrollbar: self.onboarding_scrollbar.clone(),
+                        rows,
+                        busy,
+                        continue_available,
+                        error,
+                        on_scan: live_mutations.then_some(on_scan),
+                        // Continue only advances local onboarding navigation after an
+                        // authoritative scan. It remains usable while the daemon drains.
+                        on_continue: Some(on_continue),
+                    }
+                    .into_any_element();
+                }
+                let install_action = matches!(
+                    &initial_phase,
+                    InitialPhase::AgentMissing {
+                        installable: true,
+                        ..
+                    }
+                );
+                let provider_action = matches!(&initial_phase, InitialPhase::ProvidersMissing);
+                let project_action = matches!(&initial_phase, InitialPhase::FirstProject);
+                let complete_action = matches!(&initial_phase, InitialPhase::CompletionRequired);
+                let project_busy = connectivity
+                    .read(cx)
+                    .mutation_pending(OnboardingMutationKind::Project);
+                let complete_busy = connectivity
+                    .read(cx)
+                    .mutation_pending(OnboardingMutationKind::Complete);
+                let retry_action = matches!(
+                    &initial_phase,
+                    InitialPhase::Failed {
+                        retry: InitialRetry::Transport,
+                        ..
+                    }
+                );
+                let install_retry_action = matches!(
+                    &initial_phase,
+                    InitialPhase::Failed {
+                        retry: InitialRetry::Install,
+                        ..
+                    }
+                );
+                let state = match initial_phase {
+                    InitialPhase::Checking => StartupSurfaceState::Checking {
+                        detail: "Looking for the local Happy Agent.".into(),
+                    },
+                    InitialPhase::AgentMissing {
+                        message,
+                        installable,
+                    } => {
+                        if installable {
+                            StartupSurfaceState::AgentMissing {
+                                detail: message.into(),
+                                installable: true,
+                            }
+                        } else {
+                            StartupSurfaceState::ManagedUnavailable {
+                                detail: message.into(),
+                            }
+                        }
+                    }
+                    InitialPhase::Starting { message } => StartupSurfaceState::Starting {
+                        detail: message.into(),
+                        progress: InstallProgressState::Indeterminate,
+                    },
+                    InitialPhase::Installing { message, fraction } => {
+                        StartupSurfaceState::Starting {
+                            detail: message.into(),
+                            progress: fraction
+                                .map_or(InstallProgressState::Indeterminate, |fraction| {
+                                    InstallProgressState::Determinate { fraction }
+                                }),
+                        }
+                    }
+                    InitialPhase::Connecting => StartupSurfaceState::Connecting {
+                        detail: "Opening the authenticated local connection.".into(),
+                    },
+                    InitialPhase::ProvidersMissing => StartupSurfaceState::ProvidersMissing {
+                        detail: onboarding_failure
+                            .as_ref()
+                            .filter(|failure| failure.kind == OnboardingMutationKind::Providers)
+                            .map(|failure| failure.error.message.clone())
+                            .unwrap_or_else(|| {
+                                "Sign in with Claude, Codex, or Grok, then check again.".into()
+                            })
+                            .into(),
+                    },
+                    InitialPhase::ProfileRequired => StartupSurfaceState::ProfileRequired {
+                        detail: "Add the name and Git email used for your work.".into(),
+                    },
+                    InitialPhase::FirstProject => StartupSurfaceState::FirstProject {
+                        detail: onboarding_failure
+                            .as_ref()
+                            .filter(|failure| failure.kind == OnboardingMutationKind::Project)
+                            .map(|failure| failure.error.message.clone())
+                            .unwrap_or_else(|| {
+                                "Choose the first project folder for this Happy Agent.".into()
+                            })
+                            .into(),
+                    },
+                    InitialPhase::CompletionRequired => StartupSurfaceState::CompletionRequired {
+                        detail: onboarding_failure
+                            .as_ref()
+                            .filter(|failure| failure.kind == OnboardingMutationKind::Complete)
+                            .map(|failure| failure.error.message.clone())
+                            .unwrap_or_else(|| {
+                                "Every required step is complete. Save the final acknowledgement to continue."
+                                    .into()
+                            })
+                            .into(),
+                    },
+                    InitialPhase::Failed { message, .. } => StartupSurfaceState::Failed {
+                        message: message.into(),
+                    },
+                };
+                let on_action = if install_action || install_retry_action {
+                    let connectivity = connectivity.clone();
+                    Some(Rc::new(move |_: &mut Window, cx: &mut App| {
+                        connectivity.update(cx, |controller, _| controller.install_start());
+                    }) as ActivateHandler)
+                } else if provider_action {
+                    let connectivity = connectivity.clone();
+                    Some(Rc::new(move |_: &mut Window, cx: &mut App| {
+                        connectivity.update(cx, |controller, _| controller.providers_scan());
+                    }) as ActivateHandler)
+                } else if project_action && !project_busy && live_mutations {
+                    let connectivity = connectivity.clone();
+                    Some(Rc::new(move |_: &mut Window, cx: &mut App| {
+                        let prompt = cx.prompt_for_paths(PathPromptOptions {
+                            files: false,
+                            directories: true,
+                            multiple: false,
+                            prompt: Some("Choose project".into()),
+                        });
+                        let connectivity = connectivity.clone();
+                        cx.spawn(async move |cx| {
+                            if let Ok(Ok(Some(paths))) = prompt.await
+                                && let Some(path) = paths.into_iter().next()
+                            {
+                                connectivity
+                                    .update(cx, |controller, _| controller.project_register(path))
+                                    .ok();
+                            }
+                        })
+                        .detach();
+                    }) as ActivateHandler)
+                } else if complete_action && !complete_busy && live_mutations {
+                    let connectivity = connectivity.clone();
+                    Some(Rc::new(move |_: &mut Window, cx: &mut App| {
+                        connectivity.update(cx, |controller, _| {
+                            controller.onboarding_complete();
+                        });
+                    }) as ActivateHandler)
+                } else if retry_action {
+                    let connectivity = connectivity.clone();
+                    Some(Rc::new(move |_: &mut Window, cx: &mut App| {
+                        connectivity.update(cx, |controller, _| controller.retry());
+                    }) as ActivateHandler)
+                } else {
+                    None
+                };
+                return StartupSurface {
+                    id: "native-startup".into(),
+                    theme,
+                    scrollbar: self.onboarding_scrollbar.clone(),
+                    state,
+                    on_action,
+                }
+                .into_any_element();
+            }
+            self.welcome_timer_stop();
+
+            let (availability, agent_name) = {
+                let host = host.read(cx);
+                let name = if host.namespace().as_str() == "host:local" {
+                    "This Mac"
+                } else {
+                    "Happy Agent"
+                };
+                (host.availability().clone(), name)
+            };
+            agent_online = matches!(&availability, AgentAvailability::Online);
+            let notice_state = match availability {
+                AgentAvailability::Online => None,
+                AgentAvailability::Draining { message } => {
+                    Some(ConnectionNoticeState::Restricted {
+                        reason: message.into(),
+                    })
+                }
+                AgentAvailability::Connecting => Some(ConnectionNoticeState::Connecting),
+                AgentAvailability::Reconnecting { attempt, error } => {
+                    Some(ConnectionNoticeState::Reconnecting {
+                        attempt,
+                        reason: error.map(|error| error.message.into()),
+                    })
+                }
+                AgentAvailability::Offline { error } => Some(ConnectionNoticeState::Offline {
+                    reason: error.message.into(),
+                }),
+                AgentAvailability::Error { error } => Some(ConnectionNoticeState::Error {
+                    message: error.message.into(),
+                }),
+            };
+            connection_notice = notice_state.map(|state| {
+                let retry = connectivity.clone();
+                ConnectionNotice {
+                    id: "local-host-connection".into(),
+                    theme,
+                    agent_name: agent_name.into(),
+                    state,
+                    on_action: Some(Rc::new(move |_, cx| {
+                        retry.update(cx, |controller, _| controller.retry());
+                    })),
+                }
+            });
+        }
+
+        let viewport_width: f32 = window.viewport_size().width.into();
+        let (sidebar_width, inspector_width) = Self::column_widths(viewport_width);
         let root = div()
             .debug_selector(|| "app-shell-root".into())
             .tab_group()
@@ -631,16 +1160,113 @@ impl Render for HappyApp {
                     theme,
                     self.gallery_inputs.clone(),
                     self.gallery_scrollbars.clone(),
+                    self.connectivity_gallery_scrollbars.clone(),
+                    self.gallery_welcome_dot_focus.clone(),
                     self.gallery_modal_states.clone(),
                     self.gallery_page,
                     on_select,
                 ))
+                .into_any_element()
             }
         } else {
-            root.child(self.workspace(theme, cx))
+            root.child(self.workspace(theme, connection_notice, agent_online, cx))
                 .child(self.inspector(theme, inspector_width, cx))
+                .into_any_element()
         }
     }
+}
+
+fn settings_directory() -> std::path::PathBuf {
+    std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/dev/null"))
+        .join("Library/Application Support/Happy GPUI")
+}
+
+fn welcome_marker_path() -> std::path::PathBuf {
+    settings_directory().join("welcome-v1")
+}
+
+fn appearance_path() -> std::path::PathBuf {
+    settings_directory().join("appearance-v1")
+}
+
+const WELCOME_ACKNOWLEDGEMENT: &[u8] = b"happy-gpui-welcome-v1\n";
+
+fn welcome_acknowledged_at(path: &std::path::Path) -> bool {
+    std::fs::read(path).is_ok_and(|value| value == WELCOME_ACKNOWLEDGEMENT)
+}
+
+fn welcome_acknowledged() -> bool {
+    welcome_acknowledged_at(&welcome_marker_path())
+}
+
+fn atomic_private_write(path: &std::path::Path, value: &[u8]) -> std::io::Result<()> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let directory = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("missing settings directory"))?;
+    std::fs::create_dir_all(directory)?;
+    std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))?;
+    let temporary = directory.join(format!(
+        ".{}.tmp-{}-{}",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("settings"),
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos(),
+    ));
+    let result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)?;
+        use std::io::Write;
+        file.write_all(value)?;
+        file.sync_all()?;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        std::fs::rename(&temporary, path)?;
+        std::fs::File::open(directory)?.sync_all()?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(temporary);
+    }
+    result
+}
+
+fn welcome_marker_write() -> std::io::Result<()> {
+    atomic_private_write(&welcome_marker_path(), WELCOME_ACKNOWLEDGEMENT)
+}
+
+fn appearance_read_at(path: &std::path::Path) -> Option<Option<bool>> {
+    match std::fs::read(path).ok().as_deref() {
+        Some(b"happy-gpui-appearance-v1:system\n") => Some(None),
+        Some(b"happy-gpui-appearance-v1:light\n") => Some(Some(false)),
+        Some(b"happy-gpui-appearance-v1:dark\n") => Some(Some(true)),
+        _ => None,
+    }
+}
+
+fn appearance_read() -> Option<bool> {
+    appearance_read_at(&appearance_path()).flatten()
+}
+
+fn appearance_write(value: Option<bool>) -> std::io::Result<()> {
+    let value = match value {
+        None => b"happy-gpui-appearance-v1:system\n".as_slice(),
+        Some(false) => b"happy-gpui-appearance-v1:light\n".as_slice(),
+        Some(true) => b"happy-gpui-appearance-v1:dark\n".as_slice(),
+    };
+    atomic_private_write(&appearance_path(), value)
+}
+
+fn native_reduced_motion() -> bool {
+    objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceMotion()
 }
 
 fn file_row(
@@ -663,11 +1289,15 @@ fn file_row(
 #[cfg(test)]
 mod geometry_tests {
     use gpui::{
-        Bounds, Modifiers, Pixels, ScrollDelta, ScrollWheelEvent, TestAppContext,
-        VisualTestContext, WindowAppearance, point, px, size,
+        AppContext, Bounds, Focusable, Modifiers, Pixels, ScrollDelta, ScrollWheelEvent,
+        TestAppContext, VisualTestContext, WindowAppearance, point, px, size,
     };
 
-    use super::{GalleryPage, HappyApp};
+    use super::{
+        GalleryPage, HappyApp, WELCOME_ACKNOWLEDGEMENT, appearance_read_at, atomic_private_write,
+        welcome_acknowledged_at,
+    };
+    use crate::connectivity::{AgentAvailability, ConnectivityController};
 
     const WIDTH: f32 = 1280.0;
     const HEIGHT: f32 = 800.0;
@@ -789,7 +1419,7 @@ mod geometry_tests {
     }
 
     #[gpui::test]
-    fn rendered_dark_effective_mode_offers_light_and_ambient_dark_uses_same_state(
+    fn rendered_dark_effective_mode_cycles_to_system_and_ambient_dark_uses_same_state(
         cx: &mut TestAppContext,
     ) {
         let (app, cx) = render_at(cx, 720.0, 480.0, Some(true));
@@ -814,8 +1444,8 @@ mod geometry_tests {
         cx.simulate_click(toggle, Modifiers::default());
         assert_eq!(
             cx.update(|_, context| app.read(context).dark_override),
-            Some(false),
-            "the rendered toggle flips the effective dark state"
+            None,
+            "the rendered toggle cycles dark to the system appearance"
         );
     }
 
@@ -1018,6 +1648,25 @@ mod geometry_tests {
     }
 
     #[gpui::test]
+    fn direct_gallery_mode_bypasses_product_startup_without_mutating_it(cx: &mut TestAppContext) {
+        let (app, cx) = render_at(cx, 720.0, 480.0, None);
+        let startup = cx.update(|_, cx| cx.new(ConnectivityController::fixture_startup));
+        app.update(cx, |app, cx| {
+            app.connectivity = Some(startup.clone());
+            app.show_gallery = true;
+            app.gallery_page = GalleryPage::Welcome;
+            cx.notify();
+        });
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("gallery-root").is_some());
+        assert!(cx.debug_bounds("native-welcome.root").is_none());
+        startup.read_with(cx, |controller, _| {
+            assert!(!controller.mounted());
+            assert_eq!(controller.setup_owed(), Some(true));
+        });
+    }
+
+    #[gpui::test]
     fn gallery_page_tabs_switch_the_live_reusable_fixture(cx: &mut TestAppContext) {
         cx.update(|cx| {
             crate::fonts::register(cx);
@@ -1035,5 +1684,166 @@ mod geometry_tests {
             cx.update(|_, context| app.read(context).gallery_page),
             GalleryPage::Fields
         );
+    }
+
+    #[gpui::test]
+    fn mounted_connectivity_degrades_and_heals_without_replacing_draft_focus_or_surface_entities(
+        cx: &mut TestAppContext,
+    ) {
+        let (app, cx) = render_at(cx, 1280.0, 800.0, None);
+        let controller = cx.update(|_, cx| cx.new(ConnectivityController::fixture_mounted));
+        cx.update(|_, app_cx| {
+            app.update(app_cx, |this, cx| {
+                let subscription = cx.observe(&controller, |_, _, cx| cx.notify());
+                this.connectivity = Some(controller.clone());
+                this._connectivity_subscription = Some(subscription);
+                cx.notify();
+            });
+        });
+        cx.run_until_parked();
+
+        let (input, transcript_scrollbar, tabs_scrollbar) = app.read_with(cx, |app, _| {
+            (
+                app.composer_input.clone(),
+                app.transcript_scrollbar.clone(),
+                app.workspace_tabs_scrollbar.clone(),
+            )
+        });
+        cx.update(|_, app_cx| {
+            input.update(app_cx, |input, cx| input.set_value("draft survives", cx));
+        });
+        cx.run_until_parked();
+        let input_center = bounds(cx, "composer-input.root").center();
+        cx.simulate_click(input_center, Modifiers::default());
+        assert!(cx.update(|window, app_cx| input.focus_handle(app_cx).is_focused(window)));
+
+        cx.update(|_, app_cx| {
+            controller.update(app_cx, |controller, cx| {
+                controller.availability_set(
+                    AgentAvailability::Reconnecting {
+                        attempt: 3,
+                        error: Some(crate::connectivity::UserError {
+                            kind: crate::connectivity::UserErrorKind::Unavailable,
+                            message: "route closed".into(),
+                            api: None,
+                        }),
+                    },
+                    cx,
+                );
+            });
+        });
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("local-host-connection.root").is_some());
+        assert!(cx.debug_bounds("workspace-connection-notice").is_some());
+        assert_eq!(
+            input.read_with(cx, |input, _| input.value().to_string()),
+            "draft survives"
+        );
+        assert!(cx.update(|window, app_cx| input.focus_handle(app_cx).is_focused(window)));
+        assert!(app.read_with(cx, |app, _| app.composer_input == input));
+        assert!(app.read_with(cx, |app, _| app.transcript_scrollbar
+            == transcript_scrollbar));
+        assert!(app.read_with(cx, |app, _| app.workspace_tabs_scrollbar == tabs_scrollbar));
+
+        let offline_submit = bounds(cx, "composer-submit.root").center();
+        cx.simulate_click(offline_submit, Modifiers::default());
+        assert_eq!(
+            input.read_with(cx, |input, _| input.value().to_string()),
+            "draft survives",
+            "offline submit stays disabled while the draft remains editable",
+        );
+
+        cx.update(|_, app_cx| {
+            controller.update(app_cx, |controller, cx| {
+                controller.availability_set(AgentAvailability::Online, cx);
+            });
+        });
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("local-host-connection.root").is_none());
+        assert!(cx.update(|window, app_cx| input.focus_handle(app_cx).is_focused(window)));
+        assert_eq!(
+            app.read_with(cx, |app, _| app.active_tab.to_string()),
+            "native"
+        );
+        let online_submit = bounds(cx, "composer-submit.root").center();
+        cx.simulate_click(online_submit, Modifiers::default());
+        assert_eq!(
+            input.read_with(cx, |input, _| input.value().to_string()),
+            ""
+        );
+    }
+
+    #[gpui::test]
+    fn welcome_timer_advances_every_fifteen_seconds_and_respects_reduced_motion(
+        cx: &mut TestAppContext,
+    ) {
+        let (app, cx) = render_at(cx, 720.0, 480.0, None);
+        app.update(cx, |app, cx| {
+            app.welcome_needed = true;
+            app.reduced_motion = false;
+            app.welcome_slide = 0;
+            app.welcome_timer_start(cx);
+        });
+        cx.executor()
+            .advance_clock(std::time::Duration::from_secs(15));
+        cx.run_until_parked();
+        assert_eq!(app.read_with(cx, |app, _| app.welcome_slide), 1);
+
+        app.update(cx, |app, cx| {
+            app.reduced_motion = true;
+            app.welcome_timer_start(cx);
+        });
+        cx.executor()
+            .advance_clock(std::time::Duration::from_secs(30));
+        cx.run_until_parked();
+        assert_eq!(app.read_with(cx, |app, _| app.welcome_slide), 1);
+        assert!(!app.read_with(cx, |app, _| app.welcome_timer_running));
+
+        app.update(cx, |app, cx| {
+            app.reduced_motion = false;
+            app.welcome_timer_start(cx);
+            app.welcome_timer_stop();
+        });
+        cx.executor()
+            .advance_clock(std::time::Duration::from_secs(30));
+        cx.run_until_parked();
+        assert_eq!(app.read_with(cx, |app, _| app.welcome_slide), 1);
+        assert!(!app.read_with(cx, |app, _| app.welcome_timer_running));
+    }
+
+    #[test]
+    fn welcome_and_appearance_persistence_reject_corruption_and_write_atomically() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = std::env::temp_dir().join(format!(
+            "happy-gpui-persistence-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id(),
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir(&directory).unwrap();
+        let welcome = directory.join("welcome-v1");
+        std::fs::write(&welcome, b"").unwrap();
+        assert!(!welcome_acknowledged_at(&welcome));
+        atomic_private_write(&welcome, WELCOME_ACKNOWLEDGEMENT).unwrap();
+        assert!(welcome_acknowledged_at(&welcome));
+        assert_eq!(
+            std::fs::metadata(&welcome).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            std::fs::metadata(&directory).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+
+        let appearance = directory.join("appearance-v1");
+        std::fs::write(&appearance, b"corrupt").unwrap();
+        assert_eq!(appearance_read_at(&appearance), None);
+        atomic_private_write(&appearance, b"happy-gpui-appearance-v1:system\n").unwrap();
+        assert_eq!(appearance_read_at(&appearance), Some(None));
+        atomic_private_write(&appearance, b"happy-gpui-appearance-v1:light\n").unwrap();
+        assert_eq!(appearance_read_at(&appearance), Some(Some(false)));
+        atomic_private_write(&appearance, b"happy-gpui-appearance-v1:dark\n").unwrap();
+        assert_eq!(appearance_read_at(&appearance), Some(Some(true)));
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

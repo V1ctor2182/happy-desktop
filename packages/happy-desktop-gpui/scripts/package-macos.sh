@@ -37,6 +37,9 @@ mkdir -p "$macos" "$resources"
 cp "$repo_root/target/release/happy-gpui" "$macos/happy-gpui"
 cp "$repo_root/packages/happy-desktop-electron/assets/app-icon/generated/app-icon.icns" \
     "$resources/HappyGPUI.icns"
+mkdir -p "$resources/welcome"
+cp "$package_dir/assets/welcome/"*.png "$package_dir/assets/welcome/"*.jpg \
+    "$resources/welcome/"
 
 cat > "$contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
