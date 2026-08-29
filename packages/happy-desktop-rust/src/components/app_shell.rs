@@ -1,5 +1,5 @@
-use crate::components::button::{ButtonSize, ButtonVariant, button};
 use crate::components::channel_header::channel_header;
+use crate::components::conversation::conversation;
 use crate::components::rail::rail;
 use crate::components::sidebar::sidebar;
 use crate::components::title_bar::title_bar;
@@ -86,37 +86,7 @@ fn workspace(theme: Theme) -> Div {
         .h_full()
         .bg(theme.surface)
         .child(channel_header(theme))
-        .child(
-            div()
-                .flex()
-                .flex_1()
-                .min_h_0()
-                .flex_col()
-                .justify_center()
-                .items_center()
-                .gap(px(12.0))
-                .px(px(32.0))
-                .bg(theme.surface)
-                .child(
-                    div()
-                        .text_size(px(24.0))
-                        .font_weight(FontWeight::BOLD)
-                        .child("Happy, now native."),
-                )
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .text_color(theme.text_secondary)
-                        .child("The GPUI shell is ready for conversations, files, and terminals."),
-                )
-                .child(button(
-                    "start-session",
-                    "Start a session",
-                    ButtonSize::Medium,
-                    ButtonVariant::Primary,
-                    theme,
-                )),
-        )
+        .child(conversation(theme))
 }
 
 fn inspector(theme: Theme, width: f32) -> Div {

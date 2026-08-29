@@ -1,6 +1,11 @@
 pub mod app_shell;
+pub mod approval_card;
 pub mod button;
 pub mod channel_header;
+pub mod composer;
+pub mod conversation;
+pub mod message;
 pub mod rail;
 pub mod sidebar;
 pub mod title_bar;
+pub mod tool_call;
