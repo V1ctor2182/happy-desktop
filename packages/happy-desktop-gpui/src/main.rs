@@ -1,7 +1,7 @@
 mod fonts;
-mod icons;
 mod shell;
 mod theme;
+mod ui;
 
 use gpui::{
     App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions,
@@ -14,6 +14,8 @@ actions!(happy, [Quit]);
 fn main() {
     Application::new().run(|cx: &mut App| {
         fonts::register(cx);
+        ui::text_input::init(cx);
+        ui::components::init(cx);
 
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
@@ -34,7 +36,7 @@ fn main() {
                 }),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_| HappyApp::new()),
+            |_, cx| cx.new(HappyApp::new),
         )
         .expect("open Happy window");
         cx.activate(true);

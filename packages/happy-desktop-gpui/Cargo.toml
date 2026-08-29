@@ -1,6 +1,6 @@
 [package]
 name = "happy-desktop-gpui"
-version = "0.1.5"
+version = "0.2.2"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 gpui = { version = "=0.2.2", default-features = false, features = ["font-kit"] }
+unicode-segmentation = "1.12"
 
 [dev-dependencies]
 gpui = { version = "=0.2.2", default-features = false, features = ["font-kit", "test-support"] }

@@ -1,0 +1,25 @@
+#![allow(dead_code)] // Shared DESIGN.md geometry is adopted by later phased surfaces.
+pub const GRID: f32 = 4.0;
+pub const DESIGN_WIDTH: f32 = 1280.0;
+pub const DESIGN_HEIGHT: f32 = 800.0;
+pub const MIN_WIDTH: f32 = 720.0;
+pub const MIN_HEIGHT: f32 = 480.0;
+pub const TITLE_HEIGHT: f32 = 56.0;
+pub const SURFACE_HEADER_HEIGHT: f32 = 56.0;
+pub const TOOLBAR_HEIGHT: f32 = 48.0;
+pub const BUTTON_SMALL: f32 = 28.0;
+pub const BUTTON_MEDIUM: f32 = 36.0;
+pub const BUTTON_LARGE: f32 = 44.0;
+pub const MODAL_SMALL: f32 = 360.0;
+pub const MODAL_MEDIUM: f32 = 480.0;
+pub const MODAL_LARGE: f32 = 640.0;
+pub const MODAL_GUTTER: f32 = 24.0;
+pub const PANEL_INSET: f32 = 6.0;
+pub const PANEL_ROW_PADDING: f32 = 10.0;
+pub const SCROLLBAR_TRACK: f32 = 8.0;
+pub const SCROLLBAR_INK: f32 = 6.0;
+pub const RADIUS_CONTROL: f32 = 6.0;
+pub const RADIUS_CONTENT: f32 = 8.0;
+pub const RADIUS_CARD: f32 = 10.0;
+pub const RADIUS_SHELL: f32 = 14.0;
+pub const FOCUS_RING: f32 = 2.0;

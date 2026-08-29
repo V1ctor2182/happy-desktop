@@ -2396,9 +2396,10 @@ dependencies = [
 
 [[package]]
 name = "happy-desktop-gpui"
-version = "0.1.5"
+version = "0.2.2"
 dependencies = [
  "gpui",
+ "unicode-segmentation",
 ]
 
 [[package]]

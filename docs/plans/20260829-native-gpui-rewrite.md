@@ -41,7 +41,7 @@ No phase may modify the Electron host process without two explicit human confirm
 - Port theme roles and the complete curated Ionicons/Octicons vocabulary.
 - Add reusable buttons, fields, rows, tabs, menus, modal overlays, badges, avatars, toolbars, scroll surfaces, splitters, and keyboard focus treatments.
 - Add an in-app GPUI component gallery for direct parity review against the existing Blueprint fixtures.
-- Build `phase-02-ui-system-v0.2.0` before commit.
+- Build `phase-02-ui-system-v0.2.2` before commit.
 
 ### Phase 3 — Startup, transport, and stable multi-agent state
 
@@ -104,7 +104,7 @@ No phase may modify the Electron host process without two explicit human confirm
 ## Phase completion record
 
 - [x] Phase 1 — Native foundation and reference shell (`phase-01-foundation-v0.1.5`; 9 rendered geometry tests)
-- [ ] Phase 2 — Reusable visual system
+- [x] Phase 2 — Reusable visual system (`phase-02-ui-system-v0.2.2`; review clean; exact authorized panel family; 79 native tests; signed artifact SHA-256 `2546f88c441345453ecacebc41f766179a8dc1b8eef5c8daf11d02e6ded165f4`)
 - [ ] Phase 3 — Startup, transport, and stable multi-agent state
 - [ ] Phase 4 — Navigation and workspace catalog
 - [ ] Phase 5 — Core chat work loop
