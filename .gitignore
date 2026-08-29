@@ -22,3 +22,7 @@ packages/happy-desktop-electron/release
 # local drafts, 3d party repos we pull in for research etc
 .local/
 .context/
+
+# Rust build products and retained local GPUI app bundles
+target
+output/happy-gpui-macos/
