@@ -3,7 +3,7 @@
 use std::{
     collections::BTreeSet,
     fs::{self, File, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -11,6 +11,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 const VERSION: u32 = 1;
+const DOCUMENT_BYTE_LIMIT: u64 = 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PinnedDestination {
@@ -51,8 +52,15 @@ impl SidebarMemory {
     }
 
     pub fn restore(path: PathBuf) -> Self {
-        let document = fs::read(&path)
+        let document = File::open(&path)
             .ok()
+            .and_then(|file| {
+                let mut bytes = Vec::new();
+                file.take(DOCUMENT_BYTE_LIMIT + 1)
+                    .read_to_end(&mut bytes)
+                    .ok()?;
+                (bytes.len() as u64 <= DOCUMENT_BYTE_LIMIT).then_some(bytes)
+            })
             .and_then(|bytes| serde_json::from_slice::<Document>(&bytes).ok())
             .filter(|document| document.version == VERSION);
         let collapsed = document

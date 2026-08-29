@@ -613,11 +613,70 @@ pub struct EventHint {
 }
 
 /// Only identity-bearing fields needed to target authoritative reconciliation.
+///
+/// Protocol 23 uses both flat identities and small nested resource projections.
+/// They stay explicit here so the client never searches arbitrary JSON shapes.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EventHintPayload {
     #[serde(default)]
     pub workspace_id: Option<String>,
+    #[serde(default)]
+    pub agent_id: Option<String>,
+    #[serde(default)]
+    pub process_id: Option<String>,
+    #[serde(default)]
+    pub question_id: Option<String>,
+    #[serde(default)]
+    pub agent: Option<EventAgentIdentity>,
+    #[serde(default)]
+    pub message: Option<EventAgentResourceIdentity>,
+    #[serde(default)]
+    pub run: Option<EventAgentResourceIdentity>,
+    #[serde(default)]
+    pub draft: Option<EventAgentResourceIdentity>,
+    #[serde(default)]
+    pub context: Option<EventAgentResourceIdentity>,
+    #[serde(default)]
+    pub commands: Option<EventAgentResourceIdentity>,
+    #[serde(default)]
+    pub process: Option<EventProcessIdentity>,
+    #[serde(default)]
+    pub question: Option<EventQuestionIdentity>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EventAgentIdentity {
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EventAgentResourceIdentity {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub agent_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EventProcessIdentity {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub agent_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EventQuestionIdentity {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub agent_id: Option<String>,
 }
 
 #[cfg(test)]

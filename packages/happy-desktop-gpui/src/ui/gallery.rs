@@ -1,7 +1,13 @@
-use std::rc::Rc;
+use std::{
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+    rc::Rc,
+    sync::Arc,
+};
 
 use gpui::{
-    AnyElement, App, Entity, FocusHandle, FontWeight, IntoElement, Window, div, prelude::*, px,
+    AnyElement, App, Context, Entity, FocusHandle, Focusable, FontWeight, Image, IntoElement,
+    RenderOnce, SharedString, Window, div, prelude::*, px,
 };
 
 use super::theme_roles::ThemeRole;
@@ -46,10 +52,11 @@ pub enum GalleryPage {
     Sidebar,
     Settings,
     CommandPalette,
+    Chat,
     Theme,
 }
 impl GalleryPage {
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Buttons,
         Self::Fields,
         Self::Rows,
@@ -71,6 +78,7 @@ impl GalleryPage {
         Self::Sidebar,
         Self::Settings,
         Self::CommandPalette,
+        Self::Chat,
         Self::Theme,
     ];
     pub const fn id(self) -> &'static str {
@@ -96,6 +104,7 @@ impl GalleryPage {
             Self::Sidebar => "sidebar",
             Self::Settings => "settings",
             Self::CommandPalette => "command-palette",
+            Self::Chat => "chat",
             Self::Theme => "theme",
         }
     }
@@ -122,6 +131,7 @@ impl GalleryPage {
             Self::Sidebar => "Sidebar",
             Self::Settings => "Settings",
             Self::CommandPalette => "Command palette",
+            Self::Chat => "Chat",
             Self::Theme => "Theme",
         }
     }
@@ -766,12 +776,1164 @@ fn settings_specimen(theme: Theme, scrollbar: Entity<ScrollbarState>) -> AnyElem
             title: "General".into(),
             description: Some("Core application preferences".into()),
             close_label: "Close settings".into(),
+
             body_scrollbar: scrollbar,
             body,
             on_category_select: Rc::new(|_, _, _| {}),
             on_close: Rc::new(|_, _| {}),
         })
         .into_any_element()
+}
+
+#[derive(Clone)]
+struct GalleryComposerFocus {
+    attach: FocusHandle,
+    model: FocusHandle,
+    effort: FocusHandle,
+    permission: FocusHandle,
+    tier: FocusHandle,
+    audience: FocusHandle,
+    emoji: FocusHandle,
+    submit: FocusHandle,
+}
+
+impl GalleryComposerFocus {
+    fn new(cx: &mut Context<ChatGalleryFixture>) -> Self {
+        Self {
+            attach: cx.focus_handle(),
+            model: cx.focus_handle(),
+            effort: cx.focus_handle(),
+            permission: cx.focus_handle(),
+            tier: cx.focus_handle(),
+            audience: cx.focus_handle(),
+            emoji: cx.focus_handle(),
+            submit: cx.focus_handle(),
+        }
+    }
+}
+
+/// Stable, caller-owned state for the complete native chat Blueprint specimen.
+/// Construction allocates only local GPUI state. It never opens transport or persistence.
+pub struct ChatGalleryFixture {
+    pub composer_editor: Entity<super::text_area::TextArea>,
+    pub ready_editor: Entity<super::text_area::TextArea>,
+    pub stop_editor: Entity<super::text_area::TextArea>,
+    pub free_question_editor: Entity<super::text_area::TextArea>,
+    pub transcript_state: super::chat_transcript::ChatTranscriptState,
+    pub transcript_scrollbar: Entity<ScrollbarState>,
+    pub tabs_scrollbar: Entity<ScrollbarState>,
+    pub recent_scrollbar: Entity<ScrollbarState>,
+    pub attachment_horizontal_scrollbar: Entity<ScrollbarState>,
+    pub attachment_vertical_scrollbar: Entity<ScrollbarState>,
+    pub composer_toolbar_scrollbar: Entity<ScrollbarState>,
+    pub ready_toolbar_scrollbar: Entity<ScrollbarState>,
+    pub stop_toolbar_scrollbar: Entity<ScrollbarState>,
+    pub transcript_focus: FocusHandle,
+    pub picker_focus: FocusHandle,
+    pub emoji_picker_focus: FocusHandle,
+    composer_focus: GalleryComposerFocus,
+    ready_focus: GalleryComposerFocus,
+    stop_focus: GalleryComposerFocus,
+    attachment_ready_open_focus: FocusHandle,
+    attachment_ready_remove_focus: FocusHandle,
+    attachment_ready_retry_focus: FocusHandle,
+    attachment_failed_open_focus: FocusHandle,
+    attachment_failed_remove_focus: FocusHandle,
+    attachment_failed_retry_focus: FocusHandle,
+    pub image_lightbox_overlay_focus: FocusHandle,
+    pub image_lightbox_close_focus: FocusHandle,
+    local_image: Arc<Image>,
+    rows: Rc<Vec<super::chat_transcript::ChatTranscriptRow>>,
+    events: Rc<RefCell<Vec<SharedString>>>,
+    ready_picker_open: Rc<Cell<bool>>,
+    ready_attachments_present: Rc<Cell<bool>>,
+    callbacks: RefCell<BTreeMap<&'static str, super::chat_message::ChatActivate>>,
+    id_callbacks: RefCell<BTreeMap<&'static str, super::composer_controls::IdHandler>>,
+    tab_move: super::workspace_tabs::WorkspaceTabMoveHandler,
+    command_active: super::composer_controls::IndexHandler,
+}
+
+impl ChatGalleryFixture {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        use super::chat_markdown::MarkdownDocument;
+        use super::chat_message::{
+            ChatImageBlock, ChatMessageBlock, ChatMessageModel, CompactionBlock,
+            DelegationRowModel, GenericQuestion, MessageDelivery, MessageGeneration, MessageRole,
+            NoticeRowModel, ProcessRowModel, QuestionOption, QuestionRowModel, ReasoningBlock,
+            SemanticTone, StatusRowModel, ToolBlock, ToolPresentation, ToolReview,
+            ToolReviewStatus, ToolStatus,
+        };
+        use super::chat_transcript::{ChatTranscriptContent, ChatTranscriptRow};
+
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let record = |name: &'static str| {
+            let events = events.clone();
+            Rc::new(move |_: &mut Window, _: &mut App| events.borrow_mut().push(name.into()))
+        };
+        let image_open: super::chat_message::ChatImageActivate = {
+            let events = events.clone();
+            Rc::new(move |id, _, _| events.borrow_mut().push(format!("image-open:{id}").into()))
+        };
+        let tool_open = record("tool-open");
+        let review_allow = record("review-allow");
+        let review_deny = record("review-deny");
+        let question_submit = record("question-submit");
+        let delegation_open = record("delegation-open");
+        let process_stop = record("process-stop");
+        let local_image = Arc::new(Image::empty());
+        let rows = Rc::new(vec![
+            ChatTranscriptRow {
+                id: "user-request".into(),
+                revision: 0,
+                content: ChatTranscriptContent::Message(ChatMessageModel {
+                    id: "gallery-user".into(),
+                    role: MessageRole::User,
+                    author: "You".into(),
+                    initials: "YO".into(),
+                    time: Some("10:42".into()),
+                    context_note: Some("apps/desktop".into()),
+                    delivery: MessageDelivery::Sent,
+                    generation: MessageGeneration::Complete,
+                    grouped: false,
+                    blocks: vec![
+                        ChatMessageBlock::Text(MarkdownDocument::parse(
+                            "Please make the **chat loop** stable and keep `scroll identity`\n\n```rust\nfn preserve_focus() -> bool { true }\n```",
+                        )),
+                        ChatMessageBlock::Image(ChatImageBlock {
+                            id: "local-wireframe".into(),
+                            alt: "Local chat wireframe".into(),
+                            image: Some(local_image.clone()),
+                            width: Some(640),
+                            height: Some(240),
+                        }),
+                    ],
+                    on_image_open: Some(image_open),
+                    on_tool_open: None,
+                    on_review_allow: None,
+                    on_review_deny: None,
+                }),
+            },
+            ChatTranscriptRow {
+                id: "agent-work".into(),
+                revision: 3,
+                content: ChatTranscriptContent::Message(ChatMessageModel {
+                    id: "gallery-agent".into(),
+                    role: MessageRole::Agent,
+                    author: "Happy Agent".into(),
+                    initials: "HA".into(),
+                    time: Some("10:43".into()),
+                    context_note: None,
+                    delivery: MessageDelivery::Sent,
+                    generation: MessageGeneration::Streaming,
+                    grouped: false,
+                    blocks: vec![
+                        ChatMessageBlock::Text(MarkdownDocument::parse(
+                            "I will inspect the reusable components, then apply the focused change",
+                        )),
+                        ChatMessageBlock::Reasoning(ReasoningBlock {
+                            summary: "Checked layout and identity constraints".into(),
+                            detail: MarkdownDocument::parse(
+                                "The transcript keeps a stable semantic anchor while its rows change height",
+                            ),
+                            expanded: true,
+                        }),
+                        ChatMessageBlock::Tool(ToolBlock {
+                            title: "Run native checks".into(),
+                            status: ToolStatus::Running,
+                            presentation: ToolPresentation::Command {
+                                command: "cargo check -p happy-desktop-gpui".into(),
+                                output: Some("Checking happy-desktop-gpui…".into()),
+                            },
+                            review: Some(ToolReview {
+                                status: ToolReviewStatus::Required,
+                                prompt: "Allow the local check to read this workspace?".into(),
+                            }),
+                            expanded: true,
+                        }),
+                    ],
+                    on_image_open: None,
+                    on_tool_open: Some(tool_open),
+                    on_review_allow: Some(review_allow),
+                    on_review_deny: Some(review_deny),
+                }),
+            },
+            ChatTranscriptRow {
+                id: "questions".into(),
+                revision: 1,
+                content: ChatTranscriptContent::Question(QuestionRowModel {
+                    id: "gallery-questions".into(),
+                    title: "A few choices before I continue".into(),
+                    questions: vec![
+                        GenericQuestion {
+                            id: "single".into(),
+                            prompt: "Which layout should be the reference?".into(),
+                            multiple: false,
+                            options: vec![
+                                QuestionOption {
+                                    id: "desktop".into(),
+                                    label: "1280 × 800 desktop".into(),
+                                    selected: true,
+                                    disabled: false,
+                                },
+                                QuestionOption {
+                                    id: "minimum".into(),
+                                    label: "720 × 480 minimum".into(),
+                                    selected: false,
+                                    disabled: false,
+                                },
+                            ],
+                            text_input: None,
+                        },
+                        GenericQuestion {
+                            id: "multi".into(),
+                            prompt: "Which checks should remain visible?".into(),
+                            multiple: true,
+                            options: vec![
+                                QuestionOption {
+                                    id: "focus".into(),
+                                    label: "Focus".into(),
+                                    selected: true,
+                                    disabled: false,
+                                },
+                                QuestionOption {
+                                    id: "scroll".into(),
+                                    label: "Scroll anchor".into(),
+                                    selected: true,
+                                    disabled: false,
+                                },
+                            ],
+                            text_input: None,
+                        },
+                        GenericQuestion {
+                            id: "free".into(),
+                            prompt: "Anything else?".into(),
+                            multiple: false,
+                            options: Vec::new(),
+                            text_input: None,
+                        },
+                    ],
+                    pending: true,
+                    submit_disabled: false,
+                    submit_busy: false,
+                    on_select: Some({
+                        let events = events.clone();
+                        Rc::new(move |question, option, selected, _, _| {
+                            events
+                                .borrow_mut()
+                                .push(format!("question:{question}:{option}:{selected}").into())
+                        })
+                    }),
+                    on_submit: Some(question_submit),
+                }),
+            },
+            ChatTranscriptRow {
+                id: "process".into(),
+                revision: 0,
+                content: ChatTranscriptContent::Process {
+                    model: ProcessRowModel {
+                        id: "gallery-build".into(),
+                        label: "Build".into(),
+                        detail: "cargo check".into(),
+                        running: true,
+                    },
+                    on_stop: Some(process_stop),
+                },
+            },
+            ChatTranscriptRow {
+                id: "delegation".into(),
+                revision: 0,
+                content: ChatTranscriptContent::Delegation {
+                    model: DelegationRowModel {
+                        id: "gallery-review".into(),
+                        agent: "UI reviewer".into(),
+                        task: "Review chat geometry".into(),
+                        status: "Working".into(),
+                        elapsed: Some("24s".into()),
+                    },
+                    on_open: Some(delegation_open),
+                },
+            },
+            ChatTranscriptRow {
+                id: "status".into(),
+                revision: 0,
+                content: ChatTranscriptContent::Status(StatusRowModel {
+                    id: "gallery-status".into(),
+                    label: "3 files changed".into(),
+                    detail: Some("No transport opened".into()),
+                    tone: SemanticTone::Success,
+                }),
+            },
+            ChatTranscriptRow {
+                id: "notice".into(),
+                revision: 0,
+                content: ChatTranscriptContent::Notice(NoticeRowModel {
+                    id: "gallery-notice".into(),
+                    title: Some("Agent unavailable".into()),
+                    text: "The draft stays editable while live actions are disabled.".into(),
+                    tone: SemanticTone::Warning,
+                }),
+            },
+            ChatTranscriptRow {
+                id: "compaction".into(),
+                revision: 0,
+                content: ChatTranscriptContent::Message(ChatMessageModel {
+                    id: "gallery-compaction".into(),
+                    role: MessageRole::System,
+                    author: "Context".into(),
+                    initials: "CX".into(),
+                    time: None,
+                    context_note: None,
+                    delivery: MessageDelivery::Sent,
+                    generation: MessageGeneration::Complete,
+                    grouped: false,
+                    blocks: vec![ChatMessageBlock::Compaction(CompactionBlock {
+                        title: "Earlier work compacted".into(),
+                        summary: MarkdownDocument::parse(
+                            "Kept the layout decisions, open review, and next command",
+                        ),
+                        token_count: Some(18_420),
+                    })],
+                    on_image_open: None,
+                    on_tool_open: None,
+                    on_review_allow: None,
+                    on_review_deny: None,
+                }),
+            },
+        ]);
+        let free_question_editor = cx.new(|cx| {
+            super::text_area::TextArea::new(
+                "gallery-free-question",
+                "Keep the active row visible.",
+                "Type a free answer",
+                Theme::light(),
+                cx,
+            )
+        });
+        // Insert the caller-owned editor only after it exists; row identity remains stable afterwards.
+        let mut owned_rows = (*rows).clone();
+        if let ChatTranscriptContent::Question(question) = &mut owned_rows[2].content {
+            question.questions[2].text_input = Some(free_question_editor.clone());
+        }
+        let rows = Rc::new(owned_rows);
+        let transcript_state = super::chat_transcript::ChatTranscriptState::new(&rows);
+        transcript_state.set_event_handler(Some({
+            let events = events.clone();
+            Rc::new(move |event, _, _| {
+                let label = match event {
+                    super::chat_transcript::ChatTranscriptEvent::AnchorChanged(_) => {
+                        "transcript-anchor"
+                    }
+                    super::chat_transcript::ChatTranscriptEvent::StartReached => "start-reached",
+                };
+                events.borrow_mut().push(label.into());
+            })
+        }));
+        let tab_move: super::workspace_tabs::WorkspaceTabMoveHandler = {
+            let events = events.clone();
+            Rc::new(move |id, direction, _, _| {
+                events
+                    .borrow_mut()
+                    .push(format!("tab-move:{id}:{direction:?}").into())
+            })
+        };
+        let command_active: super::composer_controls::IndexHandler = {
+            let events = events.clone();
+            Rc::new(move |index, _, _| {
+                events
+                    .borrow_mut()
+                    .push(format!("command-active:{index}").into())
+            })
+        };
+        let ready_picker_open = Rc::new(Cell::new(false));
+        let ready_attachments_present = Rc::new(Cell::new(false));
+        let ready_focus = GalleryComposerFocus::new(cx);
+        let attachment_ready_open_focus = cx.focus_handle();
+        let attachment_ready_remove_focus = cx.focus_handle();
+        let attachment_ready_retry_focus = cx.focus_handle();
+        let attachment_failed_open_focus = cx.focus_handle();
+        let attachment_failed_remove_focus = cx.focus_handle();
+        let attachment_failed_retry_focus = cx.focus_handle();
+
+        let attachment_scroll_handle = super::SharedScrollHandle::new();
+        let attachment_horizontal_handle = attachment_scroll_handle.clone();
+        let attachment_command_handle = attachment_scroll_handle.clone();
+        let attachment_horizontal_scrollbar = cx.new(move |_| {
+            ScrollbarState::horizontal(
+                super::ScrollbarAppearance::Always,
+                super::ScrollbarPlacement::Overlay,
+                attachment_horizontal_handle,
+            )
+        });
+        let attachment_vertical_scrollbar = cx.new(move |_| {
+            ScrollbarState::vertical(
+                super::ScrollbarAppearance::Always,
+                super::ScrollbarPlacement::Overlay,
+                attachment_scroll_handle,
+            )
+        });
+        let ready_toolbar_handle = super::SharedScrollHandle::new();
+        let ready_toolbar_command_handle = ready_toolbar_handle.clone();
+        let ready_toolbar_scrollbar = cx.new(move |_| {
+            ScrollbarState::horizontal(
+                super::ScrollbarAppearance::Automatic,
+                super::ScrollbarPlacement::Overlay,
+                ready_toolbar_handle,
+            )
+        });
+
+        let ready_editor = cx.new(|cx| {
+            super::text_area::TextArea::new(
+                "gallery-ready-editor",
+                "Ready to send",
+                "Ask Happy Agent",
+                Theme::light(),
+                cx,
+            )
+        });
+        ready_editor.update(cx, |editor, _| {
+            let events = events.clone();
+            let picker_open = ready_picker_open.clone();
+            let attachments_present = ready_attachments_present.clone();
+            let first_toolbar_focus = ready_focus.attach.clone();
+            let last_attachment_focus = attachment_failed_retry_focus.clone();
+            editor.set_command_handler(Some(Rc::new(move |command, window, _| match command {
+                super::text_area::TextAreaCommand::FocusNext => {
+                    ready_toolbar_command_handle.set_offset(gpui::point(
+                        px(0.0),
+                        ready_toolbar_command_handle.offset().y,
+                    ));
+                    first_toolbar_focus.focus(window);
+                    true
+                }
+                super::text_area::TextAreaCommand::FocusPrevious if attachments_present.get() => {
+                    let viewport_width = f32::from(attachment_command_handle.bounds().size.width);
+                    let next_left = (120.0 - viewport_width).max(0.0);
+                    attachment_command_handle.set_offset(gpui::point(
+                        px(-next_left),
+                        attachment_command_handle.offset().y,
+                    ));
+                    last_attachment_focus.focus(window);
+                    true
+                }
+                super::text_area::TextAreaCommand::FocusPrevious => false,
+                super::text_area::TextAreaCommand::Previous
+                | super::text_area::TextAreaCommand::Next
+                | super::text_area::TextAreaCommand::Commit
+                    if picker_open.get() =>
+                {
+                    let event = match command {
+                        super::text_area::TextAreaCommand::Previous => "picker-previous",
+                        super::text_area::TextAreaCommand::Next => "picker-next",
+                        super::text_area::TextAreaCommand::Commit => "picker-commit",
+                        _ => unreachable!(),
+                    };
+                    events.borrow_mut().push(event.into());
+                    true
+                }
+                super::text_area::TextAreaCommand::Previous
+                | super::text_area::TextAreaCommand::Next
+                | super::text_area::TextAreaCommand::Commit => false,
+            })));
+        });
+        Self {
+            composer_editor: cx.new(|cx| {
+                super::text_area::TextArea::new(
+                    "gallery-composer-editor",
+                    "Steer the running agent without losing focus",
+                    "Ask Happy Agent",
+                    Theme::light(),
+                    cx,
+                )
+            }),
+            ready_editor,
+            stop_editor: cx.new(|cx| {
+                super::text_area::TextArea::new(
+                    "gallery-stop-editor",
+                    "",
+                    "Agent is running",
+                    Theme::light(),
+                    cx,
+                )
+            }),
+            free_question_editor,
+            transcript_state,
+            transcript_scrollbar: cx.new(|_| {
+                ScrollbarState::vertical(
+                    super::ScrollbarAppearance::Automatic,
+                    super::ScrollbarPlacement::Overlay,
+                    super::SharedScrollHandle::new(),
+                )
+            }),
+            tabs_scrollbar: cx.new(|_| {
+                ScrollbarState::horizontal(
+                    super::ScrollbarAppearance::Automatic,
+                    super::ScrollbarPlacement::Overlay,
+                    super::SharedScrollHandle::new(),
+                )
+            }),
+            recent_scrollbar: cx.new(|_| {
+                ScrollbarState::vertical(
+                    super::ScrollbarAppearance::Automatic,
+                    super::ScrollbarPlacement::Overlay,
+                    super::SharedScrollHandle::new(),
+                )
+            }),
+            attachment_horizontal_scrollbar,
+            attachment_vertical_scrollbar,
+            composer_toolbar_scrollbar: cx.new(|_| {
+                ScrollbarState::horizontal(
+                    super::ScrollbarAppearance::Automatic,
+                    super::ScrollbarPlacement::Overlay,
+                    super::SharedScrollHandle::new(),
+                )
+            }),
+            ready_toolbar_scrollbar,
+            stop_toolbar_scrollbar: cx.new(|_| {
+                ScrollbarState::horizontal(
+                    super::ScrollbarAppearance::Automatic,
+                    super::ScrollbarPlacement::Overlay,
+                    super::SharedScrollHandle::new(),
+                )
+            }),
+            transcript_focus: cx.focus_handle().tab_index(0).tab_stop(true),
+            picker_focus: cx.focus_handle().tab_index(0).tab_stop(true),
+            emoji_picker_focus: cx.focus_handle().tab_index(0).tab_stop(true),
+            composer_focus: GalleryComposerFocus::new(cx),
+            ready_focus,
+            stop_focus: GalleryComposerFocus::new(cx),
+            attachment_ready_open_focus,
+            attachment_ready_remove_focus,
+            attachment_ready_retry_focus,
+            attachment_failed_open_focus,
+            attachment_failed_remove_focus,
+            attachment_failed_retry_focus,
+            image_lightbox_overlay_focus: cx.focus_handle(),
+            image_lightbox_close_focus: cx.focus_handle(),
+            local_image,
+            rows,
+            events,
+            ready_picker_open,
+            ready_attachments_present,
+            callbacks: RefCell::new(BTreeMap::new()),
+            id_callbacks: RefCell::new(BTreeMap::new()),
+            tab_move,
+            command_active,
+        }
+    }
+
+    #[cfg(test)]
+    fn events(&self) -> Vec<SharedString> {
+        self.events.borrow().clone()
+    }
+
+    fn record(&self, name: &'static str) -> super::chat_message::ChatActivate {
+        if let Some(callback) = self.callbacks.borrow().get(name) {
+            return callback.clone();
+        }
+        let events = self.events.clone();
+        let callback: super::chat_message::ChatActivate =
+            Rc::new(move |_, _| events.borrow_mut().push(name.into()));
+        self.callbacks.borrow_mut().insert(name, callback.clone());
+        callback
+    }
+
+    fn record_id(&self, prefix: &'static str) -> super::composer_controls::IdHandler {
+        if let Some(callback) = self.id_callbacks.borrow().get(prefix) {
+            return callback.clone();
+        }
+        let events = self.events.clone();
+        let callback: super::composer_controls::IdHandler =
+            Rc::new(move |id, _, _| events.borrow_mut().push(format!("{prefix}:{id}").into()));
+        self.id_callbacks
+            .borrow_mut()
+            .insert(prefix, callback.clone());
+        callback
+    }
+
+    fn composer_card(
+        &self,
+        id: &'static str,
+        theme: Theme,
+        editor: Entity<super::text_area::TextArea>,
+        running: bool,
+        send_enabled: bool,
+        picker: bool,
+        cx: &App,
+    ) -> super::chat_composer::ComposerCard {
+        use super::composer_controls::*;
+        let attachments_present = id == "gallery-composer" || id == "constrained-ready";
+        if editor == self.ready_editor {
+            self.ready_picker_open.set(picker);
+            self.ready_attachments_present.set(attachments_present);
+        }
+        let (toolbar_scrollbar, focus) = if editor == self.ready_editor {
+            (
+                self.ready_toolbar_scrollbar.clone(),
+                self.ready_focus.clone(),
+            )
+        } else if editor == self.stop_editor {
+            (self.stop_toolbar_scrollbar.clone(), self.stop_focus.clone())
+        } else {
+            (
+                self.composer_toolbar_scrollbar.clone(),
+                self.composer_focus.clone(),
+            )
+        };
+        let command_picker = picker.then(|| {
+            CommandPicker {
+                id: format!("{id}-commands").into(),
+                theme,
+                items: vec![
+                    CommandPickerItem {
+                        id: "review".into(),
+                        slash: "/review".into(),
+                        description: "Review the current changes".into(),
+                        icon: IconName::Check,
+                    },
+                    CommandPickerItem {
+                        id: "compact".into(),
+                        slash: "/compact".into(),
+                        description: "Compact the current context".into(),
+                        icon: IconName::Archive,
+                    },
+                ],
+                active: 0,
+                focus_handle: Some(self.picker_focus.clone()),
+                on_active: Some(self.command_active.clone()),
+                on_select: Some(self.record_id("command-select")),
+                on_dismiss: Some(self.record("picker-dismiss")),
+                restore_focus: Some(editor.read(cx).focus_handle(cx)),
+            }
+            .into_any_element()
+        });
+        super::chat_composer::ComposerCard {
+            id: id.into(),
+            theme,
+            text_area: editor,
+            disabled: false,
+            pending: false,
+            submit_disabled: false,
+            send_enabled,
+            running,
+            picker_open: picker,
+            attachment_previews: attachments_present.then(|| {
+                AttachmentPreviews {
+                    id: "gallery-attachments".into(),
+                    theme,
+                    items: vec![
+                        AttachmentPreviewItem {
+                            id: "ready".into(),
+                            name: "wireframe.png".into(),
+                            kind: AttachmentKind::Image,
+                            image: Some(self.local_image.clone()),
+                            error: None,
+                            open_focus: self.attachment_ready_open_focus.clone(),
+                            remove_focus: self.attachment_ready_remove_focus.clone(),
+                            retry_focus: self.attachment_ready_retry_focus.clone(),
+                        },
+                        AttachmentPreviewItem {
+                            id: "failed".into(),
+                            name: "trace.txt".into(),
+                            kind: AttachmentKind::File,
+                            image: None,
+                            error: Some("Upload failed · retry keeps the same attachment".into()),
+                            open_focus: self.attachment_failed_open_focus.clone(),
+                            remove_focus: self.attachment_failed_remove_focus.clone(),
+                            retry_focus: self.attachment_failed_retry_focus.clone(),
+                        },
+                    ],
+                    disabled: false,
+                    horizontal_scrollbar: self.attachment_horizontal_scrollbar.clone(),
+                    vertical_scrollbar: self.attachment_vertical_scrollbar.clone(),
+                    on_open: Some(self.record_id("attachment-open")),
+                    on_remove: Some(self.record_id("attachment-remove")),
+                    on_retry: Some(self.record_id("attachment-retry")),
+                }
+                .into_any_element()
+            }),
+            leading_controls: vec![
+                super::chat_composer::ComposerToolbarItem::new(
+                    COMPACT_CONTROL_WIDTH,
+                    vec![super::chat_composer::ComposerToolbarFocusTarget::new(
+                        focus.attach.clone(),
+                        0.0,
+                        COMPACT_CONTROL_WIDTH,
+                    )],
+                    Button {
+                        id: format!("{id}-attach").into(),
+                        theme,
+                        label: "Add inline image".into(),
+                        size: ControlSize::Small,
+                        variant: ButtonVariant::Ghost,
+                        icon: Some(IconName::Paperclip),
+                        icon_only: true,
+                        disabled: false,
+                        force_focused: false,
+                        focus_handle: Some(focus.attach.clone()),
+                        on_activate: Some(self.record("attach")),
+                    }
+                    .into_any_element(),
+                ),
+                super::chat_composer::ComposerToolbarItem::new(
+                    MODEL_EFFORT_CONTROL_WIDTH,
+                    vec![
+                        super::chat_composer::ComposerToolbarFocusTarget::new(
+                            focus.model.clone(),
+                            0.0,
+                            COMPACT_CONTROL_WIDTH,
+                        ),
+                        super::chat_composer::ComposerToolbarFocusTarget::new(
+                            focus.effort.clone(),
+                            COMPACT_CONTROL_WIDTH + 4.0,
+                            MODEL_EFFORT_CONTROL_WIDTH,
+                        ),
+                    ],
+                    ModelEffortControl {
+                        id: format!("{id}-model-effort").into(),
+                        theme,
+                        model: "Claude Sonnet".into(),
+                        effort: "High".into(),
+                        disabled: false,
+                        model_focus: focus.model.clone(),
+                        effort_focus: focus.effort.clone(),
+                        on_model: Some(self.record("model")),
+                        on_effort: Some(self.record("effort")),
+                    }
+                    .into_any_element(),
+                ),
+                super::chat_composer::ComposerToolbarItem::new(
+                    COMPACT_CONTROL_WIDTH,
+                    vec![super::chat_composer::ComposerToolbarFocusTarget::new(
+                        focus.permission.clone(),
+                        0.0,
+                        COMPACT_CONTROL_WIDTH,
+                    )],
+                    PermissionControl {
+                        id: format!("{id}-permission").into(),
+                        theme,
+                        label: "Accept edits".into(),
+                        disabled: false,
+                        focus_handle: focus.permission.clone(),
+                        on_activate: Some(self.record("permission")),
+                    }
+                    .into_any_element(),
+                ),
+                super::chat_composer::ComposerToolbarItem::new(
+                    COMPACT_CONTROL_WIDTH,
+                    vec![super::chat_composer::ComposerToolbarFocusTarget::new(
+                        focus.tier.clone(),
+                        0.0,
+                        COMPACT_CONTROL_WIDTH,
+                    )],
+                    TierControl {
+                        id: format!("{id}-tier").into(),
+                        theme,
+                        label: "Max".into(),
+                        disabled: false,
+                        focus_handle: focus.tier.clone(),
+                        on_activate: Some(self.record("tier")),
+                    }
+                    .into_any_element(),
+                ),
+                super::chat_composer::ComposerToolbarItem::new(
+                    AUDIENCE_UNAVAILABLE_WIDTH,
+                    vec![super::chat_composer::ComposerToolbarFocusTarget::new(
+                        focus.audience.clone(),
+                        0.0,
+                        COMPACT_CONTROL_WIDTH,
+                    )],
+                    AudienceControl {
+                        id: format!("{id}-audience").into(),
+                        theme,
+                        label: "Team".into(),
+                        protocol_available: false,
+                        disabled: false,
+                        focus_handle: focus.audience.clone(),
+                        on_activate: Some(self.record("audience")),
+                    }
+                    .into_any_element(),
+                ),
+            ],
+            trailing_controls: vec![
+                super::chat_composer::ComposerToolbarItem::new(
+                    CONTEXT_METER_WIDTH,
+                    vec![],
+                    ContextMeter {
+                        id: format!("{id}-context").into(),
+                        theme,
+                        used: 48_000,
+                        limit: 100_000,
+                        label: "48k / 100k".into(),
+                    }
+                    .into_any_element(),
+                ),
+                super::chat_composer::ComposerToolbarItem::new(
+                    COMPACT_CONTROL_WIDTH,
+                    vec![super::chat_composer::ComposerToolbarFocusTarget::new(
+                        focus.emoji.clone(),
+                        0.0,
+                        COMPACT_CONTROL_WIDTH,
+                    )],
+                    Button {
+                        id: format!("{id}-emoji").into(),
+                        theme,
+                        label: "Insert emoji".into(),
+                        size: ControlSize::Small,
+                        variant: ButtonVariant::Ghost,
+                        icon: Some(IconName::Smile),
+                        icon_only: true,
+                        disabled: false,
+                        force_focused: false,
+                        focus_handle: Some(focus.emoji.clone()),
+                        on_activate: Some(self.record("emoji-toggle")),
+                    }
+                    .into_any_element(),
+                ),
+            ],
+            toolbar_scrollbar,
+            submit_focus: focus.submit.clone(),
+            picker: command_picker,
+            on_picker_previous: Some(self.record("picker-previous")),
+            on_picker_next: Some(self.record("picker-next")),
+            on_picker_commit: Some(self.record("picker-commit")),
+            on_picker_dismiss: Some(self.record("picker-dismiss")),
+            on_send: Some(self.record(if running { "steer" } else { "send" })),
+            on_abort: Some(self.record("stop")),
+        }
+    }
+
+    fn theme_reconcile(fixture: &Entity<Self>, theme: Theme, cx: &mut App) {
+        let editors = {
+            let fixture = fixture.read(cx);
+            [
+                fixture.composer_editor.clone(),
+                fixture.ready_editor.clone(),
+                fixture.stop_editor.clone(),
+                fixture.free_question_editor.clone(),
+            ]
+        };
+        for editor in editors {
+            editor.update(cx, |editor, cx| editor.theme_reconcile(theme, cx));
+        }
+    }
+
+    fn element(&self, theme: Theme, cx: &App) -> AnyElement {
+        use super::chat_header::{
+            ProjectHeader, ProjectHeaderAction, ProjectHeaderStatus, ProjectStatusTone,
+        };
+        use super::chat_transcript::ChatTranscript;
+        use super::composer_controls::{EmojiItem, EmojiPicker};
+        use super::workspace_lifecycle::{
+            WorkspaceLifecycleLane, WorkspaceLifecycleNotice, WorkspaceLifecycleNoticeSize,
+            WorkspaceLifecyclePhase,
+        };
+        use super::workspace_tabs::*;
+        let lifecycle = WorkspaceLifecycleLane {
+            id: "gallery-chat-lifecycle".into(),
+            theme,
+            name: "chat-blueprint".into(),
+            phase: WorkspaceLifecyclePhase::Ready,
+            detail: Some("Workspace ready".into()),
+            path: Some("~/Happy/chat-blueprint".into()),
+        };
+        let tabs = WorkspaceTabs {
+            id: "gallery-chat-tabs".into(),
+            theme,
+            tabs: vec![
+                WorkspaceTabItem {
+                    id: "session".into(),
+                    label: "Chat".into(),
+                    kind: WorkspaceTabKind::Session,
+                    active: true,
+                    unread: false,
+                    waiting: false,
+                    running: true,
+                    disabled: false,
+                    closable: false,
+                },
+                WorkspaceTabItem {
+                    id: "file".into(),
+                    label: "gallery.rs".into(),
+                    kind: WorkspaceTabKind::File,
+                    active: false,
+                    unread: true,
+                    waiting: false,
+                    running: false,
+                    disabled: false,
+                    closable: true,
+                },
+                WorkspaceTabItem {
+                    id: "terminal".into(),
+                    label: "Checks".into(),
+                    kind: WorkspaceTabKind::Terminal,
+                    active: false,
+                    unread: false,
+                    waiting: true,
+                    running: true,
+                    disabled: false,
+                    closable: true,
+                },
+            ],
+            create: Some(WorkspaceCreateAffordance {
+                label: "New session".into(),
+                disabled: false,
+            }),
+            recent: Some(RecentSessionsAffordance {
+                label: "Recent sessions".into(),
+                open: true,
+                items: vec![RecentSessionItem {
+                    id: "previous".into(),
+                    label: "Previous chat".into(),
+                    detail: Some("8 min ago".into()),
+                    disabled: false,
+                }],
+            }),
+            tabs_scrollbar: self.tabs_scrollbar.clone(),
+            recent_scrollbar: Some(self.recent_scrollbar.clone()),
+            on_select: Some(self.record_id("tab-select")),
+            on_close: Some(self.record_id("tab-close")),
+            on_move: Some(self.tab_move.clone()),
+            on_create: Some(self.record("tab-create")),
+            on_recent_toggle: Some(self.record("recent-toggle")),
+            on_recent_select: Some(self.record_id("recent-select")),
+        };
+        let header = ProjectHeader {
+            id: "gallery-chat-header".into(),
+            theme,
+            title: "Chat Work Loop".into(),
+            location: Some("Happy Desktop · buenos-aires".into()),
+            status: Some(ProjectHeaderStatus {
+                label: "Happy Agent connected".into(),
+                tone: ProjectStatusTone::Available,
+            }),
+            actions: vec![
+                ProjectHeaderAction {
+                    id: "files".into(),
+                    label: "Files".into(),
+                    icon: IconName::Files,
+                    disabled: false,
+                    selected: true,
+                },
+                ProjectHeaderAction {
+                    id: "terminal".into(),
+                    label: "Terminal".into(),
+                    icon: IconName::Terminal,
+                    disabled: false,
+                    selected: false,
+                },
+            ],
+            on_action: Some(self.record_id("header-action")),
+        };
+        let dock = super::chat_composer::ComposerDock {
+            id: "gallery-chat-dock".into(),
+            theme,
+            above: Some(
+                div()
+                    .text_size(px(11.0))
+                    .text_color(theme.role(ThemeRole::TextSecondary))
+                    .child("Agent is working · steering appends to the active turn")
+                    .into_any_element(),
+            ),
+            failure: Some(super::chat_composer::ComposerFailureBanner {
+                id: "gallery-composer-failure".into(),
+                theme,
+                message: "The last send failed. The draft is still local.".into(),
+                retry_disabled: false,
+                on_retry: Some(self.record("failure-retry")),
+            }),
+            composer: self.composer_card(
+                "gallery-composer",
+                theme,
+                self.composer_editor.clone(),
+                true,
+                true,
+                true,
+                cx,
+            ),
+            footer: Some(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child("Accept edits · Max tier")
+                    .child("48% context")
+                    .into_any_element(),
+            ),
+        };
+        self.transcript_state.reconcile(&self.rows);
+        let work_loop = div()
+            .debug_selector(|| "gallery-chat-work-loop".into())
+            .w(px(720.0))
+            .flex_none()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .border_1()
+            .border_color(theme.role(ThemeRole::Divider))
+            .bg(theme.role(ThemeRole::Surface))
+            .child(header)
+            .child(lifecycle)
+            .child(tabs)
+            .child(
+                div()
+                    .debug_selector(|| "gallery-chat-transcript-stage".into())
+                    .w_full()
+                    .h(px(1080.0))
+                    .flex_none()
+                    .child(ChatTranscript {
+                        id: "gallery-chat-transcript".into(),
+                        theme,
+                        state: self.transcript_state.clone(),
+                        scrollbar: self.transcript_scrollbar.clone(),
+                        rows: self.rows.clone(),
+                        focus: Some(self.transcript_focus.clone()),
+                    }),
+            )
+            .child(dock);
+        let lifecycle_states = [
+            WorkspaceLifecyclePhase::Creating,
+            WorkspaceLifecyclePhase::Failed,
+            WorkspaceLifecyclePhase::Refused,
+            WorkspaceLifecyclePhase::Missing,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, phase)| {
+            WorkspaceLifecycleNotice {
+                id: format!("gallery-chat-lifecycle-{index}").into(),
+                theme,
+                name: "chat-blueprint".into(),
+                phase,
+                detail: Some("Caller-authored lifecycle detail".into()),
+                path: Some("~/Happy/chat-blueprint".into()),
+                size: WorkspaceLifecycleNoticeSize::Compact,
+            }
+            .into_any_element()
+        })
+        .collect();
+        let emoji = EmojiPicker {
+            id: "gallery-emoji-picker".into(),
+            theme,
+            columns: 5,
+            active: 0,
+            focus_handle: self.emoji_picker_focus.clone(),
+            items: vec![
+                EmojiItem {
+                    id: "sparkles".into(),
+                    glyph: "✨".into(),
+                    name: "Sparkles".into(),
+                },
+                EmojiItem {
+                    id: "check".into(),
+                    glyph: "✅".into(),
+                    name: "Check".into(),
+                },
+                EmojiItem {
+                    id: "eyes".into(),
+                    glyph: "👀".into(),
+                    name: "Eyes".into(),
+                },
+            ],
+            on_active: Some(self.command_active.clone()),
+            on_select: Some(self.record_id("emoji-select")),
+            on_dismiss: Some(self.record("emoji-dismiss")),
+            restore_focus: Some(self.composer_editor.read(cx).focus_handle(cx)),
+        };
+        let lightbox = div()
+            .debug_selector(|| "gallery-image-lightbox-stage".into())
+            .w(px(720.0))
+            .h(px(480.0))
+            .flex_none()
+            .relative()
+            .overflow_hidden()
+            .border_1()
+            .border_color(theme.role(ThemeRole::Divider))
+            .child(super::chat_message::InlineImageLightbox {
+                id: "gallery-image-lightbox".into(),
+                theme,
+                image: self.local_image.clone(),
+                alt: "Local chat wireframe".into(),
+                overlay_focus: self.image_lightbox_overlay_focus.clone(),
+                close_focus: self.image_lightbox_close_focus.clone(),
+                on_close: self.record("lightbox-close"),
+            })
+            .into_any_element();
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(16.0))
+            .child(work_loop)
+            .child(section("Chat lifecycle states", lifecycle_states, theme))
+            .child(section(
+                "Picker fixtures",
+                vec![emoji.into_any_element()],
+                theme,
+            ))
+            .child(section(
+                "Inline image lightbox · open",
+                vec![lightbox],
+                theme,
+            ))
+            .child(section(
+                "Composer states that cannot coexist",
+                vec![
+                    div()
+                        .w(px(560.0))
+                        .child(super::chat_composer::ComposerDock {
+                            id: "gallery-ready-dock".into(),
+                            theme,
+                            above: None,
+                            failure: None,
+                            composer: self.composer_card(
+                                "gallery-ready-composer",
+                                theme,
+                                self.ready_editor.clone(),
+                                false,
+                                true,
+                                false,
+                                cx,
+                            ),
+                            footer: None,
+                        })
+                        .into_any_element(),
+                    div()
+                        .w(px(560.0))
+                        .child(super::chat_composer::ComposerDock {
+                            id: "gallery-stop-dock".into(),
+                            theme,
+                            above: None,
+                            failure: None,
+                            composer: self.composer_card(
+                                "gallery-stop-composer",
+                                theme,
+                                self.stop_editor.clone(),
+                                true,
+                                false,
+                                false,
+                                cx,
+                            ),
+                            footer: None,
+                        })
+                        .into_any_element(),
+                ],
+                theme,
+            ))
+            .into_any_element()
+    }
+}
+
+#[derive(IntoElement)]
+struct ChatGallerySpecimen {
+    fixture: Entity<ChatGalleryFixture>,
+    theme: Theme,
+}
+impl RenderOnce for ChatGallerySpecimen {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        ChatGalleryFixture::theme_reconcile(&self.fixture, self.theme, cx);
+        self.fixture.read(cx).element(self.theme, cx)
+    }
 }
 
 fn specimens(
@@ -783,6 +1945,7 @@ fn specimens(
     welcome_focus: &[FocusHandle; 25],
     modal_states: &[GalleryModalState; 5],
     command_palette: Entity<CommandPalette>,
+    chat_fixture: Entity<ChatGalleryFixture>,
 ) -> AnyElement {
     match page {
         GalleryPage::Buttons => section(
@@ -1373,6 +2536,7 @@ fn specimens(
             .border_color(theme.role(ThemeRole::Divider))
             .child(command_palette)
             .into_any_element(),
+        GalleryPage::Chat => ChatGallerySpecimen { fixture: chat_fixture, theme }.into_any_element(),
         GalleryPage::Theme => section(
             "All authoritative light/dark generated roles",
             ThemeRole::ALL
@@ -1420,6 +2584,7 @@ pub fn gallery(
     welcome_focus: [FocusHandle; 25],
     modal_states: [GalleryModalState; 5],
     command_palette: Entity<CommandPalette>,
+    chat_fixture: Entity<ChatGalleryFixture>,
     page: GalleryPage,
     on_select: TabSelectHandler,
 ) -> impl IntoElement {
@@ -1455,6 +2620,7 @@ pub fn gallery(
             &welcome_focus,
             &modal_states,
             command_palette,
+            chat_fixture,
         ))
         .into_any_element();
     div()
@@ -1521,8 +2687,8 @@ mod tests {
     };
     use crate::ui::{ScrollbarAppearance, ScrollbarPlacement, SharedScrollHandle};
     use gpui::{
-        Bounds, Context, Render, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext,
-        point, size,
+        Bounds, Context, Modifiers, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
+        VisualTestContext, point, size,
     };
 
     struct Fixture {
@@ -1532,32 +2698,37 @@ mod tests {
         welcome_focus: [FocusHandle; 25],
         modal_states: [GalleryModalState; 5],
         command_palette: Entity<CommandPalette>,
+        chat_fixture: Entity<ChatGalleryFixture>,
         page: GalleryPage,
+        theme: Theme,
     }
     impl Render for Fixture {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             gallery(
-                Theme::light(),
+                self.theme,
                 self.inputs.clone(),
                 self.scrollbars.clone(),
                 self.connectivity_scrollbars.clone(),
                 self.welcome_focus.clone(),
                 self.modal_states.clone(),
                 self.command_palette.clone(),
+                self.chat_fixture.clone(),
                 self.page,
                 Rc::new(|_, _, _| {}),
             )
         }
     }
-    fn render_page(
+    fn render_page_theme(
         cx: &mut TestAppContext,
         width: f32,
         height: f32,
         page: GalleryPage,
+        theme: Theme,
     ) -> &mut VisualTestContext {
         cx.update(|cx| {
             crate::fonts::register(cx);
             super::super::text_input::init(cx);
+            super::super::text_area::init(cx);
             super::super::components::init(cx)
         });
         let (_, cx) = cx.add_window_view(|_, cx| {
@@ -1714,7 +2885,9 @@ mod tests {
                 welcome_focus: std::array::from_fn(|_| cx.focus_handle()),
                 modal_states,
                 command_palette,
+                chat_fixture: cx.new(ChatGalleryFixture::new),
                 page,
+                theme,
             }
         });
         cx.simulate_resize(size(px(width), px(height)));
@@ -1722,6 +2895,15 @@ mod tests {
         assert_eq!(cx.update(|window, _| window.scale_factor()), 2.0);
         cx
     }
+    fn render_page(
+        cx: &mut TestAppContext,
+        width: f32,
+        height: f32,
+        page: GalleryPage,
+    ) -> &mut VisualTestContext {
+        render_page_theme(cx, width, height, page, Theme::light())
+    }
+
     #[gpui::test]
     fn gallery_resolves_toolbar_page_selector_and_scrollable_full_scale_workbench(
         cx: &mut TestAppContext,
@@ -1899,6 +3081,7 @@ mod tests {
             (GalleryPage::Sidebar, "gallery-sidebar.root"),
             (GalleryPage::Settings, "gallery-settings.root"),
             (GalleryPage::CommandPalette, "gallery-command-palette.card"),
+            (GalleryPage::Chat, "gallery-chat-work-loop"),
             (GalleryPage::Theme, "gallery-content"),
         ] {
             let cx = render_page(cx, 900.0, 700.0, page);
@@ -1907,6 +3090,347 @@ mod tests {
                 "{page:?} page wires {selector}"
             );
         }
+    }
+
+    #[gpui::test]
+    fn chat_gallery_renders_reference_and_minimum_windows_in_light_and_dark_at_two_x(
+        cx: &mut TestAppContext,
+    ) {
+        assert_eq!(GalleryPage::from_id("chat"), Some(GalleryPage::Chat));
+        assert_eq!(GalleryPage::Chat.id(), "chat");
+        assert_eq!(GalleryPage::Chat.label(), "Chat");
+        for (width, height, theme) in [
+            (1280.0, 800.0, Theme::light()),
+            (1280.0, 800.0, Theme::dark()),
+            (720.0, 480.0, Theme::light()),
+            (720.0, 480.0, Theme::dark()),
+        ] {
+            let cx = render_page_theme(cx, width, height, GalleryPage::Chat, theme);
+            assert_eq!(
+                cx.debug_bounds("gallery-root").unwrap().size,
+                size(px(width), px(height))
+            );
+            assert_eq!(
+                cx.debug_bounds("gallery-chat-work-loop")
+                    .unwrap()
+                    .size
+                    .width,
+                px(720.0)
+            );
+            assert_eq!(
+                cx.debug_bounds("gallery-chat-header.root")
+                    .unwrap()
+                    .size
+                    .height,
+                px(56.0)
+            );
+            assert_eq!(
+                cx.debug_bounds("gallery-chat-tabs.root")
+                    .unwrap()
+                    .size
+                    .height,
+                px(32.0)
+            );
+            assert_eq!(
+                cx.debug_bounds("gallery-chat-transcript-stage")
+                    .unwrap()
+                    .size
+                    .height,
+                px(1080.0)
+            );
+            assert!(
+                cx.debug_bounds("gallery-chat-transcript.viewport")
+                    .is_some()
+            );
+            assert!(cx.debug_bounds("gallery-composer.root").is_some());
+            assert!(cx.debug_bounds("gallery-emoji-picker.root").is_some());
+            assert!(cx.debug_bounds("gallery-image-lightbox.root").is_some());
+            assert_eq!(
+                cx.debug_bounds("gallery-image-lightbox-stage")
+                    .unwrap()
+                    .size,
+                size(px(720.0), px(480.0))
+            );
+            assert!(cx.debug_bounds("gallery-ready-composer.root").is_some());
+            assert!(cx.debug_bounds("gallery-stop-composer.root").is_some());
+        }
+    }
+
+    struct ConstrainedChatFixture {
+        fixture: Entity<ChatGalleryFixture>,
+        width: f32,
+        theme: Theme,
+        stop: bool,
+        picker: bool,
+    }
+    impl Render for ConstrainedChatFixture {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            ChatGalleryFixture::theme_reconcile(&self.fixture, self.theme, cx);
+            let fixture = self.fixture.read(cx);
+            let editor = if self.stop {
+                fixture.stop_editor.clone()
+            } else {
+                fixture.ready_editor.clone()
+            };
+            let card = fixture.composer_card(
+                if self.picker {
+                    "constrained-picker"
+                } else if self.stop {
+                    "constrained-stop"
+                } else {
+                    "constrained-ready"
+                },
+                self.theme,
+                editor,
+                self.stop,
+                !self.stop,
+                self.picker,
+                cx,
+            );
+            div()
+                .debug_selector(|| "constrained-chat-content".into())
+                .w(px(self.width))
+                .flex()
+                .flex_col()
+                .child(super::super::chat_composer::ComposerFailureBanner {
+                    id: "constrained-failure".into(),
+                    theme: self.theme,
+                    message: "Send failed; the local draft remains available.".into(),
+                    retry_disabled: false,
+                    on_retry: Some(fixture.record("failure-retry")),
+                })
+                .child(card)
+        }
+    }
+
+    #[gpui::test]
+    fn chat_gallery_constrained_geometry_callbacks_and_focus_are_real(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            crate::fonts::register(cx);
+            super::super::text_area::init(cx);
+            super::super::components::init(cx);
+        });
+        for (width, theme, stop, picker) in [
+            (220.0, Theme::light(), false, false),
+            (220.0, Theme::dark(), true, false),
+            (560.0, Theme::light(), true, false),
+            (560.0, Theme::dark(), false, false),
+            (560.0, Theme::dark(), false, true),
+            (116.0, Theme::light(), false, false),
+        ] {
+            let chat = cx.update(|cx| cx.new(ChatGalleryFixture::new));
+            let view_chat = chat.clone();
+            let (_, cx) = cx.add_window_view(move |_, _| ConstrainedChatFixture {
+                fixture: view_chat,
+                width,
+                theme,
+                stop,
+                picker,
+            });
+            cx.simulate_resize(size(
+                px(if width == 220.0 { 720.0 } else { 1280.0 }),
+                px(if width == 220.0 { 480.0 } else { 800.0 }),
+            ));
+            cx.run_until_parked();
+            assert_eq!(cx.update(|window, _| window.scale_factor()), 2.0);
+            assert_eq!(
+                cx.debug_bounds("constrained-chat-content")
+                    .unwrap()
+                    .size
+                    .width,
+                px(width)
+            );
+            let card = if picker {
+                "constrained-picker.root"
+            } else if stop {
+                "constrained-stop.root"
+            } else {
+                "constrained-ready.root"
+            };
+            assert_eq!(cx.debug_bounds(card).unwrap().size.width, px(width));
+            let toolbar_content = if picker {
+                "constrained-picker.toolbar-content"
+            } else if stop {
+                "constrained-stop.toolbar-content"
+            } else {
+                "constrained-ready.toolbar-content"
+            };
+            let expected_toolbar_width = 4.0
+                * super::super::composer_controls::COMPACT_CONTROL_WIDTH
+                + super::super::composer_controls::MODEL_EFFORT_CONTROL_WIDTH
+                + super::super::composer_controls::AUDIENCE_UNAVAILABLE_WIDTH
+                + super::super::composer_controls::CONTEXT_METER_WIDTH
+                + 6.0 * 8.0;
+            assert_eq!(
+                cx.debug_bounds(toolbar_content).unwrap().size.width,
+                px(expected_toolbar_width),
+                "seven exported width-bearing toolbar items plus six 8px gaps"
+            );
+            if width == 220.0 && !stop && !picker {
+                let (focus, editor_focus) = chat.read_with(cx, |fixture, app| {
+                    (
+                        fixture.ready_focus.clone(),
+                        fixture.ready_editor.read(app).focus_handle(app),
+                    )
+                });
+                cx.update(|window, _| editor_focus.focus(window));
+                cx.simulate_keystrokes("tab");
+                cx.run_until_parked();
+                assert!(cx.update(|window, _| focus.attach.is_focused(window)));
+                for _ in 0..6 {
+                    cx.simulate_keystrokes("tab");
+                    cx.run_until_parked();
+                }
+                assert!(cx.update(|window, _| focus.emoji.is_focused(window)));
+                let viewport = cx
+                    .debug_bounds("constrained-ready-toolbar-scroll.viewport")
+                    .unwrap();
+                let emoji = cx.debug_bounds("constrained-ready-emoji.root").unwrap();
+                assert!(emoji.left() >= viewport.left() && emoji.right() <= viewport.right());
+                cx.simulate_keystrokes("space");
+                assert!(chat.read_with(cx, |fixture, _| {
+                    fixture
+                        .events()
+                        .iter()
+                        .any(|event| event.as_ref() == "emoji-toggle")
+                }));
+            }
+            if width == 116.0 {
+                let (editor_focus, retry) = chat.read_with(cx, |fixture, app| {
+                    (
+                        fixture.ready_editor.read(app).focus_handle(app),
+                        fixture.attachment_failed_retry_focus.clone(),
+                    )
+                });
+                cx.update(|window, _| editor_focus.focus(window));
+                cx.simulate_keystrokes("shift-tab");
+                cx.run_until_parked();
+                assert!(cx.update(|window, _| retry.is_focused(window)));
+                let viewport = cx
+                    .debug_bounds("gallery-attachments-scroll.viewport")
+                    .unwrap();
+                let target = cx.debug_bounds("gallery-attachments.retry").unwrap();
+                assert!(target.left() >= viewport.left() && target.right() <= viewport.right());
+                cx.simulate_keystrokes("space");
+                assert!(chat.read_with(cx, |fixture, _| {
+                    fixture
+                        .events()
+                        .iter()
+                        .any(|event| event.as_ref() == "attachment-retry:failed")
+                }));
+                continue;
+            }
+            if picker {
+                let editor_focus = chat.read_with(cx, |fixture, app| {
+                    fixture.ready_editor.read(app).focus_handle(app)
+                });
+                cx.update(|window, _| editor_focus.focus(window));
+                assert!(cx.update(|window, _| editor_focus.is_focused(window)));
+                cx.simulate_keystrokes("up down enter escape");
+                for expected in [
+                    "picker-previous",
+                    "picker-next",
+                    "picker-commit",
+                    "picker-dismiss",
+                ] {
+                    let events = chat.read_with(cx, |fixture, _| fixture.events());
+                    assert!(
+                        events.iter().any(|event| event.as_ref() == expected),
+                        "missing {expected}; events={events:?}"
+                    );
+                }
+            } else {
+                let submit = if stop {
+                    "constrained-stop.submit"
+                } else {
+                    "constrained-ready.submit"
+                };
+                let submit_center = cx.debug_bounds(submit).unwrap().center();
+                cx.simulate_click(submit_center, Modifiers::default());
+                let expected = if stop { "stop" } else { "send" };
+                assert!(chat.read_with(cx, |fixture, _| {
+                    fixture
+                        .events()
+                        .iter()
+                        .any(|event| event.as_ref() == expected)
+                }));
+                assert!(cx.update(|window, app| {
+                    let fixture = chat.read(app);
+                    let editor = if stop {
+                        &fixture.stop_editor
+                    } else {
+                        &fixture.ready_editor
+                    };
+                    editor.read(app).focus_handle(app).is_focused(window)
+                }));
+            }
+            let failure_center = cx
+                .debug_bounds("constrained-failure.retry")
+                .unwrap()
+                .center();
+            cx.simulate_click(failure_center, Modifiers::default());
+            assert!(chat.read_with(cx, |fixture, _| {
+                fixture
+                    .events()
+                    .iter()
+                    .any(|event| event.as_ref() == "failure-retry")
+            }));
+        }
+    }
+
+    #[gpui::test]
+    fn chat_gallery_composed_work_loop_callbacks_use_stable_fixture_state(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            crate::fonts::register(cx);
+            super::super::text_area::init(cx);
+            super::super::components::init(cx);
+        });
+        let chat = cx.update(|cx| cx.new(ChatGalleryFixture::new));
+        let view_chat = chat.clone();
+        struct WorkLoop {
+            fixture: Entity<ChatGalleryFixture>,
+        }
+        impl Render for WorkLoop {
+            fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+                ChatGalleryFixture::theme_reconcile(&self.fixture, Theme::dark(), cx);
+                self.fixture.read(cx).element(Theme::dark(), cx)
+            }
+        }
+        let (_, cx) = cx.add_window_view(move |_, _| WorkLoop { fixture: view_chat });
+        cx.simulate_resize(size(px(1280.0), px(2400.0)));
+        cx.run_until_parked();
+        let lightbox_close_focus =
+            chat.read_with(cx, |fixture, _| fixture.image_lightbox_close_focus.clone());
+        assert!(cx.update(|window, _| lightbox_close_focus.is_focused(window)));
+        for (selector, event) in [
+            ("gallery-chat-header.action-files", "header-action:files"),
+            ("gallery-chat-tabs.create", "tab-create"),
+            ("gallery-composer-failure.retry", "failure-retry"),
+            ("gallery-attachments.retry", "attachment-retry:failed"),
+        ] {
+            let bounds = cx
+                .debug_bounds(selector)
+                .unwrap_or_else(|| panic!("missing {selector}"));
+            cx.simulate_click(bounds.center(), Modifiers::default());
+            assert!(
+                chat.read_with(cx, |fixture, _| fixture
+                    .events()
+                    .iter()
+                    .any(|value| value.as_ref() == event)),
+                "missing callback {event}"
+            );
+        }
+        let emoji_center = cx
+            .debug_bounds("gallery-emoji-picker.cell")
+            .unwrap()
+            .center();
+        cx.simulate_click(emoji_center, Modifiers::default());
+        assert!(chat.read_with(cx, |fixture, _| {
+            fixture
+                .events()
+                .iter()
+                .any(|value| value.as_ref().starts_with("emoji-select:"))
+        }));
     }
 
     macro_rules! gallery_wiring_test {

@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -11,6 +11,7 @@ use super::{FileKind, FilePath, GroupId, Route, SessionId, SettingsSection};
 use crate::connectivity::AgentNamespace;
 
 const DOCUMENT_VERSION: u32 = 1;
+const DOCUMENT_BYTE_LIMIT: u64 = 1024 * 1024;
 
 /// Durable storage owned by one native window's navigation history.
 ///
@@ -39,11 +40,16 @@ impl HistoryPersistence {
         &self,
         resolve_agent: &impl Fn(&str) -> Option<AgentNamespace>,
     ) -> io::Result<Option<(Vec<Route>, usize)>> {
-        let bytes = match fs::read(&self.path) {
-            Ok(bytes) => bytes,
+        let file = match File::open(&self.path) {
+            Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error),
         };
+        let mut bytes = Vec::new();
+        file.take(DOCUMENT_BYTE_LIMIT + 1).read_to_end(&mut bytes)?;
+        if bytes.len() as u64 > DOCUMENT_BYTE_LIMIT {
+            return Ok(None);
+        }
         let Ok(document) = serde_json::from_slice::<StoredDocument>(&bytes) else {
             return Ok(None);
         };

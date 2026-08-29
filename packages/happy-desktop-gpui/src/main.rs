@@ -1,7 +1,9 @@
+mod chat;
 mod connectivity;
 mod fonts;
 mod navigation;
 mod shell;
+mod surfaces;
 mod theme;
 mod ui;
 
@@ -17,6 +19,7 @@ fn main() {
     Application::new().run(|cx: &mut App| {
         fonts::register(cx);
         ui::text_input::init(cx);
+        ui::text_area::init(cx);
         ui::components::init(cx);
         ui::command_palette::init(cx);
 
@@ -42,7 +45,7 @@ fn main() {
                 }),
                 ..Default::default()
             },
-            |_, cx| cx.new(HappyApp::new),
+            |window, cx| cx.new(|cx| HappyApp::new(window, cx)),
         )
         .expect("open Happy window");
         cx.activate(true);

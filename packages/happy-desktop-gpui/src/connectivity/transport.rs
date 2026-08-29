@@ -7,8 +7,9 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     env,
     ffi::OsString,
-    fmt, fs,
-    io::{BufRead, BufReader},
+    fmt,
+    fs::File,
+    io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -37,6 +38,18 @@ use super::protocol::{
     ProviderVerificationLevel, ProviderVerificationResponse, ProviderVerificationStatus,
     WatchGitRequest, WatchGitResponse, WorkspaceListResponse,
 };
+
+const HOST_EVENT_CAPACITY: usize = 4;
+const MAX_DAEMON_RESPONSE_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_API_ERROR_BODY_BYTES: u64 = 1024 * 1024;
+const MAX_API_ERROR_NODES: usize = 4096;
+const MAX_API_ERROR_STRING_BYTES: usize = 4096;
+const MAX_API_ERROR_CODE_BYTES: usize = 256;
+const MAX_SSE_LINE_BYTES: usize = 1024 * 1024;
+const MAX_SSE_FRAME_BYTES: usize = 8 * 1024 * 1024;
+const MAX_SSE_EVENT_BYTES: usize = 256;
+const MAX_SSE_FRAME_LINES: usize = 16_384;
+const MAX_SECRET_TOKEN_BYTES: u64 = 64 * 1024;
 
 /// Stable daemon failure information safe to present to product code.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -406,7 +419,7 @@ impl Drop for HostTransport {
 }
 /// Starts all filesystem, process, HTTP, and SSE work outside the UI thread.
 pub fn start_host_transport(options: TransportOptions) -> HostTransport {
-    let (sender, receiver) = async_channel::unbounded();
+    let (sender, receiver) = async_channel::bounded(HOST_EVENT_CAPACITY);
     let event_sender = sender.clone();
     let worker_options = options.clone();
     let resolved_environment = Arc::new(Mutex::new(None));
@@ -1412,6 +1425,7 @@ fn run_onboarding_mutation_inner(
                     .header(AUTHORIZATION, token.authorization())
                     .send()
                     .map_err(transport_error)?,
+                &token,
             )?;
             None
         }
@@ -1423,9 +1437,9 @@ fn run_onboarding_mutation_inner(
                     .header(AUTHORIZATION, token.authorization())
                     .send()
                     .map_err(transport_error)?,
+                &token,
             )?
-            .json()
-            .map_err(protocol_error)?;
+            .capped_json()?;
             Some(provider_rows(&client, &token, &environment, scan))
         }
         OnboardingMutation::Project { path } => {
@@ -1441,6 +1455,7 @@ fn run_onboarding_mutation_inner(
                     .header(AUTHORIZATION, token.authorization())
                     .send()
                     .map_err(transport_error)?,
+                &token,
             )?;
             None
         }
@@ -1464,9 +1479,9 @@ fn complete_onboarding(client: &Client, token: &SecretToken) -> Result<(), UserE
             .header(AUTHORIZATION, token.authorization())
             .send()
             .map_err(transport_error)?,
+        token,
     )?
-    .json()
-    .map_err(protocol_error)?;
+    .capped_json()?;
     if !completed.completed {
         return Err(user_error("Happy Agent did not complete onboarding."));
     }
@@ -1519,9 +1534,9 @@ fn verify_provider_authentication(
             .header(AUTHORIZATION, token.authorization())
             .send()
             .map_err(transport_error)?,
+        token,
     )?
-    .json()
-    .map_err(protocol_error)?;
+    .capped_json()?;
     Ok(
         if response.provider_id == id.as_str()
             && response.requested_level == ProviderVerificationLevel::Authentication
@@ -1569,7 +1584,7 @@ fn stream_request(
         .header("last-event-id", cursor)
         .send()
         .map_err(transport_error)?;
-    checked_response(response)
+    checked_response(response, token)
 }
 fn get_json<T: DeserializeOwned>(
     client: &Client,
@@ -1585,9 +1600,9 @@ fn get_json<T: DeserializeOwned>(
             .header(AUTHORIZATION, token.authorization())
             .send()
             .map_err(transport_error)?,
+        token,
     )?
-    .json()
-    .map_err(protocol_error)
+    .capped_json()
 }
 fn post_json<T: DeserializeOwned>(
     client: &Client,
@@ -1605,30 +1620,73 @@ fn post_json<T: DeserializeOwned>(
             .json(body)
             .send()
             .map_err(transport_error)?,
+        token,
     )?
-    .json()
-    .map_err(protocol_error)
+    .capped_json()
 }
-fn checked_response(response: Response) -> Result<Response, UserError> {
+trait CappedResponseJson {
+    fn capped_json<T: DeserializeOwned>(self) -> Result<T, UserError>;
+}
+
+impl CappedResponseJson for Response {
+    fn capped_json<T: DeserializeOwned>(self) -> Result<T, UserError> {
+        let bytes = capped_response_body(self, MAX_DAEMON_RESPONSE_BYTES)?;
+        serde_json::from_slice(&bytes).map_err(protocol_error)
+    }
+}
+
+fn capped_response_body(mut response: Response, limit: u64) -> Result<Vec<u8>, UserError> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit)
+    {
+        return Err(daemon_response_too_large());
+    }
+    let mut bytes = Vec::new();
+    response
+        .by_ref()
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(transport_error)?;
+    if bytes.len() as u64 > limit {
+        return Err(daemon_response_too_large());
+    }
+    Ok(bytes)
+}
+
+fn daemon_response_too_large() -> UserError {
+    UserError {
+        kind: UserErrorKind::Protocol,
+        message: "Happy Agent returned data that exceeds the safe memory limit.".into(),
+        api: None,
+    }
+}
+
+fn checked_response(response: Response, token: &SecretToken) -> Result<Response, UserError> {
     if response.status().is_success() {
         return Ok(response);
     }
     let status = response.status();
-    let body = response
-        .json::<serde_json::Value>()
+    let mut body = capped_response_body(response, MAX_API_ERROR_BODY_BYTES)
         .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
         .filter(serde_json::Value::is_object);
+    if let Some(body) = body.as_mut() {
+        redact_error_value(body, token);
+        let mut nodes = MAX_API_ERROR_NODES;
+        sanitize_error_value(body, &mut nodes);
+    }
     let code = body
         .as_ref()
         .and_then(|value| value.get("code"))
         .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
+        .map(|value| bounded_utf8(value, MAX_API_ERROR_CODE_BYTES));
     let message = body
         .as_ref()
         .and_then(|value| value.get("error"))
         .and_then(serde_json::Value::as_str)
         .filter(|value| !value.is_empty())
-        .map(str::to_owned)
+        .map(|value| bounded_utf8(value, MAX_API_ERROR_STRING_BYTES))
         .unwrap_or_else(|| format!("Happy Agent returned HTTP {}.", status.as_u16()));
     Err(UserError {
         kind: UserErrorKind::Api,
@@ -1642,13 +1700,99 @@ fn checked_response(response: Response) -> Result<Response, UserError> {
     })
 }
 
-struct SecretToken(String);
+fn redact_error_value(value: &mut serde_json::Value, token: &SecretToken) {
+    match value {
+        serde_json::Value::String(text) => *text = token.redact(text),
+        serde_json::Value::Array(values) => {
+            for value in values {
+                redact_error_value(value, token);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            let mut redacted = serde_json::Map::new();
+            for (key, mut value) in std::mem::take(values) {
+                redact_error_value(&mut value, token);
+                redacted.insert(token.redact(&key), value);
+            }
+            *values = redacted;
+        }
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
+    }
+}
+
+fn sanitize_error_value(value: &mut serde_json::Value, nodes: &mut usize) {
+    if *nodes == 0 {
+        *value = serde_json::Value::String("[omitted]".into());
+        return;
+    }
+    *nodes -= 1;
+    match value {
+        serde_json::Value::String(text) => {
+            *text = bounded_utf8(text, MAX_API_ERROR_STRING_BYTES);
+        }
+        serde_json::Value::Array(values) => {
+            let mut retained = Vec::new();
+            for mut value in std::mem::take(values) {
+                if *nodes == 0 {
+                    break;
+                }
+                sanitize_error_value(&mut value, nodes);
+                retained.push(value);
+            }
+            *values = retained;
+        }
+        serde_json::Value::Object(values) => {
+            values.retain(|_, value| {
+                if *nodes == 0 {
+                    return false;
+                }
+                sanitize_error_value(value, nodes);
+                true
+            });
+        }
+        _ => {}
+    }
+}
+
+fn bounded_utf8(value: &str, limit: usize) -> String {
+    if value.len() <= limit {
+        return value.to_owned();
+    }
+    let mut end = limit;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    value[..end].to_owned()
+}
+
+pub(super) fn daemon_http_client(socket_path: &Path) -> Result<Client, UserError> {
+    Client::builder()
+        .unix_socket(socket_path)
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(transport_error)
+}
+
+pub(super) struct SecretToken(String);
 impl SecretToken {
-    fn read(path: &Path) -> Result<Self, UserError> {
-        let token = fs::read_to_string(path).map_err(|_| {
-            unavailable_error("The Happy Agent authentication token is unavailable.")
-        })?;
-        let token = token.trim();
+    pub(super) fn read(path: &Path) -> Result<Self, UserError> {
+        let mut bytes = Vec::new();
+        File::open(path)
+            .and_then(|file| {
+                file.take(MAX_SECRET_TOKEN_BYTES + 1)
+                    .read_to_end(&mut bytes)
+            })
+            .map_err(|_| {
+                unavailable_error("The Happy Agent authentication token is unavailable.")
+            })?;
+        if bytes.len() as u64 > MAX_SECRET_TOKEN_BYTES {
+            return Err(unavailable_error(
+                "The Happy Agent authentication token is invalid.",
+            ));
+        }
+        let token = std::str::from_utf8(&bytes)
+            .map_err(|_| unavailable_error("The Happy Agent authentication token is invalid."))?
+            .trim();
         if token.is_empty() {
             Err(unavailable_error(
                 "The Happy Agent authentication token is empty.",
@@ -1657,17 +1801,21 @@ impl SecretToken {
             Ok(Self(token.to_owned()))
         }
     }
-    fn authorization(&self) -> String {
+    pub(super) fn authorization(&self) -> String {
         format!("Bearer {}", self.0)
+    }
+
+    pub(super) fn redact(&self, value: &str) -> String {
+        value.replace(&self.0, "[redacted]")
     }
 }
 
-struct DaemonPaths {
-    socket_path: PathBuf,
-    token_path: PathBuf,
+pub(super) struct DaemonPaths {
+    pub(super) socket_path: PathBuf,
+    pub(super) token_path: PathBuf,
 }
 impl DaemonPaths {
-    fn resolve(
+    pub(super) fn resolve(
         environment: &BTreeMap<String, String>,
         supplied_home: Option<&Path>,
     ) -> Result<Self, UserError> {
@@ -1703,38 +1851,68 @@ struct SseFrame {
 }
 fn read_sse_frame(reader: &mut impl BufRead) -> Result<Option<SseFrame>, UserError> {
     let mut event = None;
-    let mut data = Vec::new();
+    let mut data = String::new();
     let mut saw_line = false;
+    let mut frame_bytes = 0usize;
+    let mut lines = 0usize;
     loop {
-        let mut line = String::new();
-        let count = reader.read_line(&mut line).map_err(stream_read_error)?;
+        let mut bytes = Vec::new();
+        let count = reader
+            .take((MAX_SSE_LINE_BYTES + 1) as u64)
+            .read_until(b'\n', &mut bytes)
+            .map_err(stream_read_error)?;
         if count == 0 {
             return if saw_line && !data.is_empty() {
-                Ok(Some(SseFrame {
-                    event,
-                    data: data.join("\n"),
-                }))
+                Ok(Some(SseFrame { event, data }))
             } else {
                 Ok(None)
             };
         }
+        if count > MAX_SSE_LINE_BYTES {
+            return Err(sse_limit_error());
+        }
+        frame_bytes = frame_bytes.saturating_add(count);
+        lines += 1;
+        if frame_bytes > MAX_SSE_FRAME_BYTES || lines > MAX_SSE_FRAME_LINES {
+            return Err(sse_limit_error());
+        }
         saw_line = true;
-        let line = line.trim_end_matches(['\r', '\n']);
+        let line = std::str::from_utf8(&bytes)
+            .map_err(|_| protocol_error("event stream line is not UTF-8"))?
+            .trim_end_matches(['\r', '\n']);
         if line.is_empty() {
-            return Ok(Some(SseFrame {
-                event,
-                data: data.join("\n"),
-            }));
+            return Ok(Some(SseFrame { event, data }));
         }
         if line.starts_with(':') {
             continue;
         }
         if let Some(value) = line.strip_prefix("event:") {
-            event = Some(value.strip_prefix(' ').unwrap_or(value).to_owned());
+            let value = value.strip_prefix(' ').unwrap_or(value);
+            if value.len() > MAX_SSE_EVENT_BYTES {
+                return Err(sse_limit_error());
+            }
+            event = Some(value.to_owned());
         }
         if let Some(value) = line.strip_prefix("data:") {
-            data.push(value.strip_prefix(' ').unwrap_or(value).to_owned());
+            let value = value.strip_prefix(' ').unwrap_or(value);
+            let added = value.len() + usize::from(!data.is_empty());
+            if data.len().saturating_add(added) > MAX_SSE_FRAME_BYTES {
+                return Err(sse_limit_error());
+            }
+            if !data.is_empty() {
+                data.push('\n');
+            }
+            data.push_str(value);
         }
+    }
+}
+
+fn sse_limit_error() -> UserError {
+    UserError {
+        kind: UserErrorKind::Protocol,
+        message: "Happy Agent returned an event stream frame that exceeds the safe memory limit."
+            .into(),
+        api: None,
     }
 }
 
@@ -1806,7 +1984,7 @@ fn protocol_error(error: impl fmt::Display) -> UserError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{io::Cursor, os::unix::fs::PermissionsExt};
+    use std::{fs, io::Cursor, os::unix::fs::PermissionsExt};
 
     #[test]
     fn daemon_version_comparison_requires_three_numeric_components() {

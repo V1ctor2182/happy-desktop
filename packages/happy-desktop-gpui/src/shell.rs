@@ -5,14 +5,19 @@ use gpui::{
 
 use crate::connectivity::{
     ActivityAggregate, AgentAvailability, AgentCatalogSnapshot, AgentNamespace, CatalogAvatar,
-    CatalogInitializationState, CatalogLifecycle, ConnectivityController, GitTotals, InitialPhase,
-    InitialRetry, OnboardingMutationKind, ProjectKey, WorkspaceCatalogRow,
+    CatalogInitializationState, CatalogLifecycle, CatalogLifecycleState, ConnectivityController,
+    GitTotals, InitialPhase, InitialRetry, OnboardingMutationKind, ProjectKey, WorkspaceCatalogRow,
+    WorkspaceKey,
 };
 use crate::navigation::{
     HistoryPersistence, NavigationHistory, PaletteCommand, PaletteSection, PinnedDestination,
     Route, SettingsSection, SidebarMemory, palette_matches,
 };
-use crate::ui::gallery::{GalleryModalState, GalleryPage};
+use crate::surfaces::{
+    ChatWorkspaceCatalogFacts, ChatWorkspaceLabels, ChatWorkspaceNavigation,
+    ChatWorkspaceNavigationHandler, ChatWorkspaceSurface,
+};
+use crate::ui::gallery::{ChatGalleryFixture, GalleryModalState, GalleryPage};
 use crate::ui::{command_palette as palette_ui, settings as settings_ui, sidebar as sidebar_ui};
 use crate::{
     theme::Theme,
@@ -22,6 +27,7 @@ use crate::{
         ScrollbarAppearance, ScrollbarPlacement, ScrollbarState, SharedScrollHandle,
         StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler, Tabs, TabsSize, TextInput,
         TitleBar, WelcomeDeck, WelcomeSelectHandler, theme_roles::ThemeRole,
+        workspace_lifecycle::WorkspaceLifecyclePhase,
     },
 };
 use std::{
@@ -36,6 +42,9 @@ const TITLE_HEIGHT: f32 = 56.0;
 pub struct HappyApp {
     connectivity: Option<Entity<ConnectivityController>>,
     _connectivity_subscription: Option<Subscription>,
+    _appearance_subscription: Option<Subscription>,
+    _bounds_subscription: Option<Subscription>,
+    window_appearance: WindowAppearance,
     navigation: NavigationHistory,
     sidebar_memory: SidebarMemory,
     navigation_error: Option<gpui::SharedString>,
@@ -49,7 +58,6 @@ pub struct HappyApp {
     palette_query: gpui::SharedString,
     palette_active: usize,
     palette_commands: Vec<(gpui::SharedString, PaletteCommand)>,
-    sidebar_routes: Vec<(gpui::SharedString, Route)>,
     known_groups: BTreeSet<String>,
     known_sessions: BTreeMap<String, String>,
     catalog_seen: bool,
@@ -73,12 +81,15 @@ pub struct HappyApp {
     gallery_welcome_dot_focus: [FocusHandle; 25],
     onboarding_scrollbar: Entity<ScrollbarState>,
     gallery_modal_states: [GalleryModalState; 5],
+    chat_gallery_fixture: Entity<ChatGalleryFixture>,
     gallery_page: GalleryPage,
     inspector_scope: gpui::SharedString,
+    workspace_surfaces: BTreeMap<WorkspaceKey, Entity<ChatWorkspaceSurface>>,
+    active_workspace_key: Option<WorkspaceKey>,
 }
 
 impl HappyApp {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let dark_override = match std::env::var("HAPPY_GPUI_APPEARANCE").as_deref() {
             Ok("dark") => Some(true),
             Ok("light") => Some(false),
@@ -123,9 +134,58 @@ impl HappyApp {
                 .push(cx.observe(&input, |_, _, cx| cx.notify()));
         }
         let connectivity = cx.new(ConnectivityController::new);
-        let subscription = cx.observe(&connectivity, |_, _, cx| cx.notify());
+        let subscription = cx.observe(&connectivity, |this, controller, cx| {
+            let mut created = Vec::new();
+            controller.update(cx, |controller, _| {
+                while let Some(next) = controller.created_chat_navigation_take() {
+                    created.push(next);
+                }
+            });
+            for navigation in created {
+                let still_in_workspace = match this.navigation.current() {
+                    Route::Group { agent, group } | Route::Chat { agent, group, .. } => {
+                        agent == navigation.workspace.namespace()
+                            && group.as_str() == navigation.workspace.id()
+                    }
+                    _ => false,
+                };
+                if !still_in_workspace {
+                    continue;
+                }
+                let group =
+                    crate::navigation::GroupId::new(Arc::<str>::from(navigation.workspace.id()))
+                        .expect("daemon workspace identity is nonempty");
+                let session = crate::navigation::SessionId::new(Arc::<str>::from(
+                    navigation.conversation.id(),
+                ))
+                .expect("daemon conversation identity is nonempty");
+                this.navigation.push(Route::Chat {
+                    agent: navigation.workspace.namespace().clone(),
+                    group,
+                    session,
+                });
+            }
+            this.retained_surface_reconcile(cx);
+            cx.notify();
+        });
+        app.window_appearance = window.appearance();
         app.connectivity = Some(connectivity);
         app._connectivity_subscription = Some(subscription);
+        app.retained_surface_reconcile(cx);
+        app._appearance_subscription =
+            Some(cx.observe_window_appearance(window, |this, window, cx| {
+                this.window_appearance = window.appearance();
+                this.retained_surface_reconcile(cx);
+                cx.notify();
+            }));
+        app._bounds_subscription = Some(cx.observe_window_bounds(window, |this, _, cx| {
+            if let Some(active_key) = this.active_workspace_key.as_ref()
+                && let Some(surface) = this.workspace_surfaces.get(active_key)
+            {
+                surface.update(cx, |surface, cx| surface.viewport_resized(cx));
+            }
+            cx.notify();
+        }));
         app
     }
 
@@ -175,12 +235,14 @@ impl HappyApp {
                         query_app.update(cx, |this, cx| {
                             this.palette_query = query;
                             this.palette_active = 0;
+                            this.retained_surface_reconcile(cx);
                             cx.notify();
                         });
                     }),
                     active_changed: Rc::new(move |index, _, _, cx| {
                         active_app.update(cx, |this, cx| {
                             this.palette_active = index;
+                            this.retained_surface_reconcile(cx);
                             cx.notify();
                         });
                     }),
@@ -205,6 +267,7 @@ impl HappyApp {
                                         .unwrap_or_else(|| this.shell_focus.clone())
                                 };
                                 this.navigation.push(route);
+                                this.retained_surface_reconcile(cx);
                                 this.palette_open = false;
                                 this.palette_query = "".into();
                                 this.palette_active = 0;
@@ -355,6 +418,7 @@ impl HappyApp {
                 cx,
             )
         });
+        let chat_gallery_fixture = cx.new(ChatGalleryFixture::new);
         let gallery_modal_states = std::array::from_fn(|_| {
             let container = cx.focus_handle();
             let first = cx.focus_handle();
@@ -375,9 +439,12 @@ impl HappyApp {
                 }),
             }
         });
-        Self {
+        let mut app = Self {
             connectivity: None,
             _connectivity_subscription: None,
+            _appearance_subscription: None,
+            _bounds_subscription: None,
+            window_appearance: WindowAppearance::Light,
             navigation: NavigationHistory::new(Route::HappyAgent {
                 agent: AgentNamespace::local_host(),
             }),
@@ -393,7 +460,6 @@ impl HappyApp {
             palette_query: "".into(),
             palette_active: 0,
             palette_commands: Vec::new(),
-            sidebar_routes: Vec::new(),
             known_groups: BTreeSet::new(),
             known_sessions: BTreeMap::new(),
             catalog_seen: false,
@@ -449,9 +515,14 @@ impl HappyApp {
             gallery_welcome_dot_focus: std::array::from_fn(|_| cx.focus_handle()),
             onboarding_scrollbar,
             gallery_modal_states,
+            chat_gallery_fixture,
             gallery_page: GalleryPage::Buttons,
             inspector_scope: "changes".into(),
-        }
+            workspace_surfaces: BTreeMap::new(),
+            active_workspace_key: None,
+        };
+        app.retained_surface_reconcile(cx);
+        app
     }
 
     fn effective_dark(dark_override: Option<bool>, appearance: WindowAppearance) -> bool {
@@ -507,8 +578,8 @@ impl HappyApp {
         }
     }
 
-    fn is_dark(&self, window: &Window) -> bool {
-        Self::effective_dark(self.dark_override, window.appearance())
+    fn is_dark(&self) -> bool {
+        Self::effective_dark(self.dark_override, self.window_appearance)
     }
 
     fn appearance_toggle_label(effective_dark: bool) -> &'static str {
@@ -699,7 +770,7 @@ impl HappyApp {
     }
 
     fn settings_surface(
-        &mut self,
+        &self,
         theme: Theme,
         navigation_width: f32,
         availability: Option<&AgentAvailability>,
@@ -729,6 +800,7 @@ impl HappyApp {
                     .find(|section| section.as_str() == id.as_ref())
                 {
                     this.navigation.push(Route::SettingsSection { section });
+                    this.retained_surface_reconcile(cx);
                     cx.notify();
                 }
             });
@@ -749,6 +821,7 @@ impl HappyApp {
                         agent: AgentNamespace::local_host(),
                     });
                 }
+                this.retained_surface_reconcile(cx);
                 cx.notify();
             });
         });
@@ -920,7 +993,7 @@ impl HappyApp {
     }
 
     fn navigation_sidebar(
-        &mut self,
+        &self,
         theme: Theme,
         effective_dark: bool,
         width: f32,
@@ -1153,21 +1226,20 @@ impl HappyApp {
                 error: Some("Loading this Happy Agent’s catalog…".into()),
             });
         }
-        self.sidebar_routes = routes;
-
         let entity = cx.entity();
         let on_item_select: sidebar_ui::SidebarItemHandler = Rc::new(move |id, _, cx| {
-            entity.update(cx, |this, cx| {
-                if let Some((_, route)) = this
-                    .sidebar_routes
-                    .iter()
-                    .find(|(candidate, _)| candidate == &id)
-                {
-                    this.navigation.push(route.clone());
+            let route = routes
+                .iter()
+                .find(|(candidate, _)| candidate == &id)
+                .map(|(_, route)| route.clone());
+            if let Some(route) = route {
+                entity.update(cx, |this, cx| {
+                    this.navigation.push(route);
                     this.show_gallery = false;
+                    this.retained_surface_reconcile(cx);
                     cx.notify();
-                }
-            });
+                });
+            }
         });
         let entity = cx.entity();
         let on_collapse: sidebar_ui::SidebarItemHandler = Rc::new(move |id, _, cx| {
@@ -1222,6 +1294,7 @@ impl HappyApp {
                     }
                     _ => {}
                 }
+                this.retained_surface_reconcile(cx);
                 cx.notify();
             });
         });
@@ -1376,6 +1449,356 @@ impl HappyApp {
             .into_any_element()
     }
 
+    fn workspace_surface_spec(
+        route: &Route,
+        catalog: &AgentCatalogSnapshot,
+        availability: Option<&AgentAvailability>,
+        authoritative_workspace_id: Option<&str>,
+    ) -> Option<(
+        WorkspaceKey,
+        Option<crate::connectivity::ConversationKey>,
+        ChatWorkspaceLabels,
+        ChatWorkspaceCatalogFacts,
+    )> {
+        let (agent, group_id, session_id) = match route {
+            Route::Group { agent, group } => (agent, group.as_str(), None),
+            Route::Chat {
+                agent,
+                group,
+                session,
+            } => (agent, group.as_str(), Some(session.as_str())),
+            _ => return None,
+        };
+        // Protocol 23 exposes only the authenticated local host. Do not infer remote routes.
+        if agent != &AgentNamespace::local_host() {
+            return None;
+        }
+        // Once bootstrap has named the conversation's workspace, that relationship is
+        // authoritative. A stale or hand-written route must not mount it under another group.
+        if session_id.is_some()
+            && authoritative_workspace_id.is_some_and(|workspace_id| workspace_id != group_id)
+        {
+            return None;
+        }
+        let workspace_key = WorkspaceKey::new(agent.clone(), group_id.to_owned());
+        let desired_conversation =
+            session_id.map(|id| crate::connectivity::ConversationKey::new(agent.clone(), id));
+
+        let bot = catalog
+            .active_bots
+            .iter()
+            .chain(&catalog.archived_bots)
+            .find(|row| row.workspace_key == workspace_key);
+        let workspace = catalog
+            .active_workspaces
+            .iter()
+            .chain(&catalog.archived_workspaces)
+            .find(|row| row.key == workspace_key);
+        let project = catalog
+            .active_projects
+            .iter()
+            .chain(&catalog.archived_projects)
+            .find(|row| row.key.id() == group_id);
+        let (name, location, branch, lifecycle) = if let Some(row) = bot {
+            (
+                row.label.clone(),
+                row.location.clone(),
+                row.branch.as_ref(),
+                row.lifecycle.clone(),
+            )
+        } else if let Some(row) = workspace {
+            (
+                row.label.clone(),
+                row.location.clone(),
+                row.branch.as_ref(),
+                row.lifecycle.clone(),
+            )
+        } else if let Some(row) = project {
+            (
+                row.label.clone(),
+                row.location.clone(),
+                row.branch.as_ref(),
+                row.lifecycle.clone(),
+            )
+        } else {
+            // Catalog absence is not permission to invent a workspace lifetime. Retained
+            // snapshots keep valid facts across disconnects, so offline surfaces still resolve.
+            return None;
+        };
+        let location = branch
+            .and_then(|facts| facts.branch.as_ref())
+            .map(|branch| {
+                if location.is_empty() {
+                    branch.to_string()
+                } else {
+                    format!("{branch} · {location}")
+                }
+            })
+            .or_else(|| (!location.is_empty()).then(|| location.to_string()))
+            .map(Into::into);
+        let labels = ChatWorkspaceLabels::new(name.to_string(), location);
+        let unavailable_reason = availability.and_then(|availability| match availability {
+            AgentAvailability::Online => None,
+            AgentAvailability::Connecting => Some("Happy Agent is connecting".to_owned()),
+            AgentAvailability::Draining { message } => Some(message.clone()),
+            AgentAvailability::Reconnecting { attempt, error } => Some(match error {
+                Some(error) => format!("Reconnecting (attempt {attempt}): {}", error.message),
+                None => format!("Reconnecting (attempt {attempt})"),
+            }),
+            AgentAvailability::Offline { error } | AgentAvailability::Error { error } => {
+                Some(error.message.clone())
+            }
+        });
+        let catalog_facts = ChatWorkspaceCatalogFacts {
+            unavailable_reason: unavailable_reason.map(Into::into),
+            lifecycle: workspace_lifecycle_phase(&lifecycle),
+            lifecycle_detail: lifecycle
+                .initialization_error
+                .as_ref()
+                .map(|value| value.to_string().into()),
+        };
+        Some((workspace_key, desired_conversation, labels, catalog_facts))
+    }
+
+    /// The only shell lifecycle boundary for retained workspace surfaces.
+    ///
+    /// Route callbacks, controller notifications, and appearance notifications call this before
+    /// requesting a render. Render therefore only selects an entity whose route, availability,
+    /// catalog labels, theme, and active lifetime already agree with the shell.
+    fn retained_surface_reconcile(&mut self, cx: &mut Context<Self>) {
+        let theme = if Self::effective_dark(self.dark_override, self.window_appearance) {
+            Theme::dark()
+        } else {
+            Theme::light()
+        };
+        for input in self.gallery_inputs.iter().chain(&self.profile_inputs) {
+            input.update(cx, |input, _| input.theme_reconcile(theme));
+        }
+
+        let startup_state = self.connectivity.as_ref().map(|connectivity| {
+            let controller = connectivity.read(cx);
+            let (name, email) = controller.profile_defaults();
+            (
+                controller.mounted(),
+                controller.initial_phase().clone(),
+                controller.setup_owed(),
+                (name.map(str::to_owned), email.map(str::to_owned)),
+            )
+        });
+        let welcome_visible = startup_state
+            .as_ref()
+            .is_some_and(|(mounted, _, setup_owed, _)| {
+                !mounted && *setup_owed == Some(true) && self.welcome_needed
+            });
+        if welcome_visible {
+            if !self.welcome_timer_running {
+                self.welcome_timer_start(cx);
+            }
+        } else {
+            self.welcome_timer_stop();
+        }
+        if let Some((false, InitialPhase::ProfileRequired, _, profile_defaults)) = startup_state
+            && !self.profile_seeded
+        {
+            if let Some(name) = profile_defaults.0 {
+                self.profile_inputs[0].update(cx, |input, cx| input.set_value(name, cx));
+            }
+            if let Some(email) = profile_defaults.1 {
+                self.profile_inputs[1].update(cx, |input, cx| input.set_value(email, cx));
+            }
+            self.profile_seeded = true;
+        }
+
+        let controller_state = self.connectivity.clone().and_then(|connectivity| {
+            let controller = connectivity.read(cx);
+            if !controller.mounted() {
+                return None;
+            }
+            let host = controller.agents().host().clone();
+            let host = host.read(cx);
+            let availability = host.availability().clone();
+            let catalog = host.catalog().clone();
+            Some((
+                connectivity,
+                availability,
+                catalog.read(cx).snapshot().clone(),
+            ))
+        });
+
+        if let Some((_, _, catalog)) = controller_state.as_ref() {
+            self.reconcile_navigation_catalog(catalog);
+        }
+
+        self.reconcile_command_palette(
+            theme,
+            controller_state
+                .as_ref()
+                .map(|(_, _, catalog)| catalog.as_ref()),
+            cx,
+        );
+
+        let route = self.navigation.current().clone();
+        let spec = if self.show_gallery {
+            None
+        } else {
+            controller_state
+                .as_ref()
+                .and_then(|(connectivity, availability, catalog)| {
+                    let authoritative_workspace_id = match &route {
+                        Route::Chat { agent, session, .. } => {
+                            let conversation = crate::connectivity::ConversationKey::new(
+                                agent.clone(),
+                                session.as_str().to_owned(),
+                            );
+                            connectivity
+                                .read(cx)
+                                .chat(&conversation, cx)
+                                .and_then(|store| {
+                                    store
+                                        .read(cx)
+                                        .snapshot()
+                                        .agent
+                                        .as_ref()
+                                        .map(|agent| agent.workspace_id.clone())
+                                })
+                        }
+                        _ => None,
+                    };
+                    Self::workspace_surface_spec(
+                        &route,
+                        catalog,
+                        Some(availability),
+                        authoritative_workspace_id.as_deref(),
+                    )
+                })
+        };
+        let next_active_key = spec.as_ref().map(|(key, _, _, _)| key.clone());
+        let active_changed = self.active_workspace_key != next_active_key;
+
+        if active_changed {
+            self.active_workspace_key = next_active_key.clone();
+            let retained = self
+                .workspace_surfaces
+                .iter()
+                .map(|(key, surface)| (surface.clone(), next_active_key.as_ref() == Some(key)))
+                .collect::<Vec<_>>();
+            for (surface, active) in retained {
+                surface.update(cx, |surface, cx| surface.active_reconcile(active, cx));
+            }
+        }
+
+        if let Some((workspace_key, desired_conversation, labels, catalog_facts)) = spec
+            && let Some((connectivity, _, _)) = controller_state
+        {
+            let surface = if let Some(surface) = self.workspace_surfaces.get(&workspace_key) {
+                surface.clone()
+            } else {
+                let app = cx.entity();
+                let on_navigate: ChatWorkspaceNavigationHandler = Rc::new(move |navigation, cx| {
+                    app.update(cx, |this, cx| {
+                        let (workspace, conversation) = match navigation {
+                            ChatWorkspaceNavigation::Conversation(navigation) => {
+                                (navigation.workspace, Some(navigation.conversation))
+                            }
+                            ChatWorkspaceNavigation::Workspace(workspace) => (workspace, None),
+                            ChatWorkspaceNavigation::WorkspaceTab { workspace, tab } => {
+                                let conversation = match tab {
+                                    crate::chat::WorkspaceTab::Conversation(conversation) => {
+                                        Some(conversation)
+                                    }
+                                    crate::chat::WorkspaceTab::File(_)
+                                    | crate::chat::WorkspaceTab::Tool(_) => None,
+                                };
+                                (workspace, conversation)
+                            }
+                        };
+                        let group =
+                            crate::navigation::GroupId::new(Arc::<str>::from(workspace.id()))
+                                .expect("daemon workspace identity is nonempty");
+                        let route = if let Some(conversation) = conversation {
+                            let session = crate::navigation::SessionId::new(Arc::<str>::from(
+                                conversation.id(),
+                            ))
+                            .expect("daemon conversation identity is nonempty");
+                            Route::Chat {
+                                agent: workspace.namespace().clone(),
+                                group,
+                                session,
+                            }
+                        } else {
+                            Route::Group {
+                                agent: workspace.namespace().clone(),
+                                group,
+                            }
+                        };
+                        this.navigation.push(route);
+                        this.retained_surface_reconcile(cx);
+                        cx.notify();
+                    });
+                });
+                let key = workspace_key.clone();
+                let labels_for_new = labels.clone();
+                let facts_for_new = catalog_facts.clone();
+                let desired_for_new = desired_conversation.clone();
+                let controller = connectivity.clone();
+                let surface = cx.new(move |cx| {
+                    ChatWorkspaceSurface::new(
+                        controller,
+                        key,
+                        desired_for_new,
+                        theme,
+                        labels_for_new,
+                        facts_for_new,
+                        on_navigate,
+                        cx,
+                    )
+                });
+                self.workspace_surfaces
+                    .insert(workspace_key.clone(), surface.clone());
+                surface
+            };
+            surface.update(cx, |surface, cx| {
+                surface.active_reconcile(true, cx);
+                surface.reconcile(desired_conversation, theme, labels, catalog_facts, cx);
+            });
+        } else if active_changed
+            && let Some(connectivity) = self.connectivity.clone()
+            && connectivity.read(cx).focused_chat().is_some()
+        {
+            connectivity.update(cx, |controller, _| controller.chat_unfocus());
+        }
+    }
+
+    fn selected_workspace_surface(&self, route: &Route) -> Option<Entity<ChatWorkspaceSurface>> {
+        let (agent, group) = match route {
+            Route::Group { agent, group } | Route::Chat { agent, group, .. } => (agent, group),
+            _ => return None,
+        };
+        if agent != &AgentNamespace::local_host() {
+            return None;
+        }
+        let key = WorkspaceKey::new(agent.clone(), group.as_str().to_owned());
+        if self.active_workspace_key.as_ref() != Some(&key) {
+            return None;
+        }
+        self.workspace_surfaces.get(&key).cloned()
+    }
+
+    fn workspace_loading_surface(&self, theme: Theme) -> gpui::AnyElement {
+        div()
+            .debug_selector(|| "workspace-loading".into())
+            .flex_1()
+            .min_w(px(140.0))
+            .h_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(theme.role(ThemeRole::Surface))
+            .text_color(theme.role(ThemeRole::TextSecondary))
+            .child("Loading workspace…")
+            .into_any_element()
+    }
+
     fn inspector(&self, theme: Theme, width: f32, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity();
         let on_select: TabSelectHandler = Rc::new(move |id, _, cx| {
@@ -1436,6 +1859,18 @@ impl HappyApp {
                             .child("Git changes and file browsing arrive in Phase 6."),
                     ),
             )
+    }
+}
+
+fn workspace_lifecycle_phase(lifecycle: &CatalogLifecycle) -> WorkspaceLifecyclePhase {
+    match lifecycle.state {
+        CatalogLifecycleState::Archived => WorkspaceLifecyclePhase::Archived,
+        CatalogLifecycleState::Archiving => WorkspaceLifecyclePhase::Archiving,
+        CatalogLifecycleState::Active => match lifecycle.initialization {
+            Some(CatalogInitializationState::Initializing) => WorkspaceLifecyclePhase::Creating,
+            Some(CatalogInitializationState::Failed) => WorkspaceLifecyclePhase::Failed,
+            Some(CatalogInitializationState::Ready) | None => WorkspaceLifecyclePhase::Ready,
+        },
     }
 }
 
@@ -1749,16 +2184,13 @@ fn append_workspace_sidebar_items(
 
 impl Render for HappyApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let effective_dark = self.is_dark(window);
+        let effective_dark = self.is_dark();
         let theme = if effective_dark {
             Theme::dark()
         } else {
             Theme::light()
         };
 
-        for input in self.gallery_inputs.iter().chain(&self.profile_inputs) {
-            input.update(cx, |input, _| input.theme_reconcile(theme));
-        }
         let mut connection_notice = None;
         let mut agent_availability: Option<AgentAvailability> = None;
         let mut agent_online = true;
@@ -1766,24 +2198,19 @@ impl Render for HappyApp {
         if !self.show_gallery
             && let Some(connectivity) = self.connectivity.clone()
         {
-            let (mounted, initial_phase, host, onboarding_failure, profile_defaults, setup_owed) = {
+            let (mounted, initial_phase, host, onboarding_failure, setup_owed) = {
                 let controller = connectivity.read(cx);
-                let (name, email) = controller.profile_defaults();
                 (
                     controller.mounted(),
                     controller.initial_phase().clone(),
                     controller.agents().host().clone(),
                     controller.onboarding_failure().cloned(),
-                    (name.map(str::to_owned), email.map(str::to_owned)),
                     controller.setup_owed(),
                 )
             };
             if !mounted {
                 let live_mutations = connectivity.read(cx).live_mutations_available();
                 if setup_owed == Some(true) && self.welcome_needed {
-                    if !self.welcome_timer_running {
-                        self.welcome_timer_start(cx);
-                    }
                     let entity = cx.entity();
                     let on_select: WelcomeSelectHandler = Rc::new(move |slide, _, cx| {
                         entity.update(cx, |this, cx| {
@@ -1830,6 +2257,7 @@ impl Render for HappyApp {
                     let on_appearance: ActivateHandler = Rc::new(move |_, cx| {
                         entity.update(cx, |this, cx| {
                             this.appearance_cycle();
+                            this.retained_surface_reconcile(cx);
                             cx.notify();
                         });
                     });
@@ -1848,7 +2276,7 @@ impl Render for HappyApp {
                             .clone()
                             .or_else(|| self.appearance_error.clone()),
                         dot_focus: self.welcome_dot_focus.clone(),
-                        dark: self.is_dark(window),
+                        dark: self.is_dark(),
                         appearance_icon,
                         on_select,
                         on_action,
@@ -1856,19 +2284,7 @@ impl Render for HappyApp {
                     }
                     .into_any_element();
                 }
-                self.welcome_timer_stop();
                 if matches!(&initial_phase, InitialPhase::ProfileRequired) {
-                    if !self.profile_seeded {
-                        if let Some(name) = profile_defaults.0 {
-                            self.profile_inputs[0]
-                                .update(cx, |input, cx| input.set_value(name, cx));
-                        }
-                        if let Some(email) = profile_defaults.1 {
-                            self.profile_inputs[1]
-                                .update(cx, |input, cx| input.set_value(email, cx));
-                        }
-                        self.profile_seeded = true;
-                    }
                     let name = self.profile_inputs[0].clone();
                     let email = self.profile_inputs[1].clone();
                     let controller = connectivity.clone();
@@ -2096,8 +2512,6 @@ impl Render for HappyApp {
                 }
                 .into_any_element();
             }
-            self.welcome_timer_stop();
-
             let (availability, agent_name, catalog) = {
                 let host = host.read(cx);
                 let name = if host.namespace().as_str() == "host:local" {
@@ -2145,10 +2559,6 @@ impl Render for HappyApp {
             });
         }
 
-        if let Some(catalog) = catalog_snapshot.as_deref() {
-            self.reconcile_navigation_catalog(catalog);
-        }
-        self.reconcile_command_palette(theme, catalog_snapshot.as_deref(), cx);
         let route = self.navigation.current().clone();
         let viewport_width: f32 = window.viewport_size().width.into();
         let (sidebar_width, inspector_width) = Self::column_widths(viewport_width);
@@ -2244,20 +2654,33 @@ impl Render for HappyApp {
                 self.gallery_welcome_dot_focus.clone(),
                 self.gallery_modal_states.clone(),
                 self.gallery_command_palette.clone(),
+                self.chat_gallery_fixture.clone(),
                 self.gallery_page,
                 on_select,
             )))
             .children(self.palette_open.then(|| self.command_palette.clone()))
             .into_any_element()
         } else {
+            let local_workspace_route = matches!(
+                &route,
+                Route::Group { agent, .. } | Route::Chat { agent, .. }
+                    if agent == &AgentNamespace::local_host()
+            );
+            let destination = if let Some(surface) = self.selected_workspace_surface(&route) {
+                surface.into_any_element()
+            } else if local_workspace_route && self.active_workspace_key.is_some() {
+                self.workspace_loading_surface(theme)
+            } else {
+                self.destination_surface(
+                    theme,
+                    &route,
+                    catalog_snapshot.as_deref(),
+                    connection_notice,
+                )
+            };
             root.child(
                 content
-                    .child(self.destination_surface(
-                        theme,
-                        &route,
-                        catalog_snapshot.as_deref(),
-                        connection_notice,
-                    ))
+                    .child(destination)
                     .child(self.inspector(theme, inspector_width, cx)),
             )
             .children(self.palette_open.then(|| self.command_palette.clone()))
@@ -2282,9 +2705,21 @@ fn appearance_path() -> std::path::PathBuf {
 }
 
 const WELCOME_ACKNOWLEDGEMENT: &[u8] = b"happy-gpui-welcome-v1\n";
+const WELCOME_READ_LIMIT: u64 = 256;
+const APPEARANCE_READ_LIMIT: u64 = 1024 * 1024;
+
+fn bounded_settings_read(path: &std::path::Path, limit: u64) -> Option<Vec<u8>> {
+    use std::io::Read;
+
+    let file = std::fs::File::open(path).ok()?;
+    let mut bytes = Vec::new();
+    file.take(limit + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() as u64 <= limit).then_some(bytes)
+}
 
 fn welcome_acknowledged_at(path: &std::path::Path) -> bool {
-    std::fs::read(path).is_ok_and(|value| value == WELCOME_ACKNOWLEDGEMENT)
+    bounded_settings_read(path, WELCOME_READ_LIMIT)
+        .is_some_and(|value| value == WELCOME_ACKNOWLEDGEMENT)
 }
 
 fn welcome_acknowledged() -> bool {
@@ -2334,7 +2769,7 @@ fn welcome_marker_write() -> std::io::Result<()> {
 }
 
 fn appearance_read_at(path: &std::path::Path) -> Option<Option<bool>> {
-    match std::fs::read(path).ok().as_deref() {
+    match bounded_settings_read(path, APPEARANCE_READ_LIMIT).as_deref() {
         Some(b"happy-gpui-appearance-v1:system\n") => Some(None),
         Some(b"happy-gpui-appearance-v1:light\n") => Some(Some(false)),
         Some(b"happy-gpui-appearance-v1:dark\n") => Some(Some(true)),
@@ -2670,9 +3105,13 @@ mod geometry_tests {
         let controller = cx.update(|_, cx| cx.new(ConnectivityController::fixture_mounted));
         cx.update(|_, app_cx| {
             app.update(app_cx, |this, cx| {
-                let subscription = cx.observe(&controller, |_, _, cx| cx.notify());
+                let subscription = cx.observe(&controller, |this, _, cx| {
+                    this.retained_surface_reconcile(cx);
+                    cx.notify();
+                });
                 this.connectivity = Some(controller.clone());
                 this._connectivity_subscription = Some(subscription);
+                this.retained_surface_reconcile(cx);
                 cx.notify();
             });
         });
@@ -2736,6 +3175,7 @@ mod geometry_tests {
         ));
         app.update(cx, |app, cx| {
             app.navigation.back();
+            app.retained_surface_reconcile(cx);
             cx.notify();
         });
         cx.run_until_parked();
@@ -2755,6 +3195,7 @@ mod geometry_tests {
             });
             app.update(app_cx, |app, cx| {
                 app.navigation.back();
+                app.retained_surface_reconcile(cx);
                 cx.notify();
             });
         });

@@ -29,6 +29,8 @@ use sha2::{Digest, Sha256};
 
 const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/slopus/happy-agent/releases/latest";
 const USER_AGENT: &str = "Happy Desktop Happy Agent downloader";
+const MAX_RELEASE_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_INSTALL_LOCK_BYTES: u64 = 4 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_BINARY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -306,7 +308,7 @@ struct ResolvedRelease {
 }
 
 fn latest_release(client: &Client, architecture: TargetArchitecture) -> Result<ResolvedRelease> {
-    let response = client
+    let mut response = client
         .get(LATEST_RELEASE_URL)
         .header("accept", "application/vnd.github+json")
         .header("x-github-api-version", "2022-11-28")
@@ -322,7 +324,28 @@ fn latest_release(client: &Client, architecture: TargetArchitecture) -> Result<R
             response.status().as_u16()
         )));
     }
-    let release: Release = response.json().map_err(|error| {
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_RELEASE_RESPONSE_BYTES)
+    {
+        return Err(InstallerError::new(
+            "GitHub returned an oversized Happy Agent release response.",
+        ));
+    }
+    let mut bytes = Vec::new();
+    response
+        .by_ref()
+        .take(MAX_RELEASE_RESPONSE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| {
+            InstallerError::with_source("Could not read the Happy Agent release response.", error)
+        })?;
+    if bytes.len() as u64 > MAX_RELEASE_RESPONSE_BYTES {
+        return Err(InstallerError::new(
+            "GitHub returned an oversized Happy Agent release response.",
+        ));
+    }
+    let release: Release = serde_json::from_slice(&bytes).map_err(|error| {
         InstallerError::with_source("GitHub returned an invalid Happy Agent release.", error)
     })?;
     validate_and_resolve_release(release, architecture)
@@ -941,7 +964,15 @@ fn remove_stale_lock(path: &Path) -> Result<()> {
 }
 
 fn read_lock(path: &Path) -> Option<InstallLockRecord> {
-    let bytes = fs::read(path).ok()?;
+    let mut bytes = Vec::new();
+    File::open(path)
+        .ok()?
+        .take(MAX_INSTALL_LOCK_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() as u64 > MAX_INSTALL_LOCK_BYTES {
+        return None;
+    }
     let record: InstallLockRecord = serde_json::from_slice(&bytes).ok()?;
     if record.pid == 0
         || record.pid > i32::MAX as u32

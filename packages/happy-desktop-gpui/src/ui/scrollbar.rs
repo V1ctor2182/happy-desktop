@@ -8,9 +8,9 @@ use std::{ops::Deref, rc::Rc, time::Duration};
 
 use gpui::{
     Animation, AnimationExt as _, App, Bounds, Context, CursorStyle, Entity, Hsla, IntoElement,
-    IsZero, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollHandle,
-    ScrollWheelEvent, SharedString, Window, canvas, div, point, prelude::*, px, quad, size,
-    transparent_black,
+    IsZero, ListState, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
+    ScrollHandle, ScrollWheelEvent, SharedString, Window, canvas, div, point, prelude::*, px, quad,
+    size, transparent_black,
 };
 
 #[derive(Clone)]
@@ -134,13 +134,29 @@ pub fn scrollbar_metrics(
     track: Bounds<Pixels>,
     handle: &ScrollHandle,
 ) -> ScrollbarMetrics {
+    scrollbar_metrics_for_source(
+        axis,
+        track,
+        handle.bounds(),
+        handle.max_offset(),
+        handle.offset(),
+    )
+}
+
+fn scrollbar_metrics_for_source(
+    axis: ScrollbarAxis,
+    track: Bounds<Pixels>,
+    viewport: Bounds<Pixels>,
+    maximum: gpui::Size<Pixels>,
+    source_offset: Point<Pixels>,
+) -> ScrollbarMetrics {
     let viewport_extent = match axis {
-        ScrollbarAxis::Vertical => handle.bounds().size.height,
-        ScrollbarAxis::Horizontal => handle.bounds().size.width,
+        ScrollbarAxis::Vertical => viewport.size.height,
+        ScrollbarAxis::Horizontal => viewport.size.width,
     };
     let maximum_offset = match axis {
-        ScrollbarAxis::Vertical => handle.max_offset().height,
-        ScrollbarAxis::Horizontal => handle.max_offset().width,
+        ScrollbarAxis::Vertical => maximum.height,
+        ScrollbarAxis::Horizontal => maximum.width,
     }
     .max(px(0.0));
     let track_extent = match axis {
@@ -156,8 +172,8 @@ pub fn scrollbar_metrics(
             let thumb_extent = (track_extent * (viewport_extent / content_extent))
                 .clamp(SCROLLBAR_MIN_THUMB_SIZE.min(track_extent), track_extent);
             let offset = match axis {
-                ScrollbarAxis::Vertical => -handle.offset().y,
-                ScrollbarAxis::Horizontal => -handle.offset().x,
+                ScrollbarAxis::Vertical => -source_offset.y,
+                ScrollbarAxis::Horizontal => -source_offset.x,
             };
             let progress = (offset / maximum_offset).clamp(0.0, 1.0);
             let along = (track_extent - thumb_extent) * progress;
@@ -193,6 +209,7 @@ pub struct ScrollbarState {
     appearance: ScrollbarAppearance,
     placement: ScrollbarPlacement,
     handle: SharedScrollHandle,
+    list: Option<ListState>,
     metrics: ScrollbarMetrics,
     surface_hovered: bool,
     track_hovered: bool,
@@ -215,6 +232,7 @@ impl ScrollbarState {
             appearance,
             placement,
             handle,
+            list: None,
             metrics: ScrollbarMetrics::default(),
             surface_hovered: false,
             track_hovered: false,
@@ -242,6 +260,19 @@ impl ScrollbarState {
         Self::new(ScrollbarAxis::Horizontal, appearance, placement, handle)
     }
 
+    /// Creates the shared scrollbar lifecycle over GPUI's virtualized `ListState`.
+    /// The list remains responsible for wheel momentum and virtualization; this
+    /// state only owns the common 8/6/24 chrome, reveal lifecycle, and dragging.
+    pub fn vertical_list(
+        appearance: ScrollbarAppearance,
+        placement: ScrollbarPlacement,
+        list: ListState,
+    ) -> Self {
+        let mut state = Self::vertical(appearance, placement, SharedScrollHandle::new());
+        state.list = Some(list);
+        state
+    }
+
     #[allow(dead_code)]
     pub fn axis(&self) -> ScrollbarAxis {
         self.axis
@@ -258,7 +289,20 @@ impl ScrollbarState {
         &self.handle
     }
     pub fn shares_handle(&self, other: &Self) -> bool {
-        self.handle.shares_identity(&other.handle)
+        self.list.is_none() && other.list.is_none() && self.handle.shares_identity(&other.handle)
+    }
+    fn source_offset(&self) -> Point<Pixels> {
+        self.list
+            .as_ref()
+            .map(ListState::scroll_px_offset_for_scrollbar)
+            .unwrap_or_else(|| self.handle.offset())
+    }
+    fn source_set_offset(&self, offset: Point<Pixels>) {
+        if let Some(list) = &self.list {
+            list.set_offset_from_scrollbar(offset);
+        } else {
+            self.handle.set_offset(offset);
+        }
     }
     #[allow(dead_code)]
     pub fn metrics(&self) -> ScrollbarMetrics {
@@ -313,9 +357,10 @@ impl ScrollbarState {
         cx: &mut Context<Self>,
     ) -> bool {
         let delta = normalized_wheel_delta(self.axis, event, has_perpendicular_axis, line_height);
+        let source_offset = self.source_offset();
         let current_offset = match self.axis {
-            ScrollbarAxis::Vertical => self.handle.offset().y,
-            ScrollbarAxis::Horizontal => self.handle.offset().x,
+            ScrollbarAxis::Vertical => source_offset.y,
+            ScrollbarAxis::Horizontal => source_offset.x,
         };
         // GPUI's native listener runs before this callback in bubble order, so
         // the handle already includes this event. Recover the pre-event offset.
@@ -455,6 +500,9 @@ impl ScrollbarState {
             thumb_extent / 2.0
         };
         self.dragging = true;
+        if let Some(list) = &self.list {
+            list.scrollbar_drag_started();
+        }
         self.lifecycle = self.lifecycle.wrapping_add(1);
         self.drag_to(event.position);
         cx.notify();
@@ -475,6 +523,9 @@ impl ScrollbarState {
             return;
         }
         self.dragging = false;
+        if let Some(list) = &self.list {
+            list.scrollbar_drag_ended();
+        }
         if self.appearance == ScrollbarAppearance::Automatic && !self.track_hovered {
             if self.revealed_by_wheel {
                 self.start_hide_lifecycle(cx);
@@ -496,12 +547,12 @@ impl ScrollbarState {
         }
         let progress = ((self.axis.coordinate(position) - track_start - self.drag_anchor) / travel)
             .clamp(0.0, 1.0);
-        let mut offset = self.handle.offset();
+        let mut offset = self.source_offset();
         match self.axis {
             ScrollbarAxis::Vertical => offset.y = -self.metrics.maximum_offset * progress,
             ScrollbarAxis::Horizontal => offset.x = -self.metrics.maximum_offset * progress,
         }
-        self.handle.set_offset(offset);
+        self.source_set_offset(offset);
     }
 
     fn reconcile_metrics(&mut self, metrics: ScrollbarMetrics, cx: &mut Context<Self>) {
@@ -563,7 +614,7 @@ impl Scrollbar {
 
 impl gpui::RenderOnce for Scrollbar {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (axis, placement, overflowing, opacity, fading, lifecycle, handle) = {
+        let (axis, placement, overflowing, opacity, fading, lifecycle, handle, list_state) = {
             let snapshot = self.state.read(cx);
             (
                 snapshot.axis,
@@ -573,6 +624,7 @@ impl gpui::RenderOnce for Scrollbar {
                 snapshot.automatic_phase == AutomaticPhase::Fading,
                 snapshot.lifecycle,
                 snapshot.handle.clone(),
+                snapshot.list.clone(),
             )
         };
 
@@ -581,7 +633,17 @@ impl gpui::RenderOnce for Scrollbar {
         let ink_color = self.color;
         let ink = canvas(
             move |track, window, cx| {
-                let metrics = scrollbar_metrics(axis, track, &metric_handle);
+                let metrics = if let Some(list) = &list_state {
+                    scrollbar_metrics_for_source(
+                        axis,
+                        track,
+                        list.viewport_bounds(),
+                        list.max_offset_for_scrollbar(),
+                        list.scroll_px_offset_for_scrollbar(),
+                    )
+                } else {
+                    scrollbar_metrics(axis, track, &metric_handle)
+                };
                 let state = state_for_metrics.clone();
                 // Layout changes from an overflow transition are deferred. Calling notify
                 // while GPUI is prepainting would invalidate the active frame.
