@@ -5,11 +5,32 @@ use happy_desktop_rust::host::HostRuntime;
 
 fn main() {
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--verify-host")) {
-        match HostRuntime::connect().and_then(|host| host.bootstrap()) {
-            Ok(bootstrap) => {
+        match HostRuntime::connect().and_then(|host| {
+            let client = host.client();
+            host.bootstrap().and_then(|bootstrap| {
+                let agent_id = bootstrap
+                    .projects
+                    .iter()
+                    .flat_map(|project| &project.agents)
+                    .chain(
+                        bootstrap
+                            .workspaces
+                            .iter()
+                            .flat_map(|workspace| &workspace.agents),
+                    )
+                    .find(|agent| agent.archived_at.is_none())
+                    .map(|agent| agent.id.clone());
+                let conversation_rows = agent_id
+                    .map(|agent_id| client.conversation(&agent_id))
+                    .transpose()?
+                    .map(|conversation| conversation.rows.len());
+                Ok((bootstrap.projects.len(), conversation_rows))
+            })
+        }) {
+            Ok((projects, conversation_rows)) => {
                 println!(
-                    "Happy Agent bootstrap verified: {} projects",
-                    bootstrap.projects.len()
+                    "Happy Agent bootstrap verified: {projects} projects; conversation rows: {}",
+                    conversation_rows.map_or_else(|| "none".to_owned(), |rows| rows.to_string())
                 );
                 return;
             }

@@ -2396,10 +2396,11 @@ dependencies = [
 
 [[package]]
 name = "happy-desktop-rust"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "getrandom 0.3.4",
  "gpui",
+ "percent-encoding",
  "serde",
  "serde_json",
 ]

@@ -34,6 +34,8 @@ the macOS application is archived under a new version in
   boundary, typed health/bootstrap contracts, and live connection status.
 - `0.7.0` — authoritative project/agent navigation projected from daemon
   bootstrap with exact hierarchy-row geometry.
+- `0.8.0` — typed agent bootstrap and run-grouped message history, stable live
+  transcript rows, and asynchronous conversation selection.
 
 A phase may be split into numbered subphases when it would otherwise stop being
 an independently reviewable commit. No later phase is allowed to replace an

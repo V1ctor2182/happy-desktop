@@ -1,7 +1,11 @@
 use super::http::UnixHttpClient;
 use super::paths::DaemonPaths;
+use crate::state::conversation::{
+    AgentConversationBootstrap, ConversationSnapshot, MessageHistory,
+};
 use crate::state::runtime::{BootstrapSnapshot, HealthSnapshot};
 use getrandom::fill;
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -43,6 +47,17 @@ impl AuthenticatedClient {
 
     pub fn bootstrap(&self) -> Result<BootstrapSnapshot, HostError> {
         self.get_json("/v0/bootstrap/desktop")
+    }
+
+    pub fn conversation(&self, agent_id: &str) -> Result<ConversationSnapshot, HostError> {
+        let identity = agent_id.to_owned();
+        let agent_id = utf8_percent_encode(agent_id, NON_ALPHANUMERIC).to_string();
+        let history = self.get_json::<MessageHistory>(&format!(
+            "/v0/agents/{agent_id}/messages?limit=100&omitToolData=true"
+        ))?;
+        let bootstrap = self
+            .get_json::<AgentConversationBootstrap>(&format!("/v0/agents/{agent_id}/bootstrap"))?;
+        Ok(ConversationSnapshot::project(identity, history, bootstrap))
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, HostError> {

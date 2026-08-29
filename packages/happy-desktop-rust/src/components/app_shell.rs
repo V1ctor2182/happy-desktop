@@ -1,5 +1,5 @@
 use crate::components::channel_header::channel_header;
-use crate::components::conversation::conversation;
+use crate::components::conversation::{conversation, scrollable_conversation_state};
 use crate::components::document_surface::document_surface;
 use crate::components::file_browser::file_browser;
 use crate::components::file_editor::file_editor;
@@ -14,14 +14,18 @@ use crate::components::terminal_panel::terminal_panel;
 use crate::components::title_bar::title_bar;
 use crate::design::geometry::sidebar_width;
 use crate::design::theme::{Theme, UI_FONT};
+use crate::state::conversation::ConversationState;
 use crate::state::runtime::RuntimeSnapshot;
-use gpui::{Context, Div, FontWeight, Window, div, prelude::*, px};
+use gpui::{Context, Div, FontWeight, ScrollHandle, Window, div, prelude::*, px};
 
 pub struct AppShell {
     dark: bool,
     selected_rail: usize,
     selected_sidebar: usize,
     runtime: RuntimeSnapshot,
+    conversation: ConversationState,
+    conversation_scroll: ScrollHandle,
+    sidebar_scroll: ScrollHandle,
 }
 
 impl AppShell {
@@ -30,12 +34,18 @@ impl AppShell {
         selected_rail: usize,
         selected_sidebar: usize,
         runtime: RuntimeSnapshot,
+        conversation: ConversationState,
+        conversation_scroll: ScrollHandle,
+        sidebar_scroll: ScrollHandle,
     ) -> Self {
         Self {
             dark,
             selected_rail,
             selected_sidebar,
             runtime,
+            conversation,
+            conversation_scroll,
+            sidebar_scroll,
         }
     }
 
@@ -46,25 +56,14 @@ impl AppShell {
             Theme::light()
         };
         let window_width: f32 = window.bounds().size.width.into();
-        interactive_shell(
-            theme,
-            self.dark,
-            self.selected_rail,
-            self.selected_sidebar,
-            window_width,
-            &self.runtime,
-            cx,
-        )
+        interactive_shell(theme, window_width, &self, cx)
     }
 }
 
 fn interactive_shell(
     theme: Theme,
-    dark: bool,
-    selected_rail: usize,
-    selected_sidebar: usize,
     width: f32,
-    runtime: &RuntimeSnapshot,
+    shell: &AppShell,
     cx: &mut Context<crate::HappyApp>,
 ) -> Div {
     let sidebar_width = sidebar_width(width);
@@ -74,28 +73,31 @@ fn interactive_shell(
         .flex_1()
         .min_h_0()
         .w_full()
-        .child(interactive_rail(theme, selected_rail, dark, cx))
-        .child(if selected_rail == 1 {
+        .child(interactive_rail(theme, shell.selected_rail, shell.dark, cx))
+        .child(if shell.selected_rail == 1 {
             file_browser(theme, sidebar_width)
-        } else if !runtime.projects.is_empty() {
+        } else if !shell.runtime.projects.is_empty() {
             interactive_project_sidebar(
                 theme,
-                selected_sidebar,
+                shell.selected_sidebar,
                 sidebar_width,
-                &runtime.projects,
-                &runtime.workspaces,
+                &shell.runtime.projects,
+                &shell.runtime.workspaces,
+                &shell.sidebar_scroll,
                 cx,
             )
         } else {
-            interactive_sidebar(theme, selected_sidebar, sidebar_width, cx)
+            interactive_sidebar(theme, shell.selected_sidebar, sidebar_width, cx)
         })
         .child(workspace(
             theme,
-            selected_rail,
-            selected_sidebar,
-            Some(runtime),
+            shell.selected_rail,
+            shell.selected_sidebar,
+            Some(&shell.runtime),
+            Some(&shell.conversation),
+            Some(&shell.conversation_scroll),
         ))
-        .child(if selected_rail == 1 {
+        .child(if shell.selected_rail == 1 {
             file_preview(theme, sidebar_width)
         } else {
             terminal_panel(theme, sidebar_width)
@@ -133,7 +135,14 @@ pub fn shell(
         .w_full()
         .child(rail(theme, selected_rail))
         .child(sidebar(theme, selected_sidebar, sidebar_width))
-        .child(workspace(theme, selected_rail, selected_sidebar, None));
+        .child(workspace(
+            theme,
+            selected_rail,
+            selected_sidebar,
+            None,
+            None,
+            None,
+        ));
     if panel {
         content = content.child(inspector(theme, sidebar_width));
     }
@@ -159,6 +168,8 @@ fn workspace(
     selected_rail: usize,
     selected_sidebar: usize,
     runtime: Option<&RuntimeSnapshot>,
+    conversation_snapshot: Option<&ConversationState>,
+    conversation_scroll: Option<&ScrollHandle>,
 ) -> Div {
     let live_items =
         runtime.map(|snapshot| project_sidebar_items(&snapshot.projects, &snapshot.workspaces));
@@ -169,7 +180,10 @@ fn workspace(
         || live_items.is_none() && selected_sidebar == 6;
     let body = match selected_rail {
         0 if documents_selected => document_surface(theme),
-        0 => conversation(theme),
+        0 => conversation_snapshot
+            .zip(conversation_scroll)
+            .map(|(state, scroll)| scrollable_conversation_state(theme, state, scroll))
+            .unwrap_or_else(|| conversation(theme)),
         1 => file_editor(theme),
         2 => inbox(theme),
         _ => settings(theme),

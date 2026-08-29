@@ -2,7 +2,7 @@ use crate::HappyApp;
 use crate::design::geometry::{SIDEBAR_ROW_GAP, SIDEBAR_ROW_HEIGHT};
 use crate::design::theme::{Theme, UI_FONT};
 use crate::state::runtime::{AgentSnapshot, AgentStatus, ProjectSnapshot, WorkspaceSnapshot};
-use gpui::{Context, Div, FontWeight, Stateful, div, prelude::*, px, rgba};
+use gpui::{Context, Div, FontWeight, ScrollHandle, Stateful, div, prelude::*, px, rgba};
 
 const ROWS: [(&str, &str); 7] = [
     ("⌂", "All chats"),
@@ -86,12 +86,7 @@ fn agent_item(agent: &AgentSnapshot, depth: usize) -> SidebarItem {
 }
 
 pub fn sidebar(theme: Theme, selected: usize, width: f32) -> Div {
-    let mut rows = div()
-        .debug_selector(|| "sidebar-rows".to_owned())
-        .flex()
-        .flex_col()
-        .gap(px(SIDEBAR_ROW_GAP))
-        .px(px(6.0));
+    let mut rows = sidebar_rows_root(None);
     for (index, (icon, label)) in ROWS.into_iter().enumerate() {
         rows = rows.child(sidebar_row(theme, index, icon, label, index == selected));
     }
@@ -104,12 +99,7 @@ pub fn interactive_sidebar(
     width: f32,
     cx: &mut Context<HappyApp>,
 ) -> Div {
-    let mut rows = div()
-        .debug_selector(|| "sidebar-rows".to_owned())
-        .flex()
-        .flex_col()
-        .gap(px(SIDEBAR_ROW_GAP))
-        .px(px(6.0));
+    let mut rows = sidebar_rows_root(None);
     for (index, (icon, label)) in ROWS.into_iter().enumerate() {
         rows = rows.child(
             sidebar_row(theme, index, icon, label, index == selected).on_click(cx.listener(
@@ -131,7 +121,7 @@ pub fn project_sidebar(
     workspaces: &[WorkspaceSnapshot],
 ) -> Div {
     let items = project_sidebar_items(projects, workspaces);
-    let mut rows = sidebar_rows_root();
+    let mut rows = sidebar_rows_root(None);
     for (index, item) in items.iter().enumerate() {
         rows = rows.child(sidebar_item_row(theme, index, item, index == selected));
     }
@@ -144,16 +134,17 @@ pub fn interactive_project_sidebar(
     width: f32,
     projects: &[ProjectSnapshot],
     workspaces: &[WorkspaceSnapshot],
+    scroll: &ScrollHandle,
     cx: &mut Context<HappyApp>,
 ) -> Div {
     let items = project_sidebar_items(projects, workspaces);
-    let mut rows = sidebar_rows_root();
+    let mut rows = sidebar_rows_root(Some(scroll));
     for (index, item) in items.iter().enumerate() {
+        let item_id = item.id.clone();
         rows = rows.child(
             sidebar_item_row(theme, index, item, index == selected).on_click(cx.listener(
                 move |this, _, _, cx| {
-                    this.selected_sidebar = index;
-                    cx.notify();
+                    this.sidebar_select(index, item_id.clone(), cx);
                 },
             )),
         );
@@ -161,16 +152,23 @@ pub fn interactive_project_sidebar(
     sidebar_root(theme, width, rows)
 }
 
-fn sidebar_rows_root() -> Div {
-    div()
+fn sidebar_rows_root(scroll: Option<&ScrollHandle>) -> Stateful<Div> {
+    let rows = div()
         .debug_selector(|| "sidebar-rows".to_owned())
+        .id("sidebar-rows-scroll")
         .flex()
+        .flex_1()
+        .min_h_0()
         .flex_col()
         .gap(px(SIDEBAR_ROW_GAP))
-        .px(px(6.0))
+        .px(px(6.0));
+    match scroll {
+        Some(handle) => rows.overflow_y_scroll().track_scroll(handle),
+        None => rows.overflow_hidden(),
+    }
 }
 
-fn sidebar_root(theme: Theme, width: f32, rows: Div) -> Div {
+fn sidebar_root(theme: Theme, width: f32, rows: impl IntoElement) -> Div {
     div()
         .debug_selector(|| "sidebar".to_owned())
         .flex()
