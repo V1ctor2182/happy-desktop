@@ -1,5 +1,6 @@
 mod connectivity;
 mod fonts;
+mod navigation;
 mod shell;
 mod theme;
 mod ui;
@@ -17,9 +18,13 @@ fn main() {
         fonts::register(cx);
         ui::text_input::init(cx);
         ui::components::init(cx);
+        ui::command_palette::init(cx);
 
         cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+        cx.bind_keys([
+            KeyBinding::new("cmd-q", Quit, None),
+            KeyBinding::new("cmd-k", ui::command_palette::CommandPaletteToggle, None),
+        ]);
         cx.set_menus(vec![Menu {
             name: "Happy GPUI".into(),
             items: vec![MenuItem::action("Quit Happy GPUI", Quit)],

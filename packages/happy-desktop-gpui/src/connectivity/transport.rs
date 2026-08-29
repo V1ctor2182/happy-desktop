@@ -4,7 +4,7 @@
 //! therefore connects only to the local host. It must not invent peer URLs.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     env,
     ffi::OsString,
     fmt, fs,
@@ -30,11 +30,12 @@ use super::installer::{
     capture_login_shell_environment, happy_home_resolve, install_latest,
 };
 use super::protocol::{
-    ConfigResponse, DesktopBootstrap, EventHint, EventStreamHello, HAPPY_AGENT_PROTOCOL_VERSION,
+    BotListResponse, ConfigResponse, DesktopBootstrap, EventHint, EventHintPayload,
+    EventStreamHello, GitState, GitStateResponse, HAPPY_AGENT_PROTOCOL_VERSION,
     HappyAgentEventType, HealthResponse, OnboardingCompletedResponse, OnboardingState,
     ProfileResponse, ProjectListResponse, ProviderScanResponse, ProviderScanResult,
     ProviderVerificationLevel, ProviderVerificationResponse, ProviderVerificationStatus,
-    WorkspaceListResponse,
+    WatchGitRequest, WatchGitResponse, WorkspaceListResponse,
 };
 
 /// Stable daemon failure information safe to present to product code.
@@ -137,11 +138,14 @@ pub enum WorkerEvent {
     /// The first complete authoritative v23 projection.
     Bootstrap {
         snapshot: DesktopBootstrap,
+        git: BTreeMap<String, GitState>,
         daemon_version: String,
     },
     /// A replacement authoritative snapshot after an SSE delivery hint or gap.
     Reconciled {
         snapshot: DesktopBootstrap,
+        /// `None` preserves the current computed Git snapshots.
+        git: Option<BTreeMap<String, GitState>>,
     },
     StreamHello(EventStreamHello),
     Draining {
@@ -471,18 +475,21 @@ fn authority_enter(gate: &Mutex<()>) -> std::sync::MutexGuard<'_, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct ReconcilePlan {
     config: bool,
     onboarding: bool,
     profile: bool,
     projects: bool,
     workspaces: bool,
+    bots: bool,
+    git_all: bool,
+    git_workspaces: BTreeSet<String>,
 }
 
 impl ReconcilePlan {
-    fn include(&mut self, event: HappyAgentEventType) {
-        match event {
+    fn include_hint(&mut self, hint: &EventHint) {
+        match hint.event_type {
             HappyAgentEventType::ConfigUpdated => {
                 self.config = true;
                 self.onboarding = true;
@@ -496,21 +503,104 @@ impl ReconcilePlan {
                 self.workspaces = true;
                 self.onboarding = true;
             }
-            HappyAgentEventType::WorkspaceCreated
-            | HappyAgentEventType::WorkspaceUpdated
-            | HappyAgentEventType::BotCreated
-            | HappyAgentEventType::BotUpdated
-            | HappyAgentEventType::AgentCreated
-            | HappyAgentEventType::AgentUpdated => {
+            HappyAgentEventType::WorkspaceCreated | HappyAgentEventType::WorkspaceUpdated => {
                 self.projects = true;
                 self.workspaces = true;
+            }
+            HappyAgentEventType::BotCreated | HappyAgentEventType::BotUpdated => {
+                self.bots = true;
+                self.workspaces = true;
+            }
+            HappyAgentEventType::AgentCreated
+            | HappyAgentEventType::AgentUpdated
+            | HappyAgentEventType::ProcessStarted
+            | HappyAgentEventType::ProcessUpdated
+            | HappyAgentEventType::ProcessExited
+            | HappyAgentEventType::QuestionCreated
+            | HappyAgentEventType::QuestionUpdated
+            | HappyAgentEventType::RunStarted
+            | HappyAgentEventType::RunBoundary
+            | HappyAgentEventType::RunFinished => {
+                // These events can change facts embedded in an agent, but v23
+                // does not name that agent's authoritative owner. Re-read all
+                // three closed owner families rather than invent an owner.
+                self.projects = true;
+                self.workspaces = true;
+                self.bots = true;
+            }
+            HappyAgentEventType::GitUpdated => {
+                if let Some(workspace_id) = hint
+                    .payload
+                    .as_ref()
+                    .and_then(|payload| payload.workspace_id.as_ref())
+                {
+                    self.git_workspaces.insert(workspace_id.clone());
+                } else {
+                    self.git_all = true;
+                }
             }
             _ => {}
         }
     }
 
-    fn is_empty(self) -> bool {
-        self == Self::default()
+    #[cfg(test)]
+    fn include(&mut self, event_type: HappyAgentEventType) {
+        self.include_hint(&EventHint {
+            cursor: String::new(),
+            event_type,
+            payload: None,
+        });
+    }
+
+    fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+
+    fn catalog_membership_changed(&self) -> bool {
+        self.projects || self.workspaces || self.bots
+    }
+}
+
+const GIT_WATCH_RENEWAL: Duration = Duration::from_secs(2 * 60);
+const GIT_RETRY_DELAY: Duration = Duration::from_secs(5);
+
+struct GitRefresh {
+    full_watch_pending: bool,
+    targeted_pending: BTreeSet<String>,
+    next_watch_renewal: Instant,
+    retry_at: Instant,
+}
+
+impl GitRefresh {
+    fn after_initial_attempt(succeeded: bool) -> Self {
+        let now = Instant::now();
+        Self {
+            full_watch_pending: !succeeded,
+            targeted_pending: BTreeSet::new(),
+            next_watch_renewal: if succeeded {
+                now + GIT_WATCH_RENEWAL
+            } else {
+                now
+            },
+            retry_at: if succeeded {
+                now
+            } else {
+                now + GIT_RETRY_DELAY
+            },
+        }
+    }
+
+    fn catalog_changed(&mut self) {
+        self.full_watch_pending = true;
+        self.targeted_pending.clear();
+        self.retry_at = Instant::now();
+    }
+
+    fn target(&mut self, workspace_id: String, bootstrap: &DesktopBootstrap) {
+        if catalog_git_targets(bootstrap).contains(&workspace_id) {
+            self.targeted_pending.insert(workspace_id);
+            self.retry_at = Instant::now();
+        }
     }
 }
 
@@ -799,11 +889,18 @@ fn connect_once(
     }
     let authority = authority_enter(authority_gate);
     let mut bootstrap: DesktopBootstrap = get_json(&client, &token, "/v0/bootstrap/desktop")?;
+    // Git is a secondary projection. A failed watch must not block the
+    // authoritative desktop bootstrap or the event stream.
+    let initial_git = watch_catalog_git(&client, &token, &bootstrap);
+    let initial_git_succeeded = initial_git.is_ok();
+    let mut git = initial_git.unwrap_or_default();
+    let mut git_refresh = GitRefresh::after_initial_attempt(initial_git_succeeded);
     let mut cursor = bootstrap.cursor.clone();
     send(
         sender,
         WorkerEvent::Bootstrap {
             snapshot: bootstrap.clone(),
+            git: git.clone(),
             daemon_version: health.version.daemon.clone(),
         },
     );
@@ -832,8 +929,10 @@ fn connect_once(
                             &token,
                             sender,
                             &mut bootstrap,
+                            &mut git,
                             &cursor,
                             std::mem::take(&mut reconcile_plan),
+                            &mut git_refresh,
                             authority_gate,
                         );
                     }
@@ -850,8 +949,10 @@ fn connect_once(
                         &token,
                         sender,
                         &mut bootstrap,
+                        &mut git,
                         &cursor,
                         std::mem::take(&mut reconcile_plan),
+                        &mut git_refresh,
                         authority_gate,
                     );
                 }
@@ -866,6 +967,26 @@ fn connect_once(
             if stream_is_stable(hello_at.map(|at| at.elapsed()), false) {
                 *stream_stable = true;
             }
+            // SSE heartbeats keep this loop active. Use them to renew the
+            // deduplicated Git watch lease every two minutes and to retry any
+            // secondary Git failure without affecting stream health.
+            if Instant::now() >= git_refresh.retry_at
+                && (git_refresh.full_watch_pending
+                    || !git_refresh.targeted_pending.is_empty()
+                    || Instant::now() >= git_refresh.next_watch_renewal)
+            {
+                let authority = authority_enter(authority_gate);
+                if try_refresh_git(&client, &token, &bootstrap, &mut git, &mut git_refresh) {
+                    send(
+                        sender,
+                        WorkerEvent::Reconciled {
+                            snapshot: bootstrap.clone(),
+                            git: Some(git.clone()),
+                        },
+                    );
+                }
+                drop(authority);
+            }
             if frame.data.is_empty() {
                 if !reconcile_plan.is_empty() && reader.buffer().is_empty() {
                     reconcile_difference(
@@ -873,8 +994,10 @@ fn connect_once(
                         &token,
                         sender,
                         &mut bootstrap,
+                        &mut git,
                         &cursor,
                         std::mem::take(&mut reconcile_plan),
+                        &mut git_refresh,
                         authority_gate,
                     )?;
                 }
@@ -902,7 +1025,9 @@ fn connect_once(
                         &token,
                         sender,
                         &mut bootstrap,
+                        &mut git,
                         &mut cursor,
+                        &mut git_refresh,
                         authority_gate,
                     )?;
                     reconcile_plan = ReconcilePlan::default();
@@ -914,20 +1039,21 @@ fn connect_once(
                 cursor: String,
                 #[serde(rename = "type")]
                 event_type: HappyAgentEventType,
+                #[serde(default)]
+                payload: Option<EventHintPayload>,
             }
             let event: Envelope = serde_json::from_str(&frame.data).map_err(protocol_error)?;
             if !accept_stream_event_cursor(&mut cursor, received_hello, &event.cursor)? {
                 continue;
             }
             *stream_stable = stream_is_stable(None, true);
-            send(
-                sender,
-                WorkerEvent::EventHint(EventHint {
-                    cursor: cursor.clone(),
-                    event_type: event.event_type,
-                }),
-            );
-            if event.event_type == HappyAgentEventType::DaemonDraining {
+            let hint = EventHint {
+                cursor: cursor.clone(),
+                event_type: event.event_type,
+                payload: event.payload,
+            };
+            send(sender, WorkerEvent::EventHint(hint.clone()));
+            if hint.event_type == HappyAgentEventType::DaemonDraining {
                 send(
                     sender,
                     WorkerEvent::Draining {
@@ -940,15 +1066,17 @@ fn connect_once(
             // resource families while already-readable frames drain, then perform one
             // targeted reconciliation for that batch. Unchanged families retain their
             // existing typed snapshot values.
-            reconcile_plan.include(event.event_type);
+            reconcile_plan.include_hint(&hint);
             if !reconcile_plan.is_empty() && reader.buffer().is_empty() {
                 reconcile_difference(
                     &client,
                     &token,
                     sender,
                     &mut bootstrap,
+                    &mut git,
                     &cursor,
                     std::mem::take(&mut reconcile_plan),
+                    &mut git_refresh,
                     authority_gate,
                 )?;
             }
@@ -962,16 +1090,22 @@ fn reconcile_desktop(
     token: &SecretToken,
     sender: &Sender<WorkerEvent>,
     bootstrap: &mut DesktopBootstrap,
+    git: &mut BTreeMap<String, GitState>,
     cursor: &mut String,
+    git_refresh: &mut GitRefresh,
     authority_gate: &Mutex<()>,
 ) -> Result<(), UserError> {
     let authority = authority_enter(authority_gate);
     *bootstrap = get_json(client, token, "/v0/bootstrap/desktop")?;
+    let git_pruned = retain_catalog_git(bootstrap, git);
+    git_refresh.catalog_changed();
+    let git_changed = try_refresh_git(client, token, bootstrap, git, git_refresh);
     *cursor = bootstrap.cursor.clone();
     send(
         sender,
         WorkerEvent::Reconciled {
             snapshot: bootstrap.clone(),
+            git: (git_pruned || git_changed).then(|| git.clone()),
         },
     );
     drop(authority);
@@ -985,8 +1119,10 @@ fn reconcile_difference(
     token: &SecretToken,
     sender: &Sender<WorkerEvent>,
     bootstrap: &mut DesktopBootstrap,
+    git: &mut BTreeMap<String, GitState>,
     cursor: &str,
     plan: ReconcilePlan,
+    git_refresh: &mut GitRefresh,
     authority_gate: &Mutex<()>,
 ) -> Result<(), UserError> {
     // Bound high-rate journals to at most one authoritative read batch per quiet
@@ -1011,15 +1147,140 @@ fn reconcile_difference(
         bootstrap.workspaces =
             get_json::<WorkspaceListResponse>(client, token, "/v0/workspaces")?.workspaces;
     }
+    if plan.bots {
+        bootstrap.bots = get_json::<BotListResponse>(client, token, "/v0/bots")?.bots;
+    }
+
+    let git_pruned = if plan.catalog_membership_changed() {
+        retain_catalog_git(bootstrap, git)
+    } else {
+        false
+    };
+    if plan.catalog_membership_changed() || plan.git_all {
+        git_refresh.catalog_changed();
+    } else {
+        for workspace_id in plan.git_workspaces {
+            git_refresh.target(workspace_id, bootstrap);
+        }
+    }
+    let git_changed = try_refresh_git(client, token, bootstrap, git, git_refresh);
+
     bootstrap.cursor = cursor.to_owned();
     send(
         sender,
         WorkerEvent::Reconciled {
             snapshot: bootstrap.clone(),
+            git: (git_pruned || git_changed).then(|| git.clone()),
         },
     );
     drop(authority);
     Ok(())
+}
+
+fn try_refresh_git(
+    client: &Client,
+    token: &SecretToken,
+    bootstrap: &DesktopBootstrap,
+    git: &mut BTreeMap<String, GitState>,
+    refresh: &mut GitRefresh,
+) -> bool {
+    let now = Instant::now();
+    if now < refresh.retry_at {
+        return false;
+    }
+
+    if refresh.full_watch_pending || now >= refresh.next_watch_renewal {
+        match watch_catalog_git(client, token, bootstrap) {
+            Ok(snapshots) => {
+                *git = snapshots;
+                refresh.full_watch_pending = false;
+                refresh.targeted_pending.clear();
+                refresh.next_watch_renewal = Instant::now() + GIT_WATCH_RENEWAL;
+                refresh.retry_at = Instant::now();
+                return true;
+            }
+            Err(_) => {
+                // Keep the last good Git projection. The lease retry is
+                // independent of the authoritative catalog and SSE lifetime.
+                refresh.full_watch_pending = true;
+                refresh.retry_at = Instant::now() + GIT_RETRY_DELAY;
+                return false;
+            }
+        }
+    }
+
+    let valid_targets = catalog_git_targets(bootstrap);
+    refresh
+        .targeted_pending
+        .retain(|workspace_id| valid_targets.contains(workspace_id));
+    if refresh.targeted_pending.is_empty() {
+        return false;
+    }
+
+    let pending: Vec<_> = refresh.targeted_pending.iter().cloned().collect();
+    let mut changed = false;
+    for workspace_id in pending {
+        // This targeted route is explicitly part of protocol v23. IDs reach it
+        // only after validation against the current authoritative catalog.
+        let path = format!("/v0/workspaces/{workspace_id}/git");
+        if let Ok(response) = get_json::<GitStateResponse>(client, token, &path) {
+            git.insert(workspace_id.clone(), response.git);
+            refresh.targeted_pending.remove(&workspace_id);
+            changed = true;
+        }
+    }
+    refresh.retry_at = if refresh.targeted_pending.is_empty() {
+        Instant::now()
+    } else {
+        Instant::now() + GIT_RETRY_DELAY
+    };
+    changed
+}
+
+fn retain_catalog_git(bootstrap: &DesktopBootstrap, git: &mut BTreeMap<String, GitState>) -> bool {
+    let valid_targets = catalog_git_targets(bootstrap);
+    let previous_len = git.len();
+    git.retain(|workspace_id, _| valid_targets.contains(workspace_id));
+    git.len() != previous_len
+}
+
+fn catalog_git_targets(bootstrap: &DesktopBootstrap) -> BTreeSet<String> {
+    let mut workspace_ids = BTreeSet::new();
+    for project in &bootstrap.projects {
+        if project.status == super::protocol::ProjectStatus::Active && project.archived_at.is_none()
+        {
+            workspace_ids.insert(project.id.clone());
+        }
+    }
+    for workspace in &bootstrap.workspaces {
+        if workspace.status == super::protocol::WorkspaceStatus::Active
+            && workspace.archived_at.is_none()
+        {
+            workspace_ids.insert(workspace.id.clone());
+        }
+    }
+    for bot in &bootstrap.bots {
+        if bot.status == super::protocol::BotStatus::Active && bot.archived_at.is_none() {
+            workspace_ids.insert(bot.workspace_id.clone());
+        }
+    }
+    workspace_ids
+}
+
+fn watch_catalog_git(
+    client: &Client,
+    token: &SecretToken,
+    bootstrap: &DesktopBootstrap,
+) -> Result<BTreeMap<String, GitState>, UserError> {
+    let response: WatchGitResponse = post_json(
+        client,
+        token,
+        "/v0/git/watch",
+        &WatchGitRequest {
+            workspace_ids: catalog_git_targets(bootstrap).into_iter().collect(),
+        },
+    )?;
+    Ok(response.snapshots)
 }
 
 #[derive(Clone, Debug)]
@@ -1328,6 +1589,26 @@ fn get_json<T: DeserializeOwned>(
     .json()
     .map_err(protocol_error)
 }
+fn post_json<T: DeserializeOwned>(
+    client: &Client,
+    token: &SecretToken,
+    path: &str,
+    body: &impl Serialize,
+) -> Result<T, UserError> {
+    let url = format!("http://happy-agent{path}");
+    checked_response(
+        client
+            .post(url)
+            .timeout(Duration::from_secs(10))
+            .header(ACCEPT, "application/json")
+            .header(AUTHORIZATION, token.authorization())
+            .json(body)
+            .send()
+            .map_err(transport_error)?,
+    )?
+    .json()
+    .map_err(protocol_error)
+}
 fn checked_response(response: Response) -> Result<Response, UserError> {
     if response.status().is_success() {
         return Ok(response);
@@ -1512,7 +1793,9 @@ fn daemon_version_at_least(value: &str, minimum: (u64, u64, u64)) -> bool {
 }
 
 fn protocol_error(error: impl fmt::Display) -> UserError {
-    let _ = error;
+    if std::env::var_os("HAPPY_GPUI_TRACE_CONNECTIVITY").is_some() {
+        eprintln!("connectivity protocol detail: {error}");
+    }
     UserError {
         kind: UserErrorKind::Protocol,
         message: "Happy Agent returned data outside protocol v23.".into(),
@@ -1632,8 +1915,26 @@ mod tests {
                 profile: true,
                 projects: true,
                 workspaces: true,
+                ..ReconcilePlan::default()
             }
         );
+        for event_type in [
+            HappyAgentEventType::ProcessStarted,
+            HappyAgentEventType::ProcessUpdated,
+            HappyAgentEventType::ProcessExited,
+            HappyAgentEventType::QuestionCreated,
+            HappyAgentEventType::QuestionUpdated,
+            HappyAgentEventType::RunStarted,
+            HappyAgentEventType::RunBoundary,
+            HappyAgentEventType::RunFinished,
+        ] {
+            let mut embedded_agent_facts = ReconcilePlan::default();
+            embedded_agent_facts.include(event_type);
+            assert!(embedded_agent_facts.projects);
+            assert!(embedded_agent_facts.workspaces);
+            assert!(embedded_agent_facts.bots);
+        }
+
         let mut unrelated = ReconcilePlan::default();
         unrelated.include(HappyAgentEventType::MessageUpdated);
         assert!(unrelated.is_empty());

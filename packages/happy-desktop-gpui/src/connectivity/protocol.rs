@@ -78,7 +78,12 @@ pub struct Agent {
     pub id: String,
     pub workspace_id: String,
     pub title: Option<String>,
+    pub title_status: AgentTitleStatus,
     pub status: AgentStatus,
+    pub unread: Option<AgentUnread>,
+    pub pending_question_id: Option<String>,
+    pub subagents: AgentSubagents,
+    pub processes: AgentProcesses,
     pub archived_at: Option<i64>,
     pub order_key: Option<String>,
     pub parent_agent_id: Option<String>,
@@ -88,6 +93,8 @@ pub struct Agent {
     pub version: String,
     #[serde(default)]
     pub can_send_messages: Option<bool>,
+    #[serde(default)]
+    pub managed_by_another_agent: Option<bool>,
     #[serde(default)]
     pub user_visible: Option<bool>,
 }
@@ -99,6 +106,70 @@ pub enum AgentStatus {
     Working,
     GeneratingTools,
     RunningTools,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentTitleStatus {
+    Idle,
+    Ready,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct AgentUnread {
+    pub reason: String,
+    pub since: i64,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct AgentSubagents {
+    pub running: u64,
+    pub total: u64,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct AgentProcesses {
+    pub running: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum Compute {
+    Host { path: String },
+    Docker { image: String },
+}
+impl Compute {
+    pub fn display_location(&self) -> &str {
+        match self {
+            Self::Host { path } => path,
+            Self::Docker { image } => image,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSummary {
+    pub ahead: u64,
+    pub behind: u64,
+    #[serde(default)]
+    pub branch: Option<String>,
+    pub detached: bool,
+    /// Protocol 23 daemons return `null` for a repository without a commit.
+    pub head: Option<String>,
+    pub upstream: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ProjectAvatar {
+    Home,
+    Image {
+        source: AvatarSource,
+        thumbhash: String,
+    },
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AvatarSource {
+    User,
+    Generated,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -112,6 +183,13 @@ pub struct Project {
     pub archived_at: Option<i64>,
     pub agents: Vec<Agent>,
     pub initialization: Initialization,
+    pub compute: Compute,
+    pub avatar: Option<ProjectAvatar>,
+    pub git: Option<GitSummary>,
+    pub default_branch: Option<String>,
+    pub worktree_support: WorktreeSupport,
+    #[serde(default)]
+    pub worktree_unsupported_reason: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
     pub version: String,
@@ -122,6 +200,13 @@ pub enum ProjectStatus {
     Active,
     Archived,
 }
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WorktreeSupport {
+    Supported,
+    Unsupported,
+    Unknown,
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -129,6 +214,8 @@ pub struct Workspace {
     pub id: String,
     pub project_id: Option<String>,
     pub parent_id: Option<String>,
+    #[serde(default)]
+    pub bot_id: Option<String>,
     pub name: String,
     pub order_key: String,
     pub kind: WorkspaceKind,
@@ -136,6 +223,8 @@ pub struct Workspace {
     pub archived_at: Option<i64>,
     pub agents: Vec<Agent>,
     pub initialization: Initialization,
+    pub compute: Compute,
+    pub git: Option<GitSummary>,
     pub created_at: i64,
     pub updated_at: i64,
     pub version: String,
@@ -167,6 +256,86 @@ pub enum InitializationStatus {
     Initializing,
     Ready,
     Failed,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Bot {
+    pub id: String,
+    pub workspace_id: String,
+    pub agent: Agent,
+    pub name: String,
+    pub username: String,
+    pub order_key: String,
+    pub status: BotStatus,
+    pub archived_at: Option<i64>,
+    pub compute: Compute,
+    pub avatar: Option<BotAvatar>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub version: String,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BotStatus {
+    Active,
+    Archived,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct BotAvatar {
+    pub kind: BotAvatarKind,
+    pub source: AvatarSource,
+    pub thumbhash: String,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BotAvatarKind {
+    Image,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitState {
+    pub facts: GitSummary,
+    pub comparison: GitComparison,
+    pub base: Option<String>,
+    pub changed_files: u64,
+    pub insertions: u64,
+    pub deletions: u64,
+    pub counts_exact: bool,
+    pub conflicted: bool,
+    pub files: Vec<GitFileChange>,
+    pub files_truncated: bool,
+    pub scanned_at: i64,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum GitComparison {
+    Ready,
+    Unavailable,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct GitFileChange {
+    pub path: String,
+    pub status: GitFileStatus,
+    pub staged: bool,
+    pub unstaged: bool,
+    pub binary: bool,
+    pub insertions: Option<u64>,
+    pub deletions: Option<u64>,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GitFileStatus {
+    Added,
+    Modified,
+    Deleted,
+    Renamed,
+    Copied,
+    Untracked,
+    Conflicted,
+    TypeChanged,
+    Submodule,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -292,6 +461,8 @@ pub struct DesktopBootstrap {
     pub profile: Profile,
     pub projects: Vec<Project>,
     pub workspaces: Vec<Workspace>,
+    #[serde(default)]
+    pub bots: Vec<Bot>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -309,6 +480,23 @@ pub struct ProjectListResponse {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct WorkspaceListResponse {
     pub workspaces: Vec<Workspace>,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct BotListResponse {
+    pub bots: Vec<Bot>,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct GitStateResponse {
+    pub git: GitState,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct WatchGitResponse {
+    pub snapshots: BTreeMap<String, GitState>,
+}
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchGitRequest {
+    pub workspace_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -420,6 +608,16 @@ pub struct EventHint {
     pub cursor: String,
     #[serde(rename = "type")]
     pub event_type: HappyAgentEventType,
+    #[serde(default)]
+    pub payload: Option<EventHintPayload>,
+}
+
+/// Only identity-bearing fields needed to target authoritative reconciliation.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EventHintPayload {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[cfg(test)]

@@ -1,10 +1,12 @@
 //! Authenticated local Happy Agent transport.
 
+pub mod catalog;
 pub mod installer;
 pub mod protocol;
 pub mod state;
 pub mod transport;
 
+pub use catalog::*;
 pub use protocol::*;
 pub use state::*;
 pub use transport::{

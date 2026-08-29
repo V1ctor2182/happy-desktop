@@ -6,12 +6,16 @@ use gpui::{
 
 use super::theme_roles::ThemeRole;
 use super::{
-    Avatar, AvatarSize, Badge, BadgeVariant, Button, ButtonVariant, ConnectionNotice,
-    ConnectionNoticeState, ControlSize, Icon, IconName, InstallProgress, InstallProgressState,
-    ListRow, Menu, MenuItem, Modal, ModalFocus, ModalOverlay, ModalSize, OverlayPlacement,
-    ProfileOnboardingSurface, ProviderOnboardingSurface, ScrollSurface, ScrollbarState, Splitter,
-    SplitterDragState, StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler, Tabs,
-    TabsSize, TextField, TextInput, Toolbar, WELCOME_SLIDES, WelcomeDeck,
+    Avatar, AvatarSize, Badge, BadgeVariant, Button, ButtonVariant, CommandPalette,
+    ConnectionNotice, ConnectionNoticeState, ControlSize, Icon, IconName, InstallProgress,
+    InstallProgressState, ListRow, Menu, MenuItem, Modal, ModalFocus, ModalOverlay, ModalSize,
+    OverlayPlacement, ProfileOnboardingSurface, ProviderOnboardingSurface, ScrollSurface,
+    ScrollbarState, SettingsCategory, SettingsShell, Sidebar, SidebarActivity, SidebarChangeStats,
+    SidebarFold, SidebarFooter, SidebarFooterAction, SidebarItem, SidebarItemAvailability,
+    SidebarItemLifecycle, SidebarRowAction, SidebarSection, SidebarSectionAction,
+    SidebarUpdateAction, SidebarUpdateOperation, SidebarUpdateStatus, SidebarUpdateSubject,
+    Splitter, SplitterDragState, StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler,
+    Tabs, TabsSize, TextField, TextInput, Toolbar, WELCOME_SLIDES, WelcomeDeck,
 };
 use crate::{
     connectivity::{OnboardingProviderId, ProviderAuthenticationState, ProviderOnboardingRow},
@@ -39,10 +43,13 @@ pub enum GalleryPage {
     ProfileOnboarding,
     ProviderOnboarding,
     InstallProgress,
+    Sidebar,
+    Settings,
+    CommandPalette,
     Theme,
 }
 impl GalleryPage {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 22] = [
         Self::Buttons,
         Self::Fields,
         Self::Rows,
@@ -61,6 +68,9 @@ impl GalleryPage {
         Self::ProfileOnboarding,
         Self::ProviderOnboarding,
         Self::InstallProgress,
+        Self::Sidebar,
+        Self::Settings,
+        Self::CommandPalette,
         Self::Theme,
     ];
     pub const fn id(self) -> &'static str {
@@ -83,6 +93,9 @@ impl GalleryPage {
             Self::ProfileOnboarding => "profile-onboarding",
             Self::ProviderOnboarding => "provider-onboarding",
             Self::InstallProgress => "install-progress",
+            Self::Sidebar => "sidebar",
+            Self::Settings => "settings",
+            Self::CommandPalette => "command-palette",
             Self::Theme => "theme",
         }
     }
@@ -106,6 +119,9 @@ impl GalleryPage {
             Self::ProfileOnboarding => "Profile",
             Self::ProviderOnboarding => "Providers",
             Self::InstallProgress => "Install",
+            Self::Sidebar => "Sidebar",
+            Self::Settings => "Settings",
+            Self::CommandPalette => "Command palette",
             Self::Theme => "Theme",
         }
     }
@@ -515,6 +531,249 @@ fn connectivity_specimens(
     }
 }
 
+fn gallery_sidebar_item(
+    id: impl Into<gpui::SharedString>,
+    label: impl Into<gpui::SharedString>,
+    icon: IconName,
+    depth: usize,
+    fold: SidebarFold,
+) -> SidebarItem {
+    SidebarItem {
+        id: id.into(),
+        label: label.into(),
+        icon,
+        depth,
+        fold,
+        lifecycle: SidebarItemLifecycle::Ready,
+        lifecycle_label: None,
+        availability: SidebarItemAvailability::Available,
+        disabled: false,
+        activity: SidebarActivity::Idle,
+        unread: false,
+        change_stats: None,
+        action: None,
+    }
+}
+
+fn sidebar_specimen(theme: Theme, scrollbar: Entity<ScrollbarState>) -> AnyElement {
+    let mut inbox = gallery_sidebar_item("inbox", "Inbox", IconName::Inbox, 0, SidebarFold::Leaf);
+    inbox.unread = true;
+    let mut bot = gallery_sidebar_item(
+        "bot-builder",
+        "Builder bot",
+        IconName::Agents,
+        0,
+        SidebarFold::Expanded,
+    );
+    bot.activity = SidebarActivity::Working;
+    let mut bot_session = gallery_sidebar_item(
+        "bot-session",
+        "Refine sidebar fixtures",
+        IconName::Chat,
+        1,
+        SidebarFold::Leaf,
+    );
+    bot_session.lifecycle = SidebarItemLifecycle::Creating;
+    bot_session.lifecycle_label = Some("Starting…".into());
+    let mut project = gallery_sidebar_item(
+        "project-happy",
+        "Happy Desktop",
+        IconName::Files,
+        0,
+        SidebarFold::Expanded,
+    );
+    project.change_stats = Some(SidebarChangeStats {
+        added: 128,
+        deleted: 37,
+    });
+    let mut offline = gallery_sidebar_item(
+        "worktree-offline",
+        "Remote agent workspace",
+        IconName::Branch,
+        1,
+        SidebarFold::Leaf,
+    );
+    offline.availability = SidebarItemAvailability::Unavailable;
+    offline.lifecycle_label = Some("Offline".into());
+    offline.unread = true;
+    let mut failed = gallery_sidebar_item(
+        "worktree-failed",
+        "Failed checkout",
+        IconName::Alert,
+        1,
+        SidebarFold::Leaf,
+    );
+    failed.lifecycle = SidebarItemLifecycle::Failed;
+    failed.action = Some(SidebarRowAction {
+        id: "retry".into(),
+        label: "Retry checkout".into(),
+        icon: IconName::ArrowRight,
+        disabled: false,
+    });
+    let collapsed = gallery_sidebar_item(
+        "project-archive",
+        "Archived projects",
+        IconName::Archive,
+        0,
+        SidebarFold::Collapsed,
+    );
+    let overflow = (0..12).map(|index| {
+        gallery_sidebar_item(
+            format!("overflow-{index}"),
+            format!("Overflow project {:02}", index + 1),
+            IconName::Branch,
+            0,
+            SidebarFold::Leaf,
+        )
+    });
+    let mut project_items = vec![project, offline, failed, collapsed];
+    project_items.extend(overflow);
+
+    div()
+        .debug_selector(|| "gallery-sidebar-stage".into())
+        .w(px(360.0))
+        .h(px(520.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(Sidebar {
+            id: "gallery-sidebar".into(),
+            theme,
+            title: "Happy".into(),
+            subtitle: Some("Studio Mac · offline".into()),
+            width: Some(360.0),
+            selected_item_id: Some("project-happy".into()),
+            sections: vec![
+                SidebarSection {
+                    id: "pinned".into(),
+                    label: Some("Pinned".into()),
+                    items: vec![inbox],
+                    collapsed: false,
+                    action: None,
+                    error: None,
+                },
+                SidebarSection {
+                    id: "bots".into(),
+                    label: Some("Bots".into()),
+                    items: vec![bot, bot_session],
+                    collapsed: false,
+                    action: Some(SidebarSectionAction {
+                        label: "New bot".into(),
+                        icon: IconName::Plus,
+                        disabled: false,
+                        busy: false,
+                    }),
+                    error: None,
+                },
+                SidebarSection {
+                    id: "projects".into(),
+                    label: Some("Projects".into()),
+                    items: project_items,
+                    collapsed: false,
+                    action: Some(SidebarSectionAction {
+                        label: "Add project".into(),
+                        icon: IconName::Plus,
+                        disabled: false,
+                        busy: false,
+                    }),
+                    error: None,
+                },
+            ],
+            footer: SidebarFooter {
+                name: Some("Steve".into()),
+                online: false,
+                actions: vec![SidebarFooterAction {
+                    id: "settings".into(),
+                    label: "Settings".into(),
+                    icon: IconName::Settings,
+                    disabled: false,
+                }],
+                update: Some(SidebarUpdateAction {
+                    status: SidebarUpdateStatus::Downloaded,
+                    subject: SidebarUpdateSubject::Application,
+                    operation: SidebarUpdateOperation::Restart,
+                    version: Some("Happy 2.4.0".into()),
+                    detail: Some("Downloaded and ready".into()),
+                    open: true,
+                    disabled: false,
+                }),
+            },
+            body_scrollbar: scrollbar,
+            on_item_select: Some(Rc::new(|_, _, _| {})),
+            on_item_action: Some(Rc::new(|_, _, _, _| {})),
+            on_item_collapse_toggle: Some(Rc::new(|_, _, _| {})),
+            on_section_action: Some(Rc::new(|_, _, _| {})),
+            on_footer_action: Some(Rc::new(|_, _, _| {})),
+            on_update_toggle: Some(Rc::new(|_, _| {})),
+            on_update_apply: Some(Rc::new(|_, _| {})),
+        })
+        .into_any_element()
+}
+
+fn settings_specimen(theme: Theme, scrollbar: Entity<ScrollbarState>) -> AnyElement {
+    let categories = [
+        ("general", "General", IconName::Settings),
+        ("appearance", "Appearance", IconName::Contrast),
+        ("agents", "Agents", IconName::Agents),
+        ("providers", "Providers", IconName::Spark),
+        ("projects", "Projects", IconName::Files),
+        ("notifications", "Notifications", IconName::Bell),
+        ("security", "Security", IconName::Shield),
+        ("advanced", "Advanced", IconName::Braces),
+    ]
+    .into_iter()
+    .map(|(id, label, icon)| SettingsCategory {
+        id: id.into(),
+        label: label.into(),
+        icon,
+    })
+    .collect();
+    let body = div()
+        .debug_selector(|| "gallery-settings-body-fixture".into())
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap(px(16.0))
+        .children((0..14).map(|index| {
+            div()
+                .w_full()
+                .h(px(56.0))
+                .flex_none()
+                .flex()
+                .items_center()
+                .px(px(16.0))
+                .rounded(px(8.0))
+                .bg(theme.role(ThemeRole::InputBackground))
+                .child(format!("General preference {:02}", index + 1))
+        }))
+        .into_any_element();
+    div()
+        .debug_selector(|| "gallery-settings-stage".into())
+        .w(px(720.0))
+        .h(px(520.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(SettingsShell {
+            id: "gallery-settings".into(),
+            theme,
+            navigation_width: 250.0,
+            categories,
+            selected_category_id: "general".into(),
+            navigation_title: "Settings".into(),
+            title: "General".into(),
+            description: Some("Core application preferences".into()),
+            close_label: "Close settings".into(),
+            body_scrollbar: scrollbar,
+            body,
+            on_category_select: Rc::new(|_, _, _| {}),
+            on_close: Rc::new(|_, _| {}),
+        })
+        .into_any_element()
+}
+
 fn specimens(
     theme: Theme,
     page: GalleryPage,
@@ -523,6 +782,7 @@ fn specimens(
     connectivity_scrollbars: &[Entity<ScrollbarState>; 24],
     welcome_focus: &[FocusHandle; 25],
     modal_states: &[GalleryModalState; 5],
+    command_palette: Entity<CommandPalette>,
 ) -> AnyElement {
     match page {
         GalleryPage::Buttons => section(
@@ -1096,6 +1356,23 @@ fn specimens(
             connectivity_scrollbars,
             welcome_focus,
         ),
+        GalleryPage::Sidebar => {
+            sidebar_specimen(theme, connectivity_scrollbars[21].clone())
+        }
+        GalleryPage::Settings => {
+            settings_specimen(theme, connectivity_scrollbars[22].clone())
+        }
+        GalleryPage::CommandPalette => div()
+            .debug_selector(|| "gallery-command-palette-stage".into())
+            .w(px(720.0))
+            .h(px(600.0))
+            .flex_none()
+            .relative()
+            .overflow_hidden()
+            .border_1()
+            .border_color(theme.role(ThemeRole::Divider))
+            .child(command_palette)
+            .into_any_element(),
         GalleryPage::Theme => section(
             "All authoritative light/dark generated roles",
             ThemeRole::ALL
@@ -1142,6 +1419,7 @@ pub fn gallery(
     connectivity_scrollbars: [Entity<ScrollbarState>; 24],
     welcome_focus: [FocusHandle; 25],
     modal_states: [GalleryModalState; 5],
+    command_palette: Entity<CommandPalette>,
     page: GalleryPage,
     on_select: TabSelectHandler,
 ) -> impl IntoElement {
@@ -1176,6 +1454,7 @@ pub fn gallery(
             &connectivity_scrollbars,
             &welcome_focus,
             &modal_states,
+            command_palette,
         ))
         .into_any_element();
     div()
@@ -1236,6 +1515,10 @@ pub fn gallery(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::command_palette::{
+        CommandPaletteCallbacks, CommandPaletteCommandRow, CommandPaletteControlRow,
+        CommandPaletteFocus, CommandPaletteRow, CommandPaletteSection,
+    };
     use crate::ui::{ScrollbarAppearance, ScrollbarPlacement, SharedScrollHandle};
     use gpui::{
         Bounds, Context, Render, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext,
@@ -1248,6 +1531,7 @@ mod tests {
         connectivity_scrollbars: [Entity<ScrollbarState>; 24],
         welcome_focus: [FocusHandle; 25],
         modal_states: [GalleryModalState; 5],
+        command_palette: Entity<CommandPalette>,
         page: GalleryPage,
     }
     impl Render for Fixture {
@@ -1259,6 +1543,7 @@ mod tests {
                 self.connectivity_scrollbars.clone(),
                 self.welcome_focus.clone(),
                 self.modal_states.clone(),
+                self.command_palette.clone(),
                 self.page,
                 Rc::new(|_, _, _| {}),
             )
@@ -1295,6 +1580,88 @@ mod tests {
                             SharedScrollHandle::new(),
                         )
                     }),
+                }
+            });
+            let connectivity_scrollbars = std::array::from_fn(|_| {
+                cx.new(|_| {
+                    ScrollbarState::vertical(
+                        ScrollbarAppearance::Automatic,
+                        ScrollbarPlacement::Overlay,
+                        SharedScrollHandle::new(),
+                    )
+                })
+            });
+            let palette_focus = CommandPaletteFocus {
+                container: cx.focus_handle(),
+                last: cx.focus_handle(),
+            };
+            let command_palette = cx.new({
+                let scrollbar = connectivity_scrollbars[23].clone();
+                move |cx| {
+                    CommandPalette::new(
+                        "gallery-command-palette",
+                        Theme::light(),
+                        "happy",
+                        "Search Happy",
+                        vec![
+                            CommandPaletteSection {
+                                id: "suggested".into(),
+                                caption: Some("Suggested".into()),
+                                rows: (0..7)
+                                    .map(|index| {
+                                        CommandPaletteRow::Command(CommandPaletteCommandRow {
+                                            id: format!("suggestion-{index}").into(),
+                                            title: format!("Open Happy project {:02}", index + 1)
+                                                .into(),
+                                            meta: Some("Projects · local agent".into()),
+                                            icon: Some(IconName::Files),
+                                            shortcut: (index == 0).then(|| "⌘1".into()),
+                                            disabled: false,
+                                        })
+                                    })
+                                    .collect(),
+                            },
+                            CommandPaletteSection {
+                                id: "actions".into(),
+                                caption: Some("Actions".into()),
+                                rows: vec![
+                                    CommandPaletteRow::Command(CommandPaletteCommandRow {
+                                        id: "new-project".into(),
+                                        title: "Create new project".into(),
+                                        meta: None,
+                                        icon: Some(IconName::Plus),
+                                        shortcut: Some("⌘N".into()),
+                                        disabled: false,
+                                    }),
+                                    CommandPaletteRow::Control(CommandPaletteControlRow {
+                                        id: "appearance".into(),
+                                        label: "Appearance".into(),
+                                        description: Some("Match the system appearance".into()),
+                                        disabled: false,
+                                        control: Rc::new(|theme, _, _| {
+                                            div()
+                                                .debug_selector(|| {
+                                                    "gallery-command-palette.control".into()
+                                                })
+                                                .text_color(theme.role(ThemeRole::TextSecondary))
+                                                .child("System")
+                                                .into_any_element()
+                                        }),
+                                    }),
+                                ],
+                            },
+                        ],
+                        0,
+                        scrollbar,
+                        palette_focus,
+                        CommandPaletteCallbacks {
+                            query_changed: Rc::new(|_, _| {}),
+                            active_changed: Rc::new(|_, _, _, _| {}),
+                            committed: Rc::new(|_, _, _, _| {}),
+                            dismissed: Rc::new(|_, _| {}),
+                        },
+                        cx,
+                    )
                 }
             });
             Fixture {
@@ -1343,17 +1710,10 @@ mod tests {
                         )
                     }),
                 ],
-                connectivity_scrollbars: std::array::from_fn(|_| {
-                    cx.new(|_| {
-                        ScrollbarState::vertical(
-                            ScrollbarAppearance::Automatic,
-                            ScrollbarPlacement::Overlay,
-                            SharedScrollHandle::new(),
-                        )
-                    })
-                }),
+                connectivity_scrollbars,
                 welcome_focus: std::array::from_fn(|_| cx.focus_handle()),
                 modal_states,
+                command_palette,
                 page,
             }
         });
@@ -1536,6 +1896,9 @@ mod tests {
                 GalleryPage::InstallProgress,
                 "gallery-progress-determinate.root",
             ),
+            (GalleryPage::Sidebar, "gallery-sidebar.root"),
+            (GalleryPage::Settings, "gallery-settings.root"),
+            (GalleryPage::CommandPalette, "gallery-command-palette.card"),
             (GalleryPage::Theme, "gallery-content"),
         ] {
             let cx = render_page(cx, 900.0, 700.0, page);
@@ -1666,6 +2029,44 @@ mod tests {
         [
             "gallery-progress-indeterminate.root",
             "gallery-progress-determinate.root"
+        ]
+    );
+    gallery_wiring_test!(
+        gallery_sidebar_page_wires_complete_product_fixture,
+        GalleryPage::Sidebar,
+        [
+            "gallery-sidebar.root",
+            "gallery-sidebar.section-pinned.heading",
+            "gallery-sidebar.section-bots.heading",
+            "gallery-sidebar.section-projects.heading",
+            "gallery-sidebar.item-project-archive",
+            "gallery-sidebar.item-worktree-offline",
+            "gallery-sidebar.footer",
+            "gallery-sidebar.update.panel",
+            "gallery-sidebar-body.track"
+        ]
+    );
+    gallery_wiring_test!(
+        gallery_settings_page_wires_all_categories_and_overflowing_general_body,
+        GalleryPage::Settings,
+        [
+            "gallery-settings.root",
+            "gallery-settings.category-general",
+            "gallery-settings.category-advanced",
+            "gallery-settings-body-fixture",
+            "gallery-settings-body-scroll.track"
+        ]
+    );
+    gallery_wiring_test!(
+        gallery_command_palette_page_wires_caller_owned_grouped_fixture,
+        GalleryPage::CommandPalette,
+        [
+            "gallery-command-palette.card",
+            "gallery-command-palette.input",
+            "gallery-command-palette.section-suggested",
+            "gallery-command-palette.section-actions",
+            "gallery-command-palette.control",
+            "gallery-command-palette-body-scroll.track"
         ]
     );
     gallery_wiring_test!(

@@ -7,6 +7,7 @@ use std::{cell::Cell, rc::Rc};
 
 use super::icon::{Icon, IconName};
 use super::{
+    metrics::SURFACE_HEADER_HEIGHT,
     scrollbar::{Scrollbar, ScrollbarState},
     text_input::TextInput,
     theme_roles::ThemeRole,
@@ -677,11 +678,11 @@ impl RenderOnce for TitleBar {
         div()
             .debug_selector(part(id, "root"))
             .w_full()
-            .h(px(40.0))
+            .h(px(SURFACE_HEADER_HEIGHT))
             .flex_none()
             .flex()
             .items_center()
-            .px(px(12.0))
+            .px(px(16.0))
             .border_b_1()
             .border_color(self.theme.role(ThemeRole::Divider))
             .font_weight(FontWeight::SEMIBOLD)
@@ -2073,7 +2074,7 @@ mod geometry_tests {
         cx: &mut TestAppContext,
     ) {
         let cx = render(cx, FixtureKind::TitleBar, 400.0, 80.0);
-        assert_rect(bounds(cx, "test-title.root"), 0.0, 0.0, 400.0, 40.0);
+        assert_rect(bounds(cx, "test-title.root"), 0.0, 0.0, 400.0, 56.0);
         let cx = render(cx, FixtureKind::SectionLabel, 280.0, 80.0);
         assert_rect(bounds(cx, "test-section.root"), 0.0, 0.0, 280.0, 28.0);
         let cx = render(cx, FixtureKind::FileRow, 400.0, 80.0);

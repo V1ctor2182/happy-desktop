@@ -13,8 +13,8 @@ pub use super::transport::{
     ProviderOnboardingRow,
 };
 use super::{
-    DesktopBootstrap, HostTransport, TransportOptions, UserError, UserErrorKind, WorkerEvent,
-    start_host_transport,
+    AgentCatalogStore, DesktopBootstrap, GitState, HostTransport, TransportOptions, UserError,
+    UserErrorKind, WorkerEvent, start_host_transport,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -54,15 +54,19 @@ pub struct AgentLifetime {
     availability: AgentAvailability,
     daemon_version: Option<String>,
     snapshot: Option<Arc<DesktopBootstrap>>,
+    git: Arc<BTreeMap<String, GitState>>,
+    catalog: Entity<AgentCatalogStore>,
 }
 
 impl AgentLifetime {
-    fn local() -> Self {
+    fn local(catalog: Entity<AgentCatalogStore>) -> Self {
         Self {
             namespace: AgentNamespace::local_host(),
             availability: AgentAvailability::Connecting,
             daemon_version: None,
             snapshot: None,
+            git: Arc::new(BTreeMap::new()),
+            catalog,
         }
     }
 
@@ -82,6 +86,14 @@ impl AgentLifetime {
     #[allow(dead_code)] // Phase 4 projects the catalog without replacing this entity.
     pub fn snapshot(&self) -> Option<&Arc<DesktopBootstrap>> {
         self.snapshot.as_ref()
+    }
+
+    pub fn git(&self) -> &Arc<BTreeMap<String, GitState>> {
+        &self.git
+    }
+
+    pub fn catalog(&self) -> &Entity<AgentCatalogStore> {
+        &self.catalog
     }
 }
 
@@ -129,7 +141,9 @@ pub struct AgentRegistry {
 impl AgentRegistry {
     fn new(cx: &mut Context<ConnectivityController>) -> Self {
         let host_namespace = AgentNamespace::local_host();
-        let host = cx.new(|_| AgentLifetime::local());
+        let catalog_namespace = host_namespace.clone();
+        let catalog = cx.new(move |_| AgentCatalogStore::new(catalog_namespace));
+        let host = cx.new(|_| AgentLifetime::local(catalog));
         let mut lifetimes = BTreeMap::new();
         lifetimes.insert(host_namespace.clone(), host);
         Self {
@@ -403,6 +417,20 @@ impl ConnectivityController {
                     WorkerEvent::Stopped => "stopped",
                 }
             );
+            match &event {
+                WorkerEvent::Error { error }
+                | WorkerEvent::Offline { error }
+                | WorkerEvent::OnboardingMutationFailed { error, .. } => {
+                    eprintln!("connectivity error: {}", error.message);
+                }
+                WorkerEvent::InstallFailed { message } => {
+                    eprintln!("connectivity install error: {message}");
+                }
+                WorkerEvent::Reconnecting {
+                    error: Some(error), ..
+                } => eprintln!("connectivity retry: {}", error.message),
+                _ => {}
+            }
         }
         match event {
             WorkerEvent::Checking => self.initial_phase = InitialPhase::Checking,
@@ -461,12 +489,13 @@ impl ConnectivityController {
             }
             WorkerEvent::Bootstrap {
                 snapshot,
+                git,
                 daemon_version,
             } => {
-                self.accept_snapshot(snapshot, Some(daemon_version), cx);
+                self.accept_snapshot(snapshot, Some(git), Some(daemon_version), cx);
             }
-            WorkerEvent::Reconciled { snapshot } => {
-                self.accept_snapshot(snapshot, None, cx);
+            WorkerEvent::Reconciled { snapshot, git } => {
+                self.accept_snapshot(snapshot, git, None, cx);
             }
             WorkerEvent::StreamHello(hello) => {
                 let _delivery_position = (hello.cursor, hello.daemon_id);
@@ -558,7 +587,7 @@ impl ConnectivityController {
                     self.providers_continue_required = snapshot.onboarding.steps.providers.done
                         && !snapshot.onboarding.steps.project.done;
                 }
-                self.accept_snapshot(snapshot, None, cx);
+                self.accept_snapshot(snapshot, None, None, cx);
             }
             WorkerEvent::OnboardingMutationFailed {
                 id,
@@ -572,7 +601,7 @@ impl ConnectivityController {
                 }
                 self.pending_mutation = None;
                 if let Some(snapshot) = snapshot {
-                    self.accept_snapshot(snapshot, None, cx);
+                    self.accept_snapshot(snapshot, None, None, cx);
                 }
                 if self.mutation_matches_phase(kind) {
                     self.onboarding_failure = Some(OnboardingMutationFailure { id, kind, error });
@@ -611,6 +640,7 @@ impl ConnectivityController {
     fn accept_snapshot(
         &mut self,
         snapshot: DesktopBootstrap,
+        git: Option<BTreeMap<String, GitState>>,
         daemon_version: Option<String>,
         cx: &mut Context<Self>,
     ) {
@@ -634,10 +664,21 @@ impl ConnectivityController {
         self.profile_version = Some(snapshot.profile.version.clone());
         self.profile_name = snapshot.profile.name.clone();
         self.profile_email = snapshot.profile.email.clone();
-        self.agents.host().update(cx, |host, cx| {
+        let host_entity = self.agents.host().clone();
+        let (catalog, retained_git) = {
+            let host = host_entity.read(cx);
+            (host.catalog.clone(), host.git.clone())
+        };
+        let next_git = git.map(Arc::new).unwrap_or(retained_git);
+        catalog.update(cx, |catalog, cx| {
+            catalog.reconcile(&snapshot, next_git.as_ref());
+            cx.notify();
+        });
+        host_entity.update(cx, |host, cx| {
             if let Some(version) = daemon_version {
                 host.daemon_version = Some(version);
             }
+            host.git = next_git;
             host.snapshot = Some(Arc::new(snapshot));
             cx.notify();
         });
@@ -707,6 +748,7 @@ mod tests {
             },
             projects: Vec::new(),
             workspaces: Vec::new(),
+            bots: Vec::new(),
         }
     }
 
@@ -849,7 +891,13 @@ mod tests {
             ),
         ] {
             controller.update(cx, |controller, cx| {
-                controller.apply(WorkerEvent::Reconciled { snapshot: value }, cx);
+                controller.apply(
+                    WorkerEvent::Reconciled {
+                        snapshot: value,
+                        git: None,
+                    },
+                    cx,
+                );
             });
             controller.read_with(cx, |controller, _| {
                 assert_eq!(controller.initial_phase(), &expected);
@@ -861,6 +909,7 @@ mod tests {
             controller.apply(
                 WorkerEvent::Reconciled {
                     snapshot: snapshot(true, true, true, false),
+                    git: None,
                 },
                 cx,
             );
@@ -881,6 +930,7 @@ mod tests {
             controller.apply(
                 WorkerEvent::Reconciled {
                     snapshot: snapshot(true, true, true, true),
+                    git: None,
                 },
                 cx,
             );
@@ -898,6 +948,7 @@ mod tests {
             controller.apply(
                 WorkerEvent::Reconciled {
                     snapshot: snapshot(false, false, false, false),
+                    git: None,
                 },
                 cx,
             );
@@ -982,6 +1033,7 @@ mod tests {
             controller.apply(
                 WorkerEvent::Reconciled {
                     snapshot: snapshot(false, false, false, false),
+                    git: None,
                 },
                 cx,
             );
@@ -1040,6 +1092,7 @@ mod tests {
             controller.apply(
                 WorkerEvent::Reconciled {
                     snapshot: snapshot(true, false, false, false),
+                    git: None,
                 },
                 cx,
             );
@@ -1055,6 +1108,7 @@ mod tests {
             controller.apply(
                 WorkerEvent::Reconciled {
                     snapshot: snapshot(true, true, false, false),
+                    git: None,
                 },
                 cx,
             );
