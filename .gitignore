@@ -18,6 +18,8 @@ __screenshots__
 *.db-shm
 *.db-wal
 packages/happy-desktop-electron/release
+output/happy-desktop-rust/
+packages/happy-desktop-rust/target/
 
 # local drafts, 3d party repos we pull in for research etc
 .local/
