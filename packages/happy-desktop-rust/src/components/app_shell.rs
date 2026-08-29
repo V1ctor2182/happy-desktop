@@ -1,11 +1,14 @@
 use crate::components::channel_header::channel_header;
 use crate::components::conversation::conversation;
+use crate::components::document_surface::document_surface;
 use crate::components::file_browser::file_browser;
 use crate::components::file_editor::file_editor;
 use crate::components::file_preview::file_preview;
+use crate::components::inbox::inbox;
 use crate::components::rail::{interactive_rail, rail};
-use crate::components::route_surface::route_surface;
+use crate::components::settings::settings;
 use crate::components::sidebar::{interactive_sidebar, sidebar};
+use crate::components::terminal_panel::terminal_panel;
 use crate::components::title_bar::title_bar;
 use crate::design::geometry::sidebar_width;
 use crate::design::theme::{Theme, UI_FONT};
@@ -65,11 +68,11 @@ fn interactive_shell(
         } else {
             interactive_sidebar(theme, selected_sidebar, sidebar_width, cx)
         })
-        .child(workspace(theme, selected_rail))
+        .child(workspace(theme, selected_rail, selected_sidebar))
         .child(if selected_rail == 1 {
             file_preview(theme, sidebar_width)
         } else {
-            inspector(theme, sidebar_width)
+            terminal_panel(theme, sidebar_width)
         });
 
     div()
@@ -104,7 +107,7 @@ pub fn shell(
         .w_full()
         .child(rail(theme, selected_rail))
         .child(sidebar(theme, selected_sidebar, sidebar_width))
-        .child(workspace(theme, selected_rail));
+        .child(workspace(theme, selected_rail, selected_sidebar));
     if panel {
         content = content.child(inspector(theme, sidebar_width));
     }
@@ -125,22 +128,20 @@ pub fn shell(
         .child(content)
 }
 
-fn workspace(theme: Theme, selected_rail: usize) -> Div {
+fn workspace(theme: Theme, selected_rail: usize, selected_sidebar: usize) -> Div {
     let body = match selected_rail {
+        0 if selected_sidebar == 6 => document_surface(theme),
         0 => conversation(theme),
         1 => file_editor(theme),
-        2 => route_surface(
-            theme,
-            "Inbox",
-            "Review activity that needs your attention.",
-            "View Inbox",
-        ),
-        _ => route_surface(
-            theme,
-            "Settings",
-            "Configure Happy Agent, models, permissions, and appearance.",
-            "Open Settings",
-        ),
+        2 => inbox(theme),
+        _ => settings(theme),
+    };
+    let (title, subtitle, action) = match selected_rail {
+        0 if selected_sidebar == 6 => ("Documents", "Owned by this Happy Agent", "New document"),
+        0 => ("Rust rewrite", "Native GPUI app parity", "New session"),
+        1 => ("Files", "Changes and all files", "New file"),
+        2 => ("Inbox", "Activity across Happy Agents", "Mark all read"),
+        _ => ("Settings", "Local and remote Happy Agents", "Done"),
     };
     div()
         .debug_selector(|| "app-shell-workspace".to_owned())
@@ -150,7 +151,7 @@ fn workspace(theme: Theme, selected_rail: usize) -> Div {
         .flex_col()
         .h_full()
         .bg(theme.surface)
-        .child(channel_header(theme))
+        .child(channel_header(theme, title, subtitle, action))
         .child(body)
 }
 
@@ -260,6 +261,11 @@ mod tests {
         // Sidebar row 3 is x=70…418, y=280…312 in the complete window.
         cx.simulate_click(point_px(100.0, 296.0), Modifiers::default());
         assert_eq!(cx.read(|app_cx| app.read(app_cx).selected_sidebar), 3);
+
+        // The Documents row is row 6 at y=382…414 and replaces only the workspace body.
+        cx.simulate_click(point_px(100.0, 398.0), Modifiers::default());
+        assert_eq!(cx.read(|app_cx| app.read(app_cx).selected_sidebar), 6);
+        assert!(cx.debug_bounds("document-surface").is_some());
 
         // Appearance control is x=18…46, y=710…738 in the complete window.
         cx.simulate_click(point_px(32.0, 724.0), Modifiers::default());

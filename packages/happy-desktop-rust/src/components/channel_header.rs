@@ -3,7 +3,7 @@ use crate::design::geometry::SURFACE_HEADER_HEIGHT;
 use crate::design::theme::{Theme, UI_FONT};
 use gpui::{Div, FontWeight, div, prelude::*, px};
 
-pub fn channel_header(theme: Theme) -> Div {
+pub fn channel_header(theme: Theme, title: &str, subtitle: &str, action_label: &str) -> Div {
     div()
         .debug_selector(|| "channel-header".to_owned())
         .flex()
@@ -28,18 +28,18 @@ pub fn channel_header(theme: Theme) -> Div {
                     div()
                         .text_size(px(15.0))
                         .font_weight(FontWeight::BOLD)
-                        .child("Rust rewrite"),
+                        .child(title.to_owned()),
                 )
                 .child(
                     div()
                         .text_size(px(12.0))
                         .text_color(theme.text_secondary)
-                        .child("Native GPUI app parity"),
+                        .child(subtitle.to_owned()),
                 ),
         )
         .child(button(
             "new-session",
-            "New session",
+            action_label.to_owned(),
             ButtonSize::Small,
             ButtonVariant::Primary,
             theme,
@@ -58,7 +58,12 @@ mod tests {
         register_fonts(cx.text_system());
         let cx = cx.add_empty_window();
         cx.draw(point(px(0.0), px(0.0)), size_px(496.0, 56.0), |_, _| {
-            channel_header(Theme::light())
+            channel_header(
+                Theme::light(),
+                "Rust rewrite",
+                "Native GPUI app parity",
+                "New session",
+            )
         });
         assert_eq!(
             cx.debug_bounds("channel-header"),
