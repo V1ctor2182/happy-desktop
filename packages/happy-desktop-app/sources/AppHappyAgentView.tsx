@@ -41,6 +41,7 @@ import type {
     HappyAgentInboxStore,
     HappyAgentInstructionsStore,
     HappyAgentSecurityPolicyStore,
+    HappyAgentSecretsStore,
     HappyAgentAvailabilitySnapshot,
     HappyAgentProviderUsageStore,
     HappyAgentProvidersStore,
@@ -313,6 +314,8 @@ export interface AppHappyAgentSession {
     readonly instructions?: HappyAgentInstructionsStore;
     /** This Happy Agent's machine-wide permission-review policy. */
     readonly securityPolicy?: HappyAgentSecurityPolicyStore;
+    /** This Happy Agent's global write-only environment bundles. */
+    readonly secrets?: () => HappyAgentSecretsStore;
 }
 
 export interface AppHappyAgentDirectorySnapshot {

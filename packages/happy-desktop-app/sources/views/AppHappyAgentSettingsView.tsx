@@ -10,6 +10,7 @@ import type {
     HappyAgentCloudSnapshot,
     HappyAgentDebugLogSnapshot,
     HappyAgentSecurityPolicySnapshot,
+    HappyAgentSecret,
     HappyAgentModelCatalog,
     HappyAgentModelKey,
     HappyAgentPermissionMode,
@@ -36,6 +37,7 @@ import {
     happyAgentSocialJoinStoreNoop,
     happyAgentProviderUsageStoreNoop,
     happyAgentProvidersStoreNoop,
+    happyAgentSecretsStoreNoop,
     happyAgentWindowStoreNoop,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
@@ -51,6 +53,7 @@ import {
     HappyAgentProfilerSettings,
     HappyAgentEncryptionSettings,
     HappyAgentProfileSettings,
+    HappyAgentSecretSettings,
     HappyAgentSettingsShell,
     HappyAgentStateSettings,
     HappyAgentUsageSettings,
@@ -60,6 +63,7 @@ import {
     type HappyAgentEncryption,
     type HappyAgentEncryptionSecret,
     type HappyAgentProviderRow,
+    type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
     type HappySocialEnrollment,
@@ -78,6 +82,7 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     // Happy Mobile rather than to this account, so it stays its own.
     { icon: "users", id: "account", label: "Account" },
     { icon: "doc", id: "instructions", label: "Instructions" },
+    { icon: "lock", id: "secrets", label: "Secrets" },
     { icon: "globe", id: "providers", label: "Providers" },
     // Usage sits after Providers because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
@@ -269,6 +274,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     "mobile-access": "This Happy Agent's connection to Happy Mobile",
     account: "Who this machine is when it authors work, and the devices signed in with it",
     instructions: "Machine-wide agent guidance and permission-review policy",
+    secrets: "Write-only environment bundles this Happy Agent can provide to agents",
     providers: "Every model provider this Happy Agent daemon knows about",
     usage: "How much of each provider account's plan this machine has spent",
 };
@@ -428,6 +434,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         securityPolicyStore?.get ?? securityPolicyUnavailable,
         securityPolicyStore?.get ?? securityPolicyUnavailable,
     );
+    // Secrets are safe metadata only. The store starts its repeating read while
+    // this category (or raw Dev Tools state) watches it and stops immediately
+    // when the surface leaves.
+    const secretsStore =
+        (props.section === "secrets" || stateOpen ? host?.session?.secrets?.() : undefined) ??
+        happyAgentSecretsStoreNoop;
+    const secrets = useSyncExternalStore(
+        secretsStore.subscribe,
+        secretsStore.get,
+        secretsStore.get,
+    );
     // The Providers category is the only thing that reads this, and subscribing
     // is what starts the work: the daemon's configuration is read, and re-read
     // every few seconds, only while that category is the one on screen.
@@ -561,6 +578,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             models,
                             profile,
                             providers,
+                            secrets,
                             securityPolicy,
                             settings,
                             socialJoin,
@@ -783,6 +801,20 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
+            ) : props.section === "secrets" ? (
+                <HappyAgentSecretSettings
+                    loading={secrets.loading}
+                    onSecretCreate={(input) =>
+                        happyAgentOnline()
+                            ? secretsStore.secretCreate(input)
+                            : Promise.reject(
+                                  new Error(unavailable ?? "The local Happy Agent is unavailable."),
+                              )
+                    }
+                    secrets={secretRows(secrets.secrets)}
+                    {...(secrets.error ? { error: secrets.error.message } : {})}
+                    {...(unavailable === undefined ? {} : { unavailable })}
+                />
             ) : props.section === "usage" ? (
                 <HappyAgentUsageSettings
                     loading={usage.loading}
@@ -909,6 +941,7 @@ function stateDocuments(snapshots: {
     readonly models: unknown;
     readonly profile: unknown;
     readonly providers: unknown;
+    readonly secrets: unknown;
     readonly securityPolicy: unknown;
     readonly settings: unknown;
     readonly socialJoin: unknown;
@@ -952,6 +985,12 @@ function stateDocuments(snapshots: {
             id: "providers",
             label: "Providers",
             value: stateText(snapshots.providers),
+        },
+        {
+            description: "Safe secret metadata; stored values never enter this snapshot",
+            id: "secrets",
+            label: "Secrets",
+            value: stateText(snapshots.secrets),
         },
         {
             description: "The model catalog and last-used selection",
@@ -1302,5 +1341,20 @@ function providerRows(
         saving: provider.saving,
         serviceTiers: provider.serviceTiers.map((tier) => (tier === "fast" ? "Fast" : tier)),
         status: provider.disabledReason ?? "ready",
+    }));
+}
+
+/** Safe secret metadata with its timestamp localized for the settings list. */
+function secretRows(secrets: readonly HappyAgentSecret[]): readonly HappyAgentSecretRow[] {
+    return secrets.map((secret) => ({
+        availableToAgents: secret.availableToAgents,
+        description: secret.description,
+        environmentVariables: secret.environmentVariables,
+        id: secret.id,
+        managed: secret.managed,
+        updatedAt: new Intl.DateTimeFormat(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+        }).format(new Date(secret.updatedAt)),
     }));
 }

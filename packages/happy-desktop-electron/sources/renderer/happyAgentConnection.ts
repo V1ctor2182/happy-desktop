@@ -30,6 +30,7 @@ import {
     type HappyAgentProviderUsageStore,
     type HappyAgentProvidersStore,
     type HappyAgentSecurityPolicyStore,
+    type HappyAgentSecretsStore,
     type HappyAgentSessionLocation,
     type HappyAgentWorkspaceMemoryDocument,
     type HappyAgentWorkspaceMemoryPersistence,
@@ -107,6 +108,7 @@ export interface HappyAgentSession {
     readonly workspace: HappyAgentWorkspaceStore;
     readonly instructions: HappyAgentInstructionsStore;
     readonly securityPolicy: HappyAgentSecurityPolicyStore;
+    readonly secrets: () => HappyAgentSecretsStore;
     readonly clock: HappyAgentClockStore;
 }
 
@@ -398,6 +400,7 @@ export function happyAgentConnectionOpen(input: {
                     }),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
+                    secrets: () => client.secrets(),
                     clock: happyAgentClockStoreCreate(),
                 };
                 debugEntry({

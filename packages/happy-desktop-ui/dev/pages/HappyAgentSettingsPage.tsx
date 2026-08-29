@@ -11,10 +11,12 @@ import {
     HappyAgentProviderSettings,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
+    HappyAgentSecretSettings,
     HappyAgentSettingsShell,
     HappyAgentUsageSettings,
     type HappyAgentDevice,
     type HappyAgentProviderRow,
+    type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -26,6 +28,7 @@ const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "users", id: "account", label: "Account" },
     { icon: "doc", id: "instructions", label: "Instructions" },
+    { icon: "lock", id: "secrets", label: "Secrets" },
     { icon: "globe", id: "providers", label: "Providers" },
     { icon: "zap", id: "usage", label: "Usage" },
     { icon: "mobile", id: "mobile-access", label: "Mobile Access" },
@@ -397,6 +400,25 @@ const providers: readonly HappyAgentProviderRow[] = [
     },
 ];
 
+const secrets: readonly HappyAgentSecretRow[] = [
+    {
+        availableToAgents: true,
+        description: "Production deploy credentials",
+        environmentVariables: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"],
+        id: "secret-production",
+        managed: false,
+        updatedAt: "29 Aug 2026, 01:42",
+    },
+    {
+        availableToAgents: false,
+        description: "Linear integration",
+        environmentVariables: ["LINEAR_API_KEY"],
+        id: "secret-linear",
+        managed: true,
+        updatedAt: "27 Aug 2026, 18:10",
+    },
+];
+
 const noop = () => undefined;
 
 /**
@@ -436,7 +458,7 @@ export function HappyAgentSettingsBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The local workspace's settings window: a permanent category column whose heading is the way back out, and one category body beside it. Every state is prop-driven, with no daemon connection or router."
+            summary="The local workspace's settings window: a permanent category column whose heading is the way back out, and one category body beside it. Server-backed state is prop-driven, while transient write-only form values stay inside shared UI."
             title="Happy Agent settings"
         >
             <FullScreenSpecimen
@@ -1066,6 +1088,45 @@ export function HappyAgentSettingsBlueprintPage() {
                         onRevert={noop}
                         onSave={noop}
                         saveError="Enter the email used for Git commits."
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Secrets category: safe metadata lists write-only environment bundles without exposing values"
+                label="Happy Agent settings — secrets"
+                number="02s"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="secrets"
+                    categories={categories}
+                    description="Write-only environment bundles this Happy Agent can provide to agents"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Secrets"
+                >
+                    <HappyAgentSecretSettings
+                        onSecretCreate={() => Promise.resolve()}
+                        secrets={secrets}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Create flow: one write-only value row, explicit global availability, and the standard modal form placement"
+                label="Happy Agent settings — create secret"
+                number="02t"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="secrets"
+                    categories={categories}
+                    description="Write-only environment bundles this Happy Agent can provide to agents"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Secrets"
+                >
+                    <HappyAgentSecretSettings
+                        initialCreateOpen
+                        onSecretCreate={() => Promise.resolve()}
+                        secrets={secrets}
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>

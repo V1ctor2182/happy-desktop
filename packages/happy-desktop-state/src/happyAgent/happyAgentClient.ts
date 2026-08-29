@@ -65,6 +65,10 @@ import {
     type HappyAgentSecurityPolicyStore,
 } from "./happyAgentSecurityPolicyStore.js";
 import {
+    happyAgentSecretsStoreCreate,
+    type HappyAgentSecretsStore,
+} from "./happyAgentSecretsStore.js";
+import {
     happyAgentProviderUsageStoreCreate,
     type HappyAgentProviderUsageSource,
     type HappyAgentProviderUsageStore,
@@ -171,6 +175,8 @@ export interface HappyAgentWorkspaceClient {
     instructions(): HappyAgentInstructionsStore;
     /** This Happy Agent's machine-wide permission-review policy, as one editable document. */
     securityPolicy(): HappyAgentSecurityPolicyStore;
+    /** Global write-only environment bundles, materialized while Settings reads them. */
+    secrets(): HappyAgentSecretsStore;
     /** Reads one bounded page of one checkout directory. */
     workspaceFileTreeRead(
         groupId: HappyAgentGroupId,
@@ -431,6 +437,7 @@ export function happyAgentWorkspaceClientCreate(
     let providersStore: HappyAgentProvidersStore | undefined;
     let instructionsStore: HappyAgentInstructionsStore | undefined;
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
+    let secretsStore: HappyAgentSecretsStore | undefined;
     const chats = new Map<HappyAgentSessionId, ChatBinding>();
     let disposed = false;
 
@@ -628,6 +635,11 @@ export function happyAgentWorkspaceClientCreate(
             securityPolicyStore ??= happyAgentSecurityPolicyStoreCreate({ client: deps.client });
             return securityPolicyStore;
         },
+        secrets() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            secretsStore ??= happyAgentSecretsStoreCreate({ client: deps.client });
+            return secretsStore;
+        },
         async chat(sessionId) {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             let binding = chats.get(sessionId);
@@ -737,6 +749,8 @@ export function happyAgentWorkspaceClientCreate(
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();
             securityPolicyStore = undefined;
+            secretsStore?.[Symbol.dispose]();
+            secretsStore = undefined;
             deps.catalogSource[Symbol.dispose]();
             for (const binding of chats.values()) {
                 chatDeactivate(binding);

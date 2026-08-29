@@ -45,6 +45,7 @@ export * from "./happyAgent/happyAgentProfileStore.js";
 export * from "./happyAgent/happyAgentProviderUsageStore.js";
 export * from "./happyAgent/happyAgentProvidersStore.js";
 export * from "./happyAgent/happyAgentSecurityPolicyStore.js";
+export * from "./happyAgent/happyAgentSecretsStore.js";
 export * from "./happyAgent/happyAgentSessionListStore.js";
 export * from "./happyAgent/happyAgentSettingsStore.js";
 export * from "./happyAgent/happyAgentSidebarCollapseStore.js";

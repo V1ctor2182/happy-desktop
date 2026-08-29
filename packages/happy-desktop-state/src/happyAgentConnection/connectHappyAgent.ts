@@ -28,6 +28,7 @@ import { happyAgentServiceTierToWire } from "../happyAgentServiceTier.js";
 import { ChatStore } from "./ChatStore.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
+import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import {
     applyChanges,
@@ -1374,6 +1375,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 return;
             }
             case "profile.updated":
+            case "secret.created":
+            case "secret.updated":
+            case "secret.attached":
+            case "secret.detached":
+            case "secret.removed":
             case "terminal.created":
             case "terminal.updated":
                 return;
@@ -3178,6 +3184,12 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
             );
         case "tool_call":
             return next.type === "tool_call" && previous.id === next.id;
+        case "tool_call_request":
+            return (
+                next.type === "tool_call_request" &&
+                previous.name === next.name &&
+                deepEqual(previous.arguments, next.arguments)
+            );
         case "compaction":
             return (
                 next.type === "compaction" &&

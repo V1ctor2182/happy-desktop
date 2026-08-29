@@ -623,6 +623,18 @@ export {
     type HappyAgentProviderStatus,
 } from "./pages/settings/HappyAgentProviderSettings";
 export {
+    HappyAgentSecretSettings,
+    type HappyAgentSecretCreateInput,
+    type HappyAgentSecretRow,
+    type HappyAgentSecretSettingsProps,
+} from "./pages/settings/HappyAgentSecretSettings";
+export {
+    HappyAgentSecretCreateDialog,
+    type HappyAgentSecretCreateDialogProps,
+    type HappyAgentSecretCreateDraft,
+    type HappyAgentSecretVariableDraft,
+} from "./pages/settings/HappyAgentSecretCreateDialog";
+export {
     HappyAgentProfileSettings,
     type HappyAgentProfileSettingsProps,
 } from "./pages/settings/HappyAgentProfileSettings";

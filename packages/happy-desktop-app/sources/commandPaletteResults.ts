@@ -275,6 +275,14 @@ const SETTINGS_JUMPS: readonly {
         keywords: "agents.md security.md",
     },
     {
+        id: "settings:secrets",
+        title: "Settings › Secrets",
+        section: "secrets",
+        sectionLabel: "Secrets",
+        icon: "lock",
+        keywords: "environment variables credentials tokens api keys",
+    },
+    {
         id: "settings:providers",
         title: "Settings › Providers",
         section: "providers",
