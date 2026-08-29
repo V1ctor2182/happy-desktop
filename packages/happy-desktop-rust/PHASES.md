@@ -23,6 +23,16 @@ the macOS application is archived under a new version in
    keyboard/accessibility behavior, Retina raster/optical audits, performance,
    packaging, and side-by-side sign-off against the original app.
 
+## Archived implementation checkpoints
+
+- `0.1.0` — native shell foundation.
+- `0.2.0` — conversation, tool, approval, and composer surfaces.
+- `0.3.0` — stable GPUI navigation interactions.
+- `0.4.0` — file browser, editor, diff, and preview surfaces.
+- `0.5.0` — Inbox, Settings, Documents, and Terminal surfaces.
+- `0.6.0` — Rust-owned daemon lifecycle, authenticated in-process capability
+  boundary, typed health/bootstrap contracts, and live connection status.
+
 A phase may be split into numbered subphases when it would otherwise stop being
 an independently reviewable commit. No later phase is allowed to replace an
 earlier phase with a web view or embed the old renderer.

@@ -12,20 +12,28 @@ use crate::components::terminal_panel::terminal_panel;
 use crate::components::title_bar::title_bar;
 use crate::design::geometry::sidebar_width;
 use crate::design::theme::{Theme, UI_FONT};
+use crate::state::runtime::RuntimeSnapshot;
 use gpui::{Context, Div, FontWeight, Window, div, prelude::*, px};
 
 pub struct AppShell {
     dark: bool,
     selected_rail: usize,
     selected_sidebar: usize,
+    runtime: RuntimeSnapshot,
 }
 
 impl AppShell {
-    pub fn new(dark: bool, selected_rail: usize, selected_sidebar: usize) -> Self {
+    pub fn new(
+        dark: bool,
+        selected_rail: usize,
+        selected_sidebar: usize,
+        runtime: RuntimeSnapshot,
+    ) -> Self {
         Self {
             dark,
             selected_rail,
             selected_sidebar,
+            runtime,
         }
     }
 
@@ -42,6 +50,7 @@ impl AppShell {
             self.selected_rail,
             self.selected_sidebar,
             window_width,
+            &self.runtime,
             cx,
         )
     }
@@ -53,6 +62,7 @@ fn interactive_shell(
     selected_rail: usize,
     selected_sidebar: usize,
     width: f32,
+    runtime: &RuntimeSnapshot,
     cx: &mut Context<crate::HappyApp>,
 ) -> Div {
     let sidebar_width = sidebar_width(width);
@@ -68,7 +78,12 @@ fn interactive_shell(
         } else {
             interactive_sidebar(theme, selected_sidebar, sidebar_width, cx)
         })
-        .child(workspace(theme, selected_rail, selected_sidebar))
+        .child(workspace(
+            theme,
+            selected_rail,
+            selected_sidebar,
+            Some(runtime),
+        ))
         .child(if selected_rail == 1 {
             file_preview(theme, sidebar_width)
         } else {
@@ -107,7 +122,7 @@ pub fn shell(
         .w_full()
         .child(rail(theme, selected_rail))
         .child(sidebar(theme, selected_sidebar, sidebar_width))
-        .child(workspace(theme, selected_rail, selected_sidebar));
+        .child(workspace(theme, selected_rail, selected_sidebar, None));
     if panel {
         content = content.child(inspector(theme, sidebar_width));
     }
@@ -128,7 +143,12 @@ pub fn shell(
         .child(content)
 }
 
-fn workspace(theme: Theme, selected_rail: usize, selected_sidebar: usize) -> Div {
+fn workspace(
+    theme: Theme,
+    selected_rail: usize,
+    selected_sidebar: usize,
+    runtime: Option<&RuntimeSnapshot>,
+) -> Div {
     let body = match selected_rail {
         0 if selected_sidebar == 6 => document_surface(theme),
         0 => conversation(theme),
@@ -136,13 +156,16 @@ fn workspace(theme: Theme, selected_rail: usize, selected_sidebar: usize) -> Div
         2 => inbox(theme),
         _ => settings(theme),
     };
-    let (title, subtitle, action) = match selected_rail {
+    let (title, fixture_subtitle, action) = match selected_rail {
         0 if selected_sidebar == 6 => ("Documents", "Owned by this Happy Agent", "New document"),
         0 => ("Rust rewrite", "Native GPUI app parity", "New session"),
         1 => ("Files", "Changes and all files", "New file"),
         2 => ("Inbox", "Activity across Happy Agents", "Mark all read"),
         _ => ("Settings", "Local and remote Happy Agents", "Done"),
     };
+    let subtitle = runtime
+        .map(|snapshot| snapshot.message.as_ref())
+        .unwrap_or(fixture_subtitle);
     div()
         .debug_selector(|| "app-shell-workspace".to_owned())
         .flex()
