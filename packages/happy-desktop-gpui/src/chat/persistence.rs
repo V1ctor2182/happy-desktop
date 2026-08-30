@@ -18,9 +18,9 @@ use sha2::{Digest, Sha256};
 use crate::connectivity::{AgentNamespace, ConversationKey, WorkspaceKey};
 
 use super::workspace::{
-    ClientConversationId, DRAFT_BYTE_LIMIT, ENTRY_LIMIT, FileTabKey, RECENT_SESSION_LIMIT,
-    ScrollAnchor, ToolTabKey, TranscriptMemory, TranscriptRowId, WorkspaceBehavior,
-    WorkspaceSnapshot, WorkspaceTab,
+    ClientConversationId, DRAFT_BYTE_LIMIT, ENTRY_LIMIT, FileTabKey, FileTabPresentation,
+    RECENT_SESSION_LIMIT, ScrollAnchor, ToolTabKey, TranscriptMemory, TranscriptRowId,
+    WorkspaceBehavior, WorkspaceSnapshot, WorkspaceTab,
 };
 
 const DOCUMENT_VERSION: u32 = 1;
@@ -327,6 +327,8 @@ pub(crate) struct RestoredWorkspace {
     pub behavior: WorkspaceBehavior,
     pub tabs: Vec<WorkspaceTab>,
     pub active_tab: Option<WorkspaceTab>,
+    pub file_tab_presentations: BTreeMap<FileTabKey, FileTabPresentation>,
+    pub ephemeral_file_tab: Option<FileTabKey>,
     pub activation_history: Vec<WorkspaceTab>,
     pub archived_recents: Vec<ConversationKey>,
     pub group_draft: Arc<str>,
@@ -374,12 +376,19 @@ impl StoredWorkspace {
             workspace_id: snapshot.workspace.id().to_owned(),
             touched_at: now_nanos(),
             behavior: StoredBehavior::from(snapshot.behavior),
-            tabs: snapshot.tabs.iter().map(StoredTab::from).collect(),
-            active_tab: snapshot.active_tab.as_ref().map(StoredTab::from),
+            tabs: snapshot
+                .tabs
+                .iter()
+                .map(|tab| StoredTab::from_snapshot_tab(snapshot, tab))
+                .collect(),
+            active_tab: snapshot
+                .active_tab
+                .as_ref()
+                .map(|tab| StoredTab::from_snapshot_tab(snapshot, tab)),
             activation_history: snapshot
                 .activation_history
                 .iter()
-                .map(StoredTab::from)
+                .map(|tab| StoredTab::from_snapshot_tab(snapshot, tab))
                 .collect(),
             archived_recents: snapshot
                 .archived_recents
@@ -409,6 +418,23 @@ impl StoredWorkspace {
                 transcripts.insert(key, memory);
             }
         }
+        let mut file_tab_presentations = BTreeMap::new();
+        let mut ephemeral_file_tab = None;
+        for tab in &self.tabs {
+            if let StoredTab::File {
+                file_id,
+                presentation,
+                preview,
+            } = tab
+            {
+                if let Some(key) = FileTabKey::new(file_id) {
+                    file_tab_presentations.insert(key.clone(), presentation.restore());
+                    if *preview {
+                        ephemeral_file_tab = Some(key);
+                    }
+                }
+            }
+        }
         RestoredWorkspace {
             behavior: self.behavior.restore(),
             tabs: self
@@ -418,6 +444,8 @@ impl StoredWorkspace {
                 .filter_map(restore_tab)
                 .collect(),
             active_tab: self.active_tab.and_then(restore_tab),
+            file_tab_presentations,
+            ephemeral_file_tab,
             activation_history: self
                 .activation_history
                 .into_iter()
@@ -463,31 +491,65 @@ impl StoredBehavior {
     }
 }
 
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum StoredFilePresentation {
+    #[default]
+    File,
+    Diff,
+}
+impl StoredFilePresentation {
+    fn restore(self) -> FileTabPresentation {
+        match self {
+            Self::File => FileTabPresentation::File,
+            Self::Diff => FileTabPresentation::Diff,
+        }
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 enum StoredTab {
-    Conversation { conversation_id: String },
-    File { file_id: String },
-    Tool { tool_id: String },
+    Conversation {
+        conversation_id: String,
+    },
+    File {
+        file_id: String,
+        #[serde(default)]
+        presentation: StoredFilePresentation,
+        #[serde(default)]
+        preview: bool,
+    },
+    Tool {
+        tool_id: String,
+    },
 }
-
-impl From<&WorkspaceTab> for StoredTab {
-    fn from(value: &WorkspaceTab) -> Self {
+impl StoredTab {
+    fn from_snapshot_tab(snapshot: &WorkspaceSnapshot, value: &WorkspaceTab) -> Self {
         match value {
             WorkspaceTab::Conversation(key) => Self::Conversation {
                 conversation_id: key.id().to_owned(),
             },
-            WorkspaceTab::File(key) => Self::File {
-                file_id: key.as_str().to_owned(),
-            },
+            WorkspaceTab::File(key) => {
+                let presentation = match snapshot
+                    .file_tab_presentations
+                    .get(key)
+                    .copied()
+                    .unwrap_or_default()
+                {
+                    FileTabPresentation::File => StoredFilePresentation::File,
+                    FileTabPresentation::Diff => StoredFilePresentation::Diff,
+                };
+                Self::File {
+                    file_id: key.as_str().to_owned(),
+                    presentation,
+                    preview: snapshot.ephemeral_file_tab.as_ref() == Some(key),
+                }
+            }
             WorkspaceTab::Tool(key) => Self::Tool {
                 tool_id: key.as_str().to_owned(),
             },
         }
     }
-}
-
-impl StoredTab {
     fn restore(self, namespace: &AgentNamespace) -> Option<WorkspaceTab> {
         match self {
             Self::Conversation { conversation_id } if !conversation_id.is_empty() => {
@@ -496,7 +558,7 @@ impl StoredTab {
                     conversation_id,
                 )))
             }
-            Self::File { file_id } => FileTabKey::new(file_id).map(WorkspaceTab::File),
+            Self::File { file_id, .. } => FileTabKey::new(file_id).map(WorkspaceTab::File),
             Self::Tool { tool_id } => ToolTabKey::new(tool_id).map(WorkspaceTab::Tool),
             _ => None,
         }

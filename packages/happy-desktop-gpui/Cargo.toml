@@ -1,6 +1,6 @@
 [package]
 name = "happy-desktop-gpui"
-version = "0.5.0"
+version = "0.6.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -11,12 +11,22 @@ name = "happy-gpui"
 path = "src/main.rs"
 
 [dependencies]
+ammonia = "4"
 async-channel = "2.5"
 base64 = "0.22"
+block2 = "0.6.2"
 cuid2 = "0.1.6"
+dirs = "6"
 flate2 = "1"
+gif = "0.14"
+image = { version = "0.25.10", default-features = false, features = ["bmp", "jpeg", "png", "webp"] }
+imagesize = "0.14"
 libc = "0.2"
-objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSWorkspace"] }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", features = ["NSAccessibility", "NSView", "NSWorkspace"] }
+objc2-foundation = { version = "0.3.2", features = ["NSGeometry", "NSString", "NSURL"] }
+objc2-web-kit = { version = "0.3.2", default-features = false, features = ["block2", "WKNavigation", "WKNavigationAction", "WKNavigationDelegate", "WKPreferences", "WKWebView", "WKWebViewConfiguration", "WKWebsiteDataStore", "objc2-app-kit", "objc2-core-foundation"] }
+raw-window-handle = "0.6"
 regex = "1"
 sha2 = "0.10"
 tar = "0.4"
@@ -24,7 +34,12 @@ gpui = { version = "=0.2.2", default-features = false, features = ["font-kit"] }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+similar = { version = "2.7", features = ["text"] }
+syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "parsing", "regex-fancy"] }
 unicode-segmentation = "1.12"
+unicode-width = "0.2"
+url = "2"
+percent-encoding = "2"
 pulldown-cmark = { version = "0.13", default-features = false }
 
 [dev-dependencies]

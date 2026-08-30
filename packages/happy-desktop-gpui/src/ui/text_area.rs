@@ -2,7 +2,13 @@ use std::{cell::RefCell, ops::Range, rc::Rc, time::Duration};
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{theme::Theme, ui::theme_roles::ThemeRole};
+use crate::{
+    theme::Theme,
+    ui::{
+        scrollbar::{ScrollbarAxis, normalized_wheel_delta},
+        theme_roles::ThemeRole,
+    },
+};
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId,
     ElementInputHandler, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable,
@@ -30,6 +36,7 @@ actions!(
         End,
         Submit,
         Newline,
+        Save,
         ShowCharacterPalette,
         Paste,
         Cut,
@@ -40,11 +47,16 @@ actions!(
 );
 
 const KEY_CONTEXT: &str = "HappyTextArea";
-const LINE_HEIGHT: Pixels = px(22.0);
+const COMPOSER_LINE_HEIGHT: Pixels = px(22.0);
+const EDITOR_LINE_HEIGHT: Pixels = px(20.0);
+const EDITOR_GUTTER_WIDTH: Pixels = px(44.0);
+const MAX_HIGHLIGHT_SPANS: usize = 65_536;
 const MIN_LINES: usize = 1;
 const MAX_LINES: usize = 8;
 const SCROLLBAR_LANE: Pixels = px(8.0);
 const SCROLLBAR_INK: Pixels = px(6.0);
+const HORIZONTAL_SCROLLBAR_LANE: Pixels = px(10.0);
+const CARET_REVEAL_MARGIN: Pixels = px(8.0);
 const DRAG_SCROLL_STEP: Pixels = px(22.0);
 const DRAG_SCROLL_INTERVAL: Duration = Duration::from_millis(40);
 
@@ -66,6 +78,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("end", End, Some(KEY_CONTEXT)),
         KeyBinding::new("enter", Submit, Some(KEY_CONTEXT)),
         KeyBinding::new("shift-enter", Newline, Some(KEY_CONTEXT)),
+        KeyBinding::new("cmd-s", Save, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-v", Paste, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-c", Copy, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-x", Cut, Some(KEY_CONTEXT)),
@@ -95,9 +108,61 @@ pub enum TextAreaCommand {
 
 /// Returns `true` only when the caller consumed the command.
 pub type TextAreaCommandHandler = Rc<dyn Fn(TextAreaCommand, &mut Window, &mut App) -> bool>;
+/// A closed semantic palette for caller-provided source highlighting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextHighlightKind {
+    Keyword,
+    String,
+    Comment,
+    Number,
+    Function,
+    Type,
+    Variable,
+    Constant,
+    Operator,
+    Punctuation,
+}
+
+impl TextHighlightKind {
+    fn role(self) -> ThemeRole {
+        match self {
+            Self::Keyword => ThemeRole::CodeKeyword,
+            Self::String => ThemeRole::CodeString,
+            Self::Comment => ThemeRole::CodeComment,
+            Self::Number => ThemeRole::CodeNumber,
+            Self::Function => ThemeRole::CodeFunction,
+            Self::Type => ThemeRole::CodeType,
+            Self::Variable => ThemeRole::CodeVariable,
+            Self::Constant => ThemeRole::CodeConstant,
+            Self::Operator => ThemeRole::CodeOperator,
+            Self::Punctuation => ThemeRole::CodePunctuation,
+        }
+    }
+}
+
+/// A UTF-8 byte range whose meaning was parsed by the caller.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextHighlightSpan {
+    pub range: Range<usize>,
+    pub kind: TextHighlightKind,
+}
+/// Bounded semantic-highlight ingress result for product disclosure.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TextHighlightStatus {
+    pub requested: usize,
+    pub accepted: usize,
+    pub limit_truncated: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextAreaLayout {
+    Composer,
+    Editor { wrap: bool, line_numbers: bool },
+}
 
 struct LayoutLine {
     line: WrappedLine,
+    gutter: Option<WrappedLine>,
     start: usize,
     y: Pixels,
 }
@@ -111,13 +176,13 @@ impl LayoutLine {
         self.start + self.line.len()
     }
 
-    fn height(&self) -> Pixels {
-        LINE_HEIGHT * self.visual_lines()
+    fn height(&self, line_height: Pixels) -> Pixels {
+        line_height * self.visual_lines()
     }
 
-    fn local_position(&self, index: usize) -> Point<Pixels> {
+    fn local_position(&self, index: usize, line_height: Pixels) -> Point<Pixels> {
         self.line
-            .position_for_index(index.min(self.line.len()), LINE_HEIGHT)
+            .position_for_index(index.min(self.line.len()), line_height)
             .unwrap_or_else(|| point(px(0.0), px(0.0)))
     }
 
@@ -134,7 +199,9 @@ impl LayoutLine {
 
 struct TextLayout {
     lines: Vec<LayoutLine>,
+    width: Pixels,
     height: Pixels,
+    line_height: Pixels,
 }
 
 #[derive(Default)]
@@ -143,6 +210,7 @@ struct TextAreaGeometry {
     bounds: Option<Bounds<Pixels>>,
     height: Pixels,
     vertical_scroll: Pixels,
+    horizontal_scroll: Pixels,
     reveal_cursor: bool,
 }
 
@@ -153,13 +221,13 @@ impl TextLayout {
             .iter()
             .find(|line| index >= line.start && index <= line.end())
         {
-            let local = line.local_position(index - line.start);
+            let local = line.local_position(index - line.start, self.line_height);
             return point(local.x, line.y + local.y);
         }
         self.lines
             .last()
             .map(|line| {
-                let local = line.local_position(line.line.len());
+                let local = line.local_position(line.line.len(), self.line_height);
                 point(local.x, line.y + local.y)
             })
             .unwrap_or_default()
@@ -174,16 +242,16 @@ impl TextLayout {
             return line.start
                 + line
                     .line
-                    .closest_index_for_position(point(position.x, px(0.0)), LINE_HEIGHT)
+                    .closest_index_for_position(point(position.x, px(0.0)), self.line_height)
                     .unwrap_or_else(|index| index);
         }
         for line in &self.lines {
-            if position.y < line.y + line.height() {
+            if position.y < line.y + line.height(self.line_height) {
                 let local = point(position.x, (position.y - line.y).max(px(0.0)));
                 return line.start
                     + line
                         .line
-                        .closest_index_for_position(local, LINE_HEIGHT)
+                        .closest_index_for_position(local, self.line_height)
                         .unwrap_or_else(|index| index);
             }
         }
@@ -205,15 +273,57 @@ impl TextLayout {
     }
 }
 
-/// A reusable, controlled, multiline native GPUI editor for the chat composer.
+fn normalize_highlights(
+    highlights: &[TextHighlightSpan],
+    text: &str,
+) -> (Vec<TextHighlightSpan>, TextHighlightStatus) {
+    let mut valid = highlights
+        .iter()
+        .filter(|span| {
+            span.range.start < span.range.end
+                && span.range.end <= text.len()
+                && text.is_char_boundary(span.range.start)
+                && text.is_char_boundary(span.range.end)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    valid.sort_by_key(|span| (span.range.start, span.range.end));
+    let mut normalized = Vec::with_capacity(valid.len().min(MAX_HIGHLIGHT_SPANS));
+    let mut last_end = 0;
+    let mut limit_truncated = false;
+    for span in valid {
+        if span.range.start < last_end {
+            continue;
+        }
+        last_end = span.range.end;
+        if normalized.len() < MAX_HIGHLIGHT_SPANS {
+            normalized.push(span);
+        } else {
+            limit_truncated = true;
+            break;
+        }
+    }
+    let status = TextHighlightStatus {
+        requested: highlights.len(),
+        accepted: normalized.len(),
+        limit_truncated,
+    };
+    (normalized, status)
+}
+
+/// A reusable, controlled multiline native GPUI input.
 ///
-/// The editor always reserves an 8 px scrollbar lane. Text wraps against the
-/// remaining width, grows from one through eight 22 px lines, then scrolls.
+/// Composer layout reserves an 8 px lane and grows through eight 22 px lines.
+/// Editor layout fills its caller-owned pane, uses 13/20 mono source geometry,
+/// and keeps selection, IME composition, scroll, and entity identity stable.
 pub struct TextArea {
     id: SharedString,
     theme: Theme,
     focus_handle: FocusHandle,
     command_handler: Option<TextAreaCommandHandler>,
+    layout_mode: TextAreaLayout,
+    highlights: Vec<TextHighlightSpan>,
+    highlight_status: TextHighlightStatus,
     value: SharedString,
     placeholder: SharedString,
     disabled: bool,
@@ -225,6 +335,7 @@ pub struct TextArea {
     preferred_x: Option<Pixels>,
     is_selecting: bool,
     is_scrollbar_dragging: bool,
+    is_horizontal_scrollbar_dragging: bool,
     drag_position: Option<Point<Pixels>>,
     drag_lifecycle: usize,
 }
@@ -244,6 +355,9 @@ impl TextArea {
             theme,
             focus_handle: cx.focus_handle().tab_index(0).tab_stop(true),
             command_handler: None,
+            layout_mode: TextAreaLayout::Composer,
+            highlights: Vec::new(),
+            highlight_status: TextHighlightStatus::default(),
             value,
             placeholder: placeholder.into(),
             disabled: false,
@@ -252,13 +366,14 @@ impl TextArea {
             selection_reversed: false,
             marked_range: None,
             geometry: Rc::new(RefCell::new(TextAreaGeometry {
-                height: LINE_HEIGHT,
+                height: COMPOSER_LINE_HEIGHT,
                 reveal_cursor: true,
                 ..Default::default()
             })),
             preferred_x: None,
             is_selecting: false,
             is_scrollbar_dragging: false,
+            is_horizontal_scrollbar_dragging: false,
             drag_position: None,
             drag_lifecycle: 0,
         }
@@ -273,6 +388,39 @@ impl TextArea {
     /// preserve normal editor or focus behavior.
     pub fn set_command_handler(&mut self, handler: Option<TextAreaCommandHandler>) {
         self.command_handler = handler;
+    }
+
+    /// Configures full-pane editor layout without changing value, selection, or IME state.
+    pub fn set_layout(&mut self, layout: TextAreaLayout, cx: &mut Context<Self>) {
+        if self.layout_mode != layout {
+            self.layout_mode = layout;
+            let mut geometry = self.geometry.borrow_mut();
+            geometry.layout = None;
+            if !matches!(layout, TextAreaLayout::Editor { wrap: false, .. }) {
+                geometry.horizontal_scroll = px(0.0);
+            }
+            cx.notify();
+        }
+    }
+
+    /// Replaces caller-parsed semantic spans without touching selection or composition.
+    pub fn set_highlights(
+        &mut self,
+        highlights: Vec<TextHighlightSpan>,
+        cx: &mut Context<Self>,
+    ) -> TextHighlightStatus {
+        let (highlights, status) = normalize_highlights(&highlights, &self.value);
+        if self.highlights != highlights || self.highlight_status != status {
+            self.highlights = highlights;
+            self.highlight_status = status;
+            self.geometry.borrow_mut().layout = None;
+            cx.notify();
+        }
+        status
+    }
+
+    pub fn highlight_status(&self) -> TextHighlightStatus {
+        self.highlight_status
     }
 
     fn command_intercept(
@@ -318,6 +466,8 @@ impl TextArea {
             return;
         }
         self.value = value;
+        self.highlights.clear();
+        self.highlight_status = TextHighlightStatus::default();
         let cursor = self.value.len();
         self.selected_range = cursor..cursor;
         self.selection_reversed = false;
@@ -442,7 +592,7 @@ impl TextArea {
         let layout = geometry.layout.as_ref()?;
         let position = layout.position_for_index(self.cursor_offset());
         let x = *self.preferred_x.get_or_insert(position.x);
-        Some(layout.index_for_position(point(x, position.y + LINE_HEIGHT * direction)))
+        Some(layout.index_for_position(point(x, position.y + layout.line_height * direction)))
     }
 
     fn up(&mut self, _: &Up, window: &mut Window, cx: &mut Context<Self>) {
@@ -532,6 +682,12 @@ impl TextArea {
     }
 
     fn submit(&mut self, _: &Submit, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(self.layout_mode, TextAreaLayout::Editor { .. }) {
+            if self.can_edit() {
+                self.replace_text_in_range(None, "\n", window, cx);
+            }
+            return;
+        }
         if self.command_intercept(TextAreaCommand::Commit, window, cx) {
             return;
         }
@@ -612,7 +768,8 @@ impl TextArea {
         let local = point(
             (position.x - bounds.left())
                 .max(px(0.0))
-                .min(bounds.size.width),
+                .min(bounds.size.width)
+                + geometry.horizontal_scroll,
             position.y - bounds.top() + geometry.vertical_scroll,
         );
         self.valid_boundary(layout.index_for_position(local))
@@ -629,10 +786,27 @@ impl TextArea {
             return;
         }
         let thumb_height =
-            (bounds.size.height * (bounds.size.height / layout.height)).max(LINE_HEIGHT);
+            (bounds.size.height * (bounds.size.height / layout.height)).max(layout.line_height);
         let travel = (bounds.size.height - thumb_height).max(px(1.0));
         let local = (position.y - bounds.top() - thumb_height / 2.0).clamp(px(0.0), travel);
         geometry.vertical_scroll = max_scroll * (local / travel);
+    }
+
+    fn scroll_to_horizontal_track_position(&mut self, position: Point<Pixels>) {
+        let mut geometry = self.geometry.borrow_mut();
+        let (Some(bounds), Some(layout)) = (geometry.bounds, geometry.layout.as_ref().cloned())
+        else {
+            return;
+        };
+        let max_scroll = (layout.width - bounds.size.width).max(px(0.0));
+        if max_scroll <= px(0.0) {
+            return;
+        }
+        let thumb_width =
+            (bounds.size.width * (bounds.size.width / layout.width)).max(EDITOR_LINE_HEIGHT);
+        let travel = (bounds.size.width - thumb_width).max(px(1.0));
+        let local = (position.x - bounds.left() - thumb_width / 2.0).clamp(px(0.0), travel);
+        geometry.horizontal_scroll = max_scroll * (local / travel);
     }
 
     fn on_scroll_wheel(
@@ -641,17 +815,35 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let delta = event.delta.pixel_delta(window.line_height());
-        let delta = if delta.y != px(0.0) { delta.y } else { delta.x };
         let mut geometry = self.geometry.borrow_mut();
         let (Some(bounds), Some(layout)) = (geometry.bounds, geometry.layout.as_ref().cloned())
         else {
             return;
         };
-        let max_scroll = (layout.height - bounds.size.height).max(px(0.0));
-        let next = (geometry.vertical_scroll - delta).clamp(px(0.0), max_scroll);
-        if next != geometry.vertical_scroll {
-            geometry.vertical_scroll = next;
+        let horizontal_enabled =
+            matches!(self.layout_mode, TextAreaLayout::Editor { wrap: false, .. });
+        let vertical_delta = normalized_wheel_delta(
+            ScrollbarAxis::Vertical,
+            event,
+            horizontal_enabled,
+            window.line_height(),
+        );
+        let horizontal_delta = horizontal_enabled.then(|| {
+            normalized_wheel_delta(ScrollbarAxis::Horizontal, event, true, window.line_height())
+        });
+        let max_vertical = (layout.height - bounds.size.height).max(px(0.0));
+        let next_vertical =
+            (geometry.vertical_scroll - vertical_delta).clamp(px(0.0), max_vertical);
+        let mut changed = next_vertical != geometry.vertical_scroll;
+        geometry.vertical_scroll = next_vertical;
+        if let Some(horizontal_delta) = horizontal_delta {
+            let max_horizontal = (layout.width - bounds.size.width).max(px(0.0));
+            let next_horizontal =
+                (geometry.horizontal_scroll - horizontal_delta).clamp(px(0.0), max_horizontal);
+            changed |= next_horizontal != geometry.horizontal_scroll;
+            geometry.horizontal_scroll = next_horizontal;
+        }
+        if changed {
             drop(geometry);
             cx.notify();
             cx.stop_propagation();
@@ -667,15 +859,24 @@ impl TextArea {
         if self.disabled {
             return;
         }
-        let scrollbar_hit = {
+        let (horizontal_scrollbar_hit, scrollbar_hit) = {
             let geometry = self.geometry.borrow();
             match (geometry.bounds, geometry.layout.as_ref()) {
-                (Some(bounds), Some(layout)) => {
-                    layout.height > bounds.size.height && event.position.x >= bounds.right()
-                }
-                _ => false,
+                (Some(bounds), Some(layout)) => (
+                    matches!(self.layout_mode, TextAreaLayout::Editor { wrap: false, .. })
+                        && layout.width > bounds.size.width
+                        && event.position.y >= bounds.bottom(),
+                    layout.height > bounds.size.height && event.position.x >= bounds.right(),
+                ),
+                _ => (false, false),
             }
         };
+        if horizontal_scrollbar_hit {
+            self.is_horizontal_scrollbar_dragging = true;
+            self.scroll_to_horizontal_track_position(event.position);
+            cx.notify();
+            return;
+        }
         if scrollbar_hit {
             self.is_scrollbar_dragging = true;
             self.scroll_to_track_position(event.position);
@@ -695,7 +896,10 @@ impl TextArea {
     }
 
     fn on_mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
-        if self.is_scrollbar_dragging {
+        if self.is_horizontal_scrollbar_dragging {
+            self.scroll_to_horizontal_track_position(event.position);
+            cx.notify();
+        } else if self.is_scrollbar_dragging {
             self.scroll_to_track_position(event.position);
             cx.notify();
         } else if self.is_selecting {
@@ -710,6 +914,7 @@ impl TextArea {
         if event.button == MouseButton::Left {
             self.is_selecting = false;
             self.is_scrollbar_dragging = false;
+            self.is_horizontal_scrollbar_dragging = false;
             self.drag_position = None;
             self.drag_lifecycle = self.drag_lifecycle.wrapping_add(1);
         }
@@ -727,6 +932,16 @@ impl TextArea {
         } else if position.y >= bounds.bottom() {
             geometry.vertical_scroll =
                 (geometry.vertical_scroll + DRAG_SCROLL_STEP).min(max_scroll);
+        }
+        if matches!(self.layout_mode, TextAreaLayout::Editor { wrap: false, .. }) {
+            let max_horizontal = (layout.width - bounds.size.width).max(px(0.0));
+            if position.x <= bounds.left() {
+                geometry.horizontal_scroll =
+                    (geometry.horizontal_scroll - DRAG_SCROLL_STEP).max(px(0.0));
+            } else if position.x >= bounds.right() {
+                geometry.horizontal_scroll =
+                    (geometry.horizontal_scroll + DRAG_SCROLL_STEP).min(max_horizontal);
+            }
         }
     }
 
@@ -794,6 +1009,8 @@ impl TextArea {
     }
 
     fn replace_range(&mut self, range: Range<usize>, text: &str) {
+        self.highlights.clear();
+        self.highlight_status = TextHighlightStatus::default();
         self.value = format!(
             "{}{}{}",
             &self.value[..range.start],
@@ -923,12 +1140,12 @@ impl EntityInputHandler for TextArea {
         let end = layout.position_for_index(range.end);
         Some(Bounds::from_corners(
             point(
-                bounds.left() + start.x,
+                bounds.left() + start.x - geometry.horizontal_scroll,
                 bounds.top() + start.y - geometry.vertical_scroll,
             ),
             point(
-                bounds.left() + end.x.max(start.x + px(1.0)),
-                bounds.top() + end.y - geometry.vertical_scroll + LINE_HEIGHT,
+                bounds.left() + end.x.max(start.x + px(1.0)) - geometry.horizontal_scroll,
+                bounds.top() + end.y - geometry.vertical_scroll + layout.line_height,
             ),
         ))
     }
@@ -943,7 +1160,7 @@ impl EntityInputHandler for TextArea {
         let bounds = geometry.bounds?;
         let layout = geometry.layout.as_ref()?;
         let local = point(
-            position.x - bounds.left(),
+            position.x - bounds.left() + geometry.horizontal_scroll,
             position.y - bounds.top() + geometry.vertical_scroll,
         );
         Some(self.offset_to_utf16(self.valid_boundary(layout.index_for_position(local))))
@@ -959,7 +1176,10 @@ struct PrepaintState {
     selection: Vec<PaintQuad>,
     caret: Option<PaintQuad>,
     scrollbar: Option<PaintQuad>,
+    horizontal_scrollbar: Option<PaintQuad>,
+    gutter_separator: Option<PaintQuad>,
     vertical_scroll: Pixels,
+    horizontal_scroll: Pixels,
 }
 
 impl IntoElement for TextAreaElement {
@@ -995,56 +1215,82 @@ impl Element for TextAreaElement {
             area.value.clone()
         };
         let text_style = window.text_style();
-        let color: Hsla = if showing_placeholder {
+        let layout_mode = area.layout_mode;
+        let line_height = match layout_mode {
+            TextAreaLayout::Composer => COMPOSER_LINE_HEIGHT,
+            TextAreaLayout::Editor { .. } => EDITOR_LINE_HEIGHT,
+        };
+        let font_size = match layout_mode {
+            TextAreaLayout::Composer => text_style.font_size.to_pixels(window.rem_size()),
+            TextAreaLayout::Editor { .. } => px(13.0),
+        };
+        let font = match layout_mode {
+            TextAreaLayout::Composer => text_style.font(),
+            TextAreaLayout::Editor { .. } => gpui::font(crate::fonts::MONO_FAMILY),
+        };
+        let default_color: Hsla = if showing_placeholder {
             area.theme.role(ThemeRole::InputPlaceholder).into()
         } else if area.disabled {
             area.theme.role(ThemeRole::TextSecondary).into()
         } else {
             area.theme.role(ThemeRole::InputText).into()
         };
-        let base_run = TextRun {
-            len: display_text.len(),
-            font: text_style.font(),
-            color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        };
-        let runs = if !showing_placeholder {
-            if let Some(marked) = area.marked_range.as_ref() {
-                vec![
-                    TextRun {
-                        len: marked.start,
-                        ..base_run.clone()
-                    },
-                    TextRun {
-                        len: marked.end - marked.start,
-                        underline: Some(UnderlineStyle {
-                            color: Some(color),
-                            thickness: px(1.0),
-                            wavy: false,
-                        }),
-                        ..base_run.clone()
-                    },
-                    TextRun {
-                        len: display_text.len() - marked.end,
-                        ..base_run
-                    },
-                ]
-                .into_iter()
-                .filter(|run| run.len > 0)
-                .collect::<Vec<_>>()
-            } else {
-                vec![base_run]
-            }
+        let highlights: &[TextHighlightSpan] = if showing_placeholder {
+            &[]
         } else {
-            vec![base_run]
+            &area.highlights
         };
+        let mut boundaries = Vec::with_capacity(highlights.len() * 2 + 4);
+        boundaries.extend([0, display_text.len()]);
+        for span in highlights {
+            boundaries.extend([span.range.start, span.range.end]);
+        }
+        if let Some(marked) = &area.marked_range {
+            boundaries.extend([marked.start, marked.end]);
+        }
+        boundaries.sort_unstable();
+        boundaries.dedup();
+        let mut runs = Vec::with_capacity(boundaries.len().saturating_sub(1));
+        let mut span_index = 0;
+        for edge in boundaries.windows(2) {
+            let range = edge[0]..edge[1];
+            if range.is_empty() {
+                continue;
+            }
+            while span_index < highlights.len() && highlights[span_index].range.end <= range.start {
+                span_index += 1;
+            }
+            let kind = highlights
+                .get(span_index)
+                .filter(|span| span.range.start <= range.start && span.range.end >= range.end)
+                .map(|span| span.kind);
+            let color = kind
+                .map(|kind| Hsla::from(area.theme.role(kind.role())))
+                .unwrap_or(default_color);
+            let marked = area
+                .marked_range
+                .as_ref()
+                .is_some_and(|marked| marked.start <= range.start && marked.end >= range.end);
+            runs.push(TextRun {
+                len: range.len(),
+                font: font.clone(),
+                color,
+                background_color: None,
+                underline: marked.then_some(UnderlineStyle {
+                    color: Some(color),
+                    thickness: px(1.0),
+                    wavy: false,
+                }),
+                strikethrough: None,
+            });
+        }
+        let gutter_color: Hsla = area.theme.role(ThemeRole::CodeGutter).into();
         let geometry = area.geometry.clone();
-        let _ = area;
-        let font_size = text_style.font_size.to_pixels(window.rem_size());
         let mut style = Style::default();
         style.size.width = relative(1.).into();
+        if matches!(layout_mode, TextAreaLayout::Editor { .. }) {
+            style.size.height = relative(1.).into();
+        }
         let layout_id =
             window.request_measured_layout(style, move |known, available, window, _| {
                 let width = known
@@ -1054,30 +1300,79 @@ impl Element for TextAreaElement {
                         _ => None,
                     })
                     .unwrap_or(px(0.0));
+                let wrap_width = match layout_mode {
+                    TextAreaLayout::Composer | TextAreaLayout::Editor { wrap: true, .. } => {
+                        Some(width)
+                    }
+                    TextAreaLayout::Editor { wrap: false, .. } => None,
+                };
                 let shaped = window
                     .text_system()
-                    .shape_text(display_text.clone(), font_size, &runs, Some(width), None)
+                    .shape_text(display_text.clone(), font_size, &runs, wrap_width, None)
                     .unwrap_or_default();
+                let show_gutter = matches!(
+                    layout_mode,
+                    TextAreaLayout::Editor {
+                        line_numbers: true,
+                        ..
+                    }
+                );
                 let mut lines = Vec::new();
                 let mut start = 0;
                 let mut y = px(0.0);
                 let mut measured_width = px(0.0);
-                for line in shaped {
-                    let line_size = line.size(LINE_HEIGHT);
+                for (index, line) in shaped.into_iter().enumerate() {
+                    let line_size = line.size(line_height);
                     measured_width = measured_width.max(line_size.width);
-                    let height = LINE_HEIGHT * (line.wrap_boundaries().len() + 1);
+                    let height = line_height * (line.wrap_boundaries().len() + 1);
                     let len = line.len();
-                    lines.push(LayoutLine { line, start, y });
+                    let gutter = show_gutter.then(|| {
+                        let number: SharedString = (index + 1).to_string().into();
+                        let run = TextRun {
+                            len: number.len(),
+                            font: gpui::font(crate::fonts::MONO_FAMILY),
+                            color: gutter_color,
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        };
+                        window
+                            .text_system()
+                            .shape_text(number, px(11.0), &[run], None, None)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .next()
+                            .expect("line number must shape")
+                    });
+                    lines.push(LayoutLine {
+                        line,
+                        gutter,
+                        start,
+                        y,
+                    });
                     start += len + 1;
                     y += height;
                 }
                 let layout = Rc::new(TextLayout {
                     lines,
-                    height: y.max(LINE_HEIGHT),
+                    width: measured_width,
+                    height: y.max(line_height),
+                    line_height,
                 });
-                let wanted_lines =
-                    ((layout.height / LINE_HEIGHT) as usize).clamp(MIN_LINES, MAX_LINES);
-                let wanted_height = LINE_HEIGHT * wanted_lines;
+                let wanted_height = match layout_mode {
+                    TextAreaLayout::Composer => {
+                        let wanted_lines =
+                            ((layout.height / line_height) as usize).clamp(MIN_LINES, MAX_LINES);
+                        line_height * wanted_lines
+                    }
+                    TextAreaLayout::Editor { .. } => known
+                        .height
+                        .or(match available.height {
+                            gpui::AvailableSpace::Definite(height) => Some(height),
+                            _ => None,
+                        })
+                        .unwrap_or(layout.height),
+                };
                 let mut geometry = geometry.borrow_mut();
                 geometry.layout = Some(layout);
                 geometry.height = wanted_height;
@@ -1112,18 +1407,40 @@ impl Element for TextAreaElement {
             .expect("text area measurement must exist before prepaint");
         let wanted_height = committed.height;
         let max_scroll = (layout.height - wanted_height).max(px(0.0));
+        let horizontal_enabled =
+            matches!(area.layout_mode, TextAreaLayout::Editor { wrap: false, .. });
+        let max_horizontal = if horizontal_enabled {
+            (layout.width - bounds.size.width).max(px(0.0))
+        } else {
+            px(0.0)
+        };
         let cursor_position = layout.position_for_index(area.cursor_offset());
         let mut scroll = committed.vertical_scroll.min(max_scroll).max(px(0.0));
+        let mut horizontal_scroll = committed.horizontal_scroll.min(max_horizontal).max(px(0.0));
         if committed.reveal_cursor {
             if cursor_position.y < scroll {
                 scroll = cursor_position.y;
-            } else if cursor_position.y + LINE_HEIGHT > scroll + wanted_height {
-                scroll = cursor_position.y + LINE_HEIGHT - wanted_height;
+            } else if cursor_position.y + layout.line_height > scroll + wanted_height {
+                scroll = cursor_position.y + layout.line_height - wanted_height;
+            }
+            if horizontal_enabled {
+                let viewport_left = horizontal_scroll + CARET_REVEAL_MARGIN;
+                let viewport_right = horizontal_scroll + bounds.size.width - CARET_REVEAL_MARGIN;
+                if cursor_position.x < viewport_left {
+                    horizontal_scroll = (cursor_position.x - CARET_REVEAL_MARGIN).max(px(0.0));
+                } else if cursor_position.x > viewport_right {
+                    horizontal_scroll = (cursor_position.x + CARET_REVEAL_MARGIN
+                        - bounds.size.width)
+                        .min(max_horizontal);
+                }
+            } else {
+                horizontal_scroll = px(0.0);
             }
             committed.reveal_cursor = false;
         }
         committed.bounds = Some(bounds);
         committed.vertical_scroll = scroll;
+        committed.horizontal_scroll = horizontal_scroll;
         drop(committed);
 
         let mut selection = Vec::new();
@@ -1138,10 +1455,13 @@ impl Element for TextAreaElement {
                         let to = layout.position_for_index(end);
                         selection.push(fill(
                             Bounds::from_corners(
-                                point(bounds.left() + from.x, bounds.top() + from.y - scroll),
                                 point(
-                                    bounds.left() + to.x.max(from.x + px(1.0)),
-                                    bounds.top() + from.y - scroll + LINE_HEIGHT,
+                                    bounds.left() + from.x - horizontal_scroll,
+                                    bounds.top() + from.y - scroll,
+                                ),
+                                point(
+                                    bounds.left() + to.x.max(from.x + px(1.0)) - horizontal_scroll,
+                                    bounds.top() + from.y - scroll + layout.line_height,
                                 ),
                             ),
                             Hsla::from(area.theme.role(ThemeRole::RadioActive)).opacity(0.32),
@@ -1154,28 +1474,31 @@ impl Element for TextAreaElement {
             fill(
                 Bounds::new(
                     point(
-                        bounds.left() + cursor_position.x,
+                        bounds.left() + cursor_position.x - horizontal_scroll,
                         bounds.top() + cursor_position.y - scroll,
                     ),
-                    size(px(1.0), LINE_HEIGHT),
+                    size(px(1.0), layout.line_height),
                 ),
                 color,
             )
         });
         let scrollbar = if layout.height > wanted_height {
-            let thumb_height = (wanted_height * (wanted_height / layout.height)).max(LINE_HEIGHT);
+            let thumb_height =
+                (wanted_height * (wanted_height / layout.height)).max(layout.line_height);
             let travel = wanted_height - thumb_height;
             let top = if max_scroll > px(0.0) {
                 travel * (scroll / max_scroll)
             } else {
                 px(0.0)
             };
+            let trailing = if matches!(area.layout_mode, TextAreaLayout::Editor { .. }) {
+                px(10.0)
+            } else {
+                (SCROLLBAR_LANE - SCROLLBAR_INK) / 2.0
+            };
             Some(fill(
                 Bounds::new(
-                    point(
-                        bounds.right() + (SCROLLBAR_LANE - SCROLLBAR_INK) / 2.0,
-                        bounds.top() + top,
-                    ),
+                    point(bounds.right() + trailing, bounds.top() + top),
                     size(SCROLLBAR_INK, thumb_height),
                 ),
                 Hsla::from(area.theme.role(ThemeRole::HappyScrollbarActiveColor)),
@@ -1183,12 +1506,49 @@ impl Element for TextAreaElement {
         } else {
             None
         };
+        let horizontal_scrollbar =
+            (horizontal_enabled && layout.width > bounds.size.width).then(|| {
+                let thumb_width = (bounds.size.width * (bounds.size.width / layout.width))
+                    .max(EDITOR_LINE_HEIGHT);
+                let travel = bounds.size.width - thumb_width;
+                let left = if max_horizontal > px(0.0) {
+                    travel * (horizontal_scroll / max_horizontal)
+                } else {
+                    px(0.0)
+                };
+                fill(
+                    Bounds::new(
+                        point(bounds.left() + left, bounds.bottom() + px(2.0)),
+                        size(thumb_width, SCROLLBAR_INK),
+                    ),
+                    Hsla::from(area.theme.role(ThemeRole::HappyScrollbarActiveColor)),
+                )
+            });
+        let gutter_separator = matches!(
+            area.layout_mode,
+            TextAreaLayout::Editor {
+                line_numbers: true,
+                ..
+            }
+        )
+        .then(|| {
+            fill(
+                Bounds::new(
+                    point(bounds.left() - px(8.0), bounds.top()),
+                    size(px(1.0), bounds.size.height),
+                ),
+                Hsla::from(area.theme.role(ThemeRole::Divider)),
+            )
+        });
         PrepaintState {
             layout: Some(layout),
             selection,
             caret,
             scrollbar,
+            horizontal_scrollbar,
+            gutter_separator,
             vertical_scroll: scroll,
+            horizontal_scroll,
         }
     }
 
@@ -1228,15 +1588,34 @@ impl Element for TextAreaElement {
         for quad in prepaint.selection.drain(..) {
             window.paint_quad(quad);
         }
+        if let Some(separator) = prepaint.gutter_separator.take() {
+            window.paint_quad(separator);
+        }
         let layout = prepaint.layout.take().expect("text area layout must exist");
         for line in &layout.lines {
+            if let Some(gutter) = &line.gutter {
+                let gutter_width = gutter.size(layout.line_height).width;
+                gutter
+                    .paint(
+                        point(
+                            bounds.left() - px(14.0) - gutter_width,
+                            bounds.top() + line.y - prepaint.vertical_scroll,
+                        ),
+                        layout.line_height,
+                        TextAlign::Left,
+                        None,
+                        window,
+                        cx,
+                    )
+                    .expect("line number must paint");
+            }
             line.line
                 .paint(
                     point(
-                        bounds.left(),
+                        bounds.left() - prepaint.horizontal_scroll,
                         bounds.top() + line.y - prepaint.vertical_scroll,
                     ),
-                    LINE_HEIGHT,
+                    layout.line_height,
                     TextAlign::Left,
                     Some(bounds),
                     window,
@@ -1250,6 +1629,9 @@ impl Element for TextAreaElement {
             }
         }
         if let Some(scrollbar) = prepaint.scrollbar.take() {
+            window.paint_quad(scrollbar);
+        }
+        if let Some(scrollbar) = prepaint.horizontal_scrollbar.take() {
             window.paint_quad(scrollbar);
         }
     }
@@ -1271,7 +1653,39 @@ impl Render for TextArea {
             })
             .w_full()
             .min_w_0()
-            .pr(SCROLLBAR_LANE)
+            .when(
+                matches!(self.layout_mode, TextAreaLayout::Editor { .. }),
+                |root| root.h_full().min_h_0(),
+            )
+            .when(
+                matches!(
+                    self.layout_mode,
+                    TextAreaLayout::Editor {
+                        line_numbers: true,
+                        ..
+                    }
+                ),
+                |root| root.pl(EDITOR_GUTTER_WIDTH),
+            )
+            .pr(
+                if matches!(self.layout_mode, TextAreaLayout::Editor { .. }) {
+                    px(16.0)
+                } else {
+                    SCROLLBAR_LANE
+                },
+            )
+            .when(
+                matches!(self.layout_mode, TextAreaLayout::Editor { wrap: false, .. }),
+                |root| root.pb(HORIZONTAL_SCROLLBAR_LANE),
+            )
+            .when(
+                matches!(self.layout_mode, TextAreaLayout::Editor { .. }),
+                |root| {
+                    root.font_family(crate::fonts::MONO_FAMILY)
+                        .text_size(px(13.0))
+                        .line_height(EDITOR_LINE_HEIGHT)
+                },
+            )
             .overflow_hidden()
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
@@ -1358,6 +1772,7 @@ mod tests {
     struct Fixture {
         area: Entity<TextArea>,
         width: Pixels,
+        height: Option<Pixels>,
         events: Vec<TextAreaEvent>,
         before: FocusHandle,
         after: FocusHandle,
@@ -1398,7 +1813,12 @@ mod tests {
                 })
                 .p(px(10.0))
                 .child(div().size_0().tab_index(0).track_focus(&self.before))
-                .child(div().w(self.width).child(self.area.clone()))
+                .child(
+                    div()
+                        .w(self.width)
+                        .when_some(self.height, |surface, height| surface.h(height))
+                        .child(self.area.clone()),
+                )
                 .child(div().size_0().tab_index(0).track_focus(&self.after))
         }
     }
@@ -1427,6 +1847,7 @@ mod tests {
             Fixture {
                 area,
                 width,
+                height: None,
                 events: Vec::new(),
                 before: cx.focus_handle().tab_index(0).tab_stop(true),
                 after: cx.focus_handle().tab_index(0).tab_stop(true),
@@ -1523,7 +1944,7 @@ mod tests {
                 .unwrap()
             })
         });
-        assert!(ime.size.height >= LINE_HEIGHT);
+        assert!(ime.size.height >= COMPOSER_LINE_HEIGHT);
     }
 
     #[gpui::test]
@@ -1674,6 +2095,79 @@ mod tests {
     }
 
     #[gpui::test]
+    fn nowrap_editor_horizontal_wheel_track_caret_hit_testing_and_wrap_reset(
+        cx: &mut TestAppContext,
+    ) {
+        let text = format!("start {} end", "long_segment_".repeat(40));
+        let (fixture, cx) = render(cx, px(220.0), &text);
+        let area = area(&fixture, cx);
+        fixture.update(cx, |fixture, cx| {
+            fixture.height = Some(px(160.0));
+            fixture.area.update(cx, |area, cx| {
+                area.set_layout(
+                    TextAreaLayout::Editor {
+                        wrap: false,
+                        line_numbers: true,
+                    },
+                    cx,
+                );
+                area.move_to(0, cx);
+            });
+            cx.notify();
+        });
+        cx.run_until_parked();
+        let root = cx.debug_bounds("test-text-area.root").unwrap();
+        area.read_with(cx, |area, _| {
+            let geometry = area.geometry.borrow();
+            assert!(geometry.layout.as_ref().unwrap().width > geometry.bounds.unwrap().size.width);
+            assert_eq!(geometry.horizontal_scroll, px(0.0));
+        });
+        cx.simulate_event(ScrollWheelEvent {
+            position: root.center(),
+            delta: ScrollDelta::Pixels(point(px(-80.0), px(0.0))),
+            ..Default::default()
+        });
+        let wheel = area.read_with(cx, |area, _| area.geometry.borrow().horizontal_scroll);
+        assert!(wheel > px(0.0));
+        cx.simulate_click(
+            point(root.right() - px(2.0), root.bottom() - px(2.0)),
+            Modifiers::default(),
+        );
+        let track = area.read_with(cx, |area, _| area.geometry.borrow().horizontal_scroll);
+        assert!(track > wheel);
+        area.update(cx, |area, cx| {
+            let end = area.value.len();
+            area.move_to(end, cx)
+        });
+        cx.run_until_parked();
+        area.read_with(cx, |area, _| {
+            let geometry = area.geometry.borrow();
+            let bounds = geometry.bounds.unwrap();
+            let layout = geometry.layout.as_ref().unwrap();
+            let max = (layout.width - bounds.size.width).max(px(0.0));
+            assert!(geometry.horizontal_scroll >= max - CARET_REVEAL_MARGIN);
+            assert!(
+                area.index_for_mouse_position(point(bounds.right() - px(4.0), bounds.center().y))
+                    > 0
+            );
+        });
+        area.update(cx, |area, cx| {
+            area.set_layout(
+                TextAreaLayout::Editor {
+                    wrap: true,
+                    line_numbers: true,
+                },
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            area.read_with(cx, |area, _| area.geometry.borrow().horizontal_scroll),
+            px(0.0)
+        );
+    }
+
+    #[gpui::test]
     fn semantic_command_handler_consumes_picker_navigation_commit_and_tabs(
         cx: &mut TestAppContext,
     ) {
@@ -1778,6 +2272,56 @@ mod tests {
         assert_eq!(
             previous_grapheme_boundary(value, boundaries[3]),
             boundaries[2]
+        );
+    }
+    #[gpui::test]
+    fn highlights_normalize_on_ingress_and_clear_on_text_mutation(cx: &mut TestAppContext) {
+        let (fixture, cx) = render(cx, px(220.0), "abcdef");
+        let area = area(&fixture, cx);
+        area.update(cx, |area, cx| {
+            let status = area.set_highlights(
+                vec![
+                    TextHighlightSpan {
+                        range: 2..5,
+                        kind: TextHighlightKind::String,
+                    },
+                    TextHighlightSpan {
+                        range: 0..3,
+                        kind: TextHighlightKind::Keyword,
+                    },
+                    TextHighlightSpan {
+                        range: 99..100,
+                        kind: TextHighlightKind::Comment,
+                    },
+                ],
+                cx,
+            );
+            assert_eq!(status.requested, 3);
+            assert!(!status.limit_truncated);
+            assert_eq!(area.highlights.len(), 1);
+            assert_eq!(area.highlights[0].range, 0..3);
+            area.replace_range(0..0, "x");
+            assert!(area.highlights.is_empty());
+        });
+    }
+
+    #[test]
+    fn semantic_highlight_normalization_is_bounded_and_non_overlapping() {
+        let text = "x ".repeat(MAX_HIGHLIGHT_SPANS + 10_000);
+        let spans = (0..MAX_HIGHLIGHT_SPANS + 10_000)
+            .map(|index| TextHighlightSpan {
+                range: index * 2..index * 2 + 1,
+                kind: TextHighlightKind::Keyword,
+            })
+            .collect::<Vec<_>>();
+        let (normalized, status) = normalize_highlights(&spans, &text);
+        assert_eq!(normalized.len(), MAX_HIGHLIGHT_SPANS);
+        assert!(status.limit_truncated);
+        assert_eq!(status.accepted, MAX_HIGHLIGHT_SPANS);
+        assert!(
+            normalized
+                .windows(2)
+                .all(|pair| pair[0].range.end <= pair[1].range.start)
         );
     }
 }

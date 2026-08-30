@@ -315,8 +315,11 @@ pub enum GitComparison {
     Unavailable,
 }
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct GitFileChange {
     pub path: String,
+    #[serde(default)]
+    pub previous_path: Option<String>,
     pub status: GitFileStatus,
     pub staged: bool,
     pub unstaged: bool,
@@ -621,6 +624,8 @@ pub struct EventHint {
 pub struct EventHintPayload {
     #[serde(default)]
     pub workspace_id: Option<String>,
+    #[serde(default)]
+    pub paths: Option<Vec<String>>,
     #[serde(default)]
     pub agent_id: Option<String>,
     #[serde(default)]

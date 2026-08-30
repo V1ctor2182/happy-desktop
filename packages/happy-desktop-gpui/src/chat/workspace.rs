@@ -8,6 +8,8 @@ use crate::connectivity::{
     ConversationKey, WorkspaceKey,
 };
 
+use crate::files::RelativeFilePath;
+
 use super::persistence::{RestoredWorkspace, WorkspacePersistence};
 
 pub(crate) const ENTRY_LIMIT: usize = 1_000;
@@ -32,7 +34,22 @@ macro_rules! opaque_id {
     };
 }
 
-opaque_id!(FileTabKey);
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FileTabKey(RelativeFilePath);
+impl FileTabKey {
+    pub fn new(value: impl AsRef<str>) -> Option<Self> {
+        RelativeFilePath::parse(value).ok().map(Self)
+    }
+    pub fn from_path(path: RelativeFilePath) -> Self {
+        Self(path)
+    }
+    pub fn path(&self) -> &RelativeFilePath {
+        &self.0
+    }
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
 opaque_id!(ToolTabKey);
 opaque_id!(TranscriptRowId);
 opaque_id!(MutationId);
@@ -124,6 +141,13 @@ pub struct SessionArchiveState {
     pub state: AsyncActionState,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FileTabPresentation {
+    #[default]
+    File,
+    Diff,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceSnapshot {
     pub namespace: AgentNamespace,
@@ -133,6 +157,8 @@ pub struct WorkspaceSnapshot {
     /// authoritative conversation is first discovered.
     pub tabs: Vec<WorkspaceTab>,
     pub active_tab: Option<WorkspaceTab>,
+    pub file_tab_presentations: BTreeMap<FileTabKey, FileTabPresentation>,
+    pub ephemeral_file_tab: Option<FileTabKey>,
     /// Least-recent to most-recent activation history.
     pub activation_history: Vec<WorkspaceTab>,
     pub conversations: BTreeMap<ConversationKey, Arc<ConversationCatalogRow>>,
@@ -152,6 +178,8 @@ impl WorkspaceSnapshot {
             behavior: WorkspaceBehavior::Standard,
             tabs: Vec::new(),
             active_tab: None,
+            file_tab_presentations: BTreeMap::new(),
+            ephemeral_file_tab: None,
             activation_history: Vec::new(),
             conversations: BTreeMap::new(),
             archived_recents: Vec::new(),
@@ -292,6 +320,9 @@ impl WorkspaceStore {
         if !tab_is_known(&next, &tab) {
             return;
         }
+        if next.tabs.contains(&tab) && next.active_tab.as_ref() == Some(&tab) {
+            return;
+        }
         if !next.tabs.contains(&tab) {
             next.tabs.push(tab.clone());
         }
@@ -299,9 +330,38 @@ impl WorkspaceStore {
         self.set(next);
     }
 
+    pub fn file_tab_preview_update(&mut self, key: Option<FileTabKey>) {
+        let next_key = key.filter(|key| {
+            self.snapshot
+                .tabs
+                .contains(&WorkspaceTab::File(key.clone()))
+        });
+        if self.snapshot.ephemeral_file_tab == next_key {
+            return;
+        }
+        let mut next = (*self.snapshot).clone();
+        next.ephemeral_file_tab = next_key;
+        self.set(next);
+    }
+
+    pub fn file_tab_presentation_update(
+        &mut self,
+        key: FileTabKey,
+        presentation: FileTabPresentation,
+    ) {
+        let mut next = (*self.snapshot).clone();
+        if !next.tabs.contains(&WorkspaceTab::File(key.clone()))
+            || next.file_tab_presentations.get(&key) == Some(&presentation)
+        {
+            return;
+        }
+        next.file_tab_presentations.insert(key, presentation);
+        self.set(next);
+    }
+
     pub fn tab_activate(&mut self, tab: &WorkspaceTab) {
         let mut next = (*self.snapshot).clone();
-        if !next.tabs.contains(tab) {
+        if !next.tabs.contains(tab) || next.active_tab.as_ref() == Some(tab) {
             return;
         }
         activate(&mut next, tab.clone());
@@ -312,6 +372,12 @@ impl WorkspaceStore {
         let mut next = (*self.snapshot).clone();
         next.tabs.retain(|item| item != tab);
         next.activation_history.retain(|item| item != tab);
+        if let WorkspaceTab::File(key) = tab {
+            next.file_tab_presentations.remove(key);
+            if next.ephemeral_file_tab.as_ref() == Some(key) {
+                next.ephemeral_file_tab = None;
+            }
+        }
         repair(&mut next);
         self.set(next);
     }
@@ -537,6 +603,8 @@ fn apply_restored(snapshot: &mut WorkspaceSnapshot, restored: RestoredWorkspace)
     snapshot.behavior = restored.behavior;
     snapshot.tabs = restored.tabs;
     snapshot.active_tab = restored.active_tab;
+    snapshot.file_tab_presentations = restored.file_tab_presentations;
+    snapshot.ephemeral_file_tab = restored.ephemeral_file_tab;
     snapshot.activation_history = restored.activation_history;
     snapshot.archived_recents = restored.archived_recents;
     snapshot.group_draft = restored.group_draft;
@@ -645,6 +713,24 @@ fn tab_is_known(snapshot: &WorkspaceSnapshot, tab: &WorkspaceTab) -> bool {
 
 fn bound(snapshot: &mut WorkspaceSnapshot) {
     trim_front(&mut snapshot.tabs, ENTRY_LIMIT);
+    let retained_files: BTreeSet<_> = snapshot
+        .tabs
+        .iter()
+        .filter_map(|tab| match tab {
+            WorkspaceTab::File(key) => Some(key.clone()),
+            WorkspaceTab::Conversation(_) | WorkspaceTab::Tool(_) => None,
+        })
+        .collect();
+    snapshot
+        .file_tab_presentations
+        .retain(|key, _| retained_files.contains(key));
+    if snapshot
+        .ephemeral_file_tab
+        .as_ref()
+        .is_some_and(|key| !retained_files.contains(key))
+    {
+        snapshot.ephemeral_file_tab = None;
+    }
     trim_front(&mut snapshot.activation_history, ENTRY_LIMIT);
     snapshot.archived_recents.truncate(RECENT_SESSION_LIMIT);
     while snapshot.transcripts.len() > ENTRY_LIMIT {

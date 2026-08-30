@@ -9,13 +9,15 @@ use crate::connectivity::{
     GitTotals, InitialPhase, InitialRetry, OnboardingMutationKind, ProjectKey, WorkspaceCatalogRow,
     WorkspaceKey,
 };
+use crate::files::RelativeFilePath;
 use crate::navigation::{
     HistoryPersistence, NavigationHistory, PaletteCommand, PaletteSection, PinnedDestination,
     Route, SettingsSection, SidebarMemory, palette_matches,
 };
 use crate::surfaces::{
     ChatWorkspaceCatalogFacts, ChatWorkspaceLabels, ChatWorkspaceNavigation,
-    ChatWorkspaceNavigationHandler, ChatWorkspaceSurface,
+    ChatWorkspaceNavigationHandler, ChatWorkspaceSurface, FilePresentationServices,
+    FilesInspectorNavigation, FilesInspectorNavigationHandler, FilesInspectorSurface,
 };
 use crate::ui::gallery::{ChatGalleryFixture, GalleryModalState, GalleryPage};
 use crate::ui::{command_palette as palette_ui, settings as settings_ui, sidebar as sidebar_ui};
@@ -31,6 +33,7 @@ use crate::{
     },
 };
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
     sync::Arc,
@@ -83,7 +86,7 @@ pub struct HappyApp {
     gallery_modal_states: [GalleryModalState; 5],
     chat_gallery_fixture: Entity<ChatGalleryFixture>,
     gallery_page: GalleryPage,
-    inspector_scope: gpui::SharedString,
+    file_presentations: Rc<RefCell<FilePresentationServices>>,
     workspace_surfaces: BTreeMap<WorkspaceKey, Entity<ChatWorkspaceSurface>>,
     active_workspace_key: Option<WorkspaceKey>,
 }
@@ -517,7 +520,7 @@ impl HappyApp {
             gallery_modal_states,
             chat_gallery_fixture,
             gallery_page: GalleryPage::Buttons,
-            inspector_scope: "changes".into(),
+            file_presentations: Rc::new(RefCell::new(FilePresentationServices::new())),
             workspace_surfaces: BTreeMap::new(),
             active_workspace_key: None,
         };
@@ -1457,16 +1460,38 @@ impl HappyApp {
     ) -> Option<(
         WorkspaceKey,
         Option<crate::connectivity::ConversationKey>,
+        Option<(RelativeFilePath, crate::navigation::FileKind)>,
+        Option<(RelativeFilePath, crate::navigation::FileKind)>,
         ChatWorkspaceLabels,
         ChatWorkspaceCatalogFacts,
     )> {
-        let (agent, group_id, session_id) = match route {
-            Route::Group { agent, group } => (agent, group.as_str(), None),
+        let (agent, group_id, session_id, main_file, inspector_preview) = match route {
+            Route::Group { agent, group } => (agent, group.as_str(), None, None, None),
             Route::Chat {
                 agent,
                 group,
                 session,
-            } => (agent, group.as_str(), Some(session.as_str())),
+            } => (agent, group.as_str(), Some(session.as_str()), None, None),
+            Route::File {
+                agent,
+                group,
+                session,
+                path,
+                kind,
+            } => {
+                let path = RelativeFilePath::parse(path.as_str()).ok()?;
+                if let Some(session) = session {
+                    (
+                        agent,
+                        group.as_str(),
+                        Some(session.as_str()),
+                        None,
+                        Some((path, *kind)),
+                    )
+                } else {
+                    (agent, group.as_str(), None, Some((path, *kind)), None)
+                }
+            }
             _ => return None,
         };
         // Protocol 23 exposes only the authenticated local host. Do not infer remote routes.
@@ -1557,7 +1582,14 @@ impl HappyApp {
                 .as_ref()
                 .map(|value| value.to_string().into()),
         };
-        Some((workspace_key, desired_conversation, labels, catalog_facts))
+        Some((
+            workspace_key,
+            desired_conversation,
+            main_file,
+            inspector_preview,
+            labels,
+            catalog_facts,
+        ))
     }
 
     /// The only shell lifecycle boundary for retained workspace surfaces.
@@ -1645,7 +1677,12 @@ impl HappyApp {
                 .as_ref()
                 .and_then(|(connectivity, availability, catalog)| {
                     let authoritative_workspace_id = match &route {
-                        Route::Chat { agent, session, .. } => {
+                        Route::Chat { agent, session, .. }
+                        | Route::File {
+                            agent,
+                            session: Some(session),
+                            ..
+                        } => {
                             let conversation = crate::connectivity::ConversationKey::new(
                                 agent.clone(),
                                 session.as_str().to_owned(),
@@ -1672,7 +1709,7 @@ impl HappyApp {
                     )
                 })
         };
-        let next_active_key = spec.as_ref().map(|(key, _, _, _)| key.clone());
+        let next_active_key = spec.as_ref().map(|(key, _, _, _, _, _)| key.clone());
         let active_changed = self.active_workspace_key != next_active_key;
 
         if active_changed {
@@ -1687,7 +1724,14 @@ impl HappyApp {
             }
         }
 
-        if let Some((workspace_key, desired_conversation, labels, catalog_facts)) = spec
+        if let Some((
+            workspace_key,
+            desired_conversation,
+            desired_file,
+            inspector_preview,
+            labels,
+            catalog_facts,
+        )) = spec
             && let Some((connectivity, _, _)) = controller_state
         {
             let surface = if let Some(surface) = self.workspace_surfaces.get(&workspace_key) {
@@ -1701,6 +1745,56 @@ impl HappyApp {
                                 (navigation.workspace, Some(navigation.conversation))
                             }
                             ChatWorkspaceNavigation::Workspace(workspace) => (workspace, None),
+                            ChatWorkspaceNavigation::File {
+                                workspace,
+                                path,
+                                kind,
+                            } => {
+                                let group = crate::navigation::GroupId::new(Arc::<str>::from(
+                                    workspace.id(),
+                                ))
+                                .expect("workspace id");
+                                let path = crate::navigation::FilePath::new(path.as_str())
+                                    .expect("validated path");
+                                this.navigation.push(Route::File {
+                                    agent: workspace.namespace().clone(),
+                                    group,
+                                    session: None,
+                                    kind,
+                                    path,
+                                });
+                                this.retained_surface_reconcile(cx);
+                                cx.notify();
+                                return;
+                            }
+                            ChatWorkspaceNavigation::FilePreview {
+                                workspace,
+                                conversation,
+                                path,
+                            } => {
+                                let group = crate::navigation::GroupId::new(Arc::<str>::from(
+                                    workspace.id(),
+                                ))
+                                .expect("workspace id");
+                                let session = conversation.map(|conversation| {
+                                    crate::navigation::SessionId::new(Arc::<str>::from(
+                                        conversation.id(),
+                                    ))
+                                    .expect("conversation id")
+                                });
+                                let path = crate::navigation::FilePath::new(path.as_str())
+                                    .expect("validated path");
+                                this.navigation.push(Route::File {
+                                    agent: workspace.namespace().clone(),
+                                    group,
+                                    session,
+                                    kind: crate::navigation::FileKind::File,
+                                    path,
+                                });
+                                this.retained_surface_reconcile(cx);
+                                cx.notify();
+                                return;
+                            }
                             ChatWorkspaceNavigation::WorkspaceTab { workspace, tab } => {
                                 let conversation = match tab {
                                     crate::chat::WorkspaceTab::Conversation(conversation) => {
@@ -1736,16 +1830,175 @@ impl HappyApp {
                         cx.notify();
                     });
                 });
+                let files_app = cx.entity();
+                let files_workspace = workspace_key.clone();
+                let files_navigation: FilesInspectorNavigationHandler = Rc::new(
+                    move |navigation, cx| {
+                        files_app.update(cx, |this, cx| {
+                            if let FilesInspectorNavigation::Preview { source, path, kind } =
+                                &navigation
+                                && matches!(this.navigation.current(), Route::File { session: None, path: current, .. } if current.as_str() == source.as_str())
+                            {
+                                if let Some(surface) =
+                                    this.workspace_surfaces.get(&files_workspace).cloned()
+                                {
+                                    let target = (path.clone(), *kind);
+                                    surface.update(cx, |surface, cx| {
+                                        surface.inspector_reveal(cx);
+                                        surface.files_inspector().update(cx, |files, cx| {
+                                            files.route_preview_reconcile(Some(target), cx)
+                                        });
+                                    });
+                                }
+                                cx.notify();
+                                return;
+                            }
+                            if matches!(navigation, FilesInspectorNavigation::ClosePreview) {
+                                let current = this.navigation.current().clone();
+                                if let Route::File {
+                                    agent,
+                                    group,
+                                    session: Some(session),
+                                    ..
+                                } = current
+                                {
+                                    this.navigation.push(Route::Chat {
+                                        agent,
+                                        group,
+                                        session,
+                                    });
+                                    this.retained_surface_reconcile(cx);
+                                } else if let Some(surface) =
+                                    this.workspace_surfaces.get(&files_workspace)
+                                {
+                                    surface.read(cx).files_inspector().update(
+                                        cx,
+                                        |files, cx| files.route_preview_reconcile(None, cx),
+                                    );
+                                }
+                                cx.notify();
+                                return;
+                            }
+                            let (path, session, kind, ephemeral) = match navigation {
+                                FilesInspectorNavigation::Main {
+                                    path,
+                                    kind,
+                                    ephemeral,
+                                } => (path, None, kind, ephemeral),
+                                FilesInspectorNavigation::ClosePreview => unreachable!(),
+                                FilesInspectorNavigation::Preview { path, kind, .. } => {
+                                    let session = match this.navigation.current() {
+                                        Route::Chat { session, .. }
+                                        | Route::File {
+                                            session: Some(session),
+                                            ..
+                                        } => Some(session.clone()),
+                                        _ => this
+                                            .workspace_surfaces
+                                            .get(&files_workspace)
+                                            .and_then(|surface| {
+                                                surface
+                                                    .read(cx)
+                                                    .workspace_store()
+                                                    .read(cx)
+                                                    .snapshot()
+                                                    .activation_history
+                                                    .iter()
+                                                    .rev()
+                                                    .find_map(|tab| match tab {
+                                                        crate::chat::WorkspaceTab::Conversation(
+                                                            key,
+                                                        ) => crate::navigation::SessionId::new(
+                                                            Arc::<str>::from(key.id()),
+                                                        )
+                                                        .ok(),
+                                                        _ => None,
+                                                    })
+                                            }),
+                                    };
+                                    (path, session, kind, false)
+                                }
+                            };
+                            let group = crate::navigation::GroupId::new(Arc::<str>::from(
+                                files_workspace.id(),
+                            ))
+                            .expect("workspace id");
+                            let relative_path = path.clone();
+                            let inspector_navigation = session.is_some();
+                            let path = crate::navigation::FilePath::new(path.as_str())
+                                .expect("validated file path");
+                            this.navigation.push(Route::File {
+                                agent: files_workspace.namespace().clone(),
+                                group,
+                                session,
+                                kind,
+                                path,
+                            });
+                            this.retained_surface_reconcile(cx);
+                            let main_route_admitted = !inspector_navigation
+                                && matches!(
+                                    this.navigation.current(),
+                                    Route::File {
+                                        session: None,
+                                        path: current,
+                                        ..
+                                    } if current.as_str() == relative_path.as_str()
+                                );
+                            if let Some(surface) =
+                                this.workspace_surfaces.get(&files_workspace).cloned()
+                            {
+                                surface.update(cx, |surface, cx| {
+                                    if inspector_navigation {
+                                        surface.inspector_reveal(cx);
+                                    } else if main_route_admitted {
+                                        let files = surface.files_inspector();
+                                        let transfer_from_inspector =
+                                            files.read(cx).preview_matches(&relative_path);
+                                        surface.file_preview_reconcile(
+                                            relative_path,
+                                            ephemeral,
+                                            cx,
+                                        );
+                                        if transfer_from_inspector {
+                                            files.update(cx, |files, cx| {
+                                                files.route_preview_reconcile(None, cx)
+                                            });
+                                        }
+                                    }
+                                });
+                            }
+                            cx.notify();
+                        });
+                    },
+                );
+                let files = cx.new({
+                    let controller = connectivity.clone();
+                    let key = workspace_key.clone();
+                    let services = self.file_presentations.clone();
+                    move |cx| {
+                        FilesInspectorSurface::new(
+                            controller,
+                            key,
+                            services,
+                            theme,
+                            files_navigation,
+                            cx,
+                        )
+                    }
+                });
                 let key = workspace_key.clone();
                 let labels_for_new = labels.clone();
                 let facts_for_new = catalog_facts.clone();
                 let desired_for_new = desired_conversation.clone();
+                let desired_file_for_new = desired_file.clone();
                 let controller = connectivity.clone();
                 let surface = cx.new(move |cx| {
                     ChatWorkspaceSurface::new(
                         controller,
                         key,
+                        files,
                         desired_for_new,
+                        desired_file_for_new,
                         theme,
                         labels_for_new,
                         facts_for_new,
@@ -1759,7 +2012,30 @@ impl HappyApp {
             };
             surface.update(cx, |surface, cx| {
                 surface.active_reconcile(true, cx);
-                surface.reconcile(desired_conversation, theme, labels, catalog_facts, cx);
+                surface.reconcile(
+                    desired_conversation,
+                    desired_file,
+                    theme,
+                    labels,
+                    catalog_facts,
+                    cx,
+                );
+                let files = surface.files_inspector();
+                files.update(cx, |files, cx| {
+                    let git = connectivity
+                        .read(cx)
+                        .agents()
+                        .host()
+                        .read(cx)
+                        .git()
+                        .get(workspace_key.id())
+                        .cloned()
+                        .map(Arc::new);
+                    files.reconcile(theme, git, cx);
+                    if let Some(preview) = inspector_preview {
+                        files.route_preview_reconcile(Some(preview), cx);
+                    }
+                });
             });
         } else if active_changed
             && let Some(connectivity) = self.connectivity.clone()
@@ -1771,7 +2047,9 @@ impl HappyApp {
 
     fn selected_workspace_surface(&self, route: &Route) -> Option<Entity<ChatWorkspaceSurface>> {
         let (agent, group) = match route {
-            Route::Group { agent, group } | Route::Chat { agent, group, .. } => (agent, group),
+            Route::Group { agent, group }
+            | Route::Chat { agent, group, .. }
+            | Route::File { agent, group, .. } => (agent, group),
             _ => return None,
         };
         if agent != &AgentNamespace::local_host() {
@@ -1797,68 +2075,6 @@ impl HappyApp {
             .text_color(theme.role(ThemeRole::TextSecondary))
             .child("Loading workspace…")
             .into_any_element()
-    }
-
-    fn inspector(&self, theme: Theme, width: f32, cx: &mut Context<Self>) -> impl IntoElement {
-        let entity = cx.entity();
-        let on_select: TabSelectHandler = Rc::new(move |id, _, cx| {
-            entity.update(cx, |this, cx| {
-                this.inspector_scope = id;
-                cx.notify();
-            });
-        });
-        div()
-            .debug_selector(|| "inspector-root".into())
-            .w(px(width))
-            .min_w(px(250.0))
-            .flex_none()
-            .flex()
-            .flex_col()
-            .bg(theme.role(ThemeRole::Surface))
-            .border_l_1()
-            .border_color(theme.role(ThemeRole::Divider))
-            .child(self.title_bar(theme, "Files"))
-            .child(Tabs {
-                id: "inspector-scope".into(),
-                theme,
-                size: TabsSize::Small,
-                items: vec![
-                    TabItem {
-                        id: "changes".into(),
-                        label: "Changes".into(),
-                        icon: None,
-                        selected: self.inspector_scope == "changes",
-                        disabled: false,
-                    },
-                    TabItem {
-                        id: "all-files".into(),
-                        label: "All Files".into(),
-                        icon: None,
-                        selected: self.inspector_scope == "all-files",
-                        disabled: false,
-                    },
-                ],
-                on_select,
-            })
-            .child(
-                div()
-                    .debug_selector(|| "inspector-phase-6-placeholder".into())
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .p(px(20.0))
-                    .child(
-                        div()
-                            .max_w(px(240.0))
-                            .text_center()
-                            .text_size(px(13.0))
-                            .line_height(px(20.0))
-                            .text_color(theme.role(ThemeRole::TextSecondary))
-                            .child("Git changes and file browsing arrive in Phase 6."),
-                    ),
-            )
     }
 }
 
@@ -2561,7 +2777,7 @@ impl Render for HappyApp {
 
         let route = self.navigation.current().clone();
         let viewport_width: f32 = window.viewport_size().width.into();
-        let (sidebar_width, inspector_width) = Self::column_widths(viewport_width);
+        let (sidebar_width, _inspector_width) = Self::column_widths(viewport_width);
         let entity = cx.entity();
         let root = div()
             .debug_selector(|| "app-shell-root".into())
@@ -2584,6 +2800,15 @@ impl Render for HappyApp {
                     } else {
                         this.palette_return_focus = window.focused(cx);
                         this.palette_open = true;
+                    }
+                    if let Some(key) = this.active_workspace_key.as_ref()
+                        && let Some(surface) = this.workspace_surfaces.get(key)
+                    {
+                        let allowed = !this.palette_open;
+                        surface
+                            .read(cx)
+                            .files_inspector()
+                            .update(cx, |files, cx| files.native_allowed_reconcile(allowed, cx));
                     }
                     cx.notify();
                 });
@@ -2663,7 +2888,7 @@ impl Render for HappyApp {
         } else {
             let local_workspace_route = matches!(
                 &route,
-                Route::Group { agent, .. } | Route::Chat { agent, .. }
+                Route::Group { agent, .. } | Route::Chat { agent, .. } | Route::File { agent, .. }
                     if agent == &AgentNamespace::local_host()
             );
             let destination = if let Some(surface) = self.selected_workspace_surface(&route) {
@@ -2679,9 +2904,21 @@ impl Render for HappyApp {
                 )
             };
             root.child(
-                content
-                    .child(destination)
-                    .child(self.inspector(theme, inspector_width, cx)),
+                content.child(destination).children(
+                    self.selected_workspace_surface(&route)
+                        .filter(|surface| surface.read(cx).inspector_visible())
+                        .map(|surface| {
+                            div()
+                                .debug_selector(|| "inspector-root".into())
+                                .w(px(250.0))
+                                .min_w(px(250.0))
+                                .flex_none()
+                                .border_l_1()
+                                .border_color(theme.role(ThemeRole::Divider))
+                                .child(surface.read(cx).files_inspector())
+                                .into_any_element()
+                        }),
+                ),
             )
             .children(self.palette_open.then(|| self.command_palette.clone()))
             .into_any_element()
@@ -2848,7 +3085,9 @@ mod geometry_tests {
     }
 
     #[gpui::test]
-    fn app_shell_resolves_design_reference_columns(cx: &mut TestAppContext) {
+    fn app_shell_resolves_design_reference_columns_before_workspace_selection(
+        cx: &mut TestAppContext,
+    ) {
         let cx = render(cx);
         assert_rect(bounds(cx, "app-shell-root"), 0.0, 0.0, 1280.0, 800.0);
         assert_rect(bounds(cx, "native-titlebar-lane"), 0.0, 0.0, 1280.0, 40.0);
@@ -2864,10 +3103,9 @@ mod geometry_tests {
             bounds(cx, "navigation-destination"),
             360.0,
             40.0,
-            560.0,
+            920.0,
             760.0,
         );
-        assert_rect(bounds(cx, "inspector-root"), 920.0, 40.0, 360.0, 760.0);
     }
 
     #[gpui::test]
@@ -2885,16 +3123,10 @@ mod geometry_tests {
             bounds(cx, "navigation-destination"),
             250.0,
             40.0,
-            220.0,
+            470.0,
             440.0,
         );
-        assert_rect(bounds(cx, "inspector-root"), 470.0, 40.0, 250.0, 440.0);
-        for selector in [
-            "native-navigation-sidebar.root",
-            "navigation-destination",
-            "inspector-root",
-            "inspector-phase-6-placeholder",
-        ] {
+        for selector in ["native-navigation-sidebar.root", "navigation-destination"] {
             let element = bounds(cx, selector);
             assert!(element.origin.x >= px(0.0));
             assert!(element.right() <= px(720.0));
@@ -2932,23 +3164,16 @@ mod geometry_tests {
     }
 
     #[gpui::test]
-    fn destination_and_inspector_headers_share_the_56px_surface_lane(cx: &mut TestAppContext) {
+    fn destination_header_uses_the_56px_surface_lane_before_workspace_selection(
+        cx: &mut TestAppContext,
+    ) {
         let cx = render(cx);
         assert_rect(
             bounds(cx, "navigation-destination-header"),
             360.0,
             40.0,
-            560.0,
+            920.0,
             56.0,
-        );
-        assert_rect(bounds(cx, "title-bar-Files.root"), 921.0, 40.0, 359.0, 56.0);
-        assert_rect(bounds(cx, "inspector-scope.root"), 921.0, 96.0, 359.0, 32.0);
-        assert_rect(
-            bounds(cx, "inspector-phase-6-placeholder"),
-            921.0,
-            128.0,
-            359.0,
-            672.0,
         );
     }
 

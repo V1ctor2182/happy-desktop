@@ -7,6 +7,7 @@ use gpui::{
     AnyElement, App, FontWeight, IntoElement, RenderOnce, SharedString, Window, div, prelude::*, px,
 };
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use std::rc::Rc;
 
 use super::theme_roles::ThemeRole;
 use crate::{fonts, theme::Theme};
@@ -19,6 +20,26 @@ pub const MARKDOWN_MAX_CODE_LINES: usize = 4_096;
 const MARKDOWN_MAX_TABLE_COLUMNS: usize = 32;
 const MARKDOWN_MAX_LINK_BYTES: usize = 2_048;
 
+/// A safe Markdown link destination passed to the component's caller unchanged.
+///
+/// Workspace-relative references are deliberately not normalized here. Their
+/// meaning depends on the caller-owned workspace and source-document path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MarkdownLinkTarget {
+    Http(SharedString),
+    WorkspaceRelative(SharedString),
+    SameDocumentAnchor(SharedString),
+}
+
+/// The closed result of parsing an untrusted Markdown link destination.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ParsedLinkTarget {
+    Accepted(MarkdownLinkTarget),
+    Rejected,
+}
+
+pub type MarkdownLinkActivate = Rc<dyn Fn(MarkdownLinkTarget, &mut Window, &mut App)>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MarkdownInline {
     Text(SharedString),
@@ -26,10 +47,10 @@ pub enum MarkdownInline {
     Emphasis(Vec<MarkdownInline>),
     Strikethrough(Vec<MarkdownInline>),
     Code(SharedString),
-    /// Parsing guarantees that `destination` is an absolute HTTP(S) URL.
+    /// Parsing guarantees that `target` is safe and explicitly classified.
     Link {
         content: Vec<MarkdownInline>,
-        destination: SharedString,
+        target: MarkdownLinkTarget,
     },
     ImageSuppressed {
         alt: SharedString,
@@ -109,7 +130,7 @@ enum InlineKind {
     Strong,
     Emphasis,
     Strikethrough,
-    Link(Option<SharedString>),
+    Link(Option<MarkdownLinkTarget>),
     Image,
     Transparent,
 }
@@ -136,9 +157,9 @@ impl InlineTarget {
             InlineKind::Strong => Some(MarkdownInline::Strong(frame.content)),
             InlineKind::Emphasis => Some(MarkdownInline::Emphasis(frame.content)),
             InlineKind::Strikethrough => Some(MarkdownInline::Strikethrough(frame.content)),
-            InlineKind::Link(Some(destination)) => Some(MarkdownInline::Link {
+            InlineKind::Link(Some(target)) => Some(MarkdownInline::Link {
                 content: frame.content,
-                destination,
+                target,
             }),
             // Unsafe destinations stay visible as inert label content.
             InlineKind::Link(None) | InlineKind::Transparent => {
@@ -434,9 +455,12 @@ impl DocumentBuilder {
                 Tag::Emphasis => self.start_inline(InlineKind::Emphasis),
                 Tag::Strong => self.start_inline(InlineKind::Strong),
                 Tag::Strikethrough => self.start_inline(InlineKind::Strikethrough),
-                Tag::Link { dest_url, .. } => self.start_inline(InlineKind::Link(
-                    safe_http_destination(&dest_url).then(|| dest_url.to_string().into()),
-                )),
+                Tag::Link { dest_url, .. } => {
+                    self.start_inline(InlineKind::Link(match parse_link_target(&dest_url) {
+                        ParsedLinkTarget::Accepted(target) => Some(target),
+                        ParsedLinkTarget::Rejected => None,
+                    }))
+                }
                 Tag::Image { .. } => self.start_inline(InlineKind::Image),
                 _ => {}
             },
@@ -609,14 +633,102 @@ fn inline_plain_text(parts: &[MarkdownInline]) -> String {
     result
 }
 
-fn safe_http_destination(destination: &str) -> bool {
-    destination.len() <= MARKDOWN_MAX_LINK_BYTES
-        && (destination.starts_with("https://") || destination.starts_with("http://"))
-        && destination
-            .split_once("://")
-            .is_some_and(|(_, rest)| !rest.is_empty())
-        && !destination.chars().any(char::is_whitespace)
-        && !destination.chars().any(char::is_control)
+pub fn parse_link_target(destination: &str) -> ParsedLinkTarget {
+    if destination.is_empty()
+        || destination.len() > MARKDOWN_MAX_LINK_BYTES
+        || destination.contains('\\')
+        || destination
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace())
+        || unsafe_percent_encoding(destination, false)
+        || destination.starts_with("//")
+    {
+        return ParsedLinkTarget::Rejected;
+    }
+
+    if destination.starts_with('#') {
+        return ParsedLinkTarget::Accepted(MarkdownLinkTarget::SameDocumentAnchor(
+            destination.to_owned().into(),
+        ));
+    }
+
+    let scheme_end = destination.find(|character| matches!(character, ':' | '/' | '?' | '#'));
+    if scheme_end.is_some_and(|index| destination.as_bytes()[index] == b':') {
+        let Some((raw_scheme, remainder)) = destination.split_once(':') else {
+            return ParsedLinkTarget::Rejected;
+        };
+        if !matches!(raw_scheme.to_ascii_lowercase().as_str(), "http" | "https")
+            || !remainder.starts_with("//")
+        {
+            return ParsedLinkTarget::Rejected;
+        }
+        let Ok(url) = reqwest::Url::parse(destination) else {
+            return ParsedLinkTarget::Rejected;
+        };
+        if matches!(url.scheme(), "http" | "https")
+            && url.has_host()
+            && url.username().is_empty()
+            && url.password().is_none()
+        {
+            return ParsedLinkTarget::Accepted(MarkdownLinkTarget::Http(
+                destination.to_owned().into(),
+            ));
+        }
+        return ParsedLinkTarget::Rejected;
+    }
+
+    if destination.starts_with('/')
+        || destination.starts_with('~')
+        || destination.starts_with('?')
+        || unsafe_percent_encoding(destination, true)
+    {
+        return ParsedLinkTarget::Rejected;
+    }
+
+    ParsedLinkTarget::Accepted(MarkdownLinkTarget::WorkspaceRelative(
+        destination.to_owned().into(),
+    ))
+}
+
+/// Validates percent escapes without changing the raw reference passed onward.
+/// Encoded spaces and UTF-8 are ordinary filename content. Encoded controls and
+/// path separators are ambiguous at a workspace boundary and stay inert.
+fn unsafe_percent_encoding(destination: &str, reject_path_separators: bool) -> bool {
+    let bytes = destination.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            decoded.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        if index + 2 >= bytes.len() {
+            return true;
+        }
+        let (Some(high), Some(low)) = (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+        else {
+            return true;
+        };
+        let byte = high * 16 + low;
+        if byte.is_ascii_control() || (reject_path_separators && matches!(byte, b'/' | b'\\')) {
+            return true;
+        }
+        decoded.push(byte);
+        index += 3;
+    }
+    String::from_utf8(decoded)
+        .map(|decoded| decoded.chars().any(char::is_control))
+        .unwrap_or(true)
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 #[derive(IntoElement)]
@@ -624,6 +736,7 @@ pub struct ChatMarkdown {
     pub id: SharedString,
     pub theme: Theme,
     pub document: MarkdownDocument,
+    pub on_link_open: Option<MarkdownLinkActivate>,
 }
 
 impl RenderOnce for ChatMarkdown {
@@ -644,7 +757,9 @@ impl RenderOnce for ChatMarkdown {
                     .blocks
                     .into_iter()
                     .enumerate()
-                    .map(move |(index, block)| render_block(block, index, theme, id.clone())),
+                    .map(move |(index, block)| {
+                        render_block(block, index, theme, id.clone(), self.on_link_open.clone())
+                    }),
             )
             .when(self.document.truncated, |view| {
                 view.child(
@@ -661,8 +776,9 @@ fn inline_text(
     parts: Vec<MarkdownInline>,
     theme: Theme,
     scope: impl Into<SharedString>,
+    on_link_open: Option<MarkdownLinkActivate>,
 ) -> AnyElement {
-    inline_text_at(parts, theme, scope.into(), String::new())
+    inline_text_at(parts, theme, scope.into(), String::new(), on_link_open)
 }
 
 fn inline_text_at(
@@ -670,6 +786,7 @@ fn inline_text_at(
     theme: Theme,
     scope: SharedString,
     parent_path: String,
+    on_link_open: Option<MarkdownLinkActivate>,
 ) -> AnyElement {
     let mut row = div().flex().flex_wrap().items_baseline();
     for (index, part) in parts.into_iter().enumerate() {
@@ -682,15 +799,33 @@ fn inline_text_at(
             MarkdownInline::Text(text) => div().child(text).into_any_element(),
             MarkdownInline::Strong(content) => div()
                 .font_weight(FontWeight::BOLD)
-                .child(inline_text_at(content, theme, scope.clone(), path))
+                .child(inline_text_at(
+                    content,
+                    theme,
+                    scope.clone(),
+                    path,
+                    on_link_open.clone(),
+                ))
                 .into_any_element(),
             MarkdownInline::Emphasis(content) => div()
                 .italic()
-                .child(inline_text_at(content, theme, scope.clone(), path))
+                .child(inline_text_at(
+                    content,
+                    theme,
+                    scope.clone(),
+                    path,
+                    on_link_open.clone(),
+                ))
                 .into_any_element(),
             MarkdownInline::Strikethrough(content) => div()
                 .line_through()
-                .child(inline_text_at(content, theme, scope.clone(), path))
+                .child(inline_text_at(
+                    content,
+                    theme,
+                    scope.clone(),
+                    path,
+                    on_link_open.clone(),
+                ))
                 .into_any_element(),
             MarkdownInline::Code(text) => div()
                 .mx(px(2.0))
@@ -700,38 +835,48 @@ fn inline_text_at(
                 .font_family(fonts::MONO_FAMILY)
                 .child(text)
                 .into_any_element(),
-            MarkdownInline::Link {
-                content,
-                destination,
-            } => {
+            MarkdownInline::Link { content, target } => {
                 let link_id = SharedString::from(format!("{scope}-link-{path}"));
                 let debug_id = link_id.clone();
-                let pointer = destination.clone();
-                let keyboard = destination;
+                let activate: Option<MarkdownLinkActivate> = on_link_open.clone().or_else(|| {
+                    let MarkdownLinkTarget::Http(url) = &target else {
+                        return None;
+                    };
+                    let url = url.clone();
+                    Some(Rc::new(move |_, _, cx| cx.open_url(&url)))
+                });
+                let interactive = activate.is_some();
                 div()
                     .id(link_id)
                     .debug_selector(move || format!("{debug_id}.root"))
-                    .tab_index(0)
-                    .cursor_pointer()
-                    .px(px(1.0))
-                    .border_b_1()
-                    .border_color(theme.role(ThemeRole::TextLink))
-                    .focus(|style| style.bg(theme.role(ThemeRole::SurfaceSelected)))
-                    .text_color(theme.role(ThemeRole::TextLink))
-                    .on_click(move |_, _, cx| cx.open_url(&pointer))
-                    .on_key_down(move |event, _, cx| {
-                        if !event.is_held
-                            && matches!(event.keystroke.key.as_str(), "enter" | "space" | " ")
-                        {
-                            cx.stop_propagation();
-                            cx.open_url(&keyboard);
-                        }
+                    .when(interactive, |link| {
+                        link.tab_index(0)
+                            .cursor_pointer()
+                            .px(px(1.0))
+                            .border_b_1()
+                            .border_color(theme.role(ThemeRole::TextLink))
+                            .focus(|style| style.bg(theme.role(ThemeRole::SurfaceSelected)))
+                            .text_color(theme.role(ThemeRole::TextLink))
                     })
-                    .child(
-                        div()
-                            .debug_selector(|| "markdown.link".to_owned())
-                            .child(inline_text_at(content, theme, scope.clone(), path)),
-                    )
+                    .when_some(activate, |link, activate| {
+                        let pointer = activate.clone();
+                        let pointer_target = target.clone();
+                        let keyboard_target = target.clone();
+                        link.on_click(move |_, window, cx| {
+                            pointer(pointer_target.clone(), window, cx)
+                        })
+                        .on_key_down(move |event, window, cx| {
+                            if !event.is_held
+                                && matches!(event.keystroke.key.as_str(), "enter" | "space" | " ")
+                            {
+                                cx.stop_propagation();
+                                activate(keyboard_target.clone(), window, cx);
+                            }
+                        })
+                    })
+                    .child(div().debug_selector(|| "markdown.link".to_owned()).child(
+                        inline_text_at(content, theme, scope.clone(), path, on_link_open.clone()),
+                    ))
                     .into_any_element()
             }
             MarkdownInline::ImageSuppressed { alt } => div()
@@ -748,6 +893,7 @@ fn render_block(
     index: usize,
     theme: Theme,
     document_id: SharedString,
+    on_link_open: Option<MarkdownLinkActivate>,
 ) -> AnyElement {
     let block_id = SharedString::from(format!("{document_id}-block-{index}"));
     let root = div()
@@ -758,7 +904,7 @@ fn render_block(
         MarkdownBlock::Paragraph(parts) => root
             .text_size(px(14.0))
             .line_height(px(21.0))
-            .child(inline_text(parts, theme, block_id))
+            .child(inline_text(parts, theme, block_id, on_link_open))
             .into_any_element(),
         MarkdownBlock::Heading { level, content } => root
             .text_size(px(match level {
@@ -768,14 +914,14 @@ fn render_block(
             }))
             .line_height(px(28.0))
             .font_weight(FontWeight::BOLD)
-            .child(inline_text(content, theme, block_id))
+            .child(inline_text(content, theme, block_id, on_link_open))
             .into_any_element(),
         MarkdownBlock::Quote { depth, content } => root
             .pl(px(12.0 + (depth.saturating_sub(1) * 12) as f32))
             .border_l_2()
             .border_color(theme.role(ThemeRole::Divider))
             .text_color(theme.role(ThemeRole::TextSecondary))
-            .child(inline_text(content, theme, block_id))
+            .child(inline_text(content, theme, block_id, on_link_open))
             .into_any_element(),
         MarkdownBlock::List { ordered, items } => {
             let scope = block_id;
@@ -798,6 +944,7 @@ fn render_block(
                             item.content,
                             theme,
                             format!("{scope}-item-{i}"),
+                            on_link_open.clone(),
                         ))
                 }))
                 .into_any_element()
@@ -813,9 +960,16 @@ fn render_block(
                     true,
                     theme,
                     format!("{scope}-header"),
+                    on_link_open.clone(),
                 ))
                 .children(rows.into_iter().enumerate().map(move |(row_index, row)| {
-                    render_table_row(row, false, theme, format!("{scope}-row-{row_index}"))
+                    render_table_row(
+                        row,
+                        false,
+                        theme,
+                        format!("{scope}-row-{row_index}"),
+                        on_link_open.clone(),
+                    )
                 }))
                 .into_any_element()
         }
@@ -855,6 +1009,7 @@ fn render_table_row(
     header: bool,
     theme: Theme,
     scope: impl Into<SharedString>,
+    on_link_open: Option<MarkdownLinkActivate>,
 ) -> AnyElement {
     let scope = scope.into();
     div()
@@ -876,6 +1031,7 @@ fn render_table_row(
                             cell,
                             theme,
                             format!("{scope}-cell-{cell_index}"),
+                            on_link_open.clone(),
                         ))
                 }),
         )
@@ -973,7 +1129,7 @@ mod tests {
             &parts[0],
             MarkdownInline::Strong(content)
                 if content.iter().any(|part| matches!(part,
-                    MarkdownInline::Link { destination, .. }
+                    MarkdownInline::Link { target: MarkdownLinkTarget::Http(destination), .. }
                     if destination == "https://example.com/path"))
         ));
         assert!(parts.iter().any(|part| matches!(
@@ -987,7 +1143,7 @@ mod tests {
         );
         assert!(parts.iter().any(|part| matches!(
             part,
-            MarkdownInline::Link { destination, .. }
+            MarkdownInline::Link { target: MarkdownLinkTarget::Http(destination), .. }
                 if destination == "https://example.org"
         )));
     }
@@ -1029,6 +1185,55 @@ mod tests {
     }
 
     #[test]
+    fn link_targets_are_closed_bounded_and_preserve_internal_references() {
+        assert_eq!(
+            parse_link_target("HTTPS://example.com/path?q=1#top"),
+            ParsedLinkTarget::Accepted(MarkdownLinkTarget::Http(
+                "HTTPS://example.com/path?q=1#top".into()
+            ))
+        );
+        assert_eq!(
+            parse_link_target("../src/My%20File-%E2%9C%93.rs?raw=1#L20"),
+            ParsedLinkTarget::Accepted(MarkdownLinkTarget::WorkspaceRelative(
+                "../src/My%20File-%E2%9C%93.rs?raw=1#L20".into()
+            ))
+        );
+        assert_eq!(
+            parse_link_target("#heading"),
+            ParsedLinkTarget::Accepted(MarkdownLinkTarget::SameDocumentAnchor("#heading".into()))
+        );
+
+        for unsafe_target in [
+            "//example.com/path",
+            "/etc/passwd",
+            "C:/Windows/System32",
+            r"..\secret",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/plain,bad",
+            "mailto:user@example.com",
+            "unknown:value",
+            "https:example.com",
+            "https://example.com/a b",
+            "https://example.com/%0aheader",
+            "folder%2Fsecret",
+            "folder%5csecret",
+            "bad%FFutf8",
+            "bad%escape",
+        ] {
+            assert_eq!(
+                parse_link_target(unsafe_target),
+                ParsedLinkTarget::Rejected,
+                "{unsafe_target} must stay inert"
+            );
+        }
+        assert_eq!(
+            parse_link_target(&"a".repeat(MARKDOWN_MAX_LINK_BYTES + 1)),
+            ParsedLinkTarget::Rejected
+        );
+    }
+
+    #[test]
     fn malformed_streaming_input_stays_literal_and_all_limits_hold() {
         let malformed = format!("**open [link](https://example.com {}", "> ".repeat(20_000));
         let doc = MarkdownDocument::parse(&malformed);
@@ -1067,6 +1272,7 @@ mod tests {
                         document: MarkdownDocument::parse(
                             "[one](https://example.com/same) [two](https://example.com/same)",
                         ),
+                        on_link_open: None,
                     })
             }
         }
@@ -1102,6 +1308,50 @@ mod tests {
     }
 
     #[gpui::test]
+    fn internal_link_callback_receives_raw_traversal_for_caller_resolution(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use gpui::{Context, Modifiers, Render, size};
+        use std::{cell::RefCell, rc::Rc};
+
+        struct Fixture {
+            seen: Rc<RefCell<Vec<MarkdownLinkTarget>>>,
+        }
+        impl Render for Fixture {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let seen = self.seen.clone();
+                div().w(px(560.0)).child(ChatMarkdown {
+                    id: "internal-link".into(),
+                    theme: Theme::light(),
+                    document: MarkdownDocument::parse("[source](../src/lib.rs?raw=1#L20)"),
+                    on_link_open: Some(Rc::new(move |target, _, _| {
+                        seen.borrow_mut().push(target);
+                    })),
+                })
+            }
+        }
+
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let (_, cx) = cx.add_window_view({
+            let seen = seen.clone();
+            move |_, _| Fixture { seen }
+        });
+        cx.simulate_resize(size(px(560.0), px(120.0)));
+        cx.run_until_parked();
+        let link = cx
+            .debug_bounds("internal-link-block-0-link-0.root")
+            .unwrap();
+        cx.simulate_click(link.center(), Modifiers::default());
+        assert_eq!(
+            seen.borrow().as_slice(),
+            &[MarkdownLinkTarget::WorkspaceRelative(
+                "../src/lib.rs?raw=1#L20".into()
+            )]
+        );
+        assert_eq!(cx.opened_url(), None, "internal links never reach open_url");
+    }
+
+    #[gpui::test]
     fn markdown_has_real_narrow_wide_light_dark_geometry(cx: &mut gpui::TestAppContext) {
         use gpui::{Context, Modifiers, Render, size};
         struct Fixture {
@@ -1121,6 +1371,7 @@ mod tests {
                     document: MarkdownDocument::parse(
                         "# Heading\n\nA paragraph with **strong**, ~~old~~ text and [a link](https://example.com).\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n```rs\nlet value = 42;\n```",
                     ),
+                    on_link_open: None,
                 })
             }
         }

@@ -13,7 +13,8 @@ pub(crate) use persistence::WorkspacePersistenceEvent;
 pub use projection::*;
 pub use store::*;
 pub use workspace::{
-    AsyncActionState, ClientConversationId, FileTabKey, MutationId, ScrollAnchor,
-    SessionArchiveOperation, SessionArchiveState, ToolTabKey, TranscriptMemory, TranscriptRowId,
-    WorkspaceBehavior, WorkspaceOutput, WorkspaceSnapshot, WorkspaceStore, WorkspaceTab,
+    AsyncActionState, ClientConversationId, FileTabKey, FileTabPresentation, MutationId,
+    ScrollAnchor, SessionArchiveOperation, SessionArchiveState, ToolTabKey, TranscriptMemory,
+    TranscriptRowId, WorkspaceBehavior, WorkspaceOutput, WorkspaceSnapshot, WorkspaceStore,
+    WorkspaceTab,
 };

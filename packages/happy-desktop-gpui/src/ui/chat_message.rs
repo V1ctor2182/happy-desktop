@@ -9,7 +9,7 @@ use std::{fmt, rc::Rc, sync::Arc};
 
 use super::{
     Button, ButtonVariant, ControlSize, IconName, ModalFocus, ModalOverlay, OverlayPlacement,
-    chat_markdown::{ChatMarkdown, MarkdownDocument, markdown_height},
+    chat_markdown::{ChatMarkdown, MarkdownDocument, MarkdownLinkActivate, markdown_height},
     text_area::TextArea,
     theme_roles::ThemeRole,
 };
@@ -159,6 +159,7 @@ pub struct ChatMessageModel {
     pub generation: MessageGeneration,
     pub grouped: bool,
     pub blocks: Vec<ChatMessageBlock>,
+    pub on_link_open: Option<MarkdownLinkActivate>,
     pub on_image_open: Option<ChatImageActivate>,
     pub on_tool_open: Option<ChatActivate>,
     pub on_review_allow: Option<ChatActivate>,
@@ -196,6 +197,7 @@ impl RenderOnce for ChatMessage {
                             format!("chat-message-{id}.block-{index}").into(),
                             block,
                             theme,
+                            model.on_link_open.clone(),
                             model.on_image_open.clone(),
                             model.on_tool_open.clone(),
                             model.on_review_allow.clone(),
@@ -458,6 +460,7 @@ fn render_message_block(
     id: SharedString,
     block: ChatMessageBlock,
     theme: Theme,
+    on_link: Option<MarkdownLinkActivate>,
     on_image: Option<ChatImageActivate>,
     on_tool: Option<ChatActivate>,
     allow: Option<ChatActivate>,
@@ -468,6 +471,7 @@ fn render_message_block(
             id,
             theme,
             document,
+            on_link_open: on_link,
         }
         .into_any_element(),
         ChatMessageBlock::Image(image) => {
@@ -536,6 +540,7 @@ fn render_message_block(
                     id: format!("{id}.detail").into(),
                     theme,
                     document: reasoning.detail,
+                    on_link_open: on_link.clone(),
                 })
             })
             .into_any_element(),
@@ -569,6 +574,7 @@ fn render_message_block(
                 id: format!("{id}.summary").into(),
                 theme,
                 document: compaction.summary,
+                on_link_open: on_link,
             })
             .into_any_element(),
     }
@@ -1106,6 +1112,7 @@ mod tests {
             blocks: vec![ChatMessageBlock::Text(MarkdownDocument::parse(
                 &"hello ".repeat(80),
             ))],
+            on_link_open: None,
             on_image_open: None,
             on_tool_open: None,
             on_review_allow: None,
@@ -1160,6 +1167,7 @@ mod tests {
                     token_count: Some(1200),
                 }),
             ],
+            on_link_open: None,
             on_image_open: Some(Rc::new(|_, _, _| {})),
             on_tool_open: Some(Rc::new(|_, _| {})),
             on_review_allow: Some(Rc::new(|_, _| {})),
@@ -1252,6 +1260,7 @@ mod tests {
                             width: Some(320),
                             height: Some(160),
                         })],
+                        on_link_open: None,
                         on_image_open: Some(Rc::new(move |id, _, _| opened.borrow_mut().push(id))),
                         on_tool_open: None,
                         on_review_allow: None,

@@ -10,18 +10,25 @@ use gpui::{
     RenderOnce, SharedString, Window, div, prelude::*, px,
 };
 
+use super::text_area::TextArea;
 use super::theme_roles::ThemeRole;
 use super::{
-    Avatar, AvatarSize, Badge, BadgeVariant, Button, ButtonVariant, CommandPalette,
-    ConnectionNotice, ConnectionNoticeState, ControlSize, Icon, IconName, InstallProgress,
+    Avatar, AvatarSize, Badge, BadgeVariant, BinaryFact, Button, ButtonVariant, CommandPalette,
+    ConnectionNotice, ConnectionNoticeState, ControlSize, FileBrowser, FileBrowserChangeStats,
+    FileBrowserEntry, FileBrowserEntryKind, FileBrowserFocusHandles, FileBrowserIconFamily,
+    FileBrowserLayout, FileBrowserListState, FileBrowserScope, FileBrowserStatus, FileDiff,
+    FileDiffFocus, FileDiffLine, FileDiffLineKind, FileDiffListState, FileDiffMode,
+    FileDiffPreviewLine, FileDiffStats, FileDiffText, FileEditor, FileEditorFocus, FileEditorMode,
+    FileEditorState, FilePreview, FilePreviewKind, Icon, IconName, InstallProgress,
     InstallProgressState, ListRow, Menu, MenuItem, Modal, ModalFocus, ModalOverlay, ModalSize,
-    OverlayPlacement, ProfileOnboardingSurface, ProviderOnboardingSurface, ScrollSurface,
-    ScrollbarState, SettingsCategory, SettingsShell, Sidebar, SidebarActivity, SidebarChangeStats,
-    SidebarFold, SidebarFooter, SidebarFooterAction, SidebarItem, SidebarItemAvailability,
-    SidebarItemLifecycle, SidebarRowAction, SidebarSection, SidebarSectionAction,
-    SidebarUpdateAction, SidebarUpdateOperation, SidebarUpdateStatus, SidebarUpdateSubject,
-    Splitter, SplitterDragState, StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler,
-    Tabs, TabsSize, TextField, TextInput, Toolbar, WELCOME_SLIDES, WelcomeDeck,
+    NativePreviewKind, NativePreviewSource, OverlayPlacement, PreviewMode,
+    ProfileOnboardingSurface, ProviderOnboardingSurface, ScrollSurface, ScrollbarState,
+    SettingsCategory, SettingsShell, Sidebar, SidebarActivity, SidebarChangeStats, SidebarFold,
+    SidebarFooter, SidebarFooterAction, SidebarItem, SidebarItemAvailability, SidebarItemLifecycle,
+    SidebarRowAction, SidebarSection, SidebarSectionAction, SidebarUpdateAction,
+    SidebarUpdateOperation, SidebarUpdateStatus, SidebarUpdateSubject, Splitter, SplitterDragState,
+    StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler, Tabs, TabsSize, TextField,
+    TextInput, Toolbar, WELCOME_SLIDES, WelcomeDeck,
 };
 use crate::{
     connectivity::{OnboardingProviderId, ProviderAuthenticationState, ProviderOnboardingRow},
@@ -52,11 +59,13 @@ pub enum GalleryPage {
     Sidebar,
     Settings,
     CommandPalette,
+    Files,
+    Previews,
     Chat,
     Theme,
 }
 impl GalleryPage {
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 25] = [
         Self::Buttons,
         Self::Fields,
         Self::Rows,
@@ -78,6 +87,8 @@ impl GalleryPage {
         Self::Sidebar,
         Self::Settings,
         Self::CommandPalette,
+        Self::Files,
+        Self::Previews,
         Self::Chat,
         Self::Theme,
     ];
@@ -104,6 +115,8 @@ impl GalleryPage {
             Self::Sidebar => "sidebar",
             Self::Settings => "settings",
             Self::CommandPalette => "command-palette",
+            Self::Files => "files",
+            Self::Previews => "previews",
             Self::Chat => "chat",
             Self::Theme => "theme",
         }
@@ -131,6 +144,8 @@ impl GalleryPage {
             Self::Sidebar => "Sidebar",
             Self::Settings => "Settings",
             Self::CommandPalette => "Command palette",
+            Self::Files => "Files",
+            Self::Previews => "Previews",
             Self::Chat => "Chat",
             Self::Theme => "Theme",
         }
@@ -908,6 +923,7 @@ impl ChatGalleryFixture {
                         }),
                     ],
                     on_image_open: Some(image_open),
+                    on_link_open: None,
                     on_tool_open: None,
                     on_review_allow: None,
                     on_review_deny: None,
@@ -952,6 +968,7 @@ impl ChatGalleryFixture {
                         }),
                     ],
                     on_image_open: None,
+                    on_link_open: None,
                     on_tool_open: Some(tool_open),
                     on_review_allow: Some(review_allow),
                     on_review_deny: Some(review_deny),
@@ -1094,6 +1111,7 @@ impl ChatGalleryFixture {
                         token_count: Some(18_420),
                     })],
                     on_image_open: None,
+                    on_link_open: None,
                     on_tool_open: None,
                     on_review_allow: None,
                     on_review_deny: None,
@@ -1645,6 +1663,8 @@ impl ChatGalleryFixture {
                     label: "Chat".into(),
                     kind: WorkspaceTabKind::Session,
                     active: true,
+                    preview: false,
+                    dirty: false,
                     unread: false,
                     waiting: false,
                     running: true,
@@ -1656,6 +1676,8 @@ impl ChatGalleryFixture {
                     label: "gallery.rs".into(),
                     kind: WorkspaceTabKind::File,
                     active: false,
+                    preview: false,
+                    dirty: true,
                     unread: true,
                     waiting: false,
                     running: false,
@@ -1667,6 +1689,8 @@ impl ChatGalleryFixture {
                     label: "Checks".into(),
                     kind: WorkspaceTabKind::Terminal,
                     active: false,
+                    preview: false,
+                    dirty: false,
                     unread: false,
                     waiting: true,
                     running: true,
@@ -1934,6 +1958,125 @@ impl RenderOnce for ChatGallerySpecimen {
         ChatGalleryFixture::theme_reconcile(&self.fixture, self.theme, cx);
         self.fixture.read(cx).element(self.theme, cx)
     }
+}
+
+fn file_browser_gallery_specimen(
+    theme: Theme,
+    scrollbar: Entity<ScrollbarState>,
+    focus: FileBrowserFocusHandles,
+) -> AnyElement {
+    let entries = Rc::new(vec![
+        FileBrowserEntry {
+            id: "src".into(),
+            name: "src".into(),
+            directory: None,
+            depth: 0,
+            kind: FileBrowserEntryKind::Directory { expanded: true },
+            icon: FileBrowserIconFamily::Directory { expanded: true },
+            icon_role: ThemeRole::TextLink,
+            status: None,
+            changes: None,
+        },
+        FileBrowserEntry {
+            id: "ui".into(),
+            name: "ui".into(),
+            directory: Some("packages/happy-desktop-gpui/src".into()),
+            depth: 1,
+            kind: FileBrowserEntryKind::Directory { expanded: true },
+            icon: FileBrowserIconFamily::Directory { expanded: true },
+            icon_role: ThemeRole::BoxWarningText,
+            status: None,
+            changes: None,
+        },
+        FileBrowserEntry {
+            id: "file-browser".into(),
+            name: "file_browser.rs".into(),
+            directory: Some("packages/happy-desktop-gpui/src/ui".into()),
+            depth: 2,
+            kind: FileBrowserEntryKind::File,
+            icon: FileBrowserIconFamily::Code,
+            icon_role: ThemeRole::TextLink,
+            status: Some(FileBrowserStatus {
+                label: "Created".into(),
+                role: ThemeRole::DiffSuccess,
+            }),
+            changes: Some(FileBrowserChangeStats {
+                files: 0,
+                added: Some(412),
+                deleted: Some(0),
+                counts_exact: true,
+            }),
+        },
+        FileBrowserEntry {
+            id: "gallery".into(),
+            name: "gallery.rs".into(),
+            directory: Some("packages/happy-desktop-gpui/src/ui".into()),
+            depth: 2,
+            kind: FileBrowserEntryKind::File,
+            icon: FileBrowserIconFamily::Code,
+            icon_role: ThemeRole::BoxWarningText,
+            status: Some(FileBrowserStatus {
+                label: "Modified".into(),
+                role: ThemeRole::BoxWarningText,
+            }),
+            changes: Some(FileBrowserChangeStats {
+                files: 0,
+                added: None,
+                deleted: Some(4),
+                counts_exact: false,
+            }),
+        },
+        FileBrowserEntry {
+            id: "more-ui".into(),
+            name: "Load more files…".into(),
+            directory: None,
+            depth: 0,
+            kind: FileBrowserEntryKind::LoadMore,
+            icon: FileBrowserIconFamily::Other,
+            icon_role: ThemeRole::TextSecondary,
+            status: None,
+            changes: None,
+        },
+    ]);
+    let list_state = FileBrowserListState::new(&entries);
+    section(
+        "FileBrowser · controlled 340px permanent Files inspector",
+        vec![
+            div()
+                .debug_selector(|| "gallery-file-browser-stage".into())
+                .w(px(340.0))
+                .h(px(360.0))
+                .flex_none()
+                .border_1()
+                .border_color(theme.role(ThemeRole::Divider))
+                .child(FileBrowser {
+                    id: "gallery-file-browser".into(),
+                    theme,
+                    width: 338.0,
+                    scope: FileBrowserScope::Changes,
+                    layout: FileBrowserLayout::Tree,
+                    change_stats: FileBrowserChangeStats {
+                        files: 12,
+                        added: Some(448),
+                        deleted: Some(21),
+                        counts_exact: false,
+                    },
+                    entries,
+                    selected_entry_id: Some("file-browser".into()),
+                    list_state,
+                    focus,
+                    scrollbar,
+                    on_scope_change: Some(Rc::new(|_, _, _| {})),
+                    on_layout_change: Some(Rc::new(|_, _, _| {})),
+                    on_entry_select: Some(Rc::new(|_, _, _| {})),
+                    on_entry_open: Some(Rc::new(|_, _, _| {})),
+                    on_entry_toggle: Some(Rc::new(|_, _, _| {})),
+                })
+                .into_any_element(),
+        ],
+        theme,
+    )
+    .into_any_element()
 }
 
 fn specimens(
@@ -2536,6 +2679,36 @@ fn specimens(
             .border_color(theme.role(ThemeRole::Divider))
             .child(command_palette)
             .into_any_element(),
+        GalleryPage::Files => file_browser_gallery_specimen(
+            theme,
+            connectivity_scrollbars[23].clone(),
+            FileBrowserFocusHandles {
+                root: welcome_focus[20].clone(),
+                all_files: welcome_focus[21].clone(),
+                changes: welcome_focus[22].clone(),
+                list: welcome_focus[23].clone(),
+                tree: welcome_focus[24].clone(),
+            },
+        ),
+        GalleryPage::Previews => {
+            let image = Arc::new(Image::empty());
+            let preview = |id: &'static str, kind: FilePreviewKind| {
+                div().w(px(560.0)).h(px(320.0)).child(FilePreview {
+                    id: id.into(), theme, size: "24 KB".into(), updating: false,
+                    mode: Some(PreviewMode::Rendered), mode_focus: None, on_markdown_link_open: None, on_mode_select: None, native_visible: true, kind,
+                }).into_any_element()
+            };
+            section("File previews · typed props-only kinds", vec![
+                preview("gallery-preview-image", FilePreviewKind::Image { image, dimensions: Some((1280, 720)), alt: "Aurora".into(), focus_handle: None, on_open_lightbox: None }),
+                preview("gallery-preview-markdown", FilePreviewKind::Markdown(super::chat_markdown::MarkdownDocument::parse("# Rendered Markdown\n\nReusable `ChatMarkdown` body."))),
+                preview("gallery-preview-html", FilePreviewKind::Html(NativePreviewSource::gallery_fixture(NativePreviewKind::Html))),
+                preview("gallery-preview-audio", FilePreviewKind::Audio(NativePreviewSource::gallery_fixture(NativePreviewKind::Audio))),
+                preview("gallery-preview-video", FilePreviewKind::Video { source: NativePreviewSource::gallery_fixture(NativePreviewKind::Video), focus_handle: None, on_open_lightbox: None }),
+                preview("gallery-preview-pdf", FilePreviewKind::Pdf(NativePreviewSource::gallery_fixture(NativePreviewKind::Pdf))),
+                preview("gallery-preview-binary", FilePreviewKind::Binary(vec![BinaryFact { label: "Type".into(), value: "application/octet-stream".into() }, BinaryFact { label: "Bytes".into(), value: "24576".into() }])),
+                preview("gallery-preview-text", FilePreviewKind::Text("A deterministic plain-text preview.".into())),
+            ], theme).into_any_element()
+        }
         GalleryPage::Chat => ChatGallerySpecimen { fixture: chat_fixture, theme }.into_any_element(),
         GalleryPage::Theme => section(
             "All authoritative light/dark generated roles",
@@ -2575,6 +2748,151 @@ fn specimens(
         .into_any_element(),
     }
 }
+
+// ===== PHASE 6 FILE SURFACE GALLERY FIXTURES (isolated; no product/store/transport) =====
+
+pub fn phase6_file_editor_gallery_fixture(
+    theme: Theme,
+    editor: Entity<TextArea>,
+    focus: FileEditorFocus,
+) -> AnyElement {
+    div()
+        .debug_selector(|| "gallery-phase6-file-editor-stage".into())
+        .w(px(560.0))
+        .h(px(360.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(FileEditor {
+            id: "gallery-phase6-file-editor".into(),
+            theme,
+            status: Some("Rust".into()),
+            mode: FileEditorMode::Source,
+            show_mode_control: true,
+            wrap: false,
+            state: FileEditorState {
+                dirty: true,
+                read_only: false,
+                saving: false,
+                error: None,
+            },
+            editor,
+            rendered: None,
+            focus,
+            on_mode_change: Some(Rc::new(|_, _, _| {})),
+            on_wrap_change: Some(Rc::new(|_, _, _| {})),
+            on_save: Some(Rc::new(|_, _| {})),
+            on_revert: Some(Rc::new(|_, _| {})),
+        })
+        .into_any_element()
+}
+
+pub fn phase6_file_diff_gallery_fixture(
+    theme: Theme,
+    vertical_scrollbar: Entity<ScrollbarState>,
+    horizontal_scrollbar: Entity<ScrollbarState>,
+    list_state: FileDiffListState,
+    preview_list_state: FileDiffListState,
+    preview_scrollbar: Entity<ScrollbarState>,
+    focus: FileDiffFocus,
+) -> AnyElement {
+    let lines = vec![
+        FileDiffLine {
+            id: "gallery-diff-0".into(),
+            kind: FileDiffLineKind::Context,
+            old_line: Some(18),
+            new_line: Some(18),
+            old_text: Some("pub fn render() {".into()),
+            new_text: Some("pub fn render() {".into()),
+        },
+        FileDiffLine {
+            id: "gallery-diff-1".into(),
+            kind: FileDiffLineKind::Removed,
+            old_line: Some(19),
+            new_line: None,
+            old_text: Some("    old_surface();".into()),
+            new_text: None,
+        },
+        FileDiffLine {
+            id: "gallery-diff-2".into(),
+            kind: FileDiffLineKind::Added,
+            old_line: None,
+            new_line: Some(19),
+            old_text: None,
+            new_text: Some("    reusable_surface();".into()),
+        },
+        FileDiffLine {
+            id: "gallery-diff-3".into(),
+            kind: FileDiffLineKind::Context,
+            old_line: Some(20),
+            new_line: Some(20),
+            old_text: Some("}".into()),
+            new_text: Some("}".into()),
+        },
+    ];
+    div()
+        .debug_selector(|| "gallery-phase6-file-diff-stage".into())
+        .w(px(560.0))
+        .h(px(360.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(FileDiff {
+            id: "gallery-phase6-file-diff".into(),
+            theme,
+            text: FileDiffText {
+                old: "pub fn render() {\n    old_surface();\n}".into(),
+                new: "pub fn render() {\n    reusable_surface();\n}".into(),
+            },
+            lines: Rc::new(lines),
+            list_state,
+            preview_lines: Rc::new(vec![
+                FileDiffPreviewLine {
+                    id: "preview-1".into(),
+                    line: 1,
+                    text: "pub fn render() {".into(),
+                },
+                FileDiffPreviewLine {
+                    id: "preview-2".into(),
+                    line: 2,
+                    text: "    reusable_surface();".into(),
+                },
+                FileDiffPreviewLine {
+                    id: "preview-3".into(),
+                    line: 3,
+                    text: "}".into(),
+                },
+            ]),
+            preview_list_state,
+            mode: FileDiffMode::Split,
+            wrap: false,
+            stats: Some(FileDiffStats {
+                added: 1,
+                removed: 1,
+                counts_exact: true,
+            }),
+            content_widths: super::FileDiffContentWidths {
+                preview: 240.0,
+                unified: 320.0,
+                split_old: 220.0,
+                split_new: 220.0,
+            },
+            notice: None,
+            scrollbar: vertical_scrollbar,
+            preview_scrollbar,
+            horizontal_scrollbar,
+            editor: None,
+            focus,
+            on_mode_change: Some(Rc::new(|_, _, _| {})),
+            on_wrap_change: Some(Rc::new(|_, _, _| {})),
+            on_save: None,
+        })
+        .into_any_element()
+}
+
+// ===== END PHASE 6 FILE SURFACE GALLERY FIXTURES =====
 
 pub fn gallery(
     theme: Theme,
@@ -3081,6 +3399,8 @@ mod tests {
             (GalleryPage::Sidebar, "gallery-sidebar.root"),
             (GalleryPage::Settings, "gallery-settings.root"),
             (GalleryPage::CommandPalette, "gallery-command-palette.card"),
+            (GalleryPage::Files, "gallery-file-browser.root"),
+            (GalleryPage::Previews, "gallery-preview-image.root"),
             (GalleryPage::Chat, "gallery-chat-work-loop"),
             (GalleryPage::Theme, "gallery-content"),
         ] {
@@ -3089,6 +3409,81 @@ mod tests {
                 cx.debug_bounds(selector).is_some(),
                 "{page:?} page wires {selector}"
             );
+        }
+    }
+
+    #[gpui::test]
+    fn file_browser_gallery_fixture_uses_real_inspector_geometry(cx: &mut TestAppContext) {
+        assert_eq!(GalleryPage::from_id("files"), Some(GalleryPage::Files));
+        let cx = render_page(cx, 900.0, 700.0, GalleryPage::Files);
+        let stage = cx.debug_bounds("gallery-file-browser-stage").unwrap();
+        let browser = cx.debug_bounds("gallery-file-browser.root").unwrap();
+        assert_eq!(stage.size, size(px(340.0), px(360.0)));
+        assert_eq!(browser.size, size(px(338.0), px(358.0)));
+        assert_eq!(
+            cx.debug_bounds("gallery-file-browser.scope-all")
+                .unwrap()
+                .size
+                .height,
+            px(24.0)
+        );
+        assert_eq!(
+            cx.debug_bounds("gallery-file-browser.layout-tree")
+                .unwrap()
+                .size
+                .height,
+            px(24.0)
+        );
+        assert_eq!(
+            cx.debug_bounds("gallery-file-browser.entry-file-browser")
+                .unwrap()
+                .size
+                .height,
+            px(28.0)
+        );
+        assert_eq!(
+            cx.debug_bounds("gallery-file-browser.entry-more-ui")
+                .unwrap()
+                .size
+                .height,
+            px(28.0)
+        );
+        assert!(
+            cx.debug_bounds("gallery-file-browser.entry-more-ui.path")
+                .is_none()
+        );
+        assert!(
+            cx.debug_bounds("gallery-file-browser.entry-more-ui.status")
+                .is_none()
+        );
+    }
+
+    #[gpui::test]
+    fn preview_gallery_fixture_names_every_typed_preview(cx: &mut TestAppContext) {
+        assert_eq!(
+            GalleryPage::from_id("previews"),
+            Some(GalleryPage::Previews)
+        );
+        let cx = render_page(cx, 1280.0, 800.0, GalleryPage::Previews);
+        for (root, header) in [
+            ("gallery-preview-image.root", "gallery-preview-image.header"),
+            (
+                "gallery-preview-markdown.root",
+                "gallery-preview-markdown.header",
+            ),
+            ("gallery-preview-html.root", "gallery-preview-html.header"),
+            ("gallery-preview-audio.root", "gallery-preview-audio.header"),
+            ("gallery-preview-video.root", "gallery-preview-video.header"),
+            ("gallery-preview-pdf.root", "gallery-preview-pdf.header"),
+            (
+                "gallery-preview-binary.root",
+                "gallery-preview-binary.header",
+            ),
+            ("gallery-preview-text.root", "gallery-preview-text.header"),
+        ] {
+            let bounds = cx.debug_bounds(root).unwrap();
+            assert_eq!(bounds.size, size(px(560.0), px(320.0)));
+            assert_eq!(cx.debug_bounds(header).unwrap().size.height, px(32.0));
         }
     }
 

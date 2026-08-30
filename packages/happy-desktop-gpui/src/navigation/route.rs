@@ -31,7 +31,41 @@ macro_rules! opaque_text {
 
 opaque_text!(GroupId, "group id");
 opaque_text!(SessionId, "session id");
-opaque_text!(FilePath, "file path");
+
+/// A daemon workspace-relative POSIX file path.
+///
+/// The daemon is the final authority, but rejecting traversal and platform
+/// separators at route construction keeps unsafe values out of retained UI
+/// identity and persistence.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FilePath(Arc<str>);
+impl FilePath {
+    pub fn new(value: impl Into<Arc<str>>) -> Result<Self, RouteParseError> {
+        let value = value.into();
+        let bytes = value.as_bytes();
+        if bytes.is_empty()
+            || bytes.len() > 16_384
+            || bytes[0] == b'/'
+            || bytes.contains(&b'\\')
+            || bytes.contains(&0)
+            || value
+                .split('/')
+                .any(|component| component.is_empty() || component == "." || component == "..")
+        {
+            return Err(RouteParseError::InvalidPath);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+impl fmt::Display for FilePath {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FileKind {

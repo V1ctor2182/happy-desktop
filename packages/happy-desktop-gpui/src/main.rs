@@ -1,5 +1,6 @@
 mod chat;
 mod connectivity;
+mod files;
 mod fonts;
 mod navigation;
 mod shell;

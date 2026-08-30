@@ -1765,7 +1765,7 @@ fn bounded_utf8(value: &str, limit: usize) -> String {
     value[..end].to_owned()
 }
 
-pub(super) fn daemon_http_client(socket_path: &Path) -> Result<Client, UserError> {
+pub(crate) fn daemon_http_client(socket_path: &Path) -> Result<Client, UserError> {
     Client::builder()
         .unix_socket(socket_path)
         .timeout(Duration::from_secs(60))
@@ -1773,9 +1773,9 @@ pub(super) fn daemon_http_client(socket_path: &Path) -> Result<Client, UserError
         .map_err(transport_error)
 }
 
-pub(super) struct SecretToken(String);
+pub(crate) struct SecretToken(String);
 impl SecretToken {
-    pub(super) fn read(path: &Path) -> Result<Self, UserError> {
+    pub(crate) fn read(path: &Path) -> Result<Self, UserError> {
         let mut bytes = Vec::new();
         File::open(path)
             .and_then(|file| {
@@ -1801,21 +1801,21 @@ impl SecretToken {
             Ok(Self(token.to_owned()))
         }
     }
-    pub(super) fn authorization(&self) -> String {
+    pub(crate) fn authorization(&self) -> String {
         format!("Bearer {}", self.0)
     }
 
-    pub(super) fn redact(&self, value: &str) -> String {
+    pub(crate) fn redact(&self, value: &str) -> String {
         value.replace(&self.0, "[redacted]")
     }
 }
 
-pub(super) struct DaemonPaths {
-    pub(super) socket_path: PathBuf,
-    pub(super) token_path: PathBuf,
+pub(crate) struct DaemonPaths {
+    pub(crate) socket_path: PathBuf,
+    pub(crate) token_path: PathBuf,
 }
 impl DaemonPaths {
-    pub(super) fn resolve(
+    pub(crate) fn resolve(
         environment: &BTreeMap<String, String>,
         supplied_home: Option<&Path>,
     ) -> Result<Self, UserError> {

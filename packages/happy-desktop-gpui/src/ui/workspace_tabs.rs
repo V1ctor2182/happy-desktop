@@ -83,6 +83,10 @@ pub struct WorkspaceTabItem {
     pub label: SharedString,
     pub kind: WorkspaceTabKind,
     pub active: bool,
+    /// Caller-authoritative ephemeral preview state. Preview labels are italic only.
+    pub preview: bool,
+    /// Caller-authoritative unsaved editor state.
+    pub dirty: bool,
     pub unread: bool,
     pub waiting: bool,
     pub running: bool,
@@ -354,7 +358,25 @@ impl RenderOnce for WorkspaceTabs {
                             .debug_selector(part(root_id.clone(), format!("{selector}.label")))
                             .min_w_0()
                             .truncate()
+                            .when(tab.preview, |label| label.italic())
                             .child(tab.label),
+                    )
+                    .child(
+                        div()
+                            .debug_selector(part(root_id.clone(), format!("{selector}.dirty-slot")))
+                            .size(px(8.0))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .children(tab.dirty.then(|| {
+                                Icon::decorative(
+                                    IconName::Dot,
+                                    8.0,
+                                    theme.role(ThemeRole::Warning).into(),
+                                    format!("{root_id}.{selector}.dirty"),
+                                )
+                            })),
                     )
                     .when(tab.running || tab.waiting, |row| {
                         row.child(Icon::labelled(
@@ -790,7 +812,9 @@ mod tests {
                         id: "session".into(),
                         label: "A very long session title that truncates".into(),
                         kind: WorkspaceTabKind::Session,
+                        dirty: false,
                         active: true,
+                        preview: false,
                         unread: true,
                         waiting: false,
                         running: true,
@@ -801,7 +825,9 @@ mod tests {
                         id: "disabled".into(),
                         label: "Disabled file".into(),
                         kind: WorkspaceTabKind::File,
+                        dirty: true,
                         active: false,
+                        preview: false,
                         unread: false,
                         waiting: false,
                         running: false,
@@ -812,7 +838,9 @@ mod tests {
                         id: "terminal".into(),
                         label: "Terminal".into(),
                         kind: WorkspaceTabKind::Terminal,
+                        dirty: false,
                         active: false,
+                        preview: false,
                         unread: false,
                         waiting: true,
                         running: false,
@@ -920,6 +948,22 @@ mod tests {
         assert_eq!(
             bounds(cx, "workspace-tabs.create").size,
             size(px(28.0), px(28.0))
+        );
+        let clean_slot = bounds(cx, "workspace-tabs.tab-session.dirty-slot");
+        let dirty_slot = bounds(cx, "workspace-tabs.tab-disabled.dirty-slot");
+        assert_eq!(clean_slot.size, size(px(8.0), px(8.0)));
+        assert_eq!(dirty_slot.size, size(px(8.0), px(8.0)));
+        assert!(
+            cx.debug_bounds("workspace-tabs.tab-session.dirty")
+                .is_none()
+        );
+        assert_eq!(
+            bounds(cx, "workspace-tabs.tab-disabled.dirty").size,
+            size(px(8.0), px(8.0))
+        );
+        assert_eq!(
+            dirty_slot.origin.x - bounds(cx, "workspace-tabs.tab-disabled.label").right(),
+            px(6.0)
         );
     }
 

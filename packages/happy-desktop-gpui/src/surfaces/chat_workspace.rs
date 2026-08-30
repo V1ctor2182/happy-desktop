@@ -20,9 +20,9 @@ use crate::{
         AgentAvailability as ChatAvailability, AsyncActionState, AttachmentId, AttachmentRejection,
         AttachmentState, ChatMutationId, ChatSnapshot, ChatStore, ChatTranscriptBlockKind,
         ChatTranscriptMessageRole, ChatTranscriptRowId as ProductRowId, ChatTranscriptRowKind,
-        ClientConversationId, ClientMessageId, HistoryPage, InlineImageAttachment, LoadState,
-        MutationId, OperationState, ScrollAnchor, TranscriptRowId, WorkspaceBehavior,
-        WorkspaceStore, WorkspaceTab, transcript_project,
+        ClientConversationId, ClientMessageId, FileTabKey, FileTabPresentation, HistoryPage,
+        InlineImageAttachment, LoadState, MutationId, OperationState, ScrollAnchor,
+        TranscriptRowId, WorkspaceBehavior, WorkspaceStore, WorkspaceTab, transcript_project,
     },
     connectivity::{
         AgentStatus, CatalogConversationStatus, ConnectivityController, ConversationKey,
@@ -47,7 +47,7 @@ use crate::{
             ProjectHeader as ChatHeader, ProjectHeaderAction, ProjectHeaderStatus,
             ProjectStatusTone,
         },
-        chat_markdown::MarkdownDocument,
+        chat_markdown::{MarkdownDocument, MarkdownLinkActivate, MarkdownLinkTarget},
         chat_message::{
             ChatImageActivate, ChatImageBlock, ChatMessageBlock, ChatMessageModel, CompactionBlock,
             DelegationRowModel, GenericQuestion, InlineImageLightbox, MessageDelivery,
@@ -79,6 +79,10 @@ use crate::{
     },
 };
 
+use crate::{files::RelativeFilePath, navigation::FileKind};
+
+use super::FilesInspectorSurface;
+
 /// A route transition requested by a retained workspace surface.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChatWorkspaceNavigation {
@@ -87,6 +91,16 @@ pub enum ChatWorkspaceNavigation {
     WorkspaceTab {
         workspace: WorkspaceKey,
         tab: WorkspaceTab,
+    },
+    File {
+        workspace: WorkspaceKey,
+        path: RelativeFilePath,
+        kind: FileKind,
+    },
+    FilePreview {
+        workspace: WorkspaceKey,
+        conversation: Option<ConversationKey>,
+        path: RelativeFilePath,
     },
 }
 
@@ -321,13 +335,16 @@ pub struct ChatWorkspaceSurface {
     connectivity: Entity<ConnectivityController>,
     workspace_key: WorkspaceKey,
     workspace: Entity<WorkspaceStore>,
+    files: Entity<FilesInspectorSurface>,
     desired_conversation: Option<ConversationKey>,
+    desired_file: Option<(RelativeFilePath, FileKind)>,
     focused_conversation: Option<ConversationKey>,
     active: bool,
     theme: Theme,
     labels: ChatWorkspaceLabels,
     catalog_facts: ChatWorkspaceCatalogFacts,
     on_navigate: ChatWorkspaceNavigationHandler,
+    link_open: MarkdownLinkActivate,
     recent_open: bool,
     pending_restore: Option<ConversationKey>,
     tabs_scrollbar: Entity<ScrollbarState>,
@@ -335,6 +352,7 @@ pub struct ChatWorkspaceSurface {
     emoji_open: BTreeSet<ConversationKey>,
     mutation_serial: u64,
     persistence_error: Option<Arc<str>>,
+    inspector_visible: bool,
     ui: BTreeMap<ConversationKey, ConversationUi>,
     images: RefCell<BTreeMap<String, DecodedInlineImage>>,
     rejected_images: RefCell<BTreeSet<String>>,
@@ -352,7 +370,9 @@ impl ChatWorkspaceSurface {
     pub fn new(
         connectivity: Entity<ConnectivityController>,
         workspace_key: WorkspaceKey,
+        files: Entity<FilesInspectorSurface>,
         desired_conversation: Option<ConversationKey>,
+        desired_file: Option<(RelativeFilePath, FileKind)>,
         theme: Theme,
         labels: ChatWorkspaceLabels,
         catalog_facts: ChatWorkspaceCatalogFacts,
@@ -412,17 +432,39 @@ impl ChatWorkspaceSurface {
                 SharedScrollHandle::new(),
             )
         });
+        let link_surface = cx.entity();
+        let link_open: MarkdownLinkActivate = Rc::new(move |target, _window, cx| match target {
+            MarkdownLinkTarget::Http(url) => cx.open_url(url.as_ref()),
+            MarkdownLinkTarget::WorkspaceRelative(path) => {
+                if let Ok(path) = RelativeFilePath::parse(path.as_ref()) {
+                    link_surface.update(cx, |this, cx| {
+                        (this.on_navigate)(
+                            ChatWorkspaceNavigation::FilePreview {
+                                workspace: this.workspace_key.clone(),
+                                conversation: this.focused_conversation.clone(),
+                                path,
+                            },
+                            cx,
+                        );
+                    });
+                }
+            }
+            MarkdownLinkTarget::SameDocumentAnchor(_) => {}
+        });
         let mut this = Self {
             connectivity,
             workspace_key,
             workspace,
+            files,
             desired_conversation,
+            desired_file,
             focused_conversation: None,
             active: true,
             theme,
             labels,
             catalog_facts,
             on_navigate,
+            link_open,
             recent_open: false,
             pending_restore: None,
             tabs_scrollbar,
@@ -430,6 +472,7 @@ impl ChatWorkspaceSurface {
             emoji_open: BTreeSet::new(),
             mutation_serial: 0,
             persistence_error: None,
+            inspector_visible: true,
             ui: BTreeMap::new(),
             images: RefCell::new(BTreeMap::new()),
             rejected_images: RefCell::new(BTreeSet::new()),
@@ -449,12 +492,14 @@ impl ChatWorkspaceSurface {
     pub fn reconcile(
         &mut self,
         desired_conversation: Option<ConversationKey>,
+        desired_file: Option<(RelativeFilePath, FileKind)>,
         theme: Theme,
         labels: ChatWorkspaceLabels,
         catalog_facts: ChatWorkspaceCatalogFacts,
         cx: &mut Context<Self>,
     ) {
         if self.desired_conversation == desired_conversation
+            && self.desired_file == desired_file
             && self.theme == theme
             && self.labels == labels
             && self.catalog_facts == catalog_facts
@@ -462,6 +507,7 @@ impl ChatWorkspaceSurface {
             return;
         }
         self.desired_conversation = desired_conversation;
+        self.desired_file = desired_file;
         if self.theme != theme {
             self.theme = theme;
             for ui in self.ui.values() {
@@ -490,6 +536,8 @@ impl ChatWorkspaceSurface {
             return;
         }
         self.active = active;
+        self.files
+            .update(cx, |files, cx| files.workspace_active_reconcile(active, cx));
         if active {
             self.route_reconcile(cx);
         } else {
@@ -518,17 +566,236 @@ impl ChatWorkspaceSurface {
         &self.workspace
     }
 
+    pub fn files_inspector(&self) -> Entity<FilesInspectorSurface> {
+        self.files.clone()
+    }
+    pub fn inspector_reveal(&mut self, cx: &mut Context<Self>) {
+        if !self.inspector_visible {
+            self.inspector_visible = true;
+            self.files
+                .update(cx, |files, cx| files.inspector_visible_reconcile(true, cx));
+            cx.notify();
+        }
+    }
+    pub fn file_preview_reconcile(
+        &mut self,
+        path: RelativeFilePath,
+        ephemeral: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let key = FileTabKey::from_path(path);
+        let old = self
+            .workspace
+            .read(cx)
+            .snapshot()
+            .ephemeral_file_tab
+            .clone();
+        if ephemeral && old.as_ref() != Some(&key) {
+            if let Some(old) = old {
+                let dirty = self
+                    .files
+                    .read(cx)
+                    .document(old.path())
+                    .is_some_and(|doc| doc.read(cx).dirty(cx));
+                if !dirty {
+                    self.workspace.update(cx, |store, cx| {
+                        store.tab_close(&WorkspaceTab::File(old));
+                        cx.notify();
+                    });
+                }
+            }
+        }
+        let path = key.path().clone();
+        let presentation = self
+            .workspace
+            .read(cx)
+            .snapshot()
+            .file_tab_presentations
+            .get(&key)
+            .copied()
+            .unwrap_or_default();
+        let kind = if presentation == FileTabPresentation::Diff {
+            FileKind::Diff
+        } else {
+            FileKind::File
+        };
+        self.workspace.update(cx, |store, cx| {
+            store.file_tab_preview_update(ephemeral.then_some(key));
+            cx.notify();
+        });
+        self.files.update(cx, |files, cx| {
+            files.main_file_kind_reconcile(path, kind, ephemeral, cx)
+        });
+    }
+
+    pub fn inspector_visible(&self) -> bool {
+        self.inspector_visible
+    }
+
     pub fn focused_chat_store(&self, cx: &App) -> Option<Entity<ChatStore>> {
         self.focused_conversation
             .as_ref()
             .and_then(|key| self.connectivity.read(cx).chat(key, cx))
     }
 
+    fn navigate_after_update(&self, navigation: ChatWorkspaceNavigation, cx: &mut Context<Self>) {
+        let on_navigate = self.on_navigate.clone();
+        cx.defer(move |cx| on_navigate(navigation, cx));
+    }
+
+    fn open_file_tab(&mut self, path: RelativeFilePath, cx: &mut Context<Self>) -> bool {
+        let tab = WorkspaceTab::File(FileTabKey::from_path(path.clone()));
+        let snapshot = self.workspace.read(cx).snapshot().clone();
+        if snapshot.tabs.contains(&tab) {
+            self.files.update(cx, |files, cx| {
+                files.document_materialize(path, cx);
+            });
+            if snapshot.active_tab.as_ref() != Some(&tab) {
+                self.workspace.update(cx, |store, cx| {
+                    store.tab_activate(&tab);
+                    cx.notify();
+                });
+            }
+            return true;
+        }
+        let file_count = snapshot
+            .tabs
+            .iter()
+            .filter(|tab| matches!(tab, WorkspaceTab::File(_)))
+            .count();
+        if file_count >= 20 {
+            let clean_lru =
+                snapshot
+                    .activation_history
+                    .iter()
+                    .find_map(|candidate| match candidate {
+                        WorkspaceTab::File(key) => {
+                            let dirty = self
+                                .files
+                                .read(cx)
+                                .document(key.path())
+                                .is_some_and(|doc| doc.read(cx).dirty(cx));
+                            (!dirty).then(|| candidate.clone())
+                        }
+                        _ => None,
+                    });
+            let Some(clean_lru) = clean_lru else {
+                self.persistence_error = Some(Arc::from(
+                    "All 20 file tabs have unsaved changes. Close or save one before opening another.",
+                ));
+                cx.notify();
+                return false;
+            };
+            self.workspace.update(cx, |store, cx| {
+                store.tab_close(&clean_lru);
+                cx.notify();
+            });
+        }
+        self.files.update(cx, |files, cx| {
+            files.document_materialize(path, cx);
+        });
+        self.workspace.update(cx, |store, cx| {
+            store.tab_open(tab);
+            cx.notify();
+        });
+        true
+    }
+
     fn route_reconcile(&mut self, cx: &mut Context<Self>) {
         if !self.active {
             return;
         }
+        if let Some((path, kind)) = self.desired_file.clone() {
+            if self.open_file_tab(path.clone(), cx) {
+                let key = FileTabKey::from_path(path.clone());
+                let presentation = if kind == FileKind::Diff {
+                    FileTabPresentation::Diff
+                } else {
+                    FileTabPresentation::File
+                };
+                let presentation_changed = self
+                    .workspace
+                    .read(cx)
+                    .snapshot()
+                    .file_tab_presentations
+                    .get(&key)
+                    .copied()
+                    .unwrap_or_default()
+                    != presentation;
+                if presentation_changed {
+                    self.workspace.update(cx, |store, cx| {
+                        store.file_tab_presentation_update(key, presentation);
+                        cx.notify();
+                    });
+                }
+                self.files.update(cx, |files, cx| {
+                    files.main_file_kind_reconcile(path, kind, false, cx)
+                });
+            } else {
+                self.desired_file = None;
+                match self.workspace.read(cx).snapshot().active_tab.clone() {
+                    Some(WorkspaceTab::Conversation(conversation)) => (self.on_navigate)(
+                        ChatWorkspaceNavigation::Conversation(CreatedChatNavigation {
+                            workspace: self.workspace_key.clone(),
+                            conversation,
+                        }),
+                        cx,
+                    ),
+                    Some(WorkspaceTab::File(key)) => {
+                        let fallback_kind = self
+                            .workspace
+                            .read(cx)
+                            .snapshot()
+                            .file_tab_presentations
+                            .get(&key)
+                            .copied()
+                            .map(|value| {
+                                if value == FileTabPresentation::Diff {
+                                    FileKind::Diff
+                                } else {
+                                    FileKind::File
+                                }
+                            })
+                            .unwrap_or(FileKind::File);
+                        (self.on_navigate)(
+                            ChatWorkspaceNavigation::File {
+                                workspace: self.workspace_key.clone(),
+                                path: key.path().clone(),
+                                kind: fallback_kind,
+                            },
+                            cx,
+                        );
+                    }
+                    Some(tab @ WorkspaceTab::Tool(_)) => (self.on_navigate)(
+                        ChatWorkspaceNavigation::WorkspaceTab {
+                            workspace: self.workspace_key.clone(),
+                            tab,
+                        },
+                        cx,
+                    ),
+                    None => (self.on_navigate)(
+                        ChatWorkspaceNavigation::Workspace(self.workspace_key.clone()),
+                        cx,
+                    ),
+                }
+            }
+        }
         let snapshot = self.workspace.read(cx).snapshot().clone();
+        let main_paths = snapshot
+            .tabs
+            .iter()
+            .filter_map(|tab| match tab {
+                WorkspaceTab::File(key) => Some(key.path().clone()),
+                _ => None,
+            })
+            .collect();
+        let visible_main = match snapshot.active_tab.as_ref() {
+            Some(WorkspaceTab::File(key)) => Some(key.path().clone()),
+            _ => None,
+        };
+        self.files.update(cx, |files, cx| {
+            files.main_paths_reconcile(main_paths, visible_main, cx)
+        });
         let target =
             self.desired_conversation
                 .clone()
@@ -1302,6 +1569,7 @@ impl ChatWorkspaceSurface {
                     grouped,
                     message_generation(running_message_ids, role, message),
                     Some(on_image_open),
+                    self.link_open.clone(),
                     &self.images,
                     &self.rejected_images,
                 ))
@@ -1335,6 +1603,7 @@ impl ChatWorkspaceSurface {
                             review: None,
                             expanded: false,
                         })],
+                        on_link_open: Some(self.link_open.clone()),
                         on_image_open: None,
                         on_tool_open: None,
                         on_review_allow: None,
@@ -1352,6 +1621,7 @@ impl ChatWorkspaceSurface {
                 ChatTranscriptContent::Message(single_block_message(
                     product_row_id(&row.id),
                     ChatMessageBlock::Tool(tool_model(tool, false)),
+                    self.link_open.clone(),
                 ))
             }
             ChatTranscriptRowKind::Review { tool_id, review } => {
@@ -1368,6 +1638,7 @@ impl ChatWorkspaceSurface {
                         review: Some(ToolReview { status, prompt }),
                         expanded: true,
                     }),
+                    self.link_open.clone(),
                 ))
             }
             ChatTranscriptRowKind::Compaction { compaction, .. } => {
@@ -1379,6 +1650,7 @@ impl ChatWorkspaceSurface {
                         summary: MarkdownDocument::parse(&summary),
                         token_count: count,
                     }),
+                    self.link_open.clone(),
                 ))
             }
             ChatTranscriptRowKind::Question {
@@ -1657,6 +1929,7 @@ fn message_model(
     grouped: bool,
     generation: MessageGeneration,
     on_image_open: Option<ChatImageActivate>,
+    on_link_open: MarkdownLinkActivate,
     images: &RefCell<BTreeMap<String, DecodedInlineImage>>,
     rejected_images: &RefCell<BTreeSet<String>>,
 ) -> ChatMessageModel {
@@ -1766,6 +2039,7 @@ fn message_model(
         generation,
         grouped,
         blocks,
+        on_link_open: Some(on_link_open),
         on_image_open,
         on_tool_open: None,
         on_review_allow: None,
@@ -1789,7 +2063,11 @@ fn message_time_label(value: i64) -> Option<String> {
     Some(format!("{:02}:{:02}", local.tm_hour, local.tm_min))
 }
 
-fn single_block_message(id: String, block: ChatMessageBlock) -> ChatMessageModel {
+fn single_block_message(
+    id: String,
+    block: ChatMessageBlock,
+    on_link_open: MarkdownLinkActivate,
+) -> ChatMessageModel {
     ChatMessageModel {
         id: id.into(),
         role: MessageRole::Agent,
@@ -1801,6 +2079,7 @@ fn single_block_message(id: String, block: ChatMessageBlock) -> ChatMessageModel
         generation: MessageGeneration::Complete,
         grouped: true,
         blocks: vec![block],
+        on_link_open: Some(on_link_open),
         on_image_open: None,
         on_tool_open: None,
         on_review_allow: None,
@@ -3355,52 +3634,180 @@ impl Render for ChatWorkspaceSurface {
                         || workspace.behavior == WorkspaceBehavior::BotSingleChat,
                     selected: false,
                 },
+                ProjectHeaderAction {
+                    id: "files-panel".into(),
+                    label: if self.inspector_visible {
+                        "Collapse Files"
+                    } else {
+                        "Expand Files"
+                    }
+                    .into(),
+                    icon: if self.inspector_visible {
+                        IconName::PanelCollapse
+                    } else {
+                        IconName::PanelExpand
+                    },
+                    disabled: false,
+                    selected: self.inspector_visible,
+                },
+                ProjectHeaderAction {
+                    id: "file-to-inspector".into(),
+                    label: "Move file to Files panel".into(),
+                    icon: IconName::PanelExpand,
+                    disabled: !matches!(workspace.active_tab, Some(WorkspaceTab::File(_))),
+                    selected: false,
+                },
             ],
             on_action: Some(Rc::new(move |id, _, cx| {
-                header_entity.update(cx, |this, cx| {
-                    let Some(key) = header_key.clone() else {
-                        return;
-                    };
-                    match id.as_ref() {
-                        "mark-read" => {
-                            if let Some(chat) = this.chat_entity(&key, cx) {
-                                let mutation = ChatMutationId::new(this.next_mutation("mark-read"))
-                                    .expect("mutation is nonempty");
-                                chat.update(cx, |store, cx| {
-                                    store.mark_read(mutation);
+                let header_entity = header_entity.clone();
+                let header_key = header_key.clone();
+                let id = id.clone();
+                cx.defer(move |cx| {
+                    header_entity.update(cx, |this, cx| {
+                        if id.as_ref() == "files-panel" {
+                            this.inspector_visible = !this.inspector_visible;
+                            this.files.update(cx, |files, cx| {
+                                files.inspector_visible_reconcile(this.inspector_visible, cx)
+                            });
+                            cx.notify();
+                            return;
+                        }
+                        if id.as_ref() == "file-to-inspector" {
+                            let active = this.workspace.read(cx).snapshot().active_tab.clone();
+                            if let Some(WorkspaceTab::File(key)) = active {
+                                let path = key.path().clone();
+                                let kind = this
+                                    .workspace
+                                    .read(cx)
+                                    .snapshot()
+                                    .file_tab_presentations
+                                    .get(&key)
+                                    .copied()
+                                    .map(|kind| {
+                                        if kind == FileTabPresentation::Diff {
+                                            FileKind::Diff
+                                        } else {
+                                            FileKind::File
+                                        }
+                                    })
+                                    .unwrap_or(FileKind::File);
+                                this.workspace.update(cx, |store, cx| {
+                                    store.tab_close(&WorkspaceTab::File(key));
                                     cx.notify();
                                 });
-                            }
-                        }
-                        "archive" => {
-                            let snapshot = this.workspace.read(cx).snapshot().clone();
-                            let fallback = conversation_fallback(
-                                &snapshot.tabs,
-                                &snapshot.activation_history,
-                                &key,
-                            );
-                            let mutation = MutationId::new(this.next_mutation("archive"))
-                                .expect("mutation is nonempty");
-                            this.workspace.update(cx, |store, cx| {
-                                store.conversation_archive(&key, mutation);
+                                this.desired_file = None;
+                                let fallback =
+                                    this.workspace.read(cx).snapshot().active_tab.clone();
+                                match fallback {
+                                    Some(WorkspaceTab::Conversation(conversation)) => this
+                                        .navigate_after_update(
+                                            ChatWorkspaceNavigation::Conversation(
+                                                CreatedChatNavigation {
+                                                    workspace: this.workspace_key.clone(),
+                                                    conversation,
+                                                },
+                                            ),
+                                            cx,
+                                        ),
+                                    Some(WorkspaceTab::File(key)) => {
+                                        let fallback_kind = this
+                                            .workspace
+                                            .read(cx)
+                                            .snapshot()
+                                            .file_tab_presentations
+                                            .get(&key)
+                                            .copied()
+                                            .map(|kind| {
+                                                if kind == FileTabPresentation::Diff {
+                                                    FileKind::Diff
+                                                } else {
+                                                    FileKind::File
+                                                }
+                                            })
+                                            .unwrap_or(FileKind::File);
+                                        this.navigate_after_update(
+                                            ChatWorkspaceNavigation::File {
+                                                workspace: this.workspace_key.clone(),
+                                                path: key.path().clone(),
+                                                kind: fallback_kind,
+                                            },
+                                            cx,
+                                        );
+                                    }
+                                    Some(tab @ WorkspaceTab::Tool(_)) => this
+                                        .navigate_after_update(
+                                            ChatWorkspaceNavigation::WorkspaceTab {
+                                                workspace: this.workspace_key.clone(),
+                                                tab,
+                                            },
+                                            cx,
+                                        ),
+                                    None => this.navigate_after_update(
+                                        ChatWorkspaceNavigation::Workspace(
+                                            this.workspace_key.clone(),
+                                        ),
+                                        cx,
+                                    ),
+                                }
+                                this.inspector_visible = true;
+                                this.files.update(cx, |files, cx| {
+                                    files.inspector_visible_reconcile(true, cx);
+                                    files.route_preview_reconcile(Some((path, kind)), cx);
+                                });
+                                this.route_reconcile(cx);
                                 cx.notify();
-                            });
-                            match fallback {
-                                Some(conversation) => (this.on_navigate)(
-                                    ChatWorkspaceNavigation::Conversation(CreatedChatNavigation {
-                                        workspace: this.workspace_key.clone(),
-                                        conversation,
-                                    }),
-                                    cx,
-                                ),
-                                None => (this.on_navigate)(
-                                    ChatWorkspaceNavigation::Workspace(this.workspace_key.clone()),
-                                    cx,
-                                ),
                             }
+                            return;
                         }
-                        _ => {}
-                    }
+                        let Some(key) = header_key.clone() else {
+                            return;
+                        };
+                        match id.as_ref() {
+                            "mark-read" => {
+                                if let Some(chat) = this.chat_entity(&key, cx) {
+                                    let mutation =
+                                        ChatMutationId::new(this.next_mutation("mark-read"))
+                                            .expect("mutation is nonempty");
+                                    chat.update(cx, |store, cx| {
+                                        store.mark_read(mutation);
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                            "archive" => {
+                                let snapshot = this.workspace.read(cx).snapshot().clone();
+                                let fallback = conversation_fallback(
+                                    &snapshot.tabs,
+                                    &snapshot.activation_history,
+                                    &key,
+                                );
+                                let mutation = MutationId::new(this.next_mutation("archive"))
+                                    .expect("mutation is nonempty");
+                                this.workspace.update(cx, |store, cx| {
+                                    store.conversation_archive(&key, mutation);
+                                    cx.notify();
+                                });
+                                match fallback {
+                                    Some(conversation) => this.navigate_after_update(
+                                        ChatWorkspaceNavigation::Conversation(
+                                            CreatedChatNavigation {
+                                                workspace: this.workspace_key.clone(),
+                                                conversation,
+                                            },
+                                        ),
+                                        cx,
+                                    ),
+                                    None => this.navigate_after_update(
+                                        ChatWorkspaceNavigation::Workspace(
+                                            this.workspace_key.clone(),
+                                        ),
+                                        cx,
+                                    ),
+                                }
+                            }
+                            _ => {}
+                        }
+                    });
                 });
             })),
         };
@@ -3446,6 +3853,15 @@ impl Render for ChatWorkspaceSurface {
                     label: label.into(),
                     kind,
                     active: workspace.active_tab.as_ref() == Some(tab),
+                    preview: matches!(tab, WorkspaceTab::File(key) if workspace.ephemeral_file_tab.as_ref() == Some(key)),
+                    dirty: match tab {
+                        WorkspaceTab::File(key) => self
+                            .files
+                            .read(cx)
+                            .document(key.path())
+                            .is_some_and(|doc| doc.read(cx).dirty(cx)),
+                        WorkspaceTab::Conversation(_) | WorkspaceTab::Tool(_) => false,
+                    },
                     unread: match tab {
                         WorkspaceTab::Conversation(key) => workspace
                             .conversations
@@ -3559,8 +3975,35 @@ impl Render for ChatWorkspaceSurface {
                                     cx,
                                 );
                             }
-                            tab @ (WorkspaceTab::File(_) | WorkspaceTab::Tool(_)) => {
+                            WorkspaceTab::File(key) => {
                                 this.desired_conversation = None;
+                                let presentation = this
+                                    .workspace
+                                    .read(cx)
+                                    .snapshot()
+                                    .file_tab_presentations
+                                    .get(&key)
+                                    .copied()
+                                    .unwrap_or_default();
+                                let kind = if presentation == FileTabPresentation::Diff {
+                                    FileKind::Diff
+                                } else {
+                                    FileKind::File
+                                };
+                                this.desired_file = Some((key.path().clone(), kind));
+                                this.focus_conversation(None, cx);
+                                (this.on_navigate)(
+                                    ChatWorkspaceNavigation::File {
+                                        workspace: this.workspace_key.clone(),
+                                        path: key.path().clone(),
+                                        kind,
+                                    },
+                                    cx,
+                                );
+                            }
+                            tab @ WorkspaceTab::Tool(_) => {
+                                this.desired_conversation = None;
+                                this.desired_file = None;
                                 this.focus_conversation(None, cx);
                                 (this.on_navigate)(
                                     ChatWorkspaceNavigation::WorkspaceTab {
@@ -3611,10 +4054,73 @@ impl Render for ChatWorkspaceSurface {
                             ),
                         }
                     } else {
+                        if let WorkspaceTab::File(key) = &tab {
+                            let dirty = this
+                                .files
+                                .read(cx)
+                                .document(key.path())
+                                .is_some_and(|doc| doc.read(cx).dirty(cx));
+                            if dirty {
+                                this.persistence_error =
+                                    Some(Arc::from("Save or revert this file before closing it."));
+                                cx.notify();
+                                return;
+                            }
+                        }
                         this.workspace.update(cx, |store, cx| {
                             store.tab_close(&tab);
                             cx.notify();
                         });
+                        let active = this.workspace.read(cx).snapshot().active_tab.clone();
+                        match active {
+                            Some(WorkspaceTab::Conversation(conversation)) => {
+                                this.desired_file = None;
+                                this.desired_conversation = Some(conversation.clone());
+                                (this.on_navigate)(
+                                    ChatWorkspaceNavigation::Conversation(CreatedChatNavigation {
+                                        workspace: this.workspace_key.clone(),
+                                        conversation,
+                                    }),
+                                    cx,
+                                );
+                            }
+                            Some(WorkspaceTab::File(key)) => {
+                                let presentation = this
+                                    .workspace
+                                    .read(cx)
+                                    .snapshot()
+                                    .file_tab_presentations
+                                    .get(&key)
+                                    .copied()
+                                    .unwrap_or_default();
+                                let kind = if presentation == FileTabPresentation::Diff {
+                                    FileKind::Diff
+                                } else {
+                                    FileKind::File
+                                };
+                                this.desired_file = Some((key.path().clone(), kind));
+                                this.desired_conversation = None;
+                                (this.on_navigate)(
+                                    ChatWorkspaceNavigation::File {
+                                        workspace: this.workspace_key.clone(),
+                                        path: key.path().clone(),
+                                        kind,
+                                    },
+                                    cx,
+                                );
+                            }
+                            Some(tab @ WorkspaceTab::Tool(_)) => (this.on_navigate)(
+                                ChatWorkspaceNavigation::WorkspaceTab {
+                                    workspace: this.workspace_key.clone(),
+                                    tab,
+                                },
+                                cx,
+                            ),
+                            None => (this.on_navigate)(
+                                ChatWorkspaceNavigation::Workspace(this.workspace_key.clone()),
+                                cx,
+                            ),
+                        }
                     }
                 });
             })),
@@ -3712,46 +4218,54 @@ impl Render for ChatWorkspaceSurface {
             path: self.labels.workspace_location.clone(),
         };
 
-        let body: AnyElement = match (focused.as_ref(), chat_snapshot.as_ref()) {
-            (Some(key), Some(snapshot)) => {
-                let ui = self.ui.get(key).expect("focused UI exists");
-                let transcript = ui.transcript.clone();
-                let composer = self.composer(key.clone(), snapshot, ui.composer.clone(), cx);
-                div()
-                    .size_full()
-                    .min_w_0()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .child(div().flex_1().min_h_0().min_w_0().child(transcript))
-                    .child(composer)
-                    .into_any_element()
-            }
-            _ if self.catalog_facts.lifecycle != WorkspaceLifecyclePhase::Ready => {
-                WorkspaceLifecycleNotice {
-                    id: format!("workspace-lifecycle-panel:{}", self.workspace_key.id()).into(),
-                    theme: self.theme,
-                    name: self.labels.workspace_name.clone(),
-                    phase: self.catalog_facts.lifecycle,
-                    detail: self.catalog_facts.lifecycle_detail.clone(),
-                    path: self.labels.workspace_location.clone(),
-                    size: WorkspaceLifecycleNoticeSize::Panel,
+        let active_file = match workspace.active_tab.as_ref() {
+            Some(WorkspaceTab::File(key)) => self.files.read(cx).document(key.path()),
+            _ => None,
+        };
+        let body: AnyElement = if let Some(document) = active_file {
+            document.into_any_element()
+        } else {
+            match (focused.as_ref(), chat_snapshot.as_ref()) {
+                (Some(key), Some(snapshot)) => {
+                    let ui = self.ui.get(key).expect("focused UI exists");
+                    let transcript = ui.transcript.clone();
+                    let composer = self.composer(key.clone(), snapshot, ui.composer.clone(), cx);
+                    div()
+                        .size_full()
+                        .min_w_0()
+                        .min_h_0()
+                        .flex()
+                        .flex_col()
+                        .child(div().flex_1().min_h_0().min_w_0().child(transcript))
+                        .child(composer)
+                        .into_any_element()
                 }
-                .into_any_element()
+                _ if self.catalog_facts.lifecycle != WorkspaceLifecyclePhase::Ready => {
+                    WorkspaceLifecycleNotice {
+                        id: format!("workspace-lifecycle-panel:{}", self.workspace_key.id()).into(),
+                        theme: self.theme,
+                        name: self.labels.workspace_name.clone(),
+                        phase: self.catalog_facts.lifecycle,
+                        detail: self.catalog_facts.lifecycle_detail.clone(),
+                        path: self.labels.workspace_location.clone(),
+                        size: WorkspaceLifecycleNoticeSize::Panel,
+                    }
+                    .into_any_element()
+                }
+                _ => div()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .font_family(fonts::UI_FAMILY)
+                    .text_color(self.theme.role(ThemeRole::TextSecondary))
+                    .child(if self.desired_conversation.is_some() {
+                        "The requested conversation is not available"
+                    } else {
+                        "No conversation open"
+                    })
+                    .into_any_element(),
             }
-            _ => div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .font_family(fonts::UI_FAMILY)
-                .text_color(self.theme.role(ThemeRole::TextSecondary))
-                .child(if self.desired_conversation.is_some() {
-                    "The requested conversation is not available"
-                } else {
-                    "No conversation open"
-                })
-                .into_any_element(),
         };
 
         let attachment_boundary = focused.as_ref().and_then(|key| {

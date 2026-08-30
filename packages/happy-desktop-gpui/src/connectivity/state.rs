@@ -3,9 +3,19 @@
 //! Transport availability is mutable state on a long-lived entity. A route
 //! failure never replaces its namespace, authoritative snapshot, or entity ID.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap, VecDeque},
+    sync::Arc,
+};
 
 use gpui::{AppContext, Context, Entity};
+
+use crate::files::{
+    DocumentPayload, FileAvailability, FileBrowserOutput, FileBrowserStore, FileDocumentOutput,
+    FileDocumentStore, FileEvent, FileOperation, FileOutputAdmission, FileRequestId,
+    FileRevisionQuery, FileSearchQuery, FileTransport, FileTreeQuery, FileWorkspaceId, LoadState,
+    MAX_EDITOR_BYTES, RelativeDirectoryPath, RelativeFilePath,
+};
 
 use crate::chat::{
     AgentAvailability as ChatAvailability, ChatStore, WorkspacePersistence, WorkspaceStore,
@@ -63,6 +73,8 @@ pub struct AgentLifetime {
     catalog: Entity<AgentCatalogStore>,
     workspaces: BTreeMap<WorkspaceKey, Entity<WorkspaceStore>>,
     chats: BTreeMap<ConversationKey, Entity<ChatStore>>,
+    file_browsers: BTreeMap<String, Entity<FileBrowserStore>>,
+    file_documents: BTreeMap<(String, RelativeFilePath), Entity<FileDocumentStore>>,
 }
 
 impl AgentLifetime {
@@ -76,6 +88,8 @@ impl AgentLifetime {
             catalog,
             workspaces: BTreeMap::new(),
             chats: BTreeMap::new(),
+            file_browsers: BTreeMap::new(),
+            file_documents: BTreeMap::new(),
         }
     }
 
@@ -123,6 +137,28 @@ impl AgentLifetime {
         &self,
     ) -> impl Iterator<Item = (&ConversationKey, &Entity<ChatStore>)> {
         self.chats.iter()
+    }
+
+    pub fn file_browser(&self, workspace_id: &str) -> Option<&Entity<FileBrowserStore>> {
+        self.file_browsers.get(workspace_id)
+    }
+    pub fn file_document(
+        &self,
+        workspace_id: &str,
+        path: &RelativeFilePath,
+    ) -> Option<&Entity<FileDocumentStore>> {
+        self.file_documents
+            .get(&(workspace_id.to_owned(), path.clone()))
+    }
+    pub fn materialized_file_browsers(
+        &self,
+    ) -> impl Iterator<Item = (&String, &Entity<FileBrowserStore>)> {
+        self.file_browsers.iter()
+    }
+    pub fn materialized_file_documents(
+        &self,
+    ) -> impl Iterator<Item = (&(String, RelativeFilePath), &Entity<FileDocumentStore>)> {
+        self.file_documents.iter()
     }
 }
 
@@ -206,6 +242,47 @@ pub struct OnboardingMutationFailure {
     pub error: UserError,
 }
 
+#[derive(Clone, Debug)]
+enum FileStoreOutput {
+    Browser(FileBrowserOutput),
+    Document(FileDocumentOutput),
+}
+
+#[derive(Clone, Debug)]
+enum FileRequestProvenance {
+    Search {
+        workspace: String,
+        query: String,
+    },
+    Tree {
+        workspace: String,
+        path: RelativeDirectoryPath,
+        cursor: Option<String>,
+        generation: u64,
+    },
+    Read {
+        workspace: String,
+        path: RelativeFilePath,
+        generation: u64,
+    },
+    Write {
+        workspace: String,
+        path: RelativeFilePath,
+        revision: u64,
+    },
+    Revision {
+        workspace: String,
+        path: RelativeFilePath,
+        revision: Arc<str>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum FileCacheKey {
+    Current(String, RelativeFilePath),
+    Revision(String, RelativeFilePath, Arc<str>),
+}
+
 pub struct ConnectivityController {
     agents: AgentRegistry,
     transport: Option<HostTransport>,
@@ -221,6 +298,10 @@ pub struct ConnectivityController {
     live_mutations: bool,
     mounted: bool,
     chat: super::chat_state::ChatConnectivity,
+    files: Arc<FileTransport>,
+    file_output_tx: async_channel::Sender<FileStoreOutput>,
+    file_provenance: HashMap<FileRequestId, FileRequestProvenance>,
+    file_cache_order: VecDeque<FileCacheKey>,
     workspace_persistence: Option<WorkspacePersistence>,
     workspace_persistence_error: Option<Arc<str>>,
     workspace_persistence_error_workspace: Option<WorkspaceKey>,
@@ -234,6 +315,12 @@ impl ConnectivityController {
         let chat_receiver = chat_transport.receiver();
         let chat = super::chat_state::ChatConnectivity::new(Arc::clone(&chat_transport));
         let output_receiver = chat.output_rx.clone();
+        let files = Arc::new(crate::files::start_file_transport(
+            TransportOptions::default(),
+        ));
+        let file_receiver = files.receiver();
+        let (file_output_tx, file_output_receiver) =
+            async_channel::bounded(crate::files::MAX_PENDING_REQUESTS);
         let agents = AgentRegistry::new(cx);
         cx.spawn(async move |this, cx| {
             while let Ok(event) = receiver.recv().await {
@@ -266,6 +353,32 @@ impl ConnectivityController {
                 if this
                     .update(cx, |controller, cx| {
                         controller.apply_store_output(output, cx)
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
+        cx.spawn(async move |this, cx| {
+            while let Ok(event) = file_receiver.recv().await {
+                let stopped = matches!(event, FileEvent::Stopped);
+                if this
+                    .update(cx, |controller, cx| controller.apply_file_event(event, cx))
+                    .is_err()
+                    || stopped
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
+        cx.spawn(async move |this, cx| {
+            while let Ok(output) = file_output_receiver.recv().await {
+                if this
+                    .update(cx, |controller, cx| {
+                        controller.apply_file_output(output, cx)
                     })
                     .is_err()
                 {
@@ -339,6 +452,10 @@ impl ConnectivityController {
             live_mutations: false,
             mounted: false,
             chat,
+            files,
+            file_output_tx,
+            file_provenance: HashMap::new(),
+            file_cache_order: VecDeque::new(),
             workspace_persistence,
             workspace_persistence_error,
             workspace_persistence_error_workspace: None,
@@ -347,6 +464,92 @@ impl ConnectivityController {
 
     pub fn agents(&self) -> &AgentRegistry {
         &self.agents
+    }
+
+    /// Returns the permanent browser store for one host workspace, creating it without opening transport.
+    pub fn file_browser_materialize(
+        &mut self,
+        workspace: &WorkspaceKey,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<FileBrowserStore>> {
+        if workspace.namespace() != &AgentNamespace::local_host() {
+            return None;
+        }
+        let id = workspace.id().to_owned();
+        if let Some(store) = self.agents.host().read(cx).file_browsers.get(&id) {
+            return Some(store.clone());
+        }
+        let sender = self.file_output_tx.clone();
+        let availability = self.file_availability(cx);
+        let store = cx.new({
+            let id = id.clone();
+            move |_| {
+                let mut store = FileBrowserStore::with_admission_listener(
+                    FileWorkspaceId::new(id),
+                    move |output| {
+                        if sender.try_send(FileStoreOutput::Browser(output)).is_ok() {
+                            FileOutputAdmission::Accepted
+                        } else {
+                            FileOutputAdmission::Rejected
+                        }
+                    },
+                );
+                store.authoritative().availability_replace(availability);
+                store
+            }
+        });
+        self.agents.host().update(cx, |host, cx| {
+            host.file_browsers
+                .entry(id)
+                .or_insert_with(|| store.clone());
+            cx.notify();
+        });
+        Some(store)
+    }
+
+    /// Returns the permanent document store for one `(workspace, relative path)` identity.
+    pub fn file_document_materialize(
+        &mut self,
+        workspace: &WorkspaceKey,
+        path: RelativeFilePath,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<FileDocumentStore>> {
+        if workspace.namespace() != &AgentNamespace::local_host() {
+            return None;
+        }
+        let id = workspace.id().to_owned();
+        let key = (id.clone(), path.clone());
+        if let Some(store) = self.agents.host().read(cx).file_documents.get(&key) {
+            return Some(store.clone());
+        }
+        let sender = self.file_output_tx.clone();
+        let availability = self.file_availability(cx);
+        let store = cx.new({
+            let id = id.clone();
+            let path = path.clone();
+            move |_| {
+                let mut store = FileDocumentStore::with_admission_listener(
+                    FileWorkspaceId::new(id),
+                    path,
+                    move |output| {
+                        if sender.try_send(FileStoreOutput::Document(output)).is_ok() {
+                            FileOutputAdmission::Accepted
+                        } else {
+                            FileOutputAdmission::Rejected
+                        }
+                    },
+                );
+                store.authoritative().availability_replace(availability);
+                store
+            }
+        });
+        self.agents.host().update(cx, |host, cx| {
+            host.file_documents
+                .entry(key)
+                .or_insert_with(|| store.clone());
+            cx.notify();
+        });
+        Some(store)
     }
 
     pub fn initial_phase(&self) -> &InitialPhase {
@@ -476,6 +679,12 @@ impl ConnectivityController {
             chat: super::chat_state::ChatConnectivity::new(Arc::new(super::start_chat_transport(
                 TransportOptions::default(),
             ))),
+            files: Arc::new(crate::files::start_file_transport(
+                TransportOptions::default(),
+            )),
+            file_output_tx: async_channel::bounded(crate::files::MAX_PENDING_REQUESTS).0,
+            file_provenance: HashMap::new(),
+            file_cache_order: VecDeque::new(),
             workspace_persistence: None,
             workspace_persistence_error: None,
             workspace_persistence_error_workspace: None,
@@ -505,6 +714,12 @@ impl ConnectivityController {
             chat: super::chat_state::ChatConnectivity::new(Arc::new(super::start_chat_transport(
                 TransportOptions::default(),
             ))),
+            files: Arc::new(crate::files::start_file_transport(
+                TransportOptions::default(),
+            )),
+            file_output_tx: async_channel::bounded(crate::files::MAX_PENDING_REQUESTS).0,
+            file_provenance: HashMap::new(),
+            file_cache_order: VecDeque::new(),
             workspace_persistence: None,
             workspace_persistence_error: None,
             workspace_persistence_error_workspace: None,
@@ -616,6 +831,7 @@ impl ConnectivityController {
                     cx.notify();
                 });
                 self.chat_availability_reconcile(cx);
+                self.file_availability_reconcile(cx);
             }
             WorkerEvent::Bootstrap {
                 snapshot,
@@ -647,7 +863,9 @@ impl ConnectivityController {
                     cx.notify();
                 });
                 self.chat_availability_reconcile(cx);
+                self.file_availability_reconcile(cx);
                 self.refresh_focused(cx);
+                self.invalidate_all_files(cx);
                 // Stream metadata is transport state, never durable product state.
             }
             WorkerEvent::Draining { message } => {
@@ -657,11 +875,15 @@ impl ConnectivityController {
                     cx.notify();
                 });
                 self.chat_availability_reconcile(cx);
+                self.file_availability_reconcile(cx);
             }
             WorkerEvent::EventHint(hint) => {
                 let _delivery_position = hint.cursor;
+                if hint.event_type == HappyAgentEventType::FilesUpdated {
+                    self.apply_files_hint(hint.payload.as_ref(), cx);
+                }
                 self.apply_chat_hint(hint.event_type, hint.payload, cx);
-                // Delivery hints only schedule authoritative focused reconciliation.
+                // Delivery hints only schedule authoritative reconciliation of materialized state.
             }
             WorkerEvent::Reconnecting { attempt, error } => {
                 self.live_mutations = false;
@@ -670,6 +892,7 @@ impl ConnectivityController {
                     cx.notify();
                 });
                 self.chat_availability_reconcile(cx);
+                self.file_availability_reconcile(cx);
             }
             WorkerEvent::Offline { error } => {
                 self.live_mutations = false;
@@ -678,6 +901,7 @@ impl ConnectivityController {
                     cx.notify();
                 });
                 self.chat_availability_reconcile(cx);
+                self.file_availability_reconcile(cx);
             }
             WorkerEvent::Error { error } => {
                 self.live_mutations = false;
@@ -697,6 +921,7 @@ impl ConnectivityController {
                     // A protocol refusal is settled until a compatible daemon or app is installed.
                 }
                 self.chat_availability_reconcile(cx);
+                self.file_availability_reconcile(cx);
             }
             WorkerEvent::OnboardingMutationStarted { id, kind } => {
                 // The transport admits only one mutation. Keep the state boundary
@@ -755,6 +980,950 @@ impl ConnectivityController {
             WorkerEvent::Stopped => {}
         }
         cx.notify();
+    }
+
+    fn apply_file_output(&mut self, output: FileStoreOutput, cx: &mut Context<Self>) {
+        match output {
+            FileStoreOutput::Browser(FileBrowserOutput::SearchRequested { workspace, query }) => {
+                let id = workspace.as_str().to_owned();
+                match FileSearchQuery::new(query.to_string(), Some(50))
+                    .map_err(|error| UserError {
+                        kind: UserErrorKind::Protocol,
+                        message: error.to_string(),
+                        api: None,
+                    })
+                    .and_then(|request| self.files.search(id.clone(), request))
+                {
+                    Ok(request) => {
+                        self.file_provenance.insert(
+                            request,
+                            FileRequestProvenance::Search {
+                                workspace: id,
+                                query: query.to_string(),
+                            },
+                        );
+                    }
+                    Err(error) => self.file_browser_fail_search(&id, &query, error.message, cx),
+                }
+            }
+            FileStoreOutput::Browser(FileBrowserOutput::DirectoryRequested {
+                workspace,
+                path,
+                cursor,
+                generation,
+            }) => {
+                let id = workspace.as_str().to_owned();
+                let cursor_string = cursor.as_deref().map(str::to_owned);
+                match FileTreeQuery::new(path.clone(), cursor_string.clone(), Some(500))
+                    .map_err(|error| UserError {
+                        kind: UserErrorKind::Protocol,
+                        message: error.to_string(),
+                        api: None,
+                    })
+                    .and_then(|query| self.files.tree(id.clone(), query))
+                {
+                    Ok(request) => {
+                        self.file_provenance.insert(
+                            request,
+                            FileRequestProvenance::Tree {
+                                workspace: id,
+                                path,
+                                cursor: cursor_string,
+                                generation,
+                            },
+                        );
+                    }
+                    Err(error) => {
+                        self.file_browser_fail_directory(&id, &path, generation, error.message, cx)
+                    }
+                }
+            }
+            FileStoreOutput::Document(FileDocumentOutput::DocumentRequested {
+                workspace,
+                path,
+                generation,
+            }) => {
+                let id = workspace.as_str().to_owned();
+                match self.files.read(id.clone(), path.clone()) {
+                    Ok(request) => {
+                        self.file_provenance.insert(
+                            request,
+                            FileRequestProvenance::Read {
+                                workspace: id,
+                                path,
+                                generation,
+                            },
+                        );
+                    }
+                    Err(error) => {
+                        self.file_document_load_fail(&id, &path, generation, error.message, cx)
+                    }
+                }
+            }
+            FileStoreOutput::Document(FileDocumentOutput::TextSaveRequested {
+                workspace,
+                path,
+                text,
+                expected_hash,
+                revision,
+            }) => {
+                let id = workspace.as_str().to_owned();
+                match self
+                    .files
+                    .write_text(id.clone(), path.clone(), text, expected_hash, revision)
+                {
+                    Ok(request) => {
+                        self.file_provenance.insert(
+                            request,
+                            FileRequestProvenance::Write {
+                                workspace: id,
+                                path,
+                                revision,
+                            },
+                        );
+                    }
+                    Err(error) => {
+                        self.file_document_save_fail(&id, &path, revision, error.message, cx)
+                    }
+                }
+            }
+            FileStoreOutput::Document(FileDocumentOutput::PayloadReleasedAfterStaging {
+                workspace,
+                path,
+                expected_hash: _,
+            }) => {
+                let workspace = workspace.as_str().to_owned();
+                self.file_cache_order.retain(|key| match key {
+                    FileCacheKey::Current(id, item) => id != &workspace || item != &path,
+                    FileCacheKey::Revision(_, _, _) => true,
+                });
+            }
+            FileStoreOutput::Document(FileDocumentOutput::VisibilityChanged {
+                workspace,
+                path,
+                visible,
+            }) => {
+                if visible {
+                    let workspace = workspace.as_str().to_owned();
+                    if self
+                        .host_file_document(&workspace, &path, cx)
+                        .is_some_and(|store| {
+                            let snapshot = store.read(cx).snapshot();
+                            snapshot.stale
+                                || (snapshot.payload.is_none()
+                                    && matches!(snapshot.state, LoadState::Loading))
+                        })
+                    {
+                        self.request_stale_read(workspace, path, cx);
+                    }
+                }
+            }
+            FileStoreOutput::Document(FileDocumentOutput::RetentionChanged {
+                workspace,
+                path,
+                retained,
+            }) => {
+                let workspace = workspace.as_str().to_owned();
+                self.file_cache_retention_changed(workspace, path, retained, cx);
+            }
+            FileStoreOutput::Document(FileDocumentOutput::RevisionRequested {
+                workspace,
+                path,
+                revision,
+            }) => {
+                let id = workspace.as_str().to_owned();
+                match FileRevisionQuery::new(path.clone(), revision.to_string())
+                    .map_err(|error| UserError {
+                        kind: UserErrorKind::Protocol,
+                        message: error.to_string(),
+                        api: None,
+                    })
+                    .and_then(|query| self.files.revision(id.clone(), query))
+                {
+                    Ok(request) => {
+                        self.file_provenance.insert(
+                            request,
+                            FileRequestProvenance::Revision {
+                                workspace: id,
+                                path,
+                                revision,
+                            },
+                        );
+                    }
+                    Err(error) => {
+                        self.file_document_revision_fail(&id, &path, &revision, error.message, cx)
+                    }
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    fn apply_file_event(&mut self, event: FileEvent, cx: &mut Context<Self>) {
+        match event {
+            FileEvent::SearchReady {
+                request_id,
+                workspace_id,
+                query,
+                response,
+            } => {
+                if matches!(self.file_provenance.remove(&request_id),Some(FileRequestProvenance::Search{workspace,query:expected}) if workspace==workspace_id && expected==query)
+                {
+                    if let Some(store) = self.host_file_browser(&workspace_id, cx) {
+                        store.update(cx, |store, cx| {
+                            store.authoritative().search_replace(&query, response.files);
+                            cx.notify();
+                        });
+                    }
+                }
+            }
+            FileEvent::TreeReady {
+                request_id,
+                workspace_id,
+                query,
+                response,
+            } => {
+                let generation = match self.file_provenance.remove(&request_id) {
+                    Some(FileRequestProvenance::Tree {
+                        workspace,
+                        path,
+                        cursor,
+                        generation,
+                    }) if workspace == workspace_id
+                        && path == query.path
+                        && cursor == query.cursor =>
+                    {
+                        Some(generation)
+                    }
+                    _ => None,
+                };
+                if let Some(generation) = generation
+                    && let Some(store) = self.host_file_browser(&workspace_id, cx)
+                {
+                    store.update(cx, |store, cx| {
+                        store.authoritative().directory_replace(
+                            &query.path,
+                            query.cursor.as_deref(),
+                            response.entries,
+                            response.next_cursor,
+                            generation,
+                        );
+                        cx.notify();
+                    });
+                }
+            }
+            FileEvent::FileReady {
+                request_id,
+                workspace_id,
+                path,
+                bytes,
+                hash,
+            } => {
+                let generation = match self.file_provenance.remove(&request_id) {
+                    Some(FileRequestProvenance::Read {
+                        workspace,
+                        path: expected_path,
+                        generation,
+                    }) if workspace == workspace_id && expected_path == path => Some(generation),
+                    _ => None,
+                };
+                if let Some(generation) = generation {
+                    match file_payload(bytes) {
+                        Ok(payload) => {
+                            if let Some(store) = self.host_file_document(&workspace_id, &path, cx)
+                                && store.read(cx).snapshot().generation == generation
+                            {
+                                store.update(cx, |store, cx| {
+                                    store
+                                        .authoritative()
+                                        .content_replace(payload, hash, generation);
+                                    cx.notify();
+                                });
+                                self.file_cache_touch(
+                                    FileCacheKey::Current(workspace_id, path),
+                                    cx,
+                                );
+                            }
+                        }
+                        Err(message) => self.file_document_load_fail(
+                            &workspace_id,
+                            &path,
+                            generation,
+                            message,
+                            cx,
+                        ),
+                    }
+                }
+            }
+            FileEvent::FileWritten {
+                request_id,
+                workspace_id,
+                path,
+                revision,
+                text,
+                hash,
+            } => {
+                let accepted = matches!(self.file_provenance.remove(&request_id), Some(FileRequestProvenance::Write { workspace, path: expected_path, revision: expected }) if workspace == workspace_id && expected_path == path && expected == revision);
+                if accepted {
+                    if let Some(store) = self.host_file_document(&workspace_id, &path, cx) {
+                        store.update(cx, |store, cx| {
+                            store.authoritative().save_succeeded(revision, text, hash);
+                            cx.notify();
+                        });
+                        self.file_cache_touch(FileCacheKey::Current(workspace_id, path), cx);
+                    }
+                }
+            }
+            FileEvent::RevisionReady {
+                request_id,
+                workspace_id,
+                query,
+                bytes,
+            } => {
+                let accepted = matches!(
+                    self.file_provenance.remove(&request_id),
+                    Some(FileRequestProvenance::Revision { workspace, path, revision })
+                        if workspace == workspace_id && path == query.path && revision.as_ref() == query.revision
+                );
+                if accepted {
+                    match file_payload(bytes) {
+                        Ok(payload) => {
+                            if let Some(store) =
+                                self.host_file_document(&workspace_id, &query.path, cx)
+                            {
+                                store.update(cx, |store, cx| {
+                                    store
+                                        .authoritative()
+                                        .revision_replace(&query.revision, payload);
+                                    cx.notify();
+                                });
+                                self.file_cache_touch(
+                                    FileCacheKey::Revision(
+                                        workspace_id,
+                                        query.path,
+                                        Arc::from(query.revision),
+                                    ),
+                                    cx,
+                                );
+                            }
+                        }
+                        Err(message) => self.file_document_revision_fail(
+                            &workspace_id,
+                            &query.path,
+                            &query.revision,
+                            message,
+                            cx,
+                        ),
+                    }
+                }
+            }
+            FileEvent::Failed {
+                request_id,
+                operation,
+                workspace_id,
+                path: _,
+                revision,
+                error,
+            } => {
+                let provenance = self.file_provenance.remove(&request_id);
+                match (operation, provenance) {
+                    (FileOperation::Search, Some(FileRequestProvenance::Search { query, .. })) => {
+                        self.file_browser_fail_search(&workspace_id, &query, error.message, cx)
+                    }
+                    (
+                        FileOperation::Tree,
+                        Some(FileRequestProvenance::Tree {
+                            path, generation, ..
+                        }),
+                    ) => self.file_browser_fail_directory(
+                        &workspace_id,
+                        &path,
+                        generation,
+                        error.message,
+                        cx,
+                    ),
+                    (
+                        FileOperation::Read,
+                        Some(FileRequestProvenance::Read {
+                            path, generation, ..
+                        }),
+                    ) => self.file_document_load_fail(
+                        &workspace_id,
+                        &path,
+                        generation,
+                        error.message,
+                        cx,
+                    ),
+                    (
+                        FileOperation::Write,
+                        Some(FileRequestProvenance::Write {
+                            path,
+                            revision: expected,
+                            ..
+                        }),
+                    ) => {
+                        let revision = revision.unwrap_or(expected);
+                        if error
+                            .api
+                            .as_ref()
+                            .is_some_and(|api| api.status == 409 || api.status == 412)
+                        {
+                            self.file_document_save_conflict(
+                                &workspace_id,
+                                &path,
+                                revision,
+                                error.message,
+                                cx,
+                            );
+                            if let Some(store) = self.host_file_document(&workspace_id, &path, cx) {
+                                store.update(cx, |store, cx| {
+                                    store.authoritative().invalidated();
+                                    cx.notify();
+                                });
+                            }
+                            self.request_stale_read(workspace_id, path, cx);
+                        } else {
+                            self.file_document_save_fail(
+                                &workspace_id,
+                                &path,
+                                revision,
+                                error.message,
+                                cx,
+                            );
+                        }
+                    }
+                    (
+                        FileOperation::Revision,
+                        Some(FileRequestProvenance::Revision { path, revision, .. }),
+                    ) => self.file_document_revision_fail(
+                        &workspace_id,
+                        &path,
+                        &revision,
+                        error.message,
+                        cx,
+                    ),
+                    _ => {}
+                }
+            }
+            FileEvent::Stopped => {
+                self.file_provenance.clear();
+            }
+        }
+        self.refresh_stale_files(cx);
+        cx.notify();
+    }
+
+    fn apply_files_hint(&mut self, payload: Option<&EventHintPayload>, cx: &mut Context<Self>) {
+        let Some(workspace) = payload.and_then(|value| value.workspace_id.as_deref()) else {
+            return;
+        };
+        // `None` means the daemon named the full workspace, or at least one supplied
+        // path was invalid. Invalid hint data must broaden, never narrow, revalidation.
+        let paths = match payload.and_then(|value| value.paths.as_ref()) {
+            Some(values) if values.len() <= crate::files::MAX_ENTRY_COUNT => values
+                .iter()
+                .map(RelativeFilePath::parse)
+                .collect::<Result<Vec<_>, _>>()
+                .ok(),
+            Some(_) => None,
+            None => None,
+        };
+        if let Some(browser) = self.host_file_browser(workspace, cx) {
+            let directories = browser.update(cx, |store, cx| {
+                let result = store.authoritative().invalidated(paths.as_deref());
+                cx.notify();
+                result
+            });
+            for path in directories {
+                self.request_stale_tree(workspace.to_owned(), path, cx);
+            }
+        }
+        let documents: Vec<_> = self
+            .agents
+            .host()
+            .read(cx)
+            .file_documents
+            .iter()
+            .filter(|((id, path), _)| {
+                id == workspace && paths.as_ref().map_or(true, |values| values.contains(path))
+            })
+            .map(|((_, path), store)| {
+                (
+                    path.clone(),
+                    store.clone(),
+                    store.read(cx).snapshot().visible,
+                )
+            })
+            .collect();
+        for (path, store, visible) in documents {
+            store.update(cx, |store, cx| {
+                store.authoritative().invalidated();
+                cx.notify();
+            });
+            if visible {
+                self.request_stale_read(workspace.to_owned(), path, cx);
+            }
+        }
+    }
+
+    fn invalidate_all_files(&mut self, cx: &mut Context<Self>) {
+        let workspace_ids: Vec<_> = self
+            .agents
+            .host()
+            .read(cx)
+            .file_browsers
+            .keys()
+            .chain(
+                self.agents
+                    .host()
+                    .read(cx)
+                    .file_documents
+                    .keys()
+                    .map(|(id, _)| id),
+            )
+            .cloned()
+            .collect();
+        for workspace in workspace_ids {
+            if let Some(browser) = self.host_file_browser(&workspace, cx) {
+                let paths = browser.update(cx, |store, cx| {
+                    let paths = store.authoritative().invalidated(None);
+                    cx.notify();
+                    paths
+                });
+                for path in paths {
+                    self.request_stale_tree(workspace.clone(), path, cx);
+                }
+            }
+            let documents: Vec<_> = self
+                .agents
+                .host()
+                .read(cx)
+                .file_documents
+                .iter()
+                .filter(|((id, _), _)| id == &workspace)
+                .map(|((_, path), store)| {
+                    (
+                        path.clone(),
+                        store.clone(),
+                        store.read(cx).snapshot().visible,
+                    )
+                })
+                .collect();
+            for (path, store, visible) in documents {
+                store.update(cx, |store, cx| {
+                    store.authoritative().invalidated();
+                    cx.notify();
+                });
+                if visible {
+                    self.request_stale_read(workspace.clone(), path, cx);
+                }
+            }
+        }
+    }
+
+    fn refresh_stale_files(&mut self, cx: &mut Context<Self>) {
+        let trees: Vec<_> = self
+            .agents
+            .host()
+            .read(cx)
+            .file_browsers
+            .iter()
+            .flat_map(|(id, store)| {
+                store
+                    .read(cx)
+                    .snapshot()
+                    .directories
+                    .iter()
+                    .filter(|(_, d)| d.stale && d.visible)
+                    .map(|(p, _)| (id.clone(), p.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        for (id, path) in trees {
+            self.request_stale_tree(id, path, cx);
+        }
+        let docs: Vec<_> = self
+            .agents
+            .host()
+            .read(cx)
+            .file_documents
+            .iter()
+            .filter(|(_, store)| {
+                let snapshot = store.read(cx).snapshot();
+                snapshot.visible
+                    && (snapshot.stale
+                        || (snapshot.payload.is_none()
+                            && matches!(snapshot.state, LoadState::Loading)))
+            })
+            .map(|((id, path), _)| (id.clone(), path.clone()))
+            .collect();
+        for (id, path) in docs {
+            self.request_stale_read(id, path, cx);
+        }
+    }
+    fn request_stale_tree(
+        &mut self,
+        workspace: String,
+        path: RelativeDirectoryPath,
+        cx: &mut Context<Self>,
+    ) {
+        let generation = self.host_file_browser(&workspace, cx).and_then(|store| {
+            store
+                .read(cx)
+                .snapshot()
+                .directories
+                .get(&path)
+                .map(|row| row.generation)
+        });
+        let Some(generation) = generation else {
+            return;
+        };
+        if self.file_provenance.values().any(|request| matches!(request,
+            FileRequestProvenance::Tree { workspace: value, path: request_path, cursor: None, generation: value_generation }
+                if value == &workspace && request_path == &path && *value_generation == generation
+        )) { return; }
+        if let Ok(query) = FileTreeQuery::new(path.clone(), None, Some(500))
+            && let Ok(id) = self.files.tree(workspace.clone(), query)
+        {
+            self.file_provenance.insert(
+                id,
+                FileRequestProvenance::Tree {
+                    workspace,
+                    path,
+                    cursor: None,
+                    generation,
+                },
+            );
+        }
+    }
+    fn request_stale_read(
+        &mut self,
+        workspace: String,
+        path: RelativeFilePath,
+        cx: &mut Context<Self>,
+    ) {
+        let generation = self
+            .host_file_document(&workspace, &path, cx)
+            .map(|store| store.read(cx).snapshot().generation);
+        let Some(generation) = generation else {
+            return;
+        };
+        if self.file_provenance.values().any(|request| matches!(request,
+            FileRequestProvenance::Read { workspace: value, path: request_path, generation: value_generation }
+                if value == &workspace && request_path == &path && *value_generation == generation
+        )) { return; }
+        if let Ok(id) = self.files.read(workspace.clone(), path.clone()) {
+            self.file_provenance.insert(
+                id,
+                FileRequestProvenance::Read {
+                    workspace,
+                    path,
+                    generation,
+                },
+            );
+        }
+    }
+
+    fn host_file_browser(&self, id: &str, cx: &gpui::App) -> Option<Entity<FileBrowserStore>> {
+        self.agents.host().read(cx).file_browsers.get(id).cloned()
+    }
+    fn host_file_document(
+        &self,
+        id: &str,
+        path: &RelativeFilePath,
+        cx: &gpui::App,
+    ) -> Option<Entity<FileDocumentStore>> {
+        self.agents
+            .host()
+            .read(cx)
+            .file_documents
+            .get(&(id.to_owned(), path.clone()))
+            .cloned()
+    }
+    fn file_browser_fail_search(
+        &self,
+        id: &str,
+        query: &str,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(store) = self.host_file_browser(id, cx) {
+            store.update(cx, |store, cx| {
+                store.authoritative().search_fail(query, Arc::from(message));
+                cx.notify();
+            });
+        }
+    }
+    fn file_browser_fail_directory(
+        &self,
+        id: &str,
+        path: &RelativeDirectoryPath,
+        generation: u64,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(store) = self.host_file_browser(id, cx) {
+            store.update(cx, |store, cx| {
+                store
+                    .authoritative()
+                    .directory_fail(path, generation, Arc::from(message));
+                cx.notify();
+            });
+        }
+    }
+    fn file_document_load_fail(
+        &self,
+        id: &str,
+        path: &RelativeFilePath,
+        generation: u64,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(store) = self.host_file_document(id, path, cx) {
+            store.update(cx, |store, cx| {
+                store
+                    .authoritative()
+                    .load_fail(generation, Arc::from(message));
+                cx.notify();
+            });
+        }
+    }
+    fn file_document_save_fail(
+        &self,
+        id: &str,
+        path: &RelativeFilePath,
+        revision: u64,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(store) = self.host_file_document(id, path, cx) {
+            store.update(cx, |store, cx| {
+                store
+                    .authoritative()
+                    .save_failed(revision, Arc::from(message));
+                cx.notify();
+            });
+        }
+    }
+
+    fn file_document_save_conflict(
+        &self,
+        id: &str,
+        path: &RelativeFilePath,
+        revision: u64,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(store) = self.host_file_document(id, path, cx) {
+            store.update(cx, |store, cx| {
+                store
+                    .authoritative()
+                    .save_conflicted(revision, Arc::from(message));
+                cx.notify();
+            });
+        }
+    }
+
+    fn file_document_revision_fail(
+        &self,
+        id: &str,
+        path: &RelativeFilePath,
+        revision: &str,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(store) = self.host_file_document(id, path, cx) {
+            store.update(cx, |store, cx| {
+                store
+                    .authoritative()
+                    .revision_fail(revision, Arc::from(message));
+                cx.notify();
+            });
+        }
+    }
+
+    fn file_cache_retention_changed(
+        &mut self,
+        workspace: String,
+        path: RelativeFilePath,
+        retained: bool,
+        cx: &mut Context<Self>,
+    ) {
+        // Retention pins only the authoritative current payload. Historical Git
+        // revisions remain in the bounded ready-payload LRU after projection.
+        self.file_cache_order.retain(|key| match key {
+            FileCacheKey::Current(id, item) => id != &workspace || item != &path,
+            FileCacheKey::Revision(_, _, _) => true,
+        });
+        if retained {
+            return;
+        }
+        let Some(store) = self.host_file_document(&workspace, &path, cx) else {
+            return;
+        };
+        let snapshot = store.read(cx).snapshot().clone();
+        if snapshot.payload.is_some() {
+            self.file_cache_touch(FileCacheKey::Current(workspace.clone(), path.clone()), cx);
+        }
+        for (revision, row) in &snapshot.revisions {
+            if row.payload.is_some() {
+                self.file_cache_touch(
+                    FileCacheKey::Revision(workspace.clone(), path.clone(), revision.clone()),
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn file_cache_touch(&mut self, key: FileCacheKey, cx: &mut Context<Self>) {
+        let (workspace, path) = match &key {
+            FileCacheKey::Current(workspace, path) | FileCacheKey::Revision(workspace, path, _) => {
+                (workspace, path)
+            }
+        };
+        if matches!(key, FileCacheKey::Current(_, _))
+            && self
+                .host_file_document(workspace, path, cx)
+                .is_some_and(|store| store.read(cx).snapshot().retained)
+        {
+            self.file_cache_order.retain(|value| value != &key);
+            return;
+        }
+        self.file_cache_order.retain(|value| value != &key);
+        let payload_len = self
+            .host_file_document(workspace, path, cx)
+            .map_or(0, |store| {
+                let snapshot = store.read(cx).snapshot();
+                match &key {
+                    FileCacheKey::Current(_, _) => snapshot
+                        .payload
+                        .as_ref()
+                        .map_or(0, DocumentPayload::byte_len),
+                    FileCacheKey::Revision(_, _, revision) => snapshot
+                        .revisions
+                        .get(revision)
+                        .and_then(|row| row.payload.as_ref())
+                        .map_or(0, DocumentPayload::byte_len),
+                }
+            });
+        if payload_len > 16 * 1024 * 1024 {
+            if let Some(store) = self.host_file_document(workspace, path, cx) {
+                store.update(cx, |store, cx| {
+                    match &key {
+                        FileCacheKey::Current(_, _) => store.authoritative().payload_evict(),
+                        FileCacheKey::Revision(_, _, revision) => {
+                            store.authoritative().revision_evict(revision)
+                        }
+                    }
+                    cx.notify();
+                });
+            }
+            return;
+        }
+        self.file_cache_order.push_back(key);
+        loop {
+            let total: usize = self
+                .agents
+                .host()
+                .read(cx)
+                .file_documents
+                .values()
+                .map(|store| {
+                    let snapshot = store.read(cx).snapshot();
+                    let current = if snapshot.retained {
+                        0
+                    } else {
+                        snapshot
+                            .payload
+                            .as_ref()
+                            .map_or(0, DocumentPayload::byte_len)
+                    };
+                    current
+                        + snapshot
+                            .revisions
+                            .values()
+                            .filter_map(|row| row.payload.as_ref())
+                            .map(DocumentPayload::byte_len)
+                            .sum::<usize>()
+                })
+                .sum();
+            if self.file_cache_order.len() <= 48 && total <= 16 * 1024 * 1024 {
+                break;
+            }
+            let Some(old) = self.file_cache_order.pop_front() else {
+                break;
+            };
+            match old {
+                FileCacheKey::Current(workspace, path) => {
+                    if let Some(store) = self.host_file_document(&workspace, &path, cx) {
+                        if store.read(cx).snapshot().retained {
+                            continue;
+                        }
+                        store.update(cx, |store, cx| {
+                            store.authoritative().payload_evict();
+                            cx.notify();
+                        });
+                    }
+                }
+                FileCacheKey::Revision(workspace, path, revision) => {
+                    if let Some(store) = self.host_file_document(&workspace, &path, cx) {
+                        store.update(cx, |store, cx| {
+                            store.authoritative().revision_evict(&revision);
+                            cx.notify();
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    fn file_availability(&self, cx: &gpui::App) -> FileAvailability {
+        match self.agents.host().read(cx).availability() {
+            AgentAvailability::Online => FileAvailability::Online,
+            AgentAvailability::Connecting | AgentAvailability::Reconnecting { .. } => {
+                FileAvailability::Reconnecting
+            }
+            AgentAvailability::Draining { .. } => FileAvailability::Draining,
+            AgentAvailability::Offline { .. } | AgentAvailability::Error { .. } => {
+                FileAvailability::Offline
+            }
+        }
+    }
+    fn file_availability_reconcile(&mut self, cx: &mut Context<Self>) {
+        let availability = self.file_availability(cx);
+        let browsers: Vec<_> = self
+            .agents
+            .host()
+            .read(cx)
+            .file_browsers
+            .values()
+            .cloned()
+            .collect();
+        let documents: Vec<_> = self
+            .agents
+            .host()
+            .read(cx)
+            .file_documents
+            .values()
+            .cloned()
+            .collect();
+        for store in browsers {
+            let value = availability.clone();
+            store.update(cx, |store, cx| {
+                store.authoritative().availability_replace(value);
+                cx.notify();
+            });
+        }
+        for store in documents {
+            let value = availability.clone();
+            store.update(cx, |store, cx| {
+                store.authoritative().availability_replace(value);
+                cx.notify();
+            });
+        }
+        if availability == FileAvailability::Online {
+            self.refresh_stale_files(cx);
+        }
     }
 
     fn mutation_matches_phase(&self, kind: OnboardingMutationKind) -> bool {
@@ -2344,6 +3513,16 @@ fn current_time_millis() -> i64 {
         .min(i64::MAX as u128) as i64
 }
 
+fn file_payload(bytes: Arc<[u8]>) -> Result<DocumentPayload, String> {
+    match std::str::from_utf8(&bytes) {
+        Ok(text) if bytes.len() <= MAX_EDITOR_BYTES => {
+            Ok(DocumentPayload::EditableText(Arc::from(text)))
+        }
+        Ok(text) => Ok(DocumentPayload::ReadOnlyText(Arc::from(text))),
+        Err(_) => Ok(DocumentPayload::Binary(bytes)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2369,6 +3548,12 @@ mod tests {
             chat: super::super::chat_state::ChatConnectivity::new(Arc::new(
                 super::super::start_chat_transport(TransportOptions::default()),
             )),
+            files: Arc::new(crate::files::start_file_transport(
+                TransportOptions::default(),
+            )),
+            file_output_tx: async_channel::bounded(crate::files::MAX_PENDING_REQUESTS).0,
+            file_provenance: HashMap::new(),
+            file_cache_order: VecDeque::new(),
             workspace_persistence: None,
             workspace_persistence_error: None,
             workspace_persistence_error_workspace: None,
