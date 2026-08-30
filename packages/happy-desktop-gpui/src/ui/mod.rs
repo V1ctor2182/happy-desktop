@@ -1,3 +1,5 @@
+pub mod activity_panel;
+pub mod agent_trace_panel;
 pub mod chat_composer;
 pub mod chat_header;
 pub mod chat_markdown;
@@ -15,15 +17,20 @@ pub mod icon;
 pub mod icon_data;
 pub mod key_cap;
 pub mod metrics;
+pub mod native_browser;
 pub mod native_preview;
 pub mod navigation;
 pub mod scrollbar;
 pub mod settings;
 pub mod sidebar;
 pub mod startup;
+pub mod terminal_panel;
 pub mod text_area;
 pub mod text_input;
 pub mod theme_roles;
+pub mod tool_call_preview;
+pub mod usage_panel;
+pub mod workspace_inspector_tabs;
 pub mod workspace_lifecycle;
 pub mod workspace_tabs;
 

@@ -6,6 +6,7 @@ mod navigation;
 mod shell;
 mod surfaces;
 mod theme;
+mod tools;
 mod ui;
 
 use gpui::{

@@ -3,8 +3,8 @@
 use std::{collections::HashMap, rc::Rc};
 
 use gpui::{
-    App, ElementId, Entity, FocusHandle, FontWeight, Global, IntoElement, MouseButton, RenderOnce,
-    SharedString, WeakFocusHandle, Window, div, prelude::*, px,
+    App, ElementId, Entity, FocusHandle, FontWeight, IntoElement, MouseButton, RenderOnce,
+    SharedString, Window, div, prelude::*, px,
 };
 
 use super::{
@@ -30,30 +30,6 @@ fn child_id(root: &SharedString, kind: &'static str, id: &SharedString) -> Eleme
         Box::new(ElementId::Name(root.clone())),
         format!("{kind}:{id}").into(),
     )
-}
-
-#[derive(Default)]
-struct WorkspaceTabsFocusRegistry {
-    handles: HashMap<String, WeakFocusHandle>,
-}
-impl Global for WorkspaceTabsFocusRegistry {}
-fn stable_focus(cx: &mut App, key: String) -> FocusHandle {
-    {
-        let registry = cx.default_global::<WorkspaceTabsFocusRegistry>();
-        registry.handles.retain(|_, weak| weak.upgrade().is_some());
-        if let Some(handle) = registry
-            .handles
-            .get(&key)
-            .and_then(WeakFocusHandle::upgrade)
-        {
-            return handle;
-        }
-    }
-    let handle = cx.focus_handle();
-    cx.default_global::<WorkspaceTabsFocusRegistry>()
-        .handles
-        .insert(key, handle.downgrade());
-    handle
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,6 +113,13 @@ pub struct WorkspaceTabs {
     pub tabs_scrollbar: Entity<ScrollbarState>,
     /// Caller-owned vertical state for the Recent menu. Required when Recent is open.
     pub recent_scrollbar: Option<Entity<ScrollbarState>>,
+    /// Retained caller-owned focus handles keyed by the exact tab IDs.
+    pub tab_focus: HashMap<SharedString, FocusHandle>,
+    pub close_focus: HashMap<SharedString, FocusHandle>,
+    pub create_focus: Option<FocusHandle>,
+    pub recent_toggle_focus: Option<FocusHandle>,
+    /// Retained caller-owned focus handles keyed by the exact recent item IDs.
+    pub recent_item_focus: HashMap<SharedString, FocusHandle>,
     pub on_select: Option<WorkspaceTabHandler>,
     pub on_close: Option<WorkspaceTabHandler>,
     /// Stable-ID reorder intent. Shift+Left/Right emits Previous/Next.
@@ -147,7 +130,7 @@ pub struct WorkspaceTabs {
 }
 
 impl RenderOnce for WorkspaceTabs {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let root_id = self.id;
         let theme = self.theme;
         let tabs_scrollbar = self.tabs_scrollbar.clone();
@@ -158,7 +141,8 @@ impl RenderOnce for WorkspaceTabs {
             .iter()
             .map(|tab| {
                 (select_enabled && !tab.disabled)
-                    .then(|| stable_focus(cx, format!("workspace-tabs:{root_id}:tab:{}", tab.id)))
+                    .then(|| self.tab_focus.get(&tab.id).cloned())
+                    .flatten()
             })
             .collect();
         let enabled: Rc<Vec<(SharedString, FocusHandle)>> = Rc::new(
@@ -173,45 +157,10 @@ impl RenderOnce for WorkspaceTabs {
             .iter()
             .position(|tab| tab.active && !tab.disabled)
             .or_else(|| self.tabs.iter().position(|tab| !tab.disabled));
-        let close_focus: HashMap<SharedString, FocusHandle> = self
-            .tabs
-            .iter()
-            .filter(|tab| tab.closable && !tab.disabled && self.on_close.is_some())
-            .map(|tab| {
-                (
-                    tab.id.clone(),
-                    stable_focus(cx, format!("workspace-tabs:{root_id}:close:{}", tab.id)),
-                )
-            })
-            .collect();
-        let create_focus = self
-            .create
-            .as_ref()
-            .map(|_| stable_focus(cx, format!("workspace-tabs:{root_id}:create")));
-        let recent_focus = self
-            .recent
-            .as_ref()
-            .map(|_| stable_focus(cx, format!("workspace-tabs:{root_id}:recent")));
-        let recent_item_focus: HashMap<SharedString, FocusHandle> = self
-            .recent
-            .as_ref()
-            .map(|recent| {
-                recent
-                    .items
-                    .iter()
-                    .filter(|item| !item.disabled && self.on_recent_select.is_some())
-                    .map(|item| {
-                        (
-                            item.id.clone(),
-                            stable_focus(
-                                cx,
-                                format!("workspace-tabs:{root_id}:recent-item:{}", item.id),
-                            ),
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let close_focus = self.close_focus;
+        let create_focus = self.create_focus;
+        let recent_focus = self.recent_toggle_focus;
+        let recent_item_focus = self.recent_item_focus;
 
         let tab_elements: Vec<_> = self
             .tabs
@@ -798,6 +747,11 @@ mod tests {
         moved: Rc<RefCell<Vec<(SharedString, WorkspaceTabMove)>>>,
         tabs_scrollbar: Entity<ScrollbarState>,
         recent_scrollbar: Entity<ScrollbarState>,
+        tab_focus: HashMap<SharedString, FocusHandle>,
+        close_focus: HashMap<SharedString, FocusHandle>,
+        create_focus: FocusHandle,
+        recent_toggle_focus: FocusHandle,
+        recent_item_focus: HashMap<SharedString, FocusHandle>,
     }
     impl Render for Fixture {
         fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -866,6 +820,11 @@ mod tests {
                 }),
                 tabs_scrollbar: self.tabs_scrollbar.clone(),
                 recent_scrollbar: Some(self.recent_scrollbar.clone()),
+                tab_focus: self.tab_focus.clone(),
+                close_focus: self.close_focus.clone(),
+                create_focus: Some(self.create_focus.clone()),
+                recent_toggle_focus: Some(self.recent_toggle_focus.clone()),
+                recent_item_focus: self.recent_item_focus.clone(),
                 on_select: Some(Rc::new(move |id, _, _| selected.borrow_mut().push(id))),
                 on_close: Some(Rc::new(move |id, _, _| closed.borrow_mut().push(id))),
                 on_move: Some(Rc::new(move |id, direction, _, _| {
@@ -911,6 +870,19 @@ mod tests {
                         SharedScrollHandle::new(),
                     )
                 }),
+                tab_focus: ["session", "disabled", "terminal"]
+                    .into_iter()
+                    .map(|id| (id.into(), cx.focus_handle()))
+                    .collect(),
+                close_focus: ["session", "disabled", "terminal"]
+                    .into_iter()
+                    .map(|id| (id.into(), cx.focus_handle()))
+                    .collect(),
+                create_focus: cx.focus_handle(),
+                recent_toggle_focus: cx.focus_handle(),
+                recent_item_focus: (0..16)
+                    .map(|index| (format!("old-{index}").into(), cx.focus_handle()))
+                    .collect(),
             }
         });
         cx.simulate_resize(size(px(width.max(720.0)), px(height)));
@@ -1052,21 +1024,5 @@ mod tests {
         closed.borrow_mut().clear();
         cx.simulate_keystrokes("enter space");
         assert_eq!(closed.borrow().as_slice(), ["session", "session"]);
-    }
-
-    #[gpui::test]
-    fn stable_focus_prunes_dead_registry_entries_before_insertion(cx: &mut TestAppContext) {
-        let dead = cx.update(|app: &mut App| stable_focus(app, "dead-focus".to_owned()));
-        let dead_weak = dead.downgrade();
-        drop(dead);
-        assert!(dead_weak.upgrade().is_none());
-
-        let live = cx.update(|app: &mut App| stable_focus(app, "live-focus".to_owned()));
-        cx.update(|app: &mut App| {
-            let registry = app.default_global::<WorkspaceTabsFocusRegistry>();
-            assert!(!registry.handles.contains_key("dead-focus"));
-            assert!(registry.handles.contains_key("live-focus"));
-        });
-        drop(live);
     }
 }

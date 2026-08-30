@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     rc::Rc,
     sync::Arc,
 };
@@ -838,6 +838,11 @@ pub struct ChatGalleryFixture {
     pub transcript_scrollbar: Entity<ScrollbarState>,
     pub tabs_scrollbar: Entity<ScrollbarState>,
     pub recent_scrollbar: Entity<ScrollbarState>,
+    tab_focus: HashMap<SharedString, FocusHandle>,
+    tab_close_focus: HashMap<SharedString, FocusHandle>,
+    tab_create_focus: FocusHandle,
+    recent_toggle_focus: FocusHandle,
+    recent_item_focus: HashMap<SharedString, FocusHandle>,
     pub attachment_horizontal_scrollbar: Entity<ScrollbarState>,
     pub attachment_vertical_scrollbar: Entity<ScrollbarState>,
     pub composer_toolbar_scrollbar: Entity<ScrollbarState>,
@@ -866,6 +871,61 @@ pub struct ChatGalleryFixture {
     id_callbacks: RefCell<BTreeMap<&'static str, super::composer_controls::IdHandler>>,
     tab_move: super::workspace_tabs::WorkspaceTabMoveHandler,
     command_active: super::composer_controls::IndexHandler,
+    phase7: Phase7GalleryFixtureState,
+}
+
+/// Stable GPUI entities for the Phase 7 reusable component fixtures.
+/// These are allocated with the gallery fixture, never during component rendering.
+struct Phase7GalleryFixtureState {
+    scrollbars: [Entity<ScrollbarState>; 12],
+    terminal_focus: FocusHandle,
+    terminal_input: Entity<super::terminal_panel::TerminalInputCapture>,
+}
+
+impl Phase7GalleryFixtureState {
+    fn new(cx: &mut Context<ChatGalleryFixture>) -> Self {
+        let preview_handles = [
+            super::SharedScrollHandle::new(),
+            super::SharedScrollHandle::new(),
+            super::SharedScrollHandle::new(),
+        ];
+        let scrollbars = std::array::from_fn(|index| {
+            let pair = match index {
+                3 | 4 => Some((0, index == 4)),
+                6 | 7 => Some((1, index == 7)),
+                9 | 10 => Some((2, index == 10)),
+                _ => None,
+            };
+            let handle = pair
+                .map(|(pair, _)| preview_handles[pair].clone())
+                .unwrap_or_else(super::SharedScrollHandle::new);
+            cx.new(move |_| {
+                if pair.is_some_and(|(_, horizontal)| horizontal) {
+                    ScrollbarState::horizontal(
+                        super::ScrollbarAppearance::Automatic,
+                        super::ScrollbarPlacement::Overlay,
+                        handle,
+                    )
+                } else {
+                    ScrollbarState::vertical(
+                        super::ScrollbarAppearance::Automatic,
+                        super::ScrollbarPlacement::Overlay,
+                        handle,
+                    )
+                }
+            })
+        });
+        let terminal_focus = cx.focus_handle();
+        let capture_focus = terminal_focus.clone();
+        let terminal_input = cx.new(move |_| {
+            super::terminal_panel::TerminalInputCapture::new(capture_focus, Rc::new(|_, _, _| {}))
+        });
+        Self {
+            scrollbars,
+            terminal_focus,
+            terminal_input,
+        }
+    }
 }
 
 impl ChatGalleryFixture {
@@ -1073,12 +1133,16 @@ impl ChatGalleryFixture {
             ChatTranscriptRow {
                 id: "status".into(),
                 revision: 0,
-                content: ChatTranscriptContent::Status(StatusRowModel {
-                    id: "gallery-status".into(),
-                    label: "3 files changed".into(),
-                    detail: Some("No transport opened".into()),
-                    tone: SemanticTone::Success,
-                }),
+                content: ChatTranscriptContent::Status {
+                    model: StatusRowModel {
+                        id: "gallery-status".into(),
+                        label: "3 files changed".into(),
+                        detail: Some("No transport opened".into()),
+                        tone: SemanticTone::Success,
+                    },
+                    focus: None,
+                    on_open: None,
+                },
             },
             ChatTranscriptRow {
                 id: "notice".into(),
@@ -1296,6 +1360,19 @@ impl ChatGalleryFixture {
                     super::SharedScrollHandle::new(),
                 )
             }),
+            tab_focus: ["session", "file", "terminal"]
+                .into_iter()
+                .map(|id| (id.into(), cx.focus_handle()))
+                .collect(),
+            tab_close_focus: ["file", "terminal"]
+                .into_iter()
+                .map(|id| (id.into(), cx.focus_handle()))
+                .collect(),
+            tab_create_focus: cx.focus_handle(),
+            recent_toggle_focus: cx.focus_handle(),
+            recent_item_focus: [("previous".into(), cx.focus_handle())]
+                .into_iter()
+                .collect(),
             attachment_horizontal_scrollbar,
             attachment_vertical_scrollbar,
             composer_toolbar_scrollbar: cx.new(|_| {
@@ -1336,6 +1413,7 @@ impl ChatGalleryFixture {
             id_callbacks: RefCell::new(BTreeMap::new()),
             tab_move,
             command_active,
+            phase7: Phase7GalleryFixtureState::new(cx),
         }
     }
 
@@ -1714,6 +1792,11 @@ impl ChatGalleryFixture {
             }),
             tabs_scrollbar: self.tabs_scrollbar.clone(),
             recent_scrollbar: Some(self.recent_scrollbar.clone()),
+            tab_focus: self.tab_focus.clone(),
+            close_focus: self.tab_close_focus.clone(),
+            create_focus: Some(self.tab_create_focus.clone()),
+            recent_toggle_focus: Some(self.recent_toggle_focus.clone()),
+            recent_item_focus: self.recent_item_focus.clone(),
             on_select: Some(self.record_id("tab-select")),
             on_close: Some(self.record_id("tab-close")),
             on_move: Some(self.tab_move.clone()),
@@ -1943,6 +2026,10 @@ impl ChatGalleryFixture {
                         .into_any_element(),
                 ],
                 theme,
+            ))
+            .child(phase7_reusable_component_gallery_fixture(
+                theme,
+                &self.phase7,
             ))
             .into_any_element()
     }
@@ -2893,6 +2980,428 @@ pub fn phase6_file_diff_gallery_fixture(
 }
 
 // ===== END PHASE 6 FILE SURFACE GALLERY FIXTURES =====
+
+// ===== PHASE 7 REUSABLE COMPONENT GALLERY FIXTURES =====
+
+fn phase7_reusable_component_gallery_fixture(
+    theme: Theme,
+    state: &Phase7GalleryFixtureState,
+) -> AnyElement {
+    use super::activity_panel::{
+        ActivityAgent, ActivityAgentStatus, ActivityGoal, ActivityGoalStatus, ActivityPanel,
+        ActivityProcess, ActivityTask, ActivityTaskStatus,
+    };
+    use super::agent_trace_panel::{
+        AgentTraceEntry, AgentTraceEntryStatus, AgentTraceKind, AgentTracePanel,
+        AgentTracePanelStatus,
+    };
+    use super::terminal_panel::{
+        TerminalAvailability, TerminalCell, TerminalCellStyle, TerminalColorScheme, TerminalGrid,
+        TerminalInputModes, TerminalPanel, TerminalPanelLayout, TerminalRow, TerminalScrollState,
+        TerminalStatus,
+    };
+    use super::tool_call_preview::{
+        ToolCallPresentation, ToolCallPreview, ToolCallPreviewData, ToolCallStatus, ToolDiffFile,
+        ToolDiffFileKind, ToolDiffLine, ToolDiffLineKind, ToolSearchSource, ToolSearchTarget,
+    };
+    use super::usage_panel::{UsageContext, UsageGroup, UsagePanel, UsageSnapshot};
+
+    let activity = div()
+        .debug_selector(|| "gallery-phase7-activity-stage".into())
+        .w(px(340.0))
+        .h(px(420.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(ActivityPanel {
+            id: "gallery-phase7-activity".into(),
+            theme,
+            goal: Some(ActivityGoal {
+                objective: "Ship the native reusable surfaces".into(),
+                status: ActivityGoalStatus::Active,
+            }),
+            tasks: Arc::new(vec![
+                ActivityTask {
+                    id: "task-fixtures".into(),
+                    subject: "Add deterministic Gallery fixtures".into(),
+                    active_form: Some("Adding deterministic Gallery fixtures".into()),
+                    status: ActivityTaskStatus::InProgress,
+                },
+                ActivityTask {
+                    id: "task-check".into(),
+                    subject: "Run the native package check".into(),
+                    active_form: None,
+                    status: ActivityTaskStatus::Pending,
+                },
+                ActivityTask {
+                    id: "task-contract".into(),
+                    subject: "Keep protocol truth explicit".into(),
+                    active_form: None,
+                    status: ActivityTaskStatus::Complete,
+                },
+            ]),
+            agents: Arc::new(vec![
+                ActivityAgent {
+                    session_id: "phase7-worker".into(),
+                    description: "Review the reusable panels".into(),
+                    task_name: Some("Panel review".into()),
+                    model_id: None,
+                    status: ActivityAgentStatus::Running,
+                    elapsed: Some("01:24".into()),
+                    total_tokens: Some(18_420),
+                    focus_handle: None,
+                },
+                ActivityAgent {
+                    session_id: "phase7-done".into(),
+                    description: "Confirm bounded fixture data".into(),
+                    task_name: None,
+                    model_id: None,
+                    status: ActivityAgentStatus::Complete,
+                    elapsed: Some("00:42".into()),
+                    total_tokens: Some(4_096),
+                    focus_handle: None,
+                },
+            ]),
+            processes: Arc::new(vec![ActivityProcess {
+                id: "proc_phase7_check_01".into(),
+                command: "cargo check -p happy-desktop-gpui".into(),
+                cwd: None,
+                stop_focus_handle: None,
+            }]),
+            completed_open: true,
+            scrollbar: state.scrollbars[0].clone(),
+            completed_focus_handle: None,
+            on_completed_toggle: None,
+            on_agent_select: None,
+            on_process_stop: None,
+        })
+        .into_any_element();
+
+    let trace = div()
+        .debug_selector(|| "gallery-phase7-agent-trace-stage".into())
+        .w(px(560.0))
+        .h(px(360.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(AgentTracePanel {
+            id: "gallery-phase7-agent-trace".into(),
+            theme,
+            title: "Phase 7 fixture run".into(),
+            status: AgentTracePanelStatus::Complete,
+            entries: Arc::new(vec![
+                AgentTraceEntry {
+                    id: "reasoning".into(),
+                    kind: AgentTraceKind::Reasoning,
+                    title: "Read the component contracts".into(),
+                    detail: Some("DESIGN.md · reusable GPUI surfaces".into()),
+                    status: AgentTraceEntryStatus::Complete,
+                    occurred_at: 45_296_000,
+                    completed_at: Some(45_300_000),
+                },
+                AgentTraceEntry {
+                    id: "tool".into(),
+                    kind: AgentTraceKind::Tool,
+                    title: "Rendered typed fixtures".into(),
+                    detail: Some("No transport or WebKit".into()),
+                    status: AgentTraceEntryStatus::Complete,
+                    occurred_at: 45_301_000,
+                    completed_at: Some(45_304_000),
+                },
+                AgentTraceEntry {
+                    id: "response".into(),
+                    kind: AgentTraceKind::Response,
+                    title: "Native surfaces are ready".into(),
+                    detail: None,
+                    status: AgentTraceEntryStatus::Complete,
+                    occurred_at: 45_305_000,
+                    completed_at: Some(45_306_000),
+                },
+            ]),
+            entry_count: 3,
+            entry_count_exact: true,
+            loading: false,
+            error: None,
+            scrollbar: state.scrollbars[1].clone(),
+            close_focus_handle: None,
+            on_close: None,
+        })
+        .into_any_element();
+
+    let usage = div()
+        .debug_selector(|| "gallery-phase7-usage-stage".into())
+        .w(px(560.0))
+        .h(px(360.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(UsagePanel {
+            id: "gallery-phase7-usage".into(),
+            theme,
+            usage: Some(Arc::new(UsageSnapshot {
+                groups: vec![
+                    UsageGroup {
+                        provider_id: "openai".into(),
+                        model_id: "gpt-5.4".into(),
+                        input_tokens: 12_480,
+                        output_tokens: 3_120,
+                        cache_read_tokens: 8_192,
+                        cache_write_tokens: 512,
+                        total_tokens: 24_304,
+                        cost_usd: None,
+                    },
+                    UsageGroup {
+                        provider_id: "anthropic".into(),
+                        model_id: "claude-opus-4-6".into(),
+                        input_tokens: 2_400,
+                        output_tokens: 860,
+                        cache_read_tokens: 0,
+                        cache_write_tokens: 0,
+                        total_tokens: 3_260,
+                        cost_usd: None,
+                    },
+                ],
+                total_tokens: 27_564,
+                total_cost_usd: None,
+                context: Some(UsageContext {
+                    total_tokens: 31_220,
+                    approximate: true,
+                    model_id: None,
+                }),
+                quotas: Vec::new(),
+            })),
+            loading: false,
+            error: None,
+            compact: false,
+            scrollbar: state.scrollbars[2].clone(),
+        })
+        .into_any_element();
+
+    let tool_stage = |id: &'static str,
+                      tool: ToolCallPreviewData,
+                      vertical: Entity<ScrollbarState>,
+                      horizontal: Entity<ScrollbarState>,
+                      terminal: Entity<ScrollbarState>| {
+        div()
+            .debug_selector(move || format!("{id}-stage"))
+            .w(px(560.0))
+            .h(px(360.0))
+            .flex_none()
+            .overflow_hidden()
+            .border_1()
+            .border_color(theme.role(ThemeRole::Divider))
+            .child(ToolCallPreview {
+                id: id.into(),
+                theme,
+                tool: Arc::new(tool),
+                vertical_scrollbar: vertical,
+                horizontal_scrollbar: horizontal,
+                terminal_scrollbar: terminal,
+                open_terminal_focus: None,
+                open_terminal_disabled: false,
+                on_open_terminal: None,
+            })
+            .into_any_element()
+    };
+    let diff_tool = tool_stage(
+        "gallery-phase7-tool-diff",
+        ToolCallPreviewData {
+            tool_name: "apply_patch".into(),
+            tool_label: "Edit gallery fixture".into(),
+            status: ToolCallStatus::Completed,
+            presentation: ToolCallPresentation::FileDiff {
+                files: vec![ToolDiffFile {
+                    path: "packages/happy-desktop-gpui/src/ui/gallery.rs".into(),
+                    kind: ToolDiffFileKind::Update,
+                    language: Some("Rust".into()),
+                    added: 2,
+                    deleted: 1,
+                    omitted_lines: None,
+                    lines: vec![
+                        ToolDiffLine {
+                            kind: ToolDiffLineKind::Context,
+                            old_number: Some(41),
+                            new_number: Some(41),
+                            text: "fn gallery_fixture() {".into(),
+                        },
+                        ToolDiffLine {
+                            kind: ToolDiffLineKind::Delete,
+                            old_number: Some(42),
+                            new_number: None,
+                            text: "    placeholder();".into(),
+                        },
+                        ToolDiffLine {
+                            kind: ToolDiffLineKind::Add,
+                            old_number: None,
+                            new_number: Some(42),
+                            text: "    render_typed_fixture();".into(),
+                        },
+                    ],
+                }],
+                omitted_files: None,
+            },
+            result: Some("Updated one file".into()),
+            failure: None,
+        },
+        state.scrollbars[3].clone(),
+        state.scrollbars[4].clone(),
+        state.scrollbars[5].clone(),
+    );
+    let search_tool = tool_stage(
+        "gallery-phase7-tool-search",
+        ToolCallPreviewData {
+            tool_name: "web_search".into(),
+            tool_label: "Search component guidance".into(),
+            status: ToolCallStatus::Completed,
+            presentation: ToolCallPresentation::Search {
+                query: "GPUI deterministic gallery fixtures".into(),
+                target: ToolSearchTarget::Web,
+                sources: vec![
+                    ToolSearchSource {
+                        title: "GPUI documentation".into(),
+                        url: "https://gpui.rs/".into(),
+                    },
+                    ToolSearchSource {
+                        title: "Happy design system".into(),
+                        url: "https://happy.engineering/design".into(),
+                    },
+                ],
+                omitted_sources: None,
+            },
+            result: Some("2 sources".into()),
+            failure: None,
+        },
+        state.scrollbars[6].clone(),
+        state.scrollbars[7].clone(),
+        state.scrollbars[8].clone(),
+    );
+    let terminal_tool = tool_stage(
+        "gallery-phase7-tool-terminal",
+        ToolCallPreviewData {
+            tool_name: "exec_command".into(),
+            tool_label: "Check native package".into(),
+            status: ToolCallStatus::Completed,
+            presentation: ToolCallPresentation::ExecCommand {
+                command: "cargo check -p happy-desktop-gpui".into(),
+                output: "Checking happy-desktop-gpui v0.1.0\nFinished dev profile".into(),
+                terminal_id: None,
+            },
+            result: Some("Process exited with code 0".into()),
+            failure: None,
+        },
+        state.scrollbars[9].clone(),
+        state.scrollbars[10].clone(),
+        state.scrollbars[11].clone(),
+    );
+
+    let terminal_row = |row: u64, text: &'static str| TerminalRow {
+        row,
+        wrapped: false,
+        cells: Rc::new(
+            text.chars()
+                .take(80)
+                .enumerate()
+                .map(|(column, character)| TerminalCell {
+                    column: column as u16,
+                    width: 1,
+                    text: character.to_string().into(),
+                    foreground: None,
+                    background: None,
+                    style: TerminalCellStyle::default(),
+                    hyperlink: None,
+                })
+                .collect(),
+        ),
+    };
+    let terminal = div()
+        .debug_selector(|| "gallery-phase7-terminal-stage".into())
+        .w(px(720.0))
+        .h(px(360.0))
+        .flex_none()
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme.role(ThemeRole::Divider))
+        .child(TerminalPanel {
+            id: "gallery-phase7-terminal".into(),
+            theme,
+            color_scheme: if theme == Theme::dark() {
+                TerminalColorScheme::Dark
+            } else {
+                TerminalColorScheme::Light
+            },
+            layout: TerminalPanelLayout::Fill,
+            status: TerminalStatus::Exited,
+            availability: TerminalAvailability::Unavailable,
+            notice: Some("Studio Mac is offline · final output remains readable".into()),
+            exit_code: Some(0),
+            grid: Some(Rc::new(TerminalGrid {
+                columns: 80,
+                rows: Rc::new(vec![
+                    terminal_row(0, "$ cargo check -p happy-desktop-gpui"),
+                    terminal_row(1, "    Checking happy-desktop-gpui v0.1.0"),
+                    terminal_row(2, "    Finished dev profile in 1.42s"),
+                    terminal_row(3, "[process exited with code 0]"),
+                ]),
+                cursor: None,
+                omitted_before: None,
+                input_modes: TerminalInputModes::default(),
+            })),
+            scroll: TerminalScrollState::default(),
+            selection: None,
+            hovered_link: None,
+            focused: false,
+            focus: state.terminal_focus.clone(),
+            input_capture: state.terminal_input.clone(),
+            reported_size: None,
+            on_input: Rc::new(|_, _, _| {}),
+            on_resize: Rc::new(|_, _, _| {}),
+            on_scroll: Rc::new(|_, _, _| {}),
+            on_selection: Rc::new(|_, _, _| {}),
+            on_copy: Rc::new(|_, _, _| {}),
+            on_open_link: None,
+            on_hover_link: None,
+            on_reconnect: Rc::new(|_, _| {}),
+        })
+        .into_any_element();
+
+    div()
+        .debug_selector(|| "gallery-phase7-reusable-components".into())
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap(px(16.0))
+        .child(section(
+            "Phase 7 · ActivityPanel · absent model and cwd stay absent",
+            vec![activity],
+            theme,
+        ))
+        .child(section(
+            "Phase 7 · AgentTracePanel · completed deterministic UTC trace",
+            vec![trace],
+            theme,
+        ))
+        .child(section(
+            "Phase 7 · UsagePanel · authoritative missing cost and model",
+            vec![usage],
+            theme,
+        ))
+        .child(section(
+            "Phase 7 · ToolCallPreview · typed file diff, search, terminal",
+            vec![diff_tool, search_tool, terminal_tool],
+            theme,
+        ))
+        .child(section(
+            "Phase 7 · TerminalPanel · offline final grid",
+            vec![terminal],
+            theme,
+        ))
+        .into_any_element()
+}
+
+// ===== END PHASE 7 REUSABLE COMPONENT GALLERY FIXTURES =====
 
 pub fn gallery(
     theme: Theme,

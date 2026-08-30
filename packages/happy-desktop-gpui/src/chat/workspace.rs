@@ -15,6 +15,15 @@ use super::persistence::{RestoredWorkspace, WorkspacePersistence};
 pub(crate) const ENTRY_LIMIT: usize = 1_000;
 pub(crate) const RECENT_SESSION_LIMIT: usize = 200;
 pub(crate) const DRAFT_BYTE_LIMIT: usize = 100_000;
+pub(crate) const TOOL_LIMIT: usize = 100;
+pub(crate) const TOOL_TAB_KEY_BYTE_LIMIT: usize = 256;
+pub(crate) const TOOL_LABEL_BYTE_LIMIT: usize = 256;
+pub(crate) const TOOL_FAILURE_MESSAGE_BYTE_LIMIT: usize = 512;
+pub(crate) const BROWSER_TITLE_BYTE_LIMIT: usize = 1_024;
+pub(crate) const BROWSER_URL_BYTE_LIMIT: usize = 8_192;
+pub const DEFAULT_INSPECTOR_WIDTH_PX: f32 = 340.0;
+pub const MIN_INSPECTOR_WIDTH_PX: f32 = 250.0;
+pub const MAX_INSPECTOR_WIDTH_PX: f32 = 360.0;
 
 macro_rules! opaque_id {
     ($name:ident) => {
@@ -50,7 +59,18 @@ impl FileTabKey {
         self.0.as_str()
     }
 }
-opaque_id!(ToolTabKey);
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ToolTabKey(Arc<str>);
+impl ToolTabKey {
+    pub fn new(value: impl Into<Arc<str>>) -> Option<Self> {
+        let value = value.into();
+        (!value.is_empty() && value.len() <= TOOL_TAB_KEY_BYTE_LIMIT).then_some(Self(value))
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 opaque_id!(TranscriptRowId);
 opaque_id!(MutationId);
 
@@ -148,6 +168,142 @@ pub enum FileTabPresentation {
     Diff,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ToolPlacement {
+    Main,
+    #[default]
+    Inspector,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ToolCreateState {
+    Creating,
+    Ready,
+    Failed { message: Arc<str> },
+}
+
+impl ToolCreateState {
+    fn admitted(self) -> Self {
+        match self {
+            Self::Failed { message } => Self::Failed {
+                message: bound_tool_text(message, TOOL_FAILURE_MESSAGE_BYTE_LIMIT),
+            },
+            state => state,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ToolKind {
+    Terminal,
+    Browser { url: Arc<str>, title: Arc<str> },
+}
+
+/// Stable workspace-owned metadata for a live or restorable tool surface.
+///
+/// The live terminal driver is deliberately not part of this value. It has a
+/// separate lifetime and cannot be reconstructed from persisted chrome.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolMetadata {
+    pub owning_conversation: ConversationKey,
+    pub label: Arc<str>,
+    pub placement: ToolPlacement,
+    pub create_state: ToolCreateState,
+    pub kind: ToolKind,
+}
+
+pub(crate) fn bound_tool_text(value: Arc<str>, byte_limit: usize) -> Arc<str> {
+    if value.len() <= byte_limit {
+        return value;
+    }
+    let mut end = byte_limit;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    Arc::from(&value[..end])
+}
+
+pub(crate) fn admit_browser_url(candidate: Arc<str>) -> Option<Arc<str>> {
+    if candidate.len() > BROWSER_URL_BYTE_LIMIT {
+        return None;
+    }
+    if candidate.as_ref() == "about:blank" {
+        return Some(candidate);
+    }
+    let mut parsed = url::Url::parse(&candidate).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https")
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return None;
+    }
+    // Workspace metadata is durable chrome, not the browser's live navigation request.
+    // Query and fragment data can contain credentials and never enter metadata snapshots.
+    parsed.set_query(None);
+    parsed.set_fragment(None);
+    let admitted: Arc<str> = Arc::from(parsed.as_str());
+    (admitted.len() <= BROWSER_URL_BYTE_LIMIT).then_some(admitted)
+}
+
+impl ToolMetadata {
+    pub(crate) fn admitted(mut self) -> Option<Self> {
+        self.label = bound_tool_text(self.label, TOOL_LABEL_BYTE_LIMIT);
+        self.create_state = self.create_state.admitted();
+        if let ToolKind::Browser { url, title } = &mut self.kind {
+            *url = admit_browser_url(url.clone())?;
+            *title = bound_tool_text(title.clone(), BROWSER_TITLE_BYTE_LIMIT);
+        }
+        Some(self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InspectorSelection {
+    Files,
+    Activity {
+        conversation: ConversationKey,
+    },
+    Usage {
+        conversation: ConversationKey,
+    },
+    Trace {
+        conversation: ConversationKey,
+        run_id: Arc<str>,
+    },
+    Preview {
+        conversation: ConversationKey,
+        entry_id: Arc<str>,
+    },
+    LiveTool(ToolTabKey),
+}
+
+impl Default for InspectorSelection {
+    fn default() -> Self {
+        Self::Files
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct InspectorSnapshot {
+    pub open: bool,
+    pub selection: InspectorSelection,
+    /// Inspector tool strip order, independent from the main tab strip.
+    pub tool_order: Vec<ToolTabKey>,
+    pub width_px: f32,
+}
+
+impl Default for InspectorSnapshot {
+    fn default() -> Self {
+        Self {
+            open: true,
+            selection: InspectorSelection::Files,
+            tool_order: Vec::new(),
+            width_px: DEFAULT_INSPECTOR_WIDTH_PX,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceSnapshot {
     pub namespace: AgentNamespace,
@@ -159,6 +315,8 @@ pub struct WorkspaceSnapshot {
     pub active_tab: Option<WorkspaceTab>,
     pub file_tab_presentations: BTreeMap<FileTabKey, FileTabPresentation>,
     pub ephemeral_file_tab: Option<FileTabKey>,
+    pub tools: BTreeMap<ToolTabKey, ToolMetadata>,
+    pub inspector: InspectorSnapshot,
     /// Least-recent to most-recent activation history.
     pub activation_history: Vec<WorkspaceTab>,
     pub conversations: BTreeMap<ConversationKey, Arc<ConversationCatalogRow>>,
@@ -180,6 +338,8 @@ impl WorkspaceSnapshot {
             active_tab: None,
             file_tab_presentations: BTreeMap::new(),
             ephemeral_file_tab: None,
+            tools: BTreeMap::new(),
+            inspector: InspectorSnapshot::default(),
             activation_history: Vec::new(),
             conversations: BTreeMap::new(),
             archived_recents: Vec::new(),
@@ -253,7 +413,10 @@ impl WorkspaceStore {
         output: impl Fn(WorkspaceOutput) + Send + Sync + 'static,
     ) -> Self {
         debug_assert_eq!(workspace.namespace(), &namespace);
-        let restored = persistence.read(&workspace).unwrap_or_default();
+        let mut restored = persistence.read(&workspace).unwrap_or_default();
+        for metadata in restored.tools.values_mut() {
+            metadata.create_state = metadata.create_state.clone().admitted();
+        }
         let mut snapshot = WorkspaceSnapshot::empty(namespace, workspace);
         apply_restored(&mut snapshot, restored);
         repair(&mut snapshot);
@@ -359,6 +522,221 @@ impl WorkspaceStore {
         self.set(next);
     }
 
+    pub fn terminal_tool_open(
+        &mut self,
+        key: ToolTabKey,
+        conversation: ConversationKey,
+        label: impl Into<Arc<str>>,
+    ) -> bool {
+        self.tool_open(
+            key,
+            ToolMetadata {
+                owning_conversation: conversation,
+                label: label.into(),
+                placement: ToolPlacement::Inspector,
+                create_state: ToolCreateState::Creating,
+                kind: ToolKind::Terminal,
+            },
+        )
+    }
+
+    pub fn browser_tool_open(
+        &mut self,
+        key: ToolTabKey,
+        conversation: ConversationKey,
+        label: impl Into<Arc<str>>,
+        url: impl Into<Arc<str>>,
+    ) -> bool {
+        self.tool_open(
+            key,
+            ToolMetadata {
+                owning_conversation: conversation,
+                label: label.into(),
+                placement: ToolPlacement::Inspector,
+                create_state: ToolCreateState::Ready,
+                kind: ToolKind::Browser {
+                    url: url.into(),
+                    title: Arc::from(""),
+                },
+            },
+        )
+    }
+
+    /// Inserts one tool once. Existing keys are never replaced, because a key
+    /// identifies the live surface and not merely its current presentation.
+    pub fn tool_open(&mut self, key: ToolTabKey, metadata: ToolMetadata) -> bool {
+        if self.snapshot.tools.contains_key(&key) || self.snapshot.tools.len() >= TOOL_LIMIT {
+            return false;
+        }
+        let Some(metadata) = metadata.admitted() else {
+            return false;
+        };
+        let mut next = (*self.snapshot).clone();
+        match metadata.placement {
+            ToolPlacement::Main => {
+                let tab = WorkspaceTab::Tool(key.clone());
+                next.tabs.push(tab.clone());
+                activate(&mut next, tab);
+            }
+            ToolPlacement::Inspector => {
+                next.inspector.tool_order.push(key.clone());
+                next.inspector.selection = InspectorSelection::LiveTool(key.clone());
+                next.inspector.open = true;
+            }
+        }
+        next.tools.insert(key, metadata);
+        self.set(next);
+        true
+    }
+
+    pub fn tool_create_state_update(&mut self, key: &ToolTabKey, state: ToolCreateState) {
+        let mut next = (*self.snapshot).clone();
+        let Some(tool) = next.tools.get_mut(key) else {
+            return;
+        };
+        tool.create_state = state.admitted();
+        self.set(next);
+    }
+
+    pub fn tool_label_update(&mut self, key: &ToolTabKey, label: impl Into<Arc<str>>) {
+        let mut next = (*self.snapshot).clone();
+        let Some(tool) = next.tools.get_mut(key) else {
+            return;
+        };
+        tool.label = bound_tool_text(label.into(), TOOL_LABEL_BYTE_LIMIT);
+        self.set(next);
+    }
+
+    pub fn browser_tool_update(
+        &mut self,
+        key: &ToolTabKey,
+        url: impl Into<Arc<str>>,
+        title: impl Into<Arc<str>>,
+    ) {
+        let Some(url) = admit_browser_url(url.into()) else {
+            return;
+        };
+        let title = bound_tool_text(title.into(), BROWSER_TITLE_BYTE_LIMIT);
+        let mut next = (*self.snapshot).clone();
+        let Some(ToolMetadata {
+            kind:
+                ToolKind::Browser {
+                    url: old_url,
+                    title: old_title,
+                },
+            ..
+        }) = next.tools.get_mut(key)
+        else {
+            return;
+        };
+        *old_url = url;
+        *old_title = title;
+        self.set(next);
+    }
+
+    /// Atomically transfers a tool between strips without changing its key or
+    /// touching the live terminal/browser resource behind it.
+    pub fn tool_placement_update(&mut self, key: &ToolTabKey, placement: ToolPlacement) {
+        let mut next = (*self.snapshot).clone();
+        let Some(tool) = next.tools.get_mut(key) else {
+            return;
+        };
+        if tool.placement == placement {
+            return;
+        }
+        tool.placement = placement;
+        let tab = WorkspaceTab::Tool(key.clone());
+        match placement {
+            ToolPlacement::Main => {
+                next.inspector.tool_order.retain(|item| item != key);
+                if next.inspector.selection == InspectorSelection::LiveTool(key.clone()) {
+                    next.inspector.selection = InspectorSelection::Files;
+                }
+                if !next.tabs.contains(&tab) {
+                    next.tabs.push(tab.clone());
+                }
+                activate(&mut next, tab);
+            }
+            ToolPlacement::Inspector => {
+                next.tabs.retain(|item| item != &tab);
+                next.activation_history.retain(|item| item != &tab);
+                if !next.inspector.tool_order.contains(key) {
+                    next.inspector.tool_order.push(key.clone());
+                }
+                next.inspector.selection = InspectorSelection::LiveTool(key.clone());
+                next.inspector.open = true;
+                repair(&mut next);
+            }
+        }
+        self.set(next);
+    }
+
+    /// Closing is the only metadata operation that forgets a tool. Callers own
+    /// stopping a terminal or disposing a browser before invoking it.
+    pub fn tool_close(&mut self, key: &ToolTabKey) {
+        let mut next = (*self.snapshot).clone();
+        if next.tools.remove(key).is_none() {
+            return;
+        }
+        let tab = WorkspaceTab::Tool(key.clone());
+        next.tabs.retain(|item| item != &tab);
+        next.activation_history.retain(|item| item != &tab);
+        next.inspector.tool_order.retain(|item| item != key);
+        if next.inspector.selection == InspectorSelection::LiveTool(key.clone()) {
+            next.inspector.selection = InspectorSelection::Files;
+        }
+        repair(&mut next);
+        self.set(next);
+    }
+
+    pub fn inspector_open_update(&mut self, open: bool) {
+        let mut next = (*self.snapshot).clone();
+        next.inspector.open = open;
+        self.set(next);
+    }
+
+    pub fn inspector_selection_update(&mut self, selection: InspectorSelection) {
+        if let InspectorSelection::LiveTool(key) = &selection {
+            if !self
+                .snapshot
+                .tools
+                .get(key)
+                .is_some_and(|tool| tool.placement == ToolPlacement::Inspector)
+            {
+                return;
+            }
+        }
+        let mut next = (*self.snapshot).clone();
+        next.inspector.selection = selection;
+        next.inspector.open = true;
+        self.set(next);
+    }
+
+    pub fn inspector_tool_move(&mut self, key: &ToolTabKey, target_index: usize) {
+        let mut next = (*self.snapshot).clone();
+        let Some(from) = next
+            .inspector
+            .tool_order
+            .iter()
+            .position(|item| item == key)
+        else {
+            return;
+        };
+        let value = next.inspector.tool_order.remove(from);
+        let target = target_index.min(next.inspector.tool_order.len());
+        next.inspector.tool_order.insert(target, value);
+        self.set(next);
+    }
+
+    pub fn inspector_width_update(&mut self, width_px: f32) {
+        if !width_px.is_finite() {
+            return;
+        }
+        let mut next = (*self.snapshot).clone();
+        next.inspector.width_px = width_px.clamp(MIN_INSPECTOR_WIDTH_PX, MAX_INSPECTOR_WIDTH_PX);
+        self.set(next);
+    }
+
     pub fn tab_activate(&mut self, tab: &WorkspaceTab) {
         let mut next = (*self.snapshot).clone();
         if !next.tabs.contains(tab) || next.active_tab.as_ref() == Some(tab) {
@@ -369,6 +747,10 @@ impl WorkspaceStore {
     }
 
     pub fn tab_close(&mut self, tab: &WorkspaceTab) {
+        if let WorkspaceTab::Tool(key) = tab {
+            self.tool_close(key);
+            return;
+        }
         let mut next = (*self.snapshot).clone();
         next.tabs.retain(|item| item != tab);
         next.activation_history.retain(|item| item != tab);
@@ -592,6 +974,9 @@ impl WorkspaceStore {
     fn set(&mut self, mut next: WorkspaceSnapshot) {
         bound(&mut next);
         repair(&mut next);
+        if next == *self.snapshot {
+            return;
+        }
         self.snapshot = Arc::new(next);
         (self.output)(WorkspaceOutput::PersistenceRequested {
             snapshot: self.snapshot.clone(),
@@ -605,6 +990,8 @@ fn apply_restored(snapshot: &mut WorkspaceSnapshot, restored: RestoredWorkspace)
     snapshot.active_tab = restored.active_tab;
     snapshot.file_tab_presentations = restored.file_tab_presentations;
     snapshot.ephemeral_file_tab = restored.ephemeral_file_tab;
+    snapshot.tools = restored.tools;
+    snapshot.inspector = restored.inspector;
     snapshot.activation_history = restored.activation_history;
     snapshot.archived_recents = restored.archived_recents;
     snapshot.group_draft = restored.group_draft;
@@ -676,6 +1063,50 @@ fn activate(snapshot: &mut WorkspaceSnapshot, tab: WorkspaceTab) {
 }
 
 fn repair(snapshot: &mut WorkspaceSnapshot) {
+    snapshot.tabs.retain(|tab| match tab {
+        WorkspaceTab::Tool(key) => snapshot
+            .tools
+            .get(key)
+            .is_some_and(|tool| tool.placement == ToolPlacement::Main),
+        WorkspaceTab::Conversation(_) | WorkspaceTab::File(_) => true,
+    });
+    snapshot.inspector.tool_order.retain(|key| {
+        snapshot
+            .tools
+            .get(key)
+            .is_some_and(|tool| tool.placement == ToolPlacement::Inspector)
+    });
+    dedup(&mut snapshot.inspector.tool_order);
+    for (key, tool) in &snapshot.tools {
+        match tool.placement {
+            ToolPlacement::Main => {
+                let tab = WorkspaceTab::Tool(key.clone());
+                if !snapshot.tabs.contains(&tab) {
+                    snapshot.tabs.push(tab);
+                }
+            }
+            ToolPlacement::Inspector if !snapshot.inspector.tool_order.contains(key) => {
+                snapshot.inspector.tool_order.push(key.clone());
+            }
+            ToolPlacement::Inspector => {}
+        }
+    }
+    if let InspectorSelection::LiveTool(key) = &snapshot.inspector.selection {
+        if !snapshot
+            .tools
+            .get(key)
+            .is_some_and(|tool| tool.placement == ToolPlacement::Inspector)
+        {
+            snapshot.inspector.selection = InspectorSelection::Files;
+        }
+    }
+    if !snapshot.inspector.width_px.is_finite() {
+        snapshot.inspector.width_px = DEFAULT_INSPECTOR_WIDTH_PX;
+    }
+    snapshot.inspector.width_px = snapshot
+        .inspector
+        .width_px
+        .clamp(MIN_INSPECTOR_WIDTH_PX, MAX_INSPECTOR_WIDTH_PX);
     let valid: BTreeSet<_> = snapshot.tabs.iter().cloned().collect();
     snapshot
         .activation_history
@@ -707,11 +1138,24 @@ fn tab_is_known(snapshot: &WorkspaceSnapshot, tab: &WorkspaceTab) -> bool {
             .conversations
             .get(key)
             .is_some_and(|row| row.lifecycle.is_active()),
-        WorkspaceTab::File(_) | WorkspaceTab::Tool(_) => true,
+        WorkspaceTab::File(_) => true,
+        WorkspaceTab::Tool(key) => snapshot.tools.contains_key(key),
     }
 }
 
 fn bound(snapshot: &mut WorkspaceSnapshot) {
+    if snapshot.tools.len() > TOOL_LIMIT {
+        let mut keep = Vec::new();
+        keep.extend(snapshot.tabs.iter().filter_map(|tab| match tab {
+            WorkspaceTab::Tool(key) => Some(key.clone()),
+            _ => None,
+        }));
+        keep.extend(snapshot.inspector.tool_order.iter().cloned());
+        dedup(&mut keep);
+        keep.truncate(TOOL_LIMIT);
+        let keep: BTreeSet<_> = keep.into_iter().collect();
+        snapshot.tools.retain(|key, _| keep.contains(key));
+    }
     trim_front(&mut snapshot.tabs, ENTRY_LIMIT);
     let retained_files: BTreeSet<_> = snapshot
         .tabs

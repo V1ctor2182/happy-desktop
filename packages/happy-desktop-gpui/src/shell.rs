@@ -27,9 +27,8 @@ use crate::{
         ActivateHandler, ConnectionNotice, ConnectionNoticeState, Icon, IconName,
         InstallProgressState, ModalFocus, ProfileOnboardingSurface, ProviderOnboardingSurface,
         ScrollbarAppearance, ScrollbarPlacement, ScrollbarState, SharedScrollHandle,
-        StartupSurface, StartupSurfaceState, TabItem, TabSelectHandler, Tabs, TabsSize, TextInput,
-        TitleBar, WelcomeDeck, WelcomeSelectHandler, theme_roles::ThemeRole,
-        workspace_lifecycle::WorkspaceLifecyclePhase,
+        StartupSurface, StartupSurfaceState, TabSelectHandler, TextInput, TitleBar, WelcomeDeck,
+        WelcomeSelectHandler, theme_roles::ThemeRole, workspace_lifecycle::WorkspaceLifecyclePhase,
     },
 };
 use std::{
@@ -89,6 +88,9 @@ pub struct HappyApp {
     file_presentations: Rc<RefCell<FilePresentationServices>>,
     workspace_surfaces: BTreeMap<WorkspaceKey, Entity<ChatWorkspaceSurface>>,
     active_workspace_key: Option<WorkspaceKey>,
+    viewport_width: f32,
+    sidebar_width: f32,
+    inspector_capacity: f32,
 }
 
 impl HappyApp {
@@ -172,6 +174,8 @@ impl HappyApp {
             cx.notify();
         });
         app.window_appearance = window.appearance();
+        app.viewport_width = window.viewport_size().width.into();
+        (app.sidebar_width, app.inspector_capacity) = Self::column_widths(app.viewport_width);
         app.connectivity = Some(connectivity);
         app._connectivity_subscription = Some(subscription);
         app.retained_surface_reconcile(cx);
@@ -181,11 +185,18 @@ impl HappyApp {
                 this.retained_surface_reconcile(cx);
                 cx.notify();
             }));
-        app._bounds_subscription = Some(cx.observe_window_bounds(window, |this, _, cx| {
+        app._bounds_subscription = Some(cx.observe_window_bounds(window, |this, window, cx| {
+            this.viewport_width = window.viewport_size().width.into();
+            (this.sidebar_width, this.inspector_capacity) =
+                Self::column_widths(this.viewport_width);
             if let Some(active_key) = this.active_workspace_key.as_ref()
                 && let Some(surface) = this.workspace_surfaces.get(active_key)
             {
-                surface.update(cx, |surface, cx| surface.viewport_resized(cx));
+                let inspector_available = this.inspector_capacity >= 250.0;
+                surface.update(cx, |surface, cx| {
+                    surface.inspector_space_reconcile(inspector_available, cx);
+                    surface.viewport_resized(cx);
+                });
             }
             cx.notify();
         }));
@@ -523,6 +534,9 @@ impl HappyApp {
             file_presentations: Rc::new(RefCell::new(FilePresentationServices::new())),
             workspace_surfaces: BTreeMap::new(),
             active_workspace_key: None,
+            viewport_width: 1280.0,
+            sidebar_width: 360.0,
+            inspector_capacity: 700.0,
         };
         app.retained_surface_reconcile(cx);
         app
@@ -594,8 +608,13 @@ impl HappyApp {
     }
 
     fn column_widths(viewport_width: f32) -> (f32, f32) {
-        let width = (viewport_width * 0.30).clamp(250.0, 360.0);
-        (width, width)
+        let sidebar = if viewport_width < 470.0 {
+            (viewport_width - 220.0).max(0.0)
+        } else {
+            (viewport_width * 0.30).clamp(250.0, 360.0)
+        };
+        let inspector_capacity = (viewport_width - sidebar - 220.0).max(0.0);
+        (sidebar, inspector_capacity)
     }
 
     fn title_bar(&self, theme: Theme, label: &'static str) -> impl IntoElement {
@@ -2010,7 +2029,9 @@ impl HappyApp {
                     .insert(workspace_key.clone(), surface.clone());
                 surface
             };
+            let inspector_available = self.inspector_capacity >= 250.0;
             surface.update(cx, |surface, cx| {
+                surface.inspector_space_reconcile(inspector_available, cx);
                 surface.active_reconcile(true, cx);
                 surface.reconcile(
                     desired_conversation,
@@ -2399,7 +2420,7 @@ fn append_workspace_sidebar_items(
 }
 
 impl Render for HappyApp {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let effective_dark = self.is_dark();
         let theme = if effective_dark {
             Theme::dark()
@@ -2776,8 +2797,7 @@ impl Render for HappyApp {
         }
 
         let route = self.navigation.current().clone();
-        let viewport_width: f32 = window.viewport_size().width.into();
-        let (sidebar_width, _inspector_width) = Self::column_widths(viewport_width);
+        let sidebar_width = self.sidebar_width;
         let entity = cx.entity();
         let root = div()
             .debug_selector(|| "app-shell-root".into())
@@ -2809,6 +2829,10 @@ impl Render for HappyApp {
                             .read(cx)
                             .files_inspector()
                             .update(cx, |files, cx| files.native_allowed_reconcile(allowed, cx));
+                        surface
+                            .read(cx)
+                            .workspace_tools()
+                            .update(cx, |tools, cx| tools.native_allowed_update(allowed, cx));
                     }
                     cx.notify();
                 });
@@ -2853,14 +2877,16 @@ impl Render for HappyApp {
                 .into_any_element();
         }
 
-        let content = content.child(self.navigation_sidebar(
-            theme,
-            effective_dark,
-            sidebar_width,
-            catalog_snapshot.as_deref(),
-            agent_online,
-            cx,
-        ));
+        let content = content.when(sidebar_width > 0.0, |content| {
+            content.child(self.navigation_sidebar(
+                theme,
+                effective_dark,
+                sidebar_width,
+                catalog_snapshot.as_deref(),
+                agent_online,
+                cx,
+            ))
+        });
         if self.show_gallery || matches!(route, Route::Blueprint) {
             let entity = cx.entity();
             let on_select: TabSelectHandler = Rc::new(move |id, _, cx| {
@@ -2906,16 +2932,25 @@ impl Render for HappyApp {
             root.child(
                 content.child(destination).children(
                     self.selected_workspace_surface(&route)
-                        .filter(|surface| surface.read(cx).inspector_visible())
+                        .filter(|surface| surface.read(cx).inspector_visible(cx))
                         .map(|surface| {
+                            let preferred = surface
+                                .read(cx)
+                                .workspace_store()
+                                .read(cx)
+                                .snapshot()
+                                .inspector
+                                .width_px;
+                            let inspector_width =
+                                preferred.clamp(250.0, 360.0).min(self.inspector_capacity);
                             div()
                                 .debug_selector(|| "inspector-root".into())
-                                .w(px(250.0))
-                                .min_w(px(250.0))
+                                .w(px(inspector_width))
+                                .min_w(px(inspector_width))
                                 .flex_none()
                                 .border_l_1()
                                 .border_color(theme.role(ThemeRole::Divider))
-                                .child(surface.read(cx).files_inspector())
+                                .child(surface.read(cx).workspace_tools())
                                 .into_any_element()
                         }),
                 ),

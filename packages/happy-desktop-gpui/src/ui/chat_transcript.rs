@@ -37,7 +37,11 @@ pub enum ChatTranscriptContent {
         model: ProcessRowModel,
         on_stop: Option<super::chat_message::ChatActivate>,
     },
-    Status(StatusRowModel),
+    Status {
+        model: StatusRowModel,
+        focus: Option<FocusHandle>,
+        on_open: Option<super::chat_message::ChatActivate>,
+    },
     Notice(NoticeRowModel),
 }
 #[derive(Clone)]
@@ -60,7 +64,7 @@ impl ChatTranscriptRow {
             }
             ChatTranscriptContent::Delegation { .. }
             | ChatTranscriptContent::Process { .. }
-            | ChatTranscriptContent::Status(_) => 36.0,
+            | ChatTranscriptContent::Status { .. } => 36.0,
             ChatTranscriptContent::Notice(model) => {
                 if model.title.is_some() {
                     52.0
@@ -451,7 +455,17 @@ fn render_row(row: ChatTranscriptRow, theme: Theme) -> AnyElement {
                 on_stop,
             }
             .into_any_element(),
-            ChatTranscriptContent::Status(model) => StatusRow { theme, model }.into_any_element(),
+            ChatTranscriptContent::Status {
+                model,
+                focus,
+                on_open,
+            } => StatusRow {
+                theme,
+                model,
+                focus,
+                on_open,
+            }
+            .into_any_element(),
             ChatTranscriptContent::Notice(model) => NoticeRow { theme, model }.into_any_element(),
         })
         .into_any_element()
@@ -464,12 +478,16 @@ mod tests {
         ChatTranscriptRow {
             id: id.to_owned().into(),
             revision,
-            content: ChatTranscriptContent::Status(StatusRowModel {
-                id: id.to_owned().into(),
-                label: id.to_owned().into(),
-                detail: None,
-                tone: super::super::chat_message::SemanticTone::Neutral,
-            }),
+            content: ChatTranscriptContent::Status {
+                model: StatusRowModel {
+                    id: id.to_owned().into(),
+                    label: id.to_owned().into(),
+                    detail: None,
+                    tone: super::super::chat_message::SemanticTone::Neutral,
+                },
+                focus: None,
+                on_open: None,
+            },
         }
     }
     #[test]

@@ -1024,11 +1024,39 @@ impl RenderOnce for ProcessRow {
 pub struct StatusRow {
     pub theme: Theme,
     pub model: StatusRowModel,
+    pub focus: Option<FocusHandle>,
+    pub on_open: Option<ChatActivate>,
 }
 impl RenderOnce for StatusRow {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let m = self.model;
-        row_shell(format!("status-{}", m.id).into(), self.theme, m.tone)
+        let theme = self.theme;
+        let focus = self.focus;
+        row_shell(format!("status-{}", m.id).into(), theme, m.tone)
+            .id(m.id.clone())
+            .when_some(focus.clone(), |view, focus| {
+                view.track_focus(&focus.tab_index(0).tab_stop(true))
+                    .cursor_pointer()
+                    .focus(|style| style.bg(theme.role(ThemeRole::SurfaceSelected)))
+            })
+            .when_some(self.on_open, |view, open| {
+                let keyboard = open.clone();
+                let pointer_focus = focus.clone();
+                view.on_click(move |_, window, cx| {
+                    if let Some(focus) = pointer_focus.as_ref() {
+                        focus.focus(window);
+                    }
+                    open(window, cx);
+                })
+                .on_key_down(move |event, window, cx| {
+                    if !event.is_held
+                        && matches!(event.keystroke.key.as_str(), "enter" | "space" | " ")
+                    {
+                        cx.stop_propagation();
+                        keyboard(window, cx);
+                    }
+                })
+            })
             .child(m.label)
             .children(m.detail)
     }
@@ -1527,6 +1555,7 @@ mod tests {
                     detail: Some("Ready".into()),
                     tone: SemanticTone::Success,
                 },
+                on_open: None,
             }
             .into_any_element(),
             TestedRow::Notice => NoticeRow {

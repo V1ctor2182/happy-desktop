@@ -69,6 +69,7 @@ pub enum IconName {
     CheckCircle,
     Copy,
     ChevronDown,
+    ChevronLeft,
     ChevronRight,
     Close,
     Branch,
@@ -120,7 +121,7 @@ pub enum IconName {
 }
 
 impl IconName {
-    pub const ALL: [Self; 64] = [
+    pub const ALL: [Self; 65] = [
         Self::Home,
         Self::Inbox,
         Self::Chat,
@@ -137,6 +138,7 @@ impl IconName {
         Self::CheckCircle,
         Self::Copy,
         Self::ChevronDown,
+        Self::ChevronLeft,
         Self::ChevronRight,
         Self::Close,
         Self::Branch,
@@ -205,6 +207,7 @@ impl IconName {
             Self::CheckCircle => icon_data::ionicons::CHECKMARK_CIRCLE_OUTLINE,
             Self::Copy => icon_data::ionicons::COPY_OUTLINE,
             Self::ChevronDown => icon_data::ionicons::CHEVRON_DOWN_OUTLINE,
+            Self::ChevronLeft => icon_data::ionicons::CHEVRON_BACK_OUTLINE,
             Self::ChevronRight => icon_data::ionicons::CHEVRON_FORWARD_OUTLINE,
             Self::Close => icon_data::ionicons::CLOSE_OUTLINE,
             Self::Branch => icon_data::octicons::GIT_BRANCH,

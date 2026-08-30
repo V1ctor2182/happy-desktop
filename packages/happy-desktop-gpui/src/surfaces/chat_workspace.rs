@@ -1,11 +1,11 @@
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs::File,
     io::Read,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::Arc,
+    sync::{Arc, Mutex, mpsc},
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -21,12 +21,13 @@ use crate::{
         AttachmentState, ChatMutationId, ChatSnapshot, ChatStore, ChatTranscriptBlockKind,
         ChatTranscriptMessageRole, ChatTranscriptRowId as ProductRowId, ChatTranscriptRowKind,
         ClientConversationId, ClientMessageId, FileTabKey, FileTabPresentation, HistoryPage,
-        InlineImageAttachment, LoadState, MutationId, OperationState, ScrollAnchor,
-        TranscriptRowId, WorkspaceBehavior, WorkspaceStore, WorkspaceTab, transcript_project,
+        InlineImageAttachment, InspectorSelection, LoadState, MutationId, OperationState,
+        ScrollAnchor, ToolKind, ToolTabKey, TranscriptRowId, WorkspaceBehavior, WorkspaceSnapshot,
+        WorkspaceStore, WorkspaceTab, transcript_project,
     },
     connectivity::{
         AgentStatus, CatalogConversationStatus, ConnectivityController, ConversationKey,
-        CreatedChatNavigation, WorkspaceKey,
+        CreatedChatNavigation, TransportOptions, WorkspaceKey,
         chat_protocol::{
             BackgroundProcessStatus, CompactionBlock as ProtocolCompaction, Message, MessageBlock,
             MessageDelivery as ProtocolDelivery, MessageMetadata, MessagePermissionMode,
@@ -49,11 +50,11 @@ use crate::{
         },
         chat_markdown::{MarkdownDocument, MarkdownLinkActivate, MarkdownLinkTarget},
         chat_message::{
-            ChatImageActivate, ChatImageBlock, ChatMessageBlock, ChatMessageModel, CompactionBlock,
-            DelegationRowModel, GenericQuestion, InlineImageLightbox, MessageDelivery,
-            MessageGeneration, MessageRole, NoticeRowModel, ProcessRowModel, QuestionOption,
-            QuestionRowModel, ReasoningBlock, SemanticTone, StatusRowModel, ToolBlock,
-            ToolPresentation, ToolReview, ToolReviewStatus, ToolStatus,
+            ChatActivate, ChatImageActivate, ChatImageBlock, ChatMessageBlock, ChatMessageModel,
+            CompactionBlock, DelegationRowModel, GenericQuestion, InlineImageLightbox,
+            MessageDelivery, MessageGeneration, MessageRole, NoticeRowModel, ProcessRowModel,
+            QuestionOption, QuestionRowModel, ReasoningBlock, SemanticTone, StatusRowModel,
+            ToolBlock, ToolPresentation, ToolReview, ToolReviewStatus, ToolStatus,
         },
         chat_transcript::{
             ChatTranscript, ChatTranscriptContent, ChatTranscriptEvent, ChatTranscriptRow,
@@ -81,7 +82,11 @@ use crate::{
 
 use crate::{files::RelativeFilePath, navigation::FileKind};
 
-use super::FilesInspectorSurface;
+use super::{
+    FilesInspectorSurface, WorkspaceToolsEvent, WorkspaceToolsFocusState,
+    WorkspaceToolsScrollState, WorkspaceToolsSurface,
+};
+use crate::tools::OpenTerminal;
 
 /// A route transition requested by a retained workspace surface.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -199,6 +204,7 @@ struct ConversationUi {
     attachment_vertical_scrollbar: Entity<ScrollbarState>,
     toolbar_scrollbar: Entity<ScrollbarState>,
     attachment_action_focus: BTreeMap<AttachmentId, AttachmentActionFocus>,
+    run_status_focus: BTreeMap<String, FocusHandle>,
     toolbar_focus: ToolbarFocus,
     _subscriptions: Vec<Subscription>,
 }
@@ -230,6 +236,8 @@ const MAX_DECODED_IMAGE_PIXELS: u64 = 16 * 1024 * 1024;
 const MAX_DECODED_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_DECODED_TRANSCRIPT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_DECODED_LOCAL_ATTACHMENT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_RAW_LOCAL_ATTACHMENT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_BASE64_LOCAL_ATTACHMENT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_DECODED_TRANSCRIPT_IMAGES: usize = 256;
 const MAX_REJECTED_TRANSCRIPT_IMAGES: usize = 512;
 const MAX_LOCAL_ATTACHMENT_FILES: usize = MAX_LOCAL_ATTACHMENT_PREVIEWS - 1;
@@ -241,8 +249,32 @@ struct LocalAttachmentPreview {
     path: PathBuf,
     image: Option<Arc<Image>>,
     decoded_bytes: u64,
+    raw_bytes: u64,
     failure: Option<Arc<str>>,
     omitted_count: usize,
+}
+
+#[derive(Clone)]
+struct AttachmentLoadToken {
+    generation: u64,
+    path: PathBuf,
+}
+
+struct AttachmentLoadGeneration {
+    generation: u64,
+    path: Option<PathBuf>,
+}
+
+struct AttachmentWorkerResult {
+    id: AttachmentId,
+    name: Arc<str>,
+    path: PathBuf,
+    loaded: Result<(&'static str, Vec<u8>, Arc<str>, u64), Arc<str>>,
+    remaining: usize,
+}
+
+fn base64_encoded_bytes(raw_bytes: u64) -> Option<u64> {
+    raw_bytes.checked_add(2)?.checked_div(3)?.checked_mul(4)
 }
 
 fn omitted_attachment_record(
@@ -256,7 +288,7 @@ fn omitted_attachment_record(
             preview.omitted_count
         ));
         preview.failure = Some(Arc::from(format!(
-            "Only {MAX_LOCAL_ATTACHMENT_FILES} local image previews can be retained; {} selections were omitted.",
+            "Attachment selection stopped at the {MAX_LOCAL_ATTACHMENT_FILES}-file or 64 MiB memory limit; {} selections were omitted.",
             preview.omitted_count
         )));
         return;
@@ -271,8 +303,9 @@ fn omitted_attachment_record(
             path: PathBuf::new(),
             image: None,
             decoded_bytes: 0,
+            raw_bytes: 0,
             failure: Some(Arc::from(format!(
-                "Only {MAX_LOCAL_ATTACHMENT_FILES} local image previews can be retained; {omitted} selections were omitted."
+                "Attachment selection stopped at the {MAX_LOCAL_ATTACHMENT_FILES}-file or 64 MiB memory limit; {omitted} selections were omitted."
             ))),
             omitted_count: omitted,
         },
@@ -349,10 +382,16 @@ pub struct ChatWorkspaceSurface {
     pending_restore: Option<ConversationKey>,
     tabs_scrollbar: Entity<ScrollbarState>,
     recent_scrollbar: Entity<ScrollbarState>,
+    tab_focus: HashMap<SharedString, FocusHandle>,
+    tab_close_focus: HashMap<SharedString, FocusHandle>,
+    tab_create_focus: FocusHandle,
+    recent_toggle_focus: FocusHandle,
+    recent_item_focus: HashMap<SharedString, FocusHandle>,
+    inspector_space_available: bool,
+    effective_inspector_visible: bool,
     emoji_open: BTreeSet<ConversationKey>,
     mutation_serial: u64,
     persistence_error: Option<Arc<str>>,
-    inspector_visible: bool,
     ui: BTreeMap<ConversationKey, ConversationUi>,
     images: RefCell<BTreeMap<String, DecodedInlineImage>>,
     rejected_images: RefCell<BTreeSet<String>>,
@@ -361,11 +400,154 @@ pub struct ChatWorkspaceSurface {
     image_overlay_focus: FocusHandle,
     image_close_focus: FocusHandle,
     local_attachments: BTreeMap<ConversationKey, BTreeMap<AttachmentId, LocalAttachmentPreview>>,
+    attachment_load_generation_serial: u64,
+    attachment_load_generations:
+        BTreeMap<ConversationKey, BTreeMap<AttachmentId, AttachmentLoadGeneration>>,
+    tools: Entity<WorkspaceToolsSurface>,
     _workspace_subscription: Subscription,
     chat_subscription: Option<Subscription>,
 }
 
 impl ChatWorkspaceSurface {
+    fn workspace_tab_focus_reconcile(
+        &mut self,
+        snapshot: &WorkspaceSnapshot,
+        cx: &mut Context<Self>,
+    ) {
+        let tab_ids: BTreeSet<SharedString> = snapshot
+            .tabs
+            .iter()
+            .map(|tab| SharedString::from(tab_id(tab)))
+            .collect();
+        self.tab_focus.retain(|id, _| tab_ids.contains(id));
+        for id in &tab_ids {
+            self.tab_focus
+                .entry(id.clone())
+                .or_insert_with(|| cx.focus_handle());
+        }
+
+        let close_ids: BTreeSet<SharedString> = snapshot
+            .tabs
+            .iter()
+            .filter(|tab| {
+                !matches!(tab, WorkspaceTab::Conversation(_))
+                    || snapshot.behavior != WorkspaceBehavior::BotSingleChat
+            })
+            .map(|tab| SharedString::from(tab_id(tab)))
+            .collect();
+        self.tab_close_focus.retain(|id, _| close_ids.contains(id));
+        for id in close_ids {
+            self.tab_close_focus
+                .entry(id)
+                .or_insert_with(|| cx.focus_handle());
+        }
+
+        let recent_ids: BTreeSet<SharedString> = snapshot
+            .tabs
+            .iter()
+            .filter_map(|tab| match tab {
+                WorkspaceTab::Conversation(key) => {
+                    Some(SharedString::from(format!("conversation:{}", key.id())))
+                }
+                WorkspaceTab::File(_) | WorkspaceTab::Tool(_) => None,
+            })
+            .chain(
+                snapshot
+                    .archived_recents
+                    .iter()
+                    .map(|key| SharedString::from(format!("conversation:{}", key.id()))),
+            )
+            .collect();
+        self.recent_item_focus
+            .retain(|id, _| recent_ids.contains(id));
+        for id in recent_ids {
+            self.recent_item_focus
+                .entry(id)
+                .or_insert_with(|| cx.focus_handle());
+        }
+    }
+
+    fn effective_inspector_reconcile(&mut self, cx: &mut Context<Self>) {
+        let visible =
+            self.inspector_space_available && self.workspace.read(cx).snapshot().inspector.open;
+        self.tools.update(cx, |tools, cx| {
+            tools.inspector_layout_visible_update(visible, cx)
+        });
+        if self.effective_inspector_visible != visible {
+            self.effective_inspector_visible = visible;
+            cx.notify();
+        }
+    }
+
+    /// Reconciles the shell-computed ability to mount a real inspector lane.
+    pub fn inspector_space_reconcile(&mut self, available: bool, cx: &mut Context<Self>) {
+        if self.inspector_space_available == available {
+            return;
+        }
+        self.inspector_space_available = available;
+        self.effective_inspector_reconcile(cx);
+    }
+
+    fn attachment_load_begin(
+        &mut self,
+        key: &ConversationKey,
+        id: &AttachmentId,
+        path: &Path,
+    ) -> AttachmentLoadToken {
+        self.attachment_load_generation_serial = self
+            .attachment_load_generation_serial
+            .checked_add(1)
+            .expect("attachment load generation overflowed");
+        let generation = self.attachment_load_generation_serial;
+        self.attachment_load_generations
+            .entry(key.clone())
+            .or_default()
+            .insert(
+                id.clone(),
+                AttachmentLoadGeneration {
+                    generation,
+                    path: Some(path.to_path_buf()),
+                },
+            );
+        AttachmentLoadToken {
+            generation,
+            path: path.to_path_buf(),
+        }
+    }
+
+    fn attachment_load_cancel(&mut self, key: &ConversationKey, id: &AttachmentId) {
+        let remove_conversation =
+            self.attachment_load_generations
+                .get_mut(key)
+                .is_some_and(|generations| {
+                    generations.remove(id);
+                    generations.is_empty()
+                });
+        if remove_conversation {
+            self.attachment_load_generations.remove(key);
+        }
+    }
+
+    fn attachment_load_matches(
+        &self,
+        key: &ConversationKey,
+        id: &AttachmentId,
+        token: &AttachmentLoadToken,
+    ) -> bool {
+        self.attachment_load_generations
+            .get(key)
+            .and_then(|generations| generations.get(id))
+            .is_some_and(|generation| {
+                generation.generation == token.generation
+                    && generation.path.as_ref() == Some(&token.path)
+            })
+            && self
+                .local_attachments
+                .get(key)
+                .and_then(|previews| previews.get(id))
+                .is_some_and(|preview| preview.omitted_count == 0 && preview.path == token.path)
+    }
+
     /// Shell integration constructor. Call it inside `cx.new`.
     pub fn new(
         connectivity: Entity<ConnectivityController>,
@@ -415,6 +597,9 @@ impl ChatWorkspaceSurface {
                     cx,
                 );
             }
+            let snapshot = workspace.read(cx).snapshot().clone();
+            this.workspace_tab_focus_reconcile(&snapshot, cx);
+            this.effective_inspector_reconcile(cx);
             this.route_reconcile(cx);
             cx.notify();
         });
@@ -451,6 +636,96 @@ impl ChatWorkspaceSurface {
             }
             MarkdownLinkTarget::SameDocumentAnchor(_) => {}
         });
+        let vertical_scroll = |cx: &mut Context<Self>| {
+            cx.new(|_| {
+                ScrollbarState::vertical(
+                    ScrollbarAppearance::Automatic,
+                    ScrollbarPlacement::Overlay,
+                    SharedScrollHandle::new(),
+                )
+            })
+        };
+        let preview_scroll_handle = SharedScrollHandle::new();
+        let preview_vertical = cx.new({
+            let handle = preview_scroll_handle.clone();
+            move |_| {
+                ScrollbarState::vertical(
+                    ScrollbarAppearance::Automatic,
+                    ScrollbarPlacement::Overlay,
+                    handle,
+                )
+            }
+        });
+        let preview_horizontal = cx.new(move |_| {
+            ScrollbarState::horizontal(
+                ScrollbarAppearance::Automatic,
+                ScrollbarPlacement::Overlay,
+                preview_scroll_handle,
+            )
+        });
+        let tools_scroll = WorkspaceToolsScrollState {
+            activity: vertical_scroll(cx),
+            usage: vertical_scroll(cx),
+            preview_vertical,
+            preview_horizontal,
+            preview_terminal: vertical_scroll(cx),
+        };
+        let tools_focus = WorkspaceToolsFocusState {
+            activity_completed: Some(cx.focus_handle()),
+        };
+        let tools_surface = cx.entity().downgrade();
+        let tools_event: super::WorkspaceToolsEventHandler = Rc::new(move |event, cx| {
+            let Some(surface) = tools_surface.upgrade() else {
+                return;
+            };
+            match event {
+                WorkspaceToolsEvent::CloseRequested => {
+                    let workspace = surface.read(cx).workspace.clone();
+                    workspace.update(cx, |store, cx| {
+                        store.inspector_open_update(false);
+                        cx.notify();
+                    });
+                }
+                WorkspaceToolsEvent::ProcessStopRequested {
+                    conversation,
+                    process_id,
+                } => {
+                    let (connectivity, mutation) = surface.update(cx, |this, _| {
+                        let connectivity = this.connectivity.clone();
+                        let mutation = ChatMutationId::new(this.next_mutation("process-stop"));
+                        (connectivity, mutation)
+                    });
+                    let Some(mutation) = mutation else {
+                        return;
+                    };
+                    let chat = connectivity.read(cx).chat(&conversation, cx);
+                    if let Some(chat) = chat {
+                        chat.update(cx, |store, cx| {
+                            store.process_stop(process_id, mutation);
+                            cx.notify();
+                        });
+                    }
+                }
+            }
+        });
+        let tools = cx.new({
+            let workspace = workspace.clone();
+            let files = files.clone();
+            let connectivity = connectivity.clone();
+            move |cx| {
+                WorkspaceToolsSurface::new(
+                    workspace,
+                    files,
+                    connectivity,
+                    theme,
+                    tools_focus,
+                    tools_scroll,
+                    tools_event,
+                    cx,
+                )
+            }
+        });
+        tools.update(cx, |tools, cx| tools.visible_update(true, cx));
         let mut this = Self {
             connectivity,
             workspace_key,
@@ -469,10 +744,16 @@ impl ChatWorkspaceSurface {
             pending_restore: None,
             tabs_scrollbar,
             recent_scrollbar,
+            tab_focus: HashMap::new(),
+            tab_close_focus: HashMap::new(),
+            tab_create_focus: cx.focus_handle(),
+            recent_toggle_focus: cx.focus_handle(),
+            recent_item_focus: HashMap::new(),
+            inspector_space_available: true,
+            effective_inspector_visible: false,
             emoji_open: BTreeSet::new(),
             mutation_serial: 0,
             persistence_error: None,
-            inspector_visible: true,
             ui: BTreeMap::new(),
             images: RefCell::new(BTreeMap::new()),
             rejected_images: RefCell::new(BTreeSet::new()),
@@ -481,9 +762,15 @@ impl ChatWorkspaceSurface {
             image_overlay_focus: cx.focus_handle().tab_index(0).tab_stop(false),
             image_close_focus: cx.focus_handle().tab_index(0).tab_stop(true),
             local_attachments: BTreeMap::new(),
+            attachment_load_generation_serial: 0,
+            attachment_load_generations: BTreeMap::new(),
+            tools,
             _workspace_subscription: workspace_subscription,
             chat_subscription: None,
         };
+        let snapshot = this.workspace.read(cx).snapshot().clone();
+        this.workspace_tab_focus_reconcile(&snapshot, cx);
+        this.effective_inspector_reconcile(cx);
         this.route_reconcile(cx);
         this
     }
@@ -510,6 +797,8 @@ impl ChatWorkspaceSurface {
         self.desired_file = desired_file;
         if self.theme != theme {
             self.theme = theme;
+            self.tools
+                .update(cx, |tools, cx| tools.theme_update(theme, cx));
             for ui in self.ui.values() {
                 ui.composer
                     .update(cx, |area, cx| area.theme_reconcile(theme, cx));
@@ -524,6 +813,9 @@ impl ChatWorkspaceSurface {
         }
         self.labels = labels;
         self.catalog_facts = catalog_facts;
+        self.tools.update(cx, |tools, cx| {
+            tools.availability_update(self.catalog_facts.unavailable_reason.is_none(), cx)
+        });
         self.route_reconcile(cx);
         cx.notify();
     }
@@ -538,6 +830,8 @@ impl ChatWorkspaceSurface {
         self.active = active;
         self.files
             .update(cx, |files, cx| files.workspace_active_reconcile(active, cx));
+        self.tools
+            .update(cx, |tools, cx| tools.visible_update(active, cx));
         if active {
             self.route_reconcile(cx);
         } else {
@@ -569,13 +863,84 @@ impl ChatWorkspaceSurface {
     pub fn files_inspector(&self) -> Entity<FilesInspectorSurface> {
         self.files.clone()
     }
-    pub fn inspector_reveal(&mut self, cx: &mut Context<Self>) {
-        if !self.inspector_visible {
-            self.inspector_visible = true;
-            self.files
-                .update(cx, |files, cx| files.inspector_visible_reconcile(true, cx));
-            cx.notify();
+    pub fn workspace_tools(&self) -> Entity<WorkspaceToolsSurface> {
+        self.tools.clone()
+    }
+    /// Creates a live terminal exactly once. Persisted terminal metadata never recreates it.
+    pub fn terminal_tool_open(
+        &mut self,
+        key: ToolTabKey,
+        conversation: ConversationKey,
+        label: impl Into<Arc<str>>,
+        options: TransportOptions,
+        request: OpenTerminal,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.workspace.read(cx).snapshot().tools.contains_key(&key) {
+            return false;
         }
+        if !self.tools.update(cx, |tools, cx| {
+            tools.terminal_open(key.clone(), options, request, cx)
+        }) {
+            return false;
+        }
+        let inserted = self.workspace.update(cx, |store, cx| {
+            let inserted = store.terminal_tool_open(key.clone(), conversation, label);
+            cx.notify();
+            inserted
+        });
+        if !inserted {
+            self.tools
+                .update(cx, |tools, cx| tools.live_tool_close(&key, cx));
+        }
+        inserted
+    }
+    /// Starts concrete native-browser preparation in the background and creates WebKit on GPUI.
+    pub fn browser_tool_open(
+        &mut self,
+        key: ToolTabKey,
+        conversation: ConversationKey,
+        label: impl Into<Arc<str>>,
+        url: impl Into<Arc<str>>,
+        options: TransportOptions,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.workspace.read(cx).snapshot().tools.contains_key(&key) {
+            return false;
+        }
+        let url = url.into();
+        let Ok(address) = crate::ui::native_browser::BrowserAddress::parse(&url) else {
+            return false;
+        };
+        if !self.tools.update(cx, |tools, cx| {
+            tools.browser_open(key.clone(), options, address, cx)
+        }) {
+            return false;
+        }
+        let inserted = self.workspace.update(cx, |store, cx| {
+            let inserted =
+                store.browser_tool_open(key.clone(), conversation, label, Arc::clone(&url));
+            if inserted {
+                store.tool_create_state_update(&key, crate::chat::ToolCreateState::Creating);
+            }
+            cx.notify();
+            inserted
+        });
+        if !inserted {
+            self.tools
+                .update(cx, |tools, cx| tools.live_tool_close(&key, cx));
+        }
+        inserted
+    }
+    pub fn live_tool_close(&mut self, key: &ToolTabKey, cx: &mut Context<Self>) {
+        self.tools
+            .update(cx, |tools, cx| tools.live_tool_close(key, cx));
+    }
+    pub fn inspector_reveal(&mut self, cx: &mut Context<Self>) {
+        self.workspace.update(cx, |store, cx| {
+            store.inspector_selection_update(InspectorSelection::Files);
+            cx.notify();
+        });
     }
     pub fn file_preview_reconcile(
         &mut self,
@@ -590,19 +955,20 @@ impl ChatWorkspaceSurface {
             .snapshot()
             .ephemeral_file_tab
             .clone();
-        if ephemeral && old.as_ref() != Some(&key) {
-            if let Some(old) = old {
-                let dirty = self
-                    .files
-                    .read(cx)
-                    .document(old.path())
-                    .is_some_and(|doc| doc.read(cx).dirty(cx));
-                if !dirty {
-                    self.workspace.update(cx, |store, cx| {
-                        store.tab_close(&WorkspaceTab::File(old));
-                        cx.notify();
-                    });
-                }
+        if ephemeral
+            && old.as_ref() != Some(&key)
+            && let Some(old) = old
+        {
+            let dirty = self
+                .files
+                .read(cx)
+                .document(old.path())
+                .is_some_and(|doc| doc.read(cx).dirty(cx));
+            if !dirty {
+                self.workspace.update(cx, |store, cx| {
+                    store.tab_close(&WorkspaceTab::File(old));
+                    cx.notify();
+                });
             }
         }
         let path = key.path().clone();
@@ -627,9 +993,8 @@ impl ChatWorkspaceSurface {
             files.main_file_kind_reconcile(path, kind, ephemeral, cx)
         });
     }
-
-    pub fn inspector_visible(&self) -> bool {
-        self.inspector_visible
+    pub fn inspector_visible(&self, _cx: &App) -> bool {
+        self.effective_inspector_visible
     }
 
     pub fn focused_chat_store(&self, cx: &App) -> Option<Entity<ChatStore>> {
@@ -1077,11 +1442,19 @@ impl ChatWorkspaceSurface {
         });
         let row_cache = Rc::new(RefCell::new(BTreeMap::new()));
         let history_revision_cache = Rc::new(RefCell::new(HistoryRevisionCache::default()));
+        let run_status_focus: BTreeMap<String, FocusHandle> = transcript_project(&snapshot)
+            .iter()
+            .filter_map(|row| {
+                matches!(row.kind, ChatTranscriptRowKind::RunStatus { .. })
+                    .then(|| (product_row_id(&row.id), cx.focus_handle()))
+            })
+            .collect();
         let rows = Rc::new(self.rows_project(
             &snapshot,
             &BTreeMap::new(),
             &row_cache,
             &history_revision_cache,
+            &run_status_focus,
             cx.entity(),
             cx,
         ));
@@ -1194,6 +1567,7 @@ impl ChatWorkspaceSurface {
                 attachment_vertical_scrollbar,
                 toolbar_scrollbar,
                 attachment_action_focus: BTreeMap::new(),
+                run_status_focus,
                 toolbar_focus,
                 _subscriptions: vec![composer_subscription],
             },
@@ -1213,11 +1587,15 @@ impl ChatWorkspaceSurface {
             .map(|attachment| attachment.id.clone())
             .collect();
         let mut released_local_images = Vec::new();
+        let mut canceled_attachment_loads = Vec::new();
         let remove_local_entry = if let Some(previews) = self.local_attachments.get_mut(key) {
             previews.retain(|id, preview| {
                 let retained = attachment_ids.contains(id) || preview.failure.is_some();
-                if !retained && let Some(image) = preview.image.as_ref() {
-                    released_local_images.push(image.clone());
+                if !retained {
+                    canceled_attachment_loads.push(id.clone());
+                    if let Some(image) = preview.image.as_ref() {
+                        released_local_images.push(image.clone());
+                    }
                 }
                 retained
             });
@@ -1225,6 +1603,9 @@ impl ChatWorkspaceSurface {
         } else {
             false
         };
+        for id in canceled_attachment_loads {
+            self.attachment_load_cancel(key, &id);
+        }
         for image in released_local_images {
             image.remove_asset(cx);
         }
@@ -1242,10 +1623,24 @@ impl ChatWorkspaceSurface {
                     .cloned(),
             )
             .collect();
+        let run_status_focus_ids: BTreeSet<String> = transcript_project(&snapshot)
+            .iter()
+            .filter_map(|row| {
+                matches!(row.kind, ChatTranscriptRowKind::RunStatus { .. })
+                    .then(|| product_row_id(&row.id))
+            })
+            .collect();
         let ui = self
             .ui
             .get_mut(key)
             .expect("conversation UI was materialized");
+        ui.run_status_focus
+            .retain(|id, _| run_status_focus_ids.contains(id));
+        for id in run_status_focus_ids {
+            ui.run_status_focus
+                .entry(id)
+                .or_insert_with(|| cx.focus_handle());
+        }
         ui.attachment_action_focus
             .retain(|id, _| attachment_focus_ids.contains(id));
         for id in attachment_focus_ids {
@@ -1325,11 +1720,13 @@ impl ChatWorkspaceSurface {
         let transcript = ui.transcript.clone();
         let row_cache = ui.row_cache.clone();
         let history_revision_cache = ui.history_revision_cache.clone();
+        let run_status_focus = ui.run_status_focus.clone();
         let rows = Rc::new(self.rows_project(
             &snapshot,
             &question_inputs,
             &row_cache,
             &history_revision_cache,
+            &run_status_focus,
             cx.entity(),
             cx,
         ));
@@ -1340,7 +1737,7 @@ impl ChatWorkspaceSurface {
                 ChatTranscriptContent::Question(_)
                 | ChatTranscriptContent::Delegation { .. }
                 | ChatTranscriptContent::Process { .. }
-                | ChatTranscriptContent::Status(_)
+                | ChatTranscriptContent::Status { .. }
                 | ChatTranscriptContent::Notice(_) => None,
             })
             .flatten()
@@ -1401,6 +1798,7 @@ impl ChatWorkspaceSurface {
         question_inputs: &BTreeMap<Arc<str>, Entity<TextArea>>,
         row_cache: &Rc<RefCell<BTreeMap<String, (u64, ChatTranscriptRow)>>>,
         history_revision_cache: &Rc<RefCell<HistoryRevisionCache>>,
+        run_status_focus: &BTreeMap<String, FocusHandle>,
         surface: Entity<Self>,
         cx: &App,
     ) -> Vec<ChatTranscriptRow> {
@@ -1527,6 +1925,7 @@ impl ChatWorkspaceSurface {
                         main_agent_id,
                         &sender_authors,
                         &running_message_ids,
+                        run_status_focus,
                         cx,
                     ),
                 };
@@ -1553,6 +1952,7 @@ impl ChatWorkspaceSurface {
         main_agent_id: Option<&str>,
         sender_authors: &BTreeMap<String, (SharedString, SharedString)>,
         running_message_ids: &BTreeSet<String>,
+        run_status_focus: &BTreeMap<String, FocusHandle>,
         _cx: &App,
     ) -> ChatTranscriptContent {
         match &row.kind {
@@ -1618,11 +2018,30 @@ impl ChatWorkspaceSurface {
                 }),
             },
             ChatTranscriptRowKind::Tool { tool, .. } => {
-                ChatTranscriptContent::Message(single_block_message(
+                let mut model = single_block_message(
                     product_row_id(&row.id),
                     ChatMessageBlock::Tool(tool_model(tool, false)),
                     self.link_open.clone(),
-                ))
+                );
+                let workspace = self.workspace.clone();
+                let conversation = snapshot.conversation.clone();
+                let entry_id: Arc<str> = Arc::from(tool.id.as_str());
+                let open: ChatActivate = Rc::new(move |_, cx| {
+                    let workspace = workspace.clone();
+                    let conversation = conversation.clone();
+                    let entry_id = Arc::clone(&entry_id);
+                    cx.defer(move |cx| {
+                        workspace.update(cx, |store, cx| {
+                            store.inspector_selection_update(InspectorSelection::Preview {
+                                conversation,
+                                entry_id,
+                            });
+                            cx.notify();
+                        })
+                    });
+                });
+                model.on_tool_open = Some(open);
+                ChatTranscriptContent::Message(model)
             }
             ChatTranscriptRowKind::Review { tool_id, review } => {
                 let (status, prompt) = review_model(review);
@@ -1783,25 +2202,52 @@ impl ChatWorkspaceSurface {
                 }
             }
             ChatTranscriptRowKind::RunStatus { run_id, status } => {
-                ChatTranscriptContent::Status(StatusRowModel {
-                    id: product_row_id(&row.id).into(),
-                    label: format!("Run {run_id}").into(),
-                    detail: Some(run_status(*status).into()),
-                    tone: if *status == RunStatus::Failed {
-                        SemanticTone::Error
-                    } else {
-                        SemanticTone::Neutral
+                let workspace = self.workspace.clone();
+                let conversation = snapshot.conversation.clone();
+                let run_id = run_id.clone();
+                let open_run_id = run_id.clone();
+                let on_open: crate::ui::chat_message::ChatActivate =
+                    Rc::new(move |_window: &mut Window, cx: &mut App| {
+                        let workspace = workspace.clone();
+                        let conversation = conversation.clone();
+                        let run_id = open_run_id.clone();
+                        cx.defer(move |cx| {
+                            workspace.update(cx, |store, cx| {
+                                store.inspector_selection_update(InspectorSelection::Trace {
+                                    conversation,
+                                    run_id,
+                                });
+                                cx.notify();
+                            });
+                        });
+                    });
+                ChatTranscriptContent::Status {
+                    model: StatusRowModel {
+                        id: product_row_id(&row.id).into(),
+                        label: format!("Run {run_id}").into(),
+                        detail: Some(run_status(*status).into()),
+                        tone: if *status == RunStatus::Failed {
+                            SemanticTone::Error
+                        } else {
+                            SemanticTone::Neutral
+                        },
                     },
-                })
+                    focus: run_status_focus.get(&product_row_id(&row.id)).cloned(),
+                    on_open: Some(on_open),
+                }
             }
             ChatTranscriptRowKind::ConversationStatus { load, availability } => {
                 let (label, detail, tone) = conversation_status(load, availability);
-                ChatTranscriptContent::Status(StatusRowModel {
-                    id: product_row_id(&row.id).into(),
-                    label: label.into(),
-                    detail: detail.map(Into::into),
-                    tone,
-                })
+                ChatTranscriptContent::Status {
+                    model: StatusRowModel {
+                        id: product_row_id(&row.id).into(),
+                        label: label.into(),
+                        detail: detail.map(Into::into),
+                        tone,
+                    },
+                    focus: None,
+                    on_open: None,
+                }
             }
         }
     }
@@ -3035,173 +3481,272 @@ impl ChatWorkspaceSurface {
                 let Ok(Ok(Some(paths))) = prompt.await else {
                     return;
                 };
-                let Ok(existing_files) = surface.update(cx, |this, _| {
-                    this.local_attachments
-                        .get(&key)
-                        .map(|items| {
-                            items
-                                .values()
-                                .filter(|preview| preview.omitted_count == 0)
-                                .count()
-                        })
-                        .unwrap_or(0)
-                }) else {
+                if paths.is_empty() {
                     return;
-                };
-                let available = MAX_LOCAL_ATTACHMENT_FILES.saturating_sub(existing_files);
-                let omitted = paths.len().saturating_sub(available);
-                let paths: Vec<_> = paths.into_iter().take(available).collect();
-                if omitted > 0 {
+                }
+
+                // A rendezvous channel plus an acknowledgement keeps exactly one file in
+                // flight. The worker cannot read or decode the next file until GPUI has
+                // admitted (or rejected) the current result.
+                let (result_sender, result_receiver) =
+                    mpsc::sync_channel::<AttachmentWorkerResult>(0);
+                let (decision_sender, decision_receiver) = mpsc::sync_channel::<bool>(0);
+                let selected = paths.len();
+                let worker = std::thread::Builder::new()
+                    .name("inline-image-loader".into())
+                    .spawn(move || {
+                        for (index, path) in paths.into_iter().enumerate() {
+                            let id = AttachmentId::new(format!("image-{}", cuid2::create_id()))
+                                .expect("generated attachment id is nonempty");
+                            let name: Arc<str> = Arc::from(
+                                path.file_name()
+                                    .and_then(|value| value.to_str())
+                                    .unwrap_or("image"),
+                            );
+                            let loaded =
+                                inline_image_file(&path).map(|(mime, bytes, decoded_bytes)| {
+                                    let data: Arc<str> = Arc::from(BASE64.encode(&bytes));
+                                    (mime, bytes, data, decoded_bytes)
+                                });
+                            if result_sender
+                                .send(AttachmentWorkerResult {
+                                    id,
+                                    name,
+                                    path,
+                                    loaded,
+                                    remaining: selected.saturating_sub(index + 1),
+                                })
+                                .is_err()
+                            {
+                                return;
+                            }
+                            match decision_receiver.recv() {
+                                Ok(true) => {}
+                                Ok(false) | Err(_) => return,
+                            }
+                        }
+                    });
+                if worker.is_err() {
                     let _ = surface.update(cx, |this, cx| {
                         omitted_attachment_record(
                             this.local_attachments.entry(key.clone()).or_default(),
-                            omitted,
+                            selected,
                         );
                         this.viewport_resized(cx);
                         cx.notify();
                     });
+                    return;
                 }
-                let loaded = executor
-                    .spawn(async move {
-                        paths
-                            .into_iter()
-                            .map(|path| {
-                                let id = AttachmentId::new(format!("image-{}", cuid2::create_id()))
-                                    .expect("generated attachment id is nonempty");
-                                let name: Arc<str> = Arc::from(
-                                    path.file_name()
-                                        .and_then(|value| value.to_str())
-                                        .unwrap_or("image"),
-                                );
-                                let loaded = inline_image_file(&path).map(|(mime, bytes, decoded_bytes)| {
-                                    let byte_size = bytes.len() as u64;
-                                    let image = Arc::new(Image::from_bytes(
-                                        inline_image_format(mime),
-                                        bytes.clone(),
-                                    ));
-                                    (
-                                        mime,
-                                        Arc::<str>::from(BASE64.encode(&bytes)),
-                                        byte_size,
-                                        image,
-                                        decoded_bytes,
-                                    )
-                                });
-                                (id, name, path, loaded)
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .await;
-                for (id, name, path, loaded) in loaded {
-                    let failure = loaded.as_ref().err().cloned();
-                    let image = loaded.as_ref().ok().map(|value| value.3.clone());
-                    let decoded_bytes = loaded.as_ref().ok().map(|value| value.4).unwrap_or(0);
-                    let mut preview = LocalAttachmentPreview {
-                        id: id.clone(),
-                        name: name.clone(),
-                        path,
-                        image,
-                        decoded_bytes,
-                        failure,
-                        omitted_count: 0,
+
+                let result_receiver = Arc::new(Mutex::new(result_receiver));
+                loop {
+                    let receiver = Arc::clone(&result_receiver);
+                    let received = executor
+                        .spawn(async move {
+                            receiver
+                                .lock()
+                                .expect("attachment result receiver poisoned")
+                                .recv()
+                        })
+                        .await;
+                    let Ok(result) = received else {
+                        break;
                     };
-                    let inserted = surface
-                        .update(cx, |this, cx| {
-                            let decoded_total: u64 = this
-                                .local_attachments
-                                .values()
-                                .flat_map(BTreeMap::values)
-                                .map(|preview| preview.decoded_bytes)
-                                .sum();
-                            let items = this.local_attachments.entry(key.clone()).or_default();
-                            let file_count = items
-                                .values()
-                                .filter(|preview| preview.omitted_count == 0)
-                                .count();
-                            if file_count >= MAX_LOCAL_ATTACHMENT_FILES {
-                                omitted_attachment_record(items, 1);
-                                let focus_ids: Vec<_> = items.keys().cloned().collect();
-                                if let Some(ui) = this.ui.get_mut(&key) {
-                                    for focus_id in focus_ids {
-                                        ui.attachment_action_focus
-                                            .entry(focus_id)
-                                            .or_insert_with(|| AttachmentActionFocus {
-                                                open: cx.focus_handle(),
-                                                remove: cx.focus_handle(),
-                                                retry: cx.focus_handle(),
-                                            });
-                                    }
+                    let AttachmentWorkerResult {
+                        id,
+                        name,
+                        path,
+                        loaded,
+                        remaining,
+                    } = result;
+
+                    let should_continue = match loaded {
+                        Err(message) => surface
+                            .update(cx, |this, cx| {
+                                let items = this.local_attachments.entry(key.clone()).or_default();
+                                let file_count = items
+                                    .values()
+                                    .filter(|preview| preview.omitted_count == 0)
+                                    .count();
+                                if file_count >= MAX_LOCAL_ATTACHMENT_FILES {
+                                    omitted_attachment_record(items, remaining.saturating_add(1));
+                                    this.viewport_resized(cx);
+                                    cx.notify();
+                                    return false;
                                 }
-                                this.viewport_resized(cx);
-                                cx.notify();
-                                false
-                            } else {
-                                let admitted = decoded_total
-                                    .checked_add(preview.decoded_bytes)
-                                    .is_some_and(|total| {
-                                        total <= MAX_DECODED_LOCAL_ATTACHMENT_BYTES
-                                    });
-                                if !admitted {
-                                    preview.image = None;
-                                    preview.decoded_bytes = 0;
-                                    preview.failure = Some(Arc::from(format!(
-                                        "Decoded local image previews are limited to {MAX_DECODED_LOCAL_ATTACHMENT_BYTES} bytes. Remove another image and retry."
-                                    )));
-                                }
-                                items.insert(id.clone(), preview);
+                                items.insert(
+                                    id.clone(),
+                                    LocalAttachmentPreview {
+                                        id: id.clone(),
+                                        name,
+                                        path,
+                                        image: None,
+                                        decoded_bytes: 0,
+                                        raw_bytes: 0,
+                                        failure: Some(message),
+                                        omitted_count: 0,
+                                    },
+                                );
                                 if let Some(ui) = this.ui.get_mut(&key) {
-                                    ui.attachment_action_focus
-                                        .entry(id.clone())
-                                        .or_insert_with(|| AttachmentActionFocus {
+                                    ui.attachment_action_focus.insert(
+                                        id,
+                                        AttachmentActionFocus {
                                             open: cx.focus_handle(),
                                             remove: cx.focus_handle(),
                                             retry: cx.focus_handle(),
-                                        });
+                                        },
+                                    );
                                 }
                                 this.viewport_resized(cx);
                                 cx.notify();
-                                admitted
-                            }
-                        })
-                        .unwrap_or(false);
-                    if !inserted {
-                        continue;
-                    }
-                    if let Ok((mime, data, byte_size, _, _)) = loaded {
-                        let rejection = connectivity
-                            .update(cx, |controller, cx| {
-                                controller.chat(&key, cx).and_then(|chat| {
-                                    chat.update(cx, |store, cx| {
-                                        let result =
-                                            store.image_attachment_add(InlineImageAttachment {
-                                                id: id.clone(),
-                                                name: name.clone(),
-                                                mime_type: Arc::from(mime),
-                                                data,
-                                                byte_size,
-                                                state: AttachmentState::Ready,
-                                            });
-                                        cx.notify();
-                                        result.err()
-                                    })
-                                })
+                                true
                             })
-                            .ok()
-                            .flatten();
-                        if let Some(rejection) = rejection {
-                            let _ = surface.update(cx, |this, cx| {
-                                if let Some(preview) = this
+                            .unwrap_or(false),
+                        Ok((mime, bytes, data, decoded_bytes)) => {
+                            let byte_size = bytes.len() as u64;
+                            let encoded_bytes = base64_encoded_bytes(byte_size);
+                            let admitted = surface.update(cx, |this, cx| {
+                                let decoded_total: u64 = this
                                     .local_attachments
-                                    .get_mut(&key)
-                                    .and_then(|items| items.get_mut(&id))
-                                {
-                                    preview.failure =
-                                        Some(attachment_rejection_message(&rejection));
+                                    .values()
+                                    .flat_map(BTreeMap::values)
+                                    .map(|preview| preview.decoded_bytes)
+                                    .sum();
+                                let raw_total: u64 = this
+                                    .local_attachments
+                                    .values()
+                                    .flat_map(BTreeMap::values)
+                                    .map(|preview| preview.raw_bytes)
+                                    .sum();
+                                let encoded_total: u64 = this
+                                    .local_attachments
+                                    .values()
+                                    .flat_map(BTreeMap::values)
+                                    .filter_map(|preview| base64_encoded_bytes(preview.raw_bytes))
+                                    .sum();
+                                let items = this.local_attachments.entry(key.clone()).or_default();
+                                let file_count = items
+                                    .values()
+                                    .filter(|preview| preview.omitted_count == 0)
+                                    .count();
+                                let within_budget = file_count < MAX_LOCAL_ATTACHMENT_FILES
+                                    && decoded_total.checked_add(decoded_bytes).is_some_and(
+                                        |total| total <= MAX_DECODED_LOCAL_ATTACHMENT_BYTES,
+                                    )
+                                    && raw_total.checked_add(byte_size).is_some_and(|total| {
+                                        total <= MAX_RAW_LOCAL_ATTACHMENT_BYTES
+                                    })
+                                    && encoded_bytes.is_some_and(|encoded_bytes| {
+                                        encoded_total.checked_add(encoded_bytes).is_some_and(
+                                            |total| total <= MAX_BASE64_LOCAL_ATTACHMENT_BYTES,
+                                        )
+                                    });
+                                if !within_budget {
+                                    omitted_attachment_record(items, remaining.saturating_add(1));
+                                    this.viewport_resized(cx);
+                                    cx.notify();
+                                    return None;
                                 }
+
+                                let image = Arc::new(Image::from_bytes(
+                                    inline_image_format(mime),
+                                    bytes.clone(),
+                                ));
+                                items.insert(
+                                    id.clone(),
+                                    LocalAttachmentPreview {
+                                        id: id.clone(),
+                                        name: name.clone(),
+                                        path: path.clone(),
+                                        image: Some(image.clone()),
+                                        decoded_bytes,
+                                        raw_bytes: byte_size,
+                                        failure: None,
+                                        omitted_count: 0,
+                                    },
+                                );
+                                if let Some(ui) = this.ui.get_mut(&key) {
+                                    ui.attachment_action_focus.insert(
+                                        id.clone(),
+                                        AttachmentActionFocus {
+                                            open: cx.focus_handle(),
+                                            remove: cx.focus_handle(),
+                                            retry: cx.focus_handle(),
+                                        },
+                                    );
+                                }
+                                let token = this.attachment_load_begin(&key, &id, &path);
                                 this.viewport_resized(cx);
                                 cx.notify();
+                                Some((token, image))
                             });
+                            match admitted {
+                                Ok(Some((load_token, image))) => {
+                                    let current = surface
+                                        .update(cx, |this, _| {
+                                            this.attachment_load_matches(&key, &id, &load_token)
+                                        })
+                                        .unwrap_or(false);
+                                    if !current {
+                                        let _ = surface.update(cx, |_, cx| image.remove_asset(cx));
+                                        false
+                                    } else {
+                                        let chat = surface
+                                            .update(cx, |_, cx| {
+                                                connectivity.read(cx).chat(&key, cx)
+                                            })
+                                            .ok()
+                                            .flatten();
+                                        let rejection = chat
+                                            .and_then(|chat| {
+                                                chat.update(cx, |store, cx| {
+                                                    let result = store.image_attachment_add(
+                                                        InlineImageAttachment {
+                                                            id: id.clone(),
+                                                            name: name.clone(),
+                                                            mime_type: Arc::from(mime),
+                                                            data,
+                                                            byte_size,
+                                                            state: AttachmentState::Ready,
+                                                        },
+                                                    );
+                                                    cx.notify();
+                                                    result.err()
+                                                })
+                                                .ok()
+                                            })
+                                            .flatten();
+                                        if let Some(rejection) = rejection {
+                                            let _ = surface.update(cx, |this, cx| {
+                                                if this.attachment_load_matches(
+                                                    &key,
+                                                    &id,
+                                                    &load_token,
+                                                ) {
+                                                    if let Some(preview) = this
+                                                        .local_attachments
+                                                        .get_mut(&key)
+                                                        .and_then(|items| items.get_mut(&id))
+                                                    {
+                                                        preview.failure =
+                                                            Some(attachment_rejection_message(
+                                                                &rejection,
+                                                            ));
+                                                    }
+                                                    this.viewport_resized(cx);
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                        true
+                                    }
+                                }
+                                Ok(None) | Err(_) => false,
+                            }
                         }
+                    };
+                    if decision_sender.send(should_continue).is_err() || !should_continue {
+                        break;
                     }
                 }
             })
@@ -3221,13 +3766,17 @@ impl ChatWorkspaceSurface {
             let Some(id) = AttachmentId::new(id.as_ref()) else {
                 return;
             };
-            let local = surface
-                .read(cx)
-                .local_attachments
-                .get(&key)
-                .and_then(|items| items.get(&id))
-                .cloned();
-            let Some(local) = local else {
+            let local_and_token = surface.update(cx, |this, _| {
+                let local = this
+                    .local_attachments
+                    .get(&key)
+                    .and_then(|items| items.get(&id))
+                    .cloned()?;
+                let token = (local.omitted_count == 0)
+                    .then(|| this.attachment_load_begin(&key, &id, &local.path));
+                Some((local, token))
+            });
+            let Some((local, load_token)) = local_and_token else {
                 if let Some(chat) = connectivity.read(cx).chat(&key, cx) {
                     chat.update(cx, |store, cx| {
                         store.image_attachment_retry(&id);
@@ -3236,9 +3785,9 @@ impl ChatWorkspaceSurface {
                 }
                 return;
             };
-            if local.omitted_count > 0 {
+            let Some(load_token) = load_token else {
                 return;
-            }
+            };
             let executor = cx.background_executor().clone();
             let connectivity = connectivity.clone();
             let key = key.clone();
@@ -3253,8 +3802,11 @@ impl ChatWorkspaceSurface {
                         let byte_size = bytes.len() as u64;
                         let image =
                             Arc::new(Image::from_bytes(inline_image_format(mime), bytes.clone()));
-                        let admitted = surface
+                        let applied = surface
                             .update(cx, |this, cx| {
+                                if !this.attachment_load_matches(&key, &id, &load_token) {
+                                    return false;
+                                }
                                 let decoded_total: u64 = this
                                     .local_attachments
                                     .values()
@@ -3275,78 +3827,93 @@ impl ChatWorkspaceSurface {
                                     .is_some_and(|total| {
                                         total <= MAX_DECODED_LOCAL_ATTACHMENT_BYTES
                                     });
-                                if let Some(preview) = this
+                                let preview = this
                                     .local_attachments
                                     .get_mut(&key)
                                     .and_then(|items| items.get_mut(&id))
-                                {
-                                    if admitted {
-                                        if let Some(previous) = preview.image.replace(image) {
-                                            previous.remove_asset(cx);
-                                        }
-                                        preview.decoded_bytes = decoded_bytes;
-                                        preview.failure = None;
-                                    } else {
-                                        preview.failure = Some(Arc::from(format!(
-                                            "Decoded local image previews are limited to {MAX_DECODED_LOCAL_ATTACHMENT_BYTES} bytes. Remove another image and retry."
-                                        )));
+                                    .expect("matched attachment preview still exists");
+                                if admitted {
+                                    if let Some(previous) = preview.image.replace(image.clone()) {
+                                        previous.remove_asset(cx);
                                     }
+                                    preview.decoded_bytes = decoded_bytes;
+                                    preview.failure = None;
+                                } else {
+                                    preview.failure = Some(Arc::from(format!(
+                                        "Decoded local image previews are limited to {MAX_DECODED_LOCAL_ATTACHMENT_BYTES} bytes. Remove another image and retry."
+                                    )));
                                 }
                                 this.viewport_resized(cx);
                                 cx.notify();
                                 admitted
                             })
                             .unwrap_or(false);
-                        if !admitted {
+                        if !applied {
+                            let _ = surface.update(cx, |_, cx| image.remove_asset(cx));
                             return;
                         }
+
                         let data: Arc<str> = Arc::from(BASE64.encode(&bytes));
-                        let rejection = connectivity
-                            .update(cx, |controller, cx| {
-                                controller.chat(&key, cx).and_then(|chat| {
-                                    chat.update(cx, |store, cx| {
-                                        store.image_attachment_remove(&id);
-                                        let result =
-                                            store.image_attachment_add(InlineImageAttachment {
-                                                id: id.clone(),
-                                                name: local.name.clone(),
-                                                mime_type: Arc::from(mime),
-                                                data,
-                                                byte_size,
-                                                state: AttachmentState::Ready,
-                                            });
-                                        cx.notify();
-                                        result.err()
-                                    })
-                                })
-                            })
+                        let chat = surface
+                            .update(cx, |_, cx| connectivity.read(cx).chat(&key, cx))
                             .ok()
                             .flatten();
+                        let current = surface
+                            .update(cx, |this, _| {
+                                this.attachment_load_matches(&key, &id, &load_token)
+                            })
+                            .unwrap_or(false);
+                        if !current {
+                            return;
+                        }
+                        let rejection = chat
+                            .and_then(|chat| {
+                                chat.update(cx, |store, cx| {
+                                    store.image_attachment_remove(&id);
+                                    let result =
+                                        store.image_attachment_add(InlineImageAttachment {
+                                            id: id.clone(),
+                                            name: local.name.clone(),
+                                            mime_type: Arc::from(mime),
+                                            data,
+                                            byte_size,
+                                            state: AttachmentState::Ready,
+                                        });
+                                    cx.notify();
+                                    result.err()
+                                })
+                                .ok()
+                            })
+                            .flatten();
                         let _ = surface.update(cx, |this, cx| {
-                            if let Some(preview) = this
-                                .local_attachments
-                                .get_mut(&key)
-                                .and_then(|items| items.get_mut(&id))
-                            {
-                                preview.failure =
-                                    rejection.as_ref().map(attachment_rejection_message);
+                            if this.attachment_load_matches(&key, &id, &load_token) {
+                                if let Some(preview) = this
+                                    .local_attachments
+                                    .get_mut(&key)
+                                    .and_then(|items| items.get_mut(&id))
+                                {
+                                    preview.failure =
+                                        rejection.as_ref().map(attachment_rejection_message);
+                                }
+                                this.viewport_resized(cx);
+                                cx.notify();
                             }
-                            this.viewport_resized(cx);
-                            cx.notify();
                         });
                     }
 
                     Err(message) => {
                         let _ = surface.update(cx, |this, cx| {
-                            if let Some(preview) = this
-                                .local_attachments
-                                .get_mut(&key)
-                                .and_then(|items| items.get_mut(&id))
-                            {
-                                preview.failure = Some(message);
+                            if this.attachment_load_matches(&key, &id, &load_token) {
+                                if let Some(preview) = this
+                                    .local_attachments
+                                    .get_mut(&key)
+                                    .and_then(|items| items.get_mut(&id))
+                                {
+                                    preview.failure = Some(message);
+                                }
+                                this.viewport_resized(cx);
+                                cx.notify();
                             }
-                            this.viewport_resized(cx);
-                            cx.notify();
                         });
                     }
                 }
@@ -3636,25 +4203,32 @@ impl Render for ChatWorkspaceSurface {
                 },
                 ProjectHeaderAction {
                     id: "files-panel".into(),
-                    label: if self.inspector_visible {
-                        "Collapse Files"
+                    label: if workspace.inspector.open {
+                        "Collapse inspector"
                     } else {
-                        "Expand Files"
+                        "Expand inspector"
                     }
                     .into(),
-                    icon: if self.inspector_visible {
+                    icon: if workspace.inspector.open {
                         IconName::PanelCollapse
                     } else {
                         IconName::PanelExpand
                     },
                     disabled: false,
-                    selected: self.inspector_visible,
+                    selected: workspace.inspector.open,
                 },
                 ProjectHeaderAction {
                     id: "file-to-inspector".into(),
                     label: "Move file to Files panel".into(),
                     icon: IconName::PanelExpand,
                     disabled: !matches!(workspace.active_tab, Some(WorkspaceTab::File(_))),
+                    selected: false,
+                },
+                ProjectHeaderAction {
+                    id: "tool-to-inspector".into(),
+                    label: "Move tool to inspector".into(),
+                    icon: IconName::PanelExpand,
+                    disabled: !matches!(workspace.active_tab, Some(WorkspaceTab::Tool(_))),
                     selected: false,
                 },
             ],
@@ -3665,11 +4239,27 @@ impl Render for ChatWorkspaceSurface {
                 cx.defer(move |cx| {
                     header_entity.update(cx, |this, cx| {
                         if id.as_ref() == "files-panel" {
-                            this.inspector_visible = !this.inspector_visible;
-                            this.files.update(cx, |files, cx| {
-                                files.inspector_visible_reconcile(this.inspector_visible, cx)
+                            let open = !this.workspace.read(cx).snapshot().inspector.open;
+                            this.workspace.update(cx, |store, cx| {
+                                store.inspector_open_update(open);
+                                cx.notify();
                             });
-                            cx.notify();
+                            return;
+                        }
+                        if id.as_ref() == "tool-to-inspector" {
+                            let active = this.workspace.read(cx).snapshot().active_tab.clone();
+                            if let Some(WorkspaceTab::Tool(key)) = active {
+                                let workspace = this.workspace.clone();
+                                cx.defer(move |cx| {
+                                    workspace.update(cx, |store, cx| {
+                                        store.tool_placement_update(
+                                            &key,
+                                            crate::chat::ToolPlacement::Inspector,
+                                        );
+                                        cx.notify();
+                                    });
+                                });
+                            }
                             return;
                         }
                         if id.as_ref() == "file-to-inspector" {
@@ -3749,9 +4339,11 @@ impl Render for ChatWorkspaceSurface {
                                         cx,
                                     ),
                                 }
-                                this.inspector_visible = true;
+                                this.workspace.update(cx, |store, cx| {
+                                    store.inspector_selection_update(InspectorSelection::Files);
+                                    cx.notify();
+                                });
                                 this.files.update(cx, |files, cx| {
-                                    files.inspector_visible_reconcile(true, cx);
                                     files.route_preview_reconcile(Some((path, kind)), cx);
                                 });
                                 this.route_reconcile(cx);
@@ -3842,8 +4434,12 @@ impl Render for ChatWorkspaceSurface {
                     ),
                     WorkspaceTab::Tool(key) => (
                         tab_id(tab),
-                        key.as_str().to_owned(),
-                        WorkspaceTabKind::Activity,
+                        workspace
+                            .tools
+                            .get(key)
+                            .map(|tool| tool.label.to_string())
+                            .unwrap_or_else(|| key.as_str().to_owned()),
+                        workspace.tools.get(key).map_or(WorkspaceTabKind::Activity, |tool| match tool.kind { ToolKind::Terminal => WorkspaceTabKind::Terminal, ToolKind::Browser { .. } => WorkspaceTabKind::Browser }),
                         CatalogConversationStatus::Idle,
                         true,
                     ),
@@ -3950,6 +4546,11 @@ impl Render for ChatWorkspaceSurface {
             }),
             tabs_scrollbar: self.tabs_scrollbar.clone(),
             recent_scrollbar: self.recent_open.then(|| self.recent_scrollbar.clone()),
+            tab_focus: self.tab_focus.clone(),
+            close_focus: self.tab_close_focus.clone(),
+            create_focus: Some(self.tab_create_focus.clone()),
+            recent_toggle_focus: Some(self.recent_toggle_focus.clone()),
+            recent_item_focus: self.recent_item_focus.clone(),
             on_select: Some(Rc::new(move |id, _window, cx| {
                 select_entity.update(cx, |this, cx| {
                     let snapshot = this.workspace.read(cx).snapshot().clone();
@@ -4017,62 +4618,82 @@ impl Render for ChatWorkspaceSurface {
                     }
                 });
             })),
-            on_close: Some(Rc::new(move |id, _, cx| {
-                close_entity.update(cx, |this, cx| {
+            on_close: Some(Rc::new(move |id, window, cx| {
+                let close_request = close_entity.update(cx, |this, cx| {
                     let snapshot = this.workspace.read(cx).snapshot().clone();
-                    let Some(tab) = snapshot
+                    let Some(index) = snapshot
                         .tabs
                         .iter()
-                        .find(|tab| tab_id(tab) == id.as_ref())
-                        .cloned()
+                        .position(|tab| tab_id(tab) == id.as_ref())
                     else {
-                        return;
+                        return None;
                     };
-                    if let WorkspaceTab::Conversation(key) = &tab {
-                        let fallback = conversation_fallback(
-                            &snapshot.tabs,
-                            &snapshot.activation_history,
-                            key,
-                        );
-                        let mutation = MutationId::new(this.next_mutation("archive"))
-                            .expect("mutation is nonempty");
-                        this.workspace.update(cx, |store, cx| {
-                            store.conversation_archive(key, mutation);
+                    let tab = snapshot.tabs[index].clone();
+                    if let WorkspaceTab::File(key) = &tab {
+                        let dirty = this
+                            .files
+                            .read(cx)
+                            .document(key.path())
+                            .is_some_and(|doc| doc.read(cx).dirty(cx));
+                        if dirty {
+                            this.persistence_error =
+                                Some(Arc::from("Save or revert this file before closing it."));
                             cx.notify();
-                        });
-                        match fallback {
-                            Some(conversation) => (this.on_navigate)(
-                                ChatWorkspaceNavigation::Conversation(CreatedChatNavigation {
-                                    workspace: this.workspace_key.clone(),
-                                    conversation,
-                                }),
-                                cx,
-                            ),
-                            None => (this.on_navigate)(
-                                ChatWorkspaceNavigation::Workspace(this.workspace_key.clone()),
-                                cx,
-                            ),
+                            return None;
                         }
+                    }
+
+                    let successor = if snapshot.active_tab.as_ref() == Some(&tab) {
+                        snapshot.tabs.get(index + 1).cloned().or_else(|| {
+                            index
+                                .checked_sub(1)
+                                .and_then(|previous| snapshot.tabs.get(previous).cloned())
+                        })
                     } else {
-                        if let WorkspaceTab::File(key) = &tab {
-                            let dirty = this
-                                .files
-                                .read(cx)
-                                .document(key.path())
-                                .is_some_and(|doc| doc.read(cx).dirty(cx));
-                            if dirty {
-                                this.persistence_error =
-                                    Some(Arc::from("Save or revert this file before closing it."));
+                        snapshot.active_tab.clone().filter(|active| active != &tab)
+                    };
+                    let focus = successor.as_ref().and_then(|successor| {
+                        this.tab_focus.get(tab_id(successor).as_str()).cloned()
+                    });
+                    Some((tab, successor, focus))
+                });
+                let Some((tab, successor, focus)) = close_request else {
+                    return;
+                };
+
+                // Repair keyboard focus while every caller-owned tab handle is still retained.
+                // The store mutation is deferred so the close control can disappear safely.
+                if let Some(focus) = focus {
+                    window.focus(&focus);
+                }
+                let close_entity = close_entity.clone();
+                cx.defer(move |cx| {
+                    let _ = close_entity.update(cx, |this, cx| {
+                        if let Some(successor) = successor.as_ref() {
+                            this.workspace.update(cx, |store, cx| {
+                                store.tab_activate(successor);
                                 cx.notify();
-                                return;
-                            }
+                            });
                         }
-                        this.workspace.update(cx, |store, cx| {
-                            store.tab_close(&tab);
-                            cx.notify();
-                        });
-                        let active = this.workspace.read(cx).snapshot().active_tab.clone();
-                        match active {
+                        if let WorkspaceTab::Conversation(key) = &tab {
+                            let mutation = MutationId::new(this.next_mutation("archive"))
+                                .expect("mutation is nonempty");
+                            this.workspace.update(cx, |store, cx| {
+                                store.conversation_archive(key, mutation);
+                                cx.notify();
+                            });
+                        } else {
+                            if let WorkspaceTab::Tool(key) = &tab {
+                                this.tools
+                                    .update(cx, |tools, cx| tools.live_tool_close(key, cx));
+                            }
+                            this.workspace.update(cx, |store, cx| {
+                                store.tab_close(&tab);
+                                cx.notify();
+                            });
+                        }
+
+                        match successor {
                             Some(WorkspaceTab::Conversation(conversation)) => {
                                 this.desired_file = None;
                                 this.desired_conversation = Some(conversation.clone());
@@ -4109,19 +4730,23 @@ impl Render for ChatWorkspaceSurface {
                                     cx,
                                 );
                             }
-                            Some(tab @ WorkspaceTab::Tool(_)) => (this.on_navigate)(
-                                ChatWorkspaceNavigation::WorkspaceTab {
-                                    workspace: this.workspace_key.clone(),
-                                    tab,
-                                },
-                                cx,
-                            ),
+                            Some(tab @ WorkspaceTab::Tool(_)) => {
+                                this.desired_file = None;
+                                this.desired_conversation = None;
+                                (this.on_navigate)(
+                                    ChatWorkspaceNavigation::WorkspaceTab {
+                                        workspace: this.workspace_key.clone(),
+                                        tab,
+                                    },
+                                    cx,
+                                );
+                            }
                             None => (this.on_navigate)(
                                 ChatWorkspaceNavigation::Workspace(this.workspace_key.clone()),
                                 cx,
                             ),
                         }
-                    }
+                    });
                 });
             })),
             on_move: Some(Rc::new(move |id, direction, _, cx| {
@@ -4222,8 +4847,14 @@ impl Render for ChatWorkspaceSurface {
             Some(WorkspaceTab::File(key)) => self.files.read(cx).document(key.path()),
             _ => None,
         };
+        let active_tool = match workspace.active_tab.as_ref() {
+            Some(WorkspaceTab::Tool(key)) => self.tools.read(cx).live_tool(key),
+            _ => None,
+        };
         let body: AnyElement = if let Some(document) = active_file {
             document.into_any_element()
+        } else if let Some(tool) = active_tool {
+            tool.into_any_element()
         } else {
             match (focused.as_ref(), chat_snapshot.as_ref()) {
                 (Some(key), Some(snapshot)) => {
@@ -4587,6 +5218,7 @@ impl ChatWorkspaceSurface {
                         });
                     }
                     let _ = remove_surface.update(cx, |this, cx| {
+                        this.attachment_load_cancel(&remove_key, &id);
                         let removed_image = this
                             .local_attachments
                             .get_mut(&remove_key)

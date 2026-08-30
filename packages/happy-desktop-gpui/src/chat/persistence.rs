@@ -18,9 +18,11 @@ use sha2::{Digest, Sha256};
 use crate::connectivity::{AgentNamespace, ConversationKey, WorkspaceKey};
 
 use super::workspace::{
-    ClientConversationId, DRAFT_BYTE_LIMIT, ENTRY_LIMIT, FileTabKey, FileTabPresentation,
-    RECENT_SESSION_LIMIT, ScrollAnchor, ToolTabKey, TranscriptMemory, TranscriptRowId,
-    WorkspaceBehavior, WorkspaceSnapshot, WorkspaceTab,
+    ClientConversationId, DEFAULT_INSPECTOR_WIDTH_PX, DRAFT_BYTE_LIMIT, ENTRY_LIMIT, FileTabKey,
+    FileTabPresentation, InspectorSelection, InspectorSnapshot, RECENT_SESSION_LIMIT, ScrollAnchor,
+    TOOL_LIMIT, ToolCreateState, ToolKind, ToolMetadata, ToolPlacement, ToolTabKey,
+    TranscriptMemory, TranscriptRowId, WorkspaceBehavior, WorkspaceSnapshot, WorkspaceTab,
+    admit_browser_url,
 };
 
 const DOCUMENT_VERSION: u32 = 1;
@@ -284,6 +286,15 @@ fn write_snapshot(
             .workspaces
             .drain(..document.workspaces.len() - ENTRY_LIMIT);
     }
+    for workspace in &mut document.workspaces {
+        workspace.tools.retain_mut(|tool| {
+            let Some(url) = sanitize_persisted_browser_url(&tool.url) else {
+                return false;
+            };
+            tool.url = url.to_string();
+            true
+        });
+    }
     let bytes = serde_json::to_vec(&document).map_err(io::Error::other)?;
     if bytes.len() as u64 > DOCUMENT_BYTE_LIMIT {
         return Err(io::Error::new(
@@ -329,6 +340,8 @@ pub(crate) struct RestoredWorkspace {
     pub active_tab: Option<WorkspaceTab>,
     pub file_tab_presentations: BTreeMap<FileTabKey, FileTabPresentation>,
     pub ephemeral_file_tab: Option<FileTabKey>,
+    pub tools: BTreeMap<ToolTabKey, ToolMetadata>,
+    pub inspector: InspectorSnapshot,
     pub activation_history: Vec<WorkspaceTab>,
     pub archived_recents: Vec<ConversationKey>,
     pub group_draft: Arc<str>,
@@ -368,6 +381,10 @@ struct StoredWorkspace {
     #[serde(default)]
     session_create_id: Option<String>,
     transcripts: Vec<StoredTranscript>,
+    #[serde(default)]
+    tools: Vec<StoredTool>,
+    #[serde(default)]
+    inspector: StoredInspector,
 }
 
 impl StoredWorkspace {
@@ -379,16 +396,16 @@ impl StoredWorkspace {
             tabs: snapshot
                 .tabs
                 .iter()
-                .map(|tab| StoredTab::from_snapshot_tab(snapshot, tab))
+                .filter_map(|tab| StoredTab::from_snapshot_tab(snapshot, tab))
                 .collect(),
             active_tab: snapshot
                 .active_tab
                 .as_ref()
-                .map(|tab| StoredTab::from_snapshot_tab(snapshot, tab)),
+                .and_then(|tab| StoredTab::from_snapshot_tab(snapshot, tab)),
             activation_history: snapshot
                 .activation_history
                 .iter()
-                .map(|tab| StoredTab::from_snapshot_tab(snapshot, tab))
+                .filter_map(|tab| StoredTab::from_snapshot_tab(snapshot, tab))
                 .collect(),
             archived_recents: snapshot
                 .archived_recents
@@ -405,6 +422,12 @@ impl StoredWorkspace {
                 .iter()
                 .map(|(key, memory)| StoredTranscript::from_memory(key, memory))
                 .collect(),
+            tools: snapshot
+                .tools
+                .iter()
+                .filter_map(StoredTool::from_metadata)
+                .collect(),
+            inspector: StoredInspector::from_snapshot(snapshot),
         }
     }
 
@@ -435,6 +458,13 @@ impl StoredWorkspace {
                 }
             }
         }
+        let mut tools = BTreeMap::new();
+        for stored in self.tools.into_iter().take(TOOL_LIMIT) {
+            if let Some((key, metadata)) = stored.restore(namespace) {
+                tools.insert(key, metadata);
+            }
+        }
+        let inspector = self.inspector.restore(&tools);
         RestoredWorkspace {
             behavior: self.behavior.restore(),
             tabs: self
@@ -446,6 +476,8 @@ impl StoredWorkspace {
             active_tab: self.active_tab.and_then(restore_tab),
             file_tab_presentations,
             ephemeral_file_tab,
+            tools,
+            inspector,
             activation_history: self
                 .activation_history
                 .into_iter()
@@ -524,11 +556,11 @@ enum StoredTab {
     },
 }
 impl StoredTab {
-    fn from_snapshot_tab(snapshot: &WorkspaceSnapshot, value: &WorkspaceTab) -> Self {
+    fn from_snapshot_tab(snapshot: &WorkspaceSnapshot, value: &WorkspaceTab) -> Option<Self> {
         match value {
-            WorkspaceTab::Conversation(key) => Self::Conversation {
+            WorkspaceTab::Conversation(key) => Some(Self::Conversation {
                 conversation_id: key.id().to_owned(),
-            },
+            }),
             WorkspaceTab::File(key) => {
                 let presentation = match snapshot
                     .file_tab_presentations
@@ -539,15 +571,17 @@ impl StoredTab {
                     FileTabPresentation::File => StoredFilePresentation::File,
                     FileTabPresentation::Diff => StoredFilePresentation::Diff,
                 };
-                Self::File {
+                Some(Self::File {
                     file_id: key.as_str().to_owned(),
                     presentation,
                     preview: snapshot.ephemeral_file_tab.as_ref() == Some(key),
-                }
+                })
             }
-            WorkspaceTab::Tool(key) => Self::Tool {
-                tool_id: key.as_str().to_owned(),
-            },
+            WorkspaceTab::Tool(key) => snapshot.tools.get(key).and_then(|tool| {
+                matches!(&tool.kind, ToolKind::Browser { .. }).then(|| Self::Tool {
+                    tool_id: key.as_str().to_owned(),
+                })
+            }),
         }
     }
     fn restore(self, namespace: &AgentNamespace) -> Option<WorkspaceTab> {
@@ -563,6 +597,193 @@ impl StoredTab {
             _ => None,
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StoredTool {
+    id: String,
+    owner_conversation_id: String,
+    label: String,
+    placement: StoredToolPlacement,
+    url: String,
+    title: String,
+}
+
+fn sanitize_persisted_browser_url(value: &str) -> Option<Arc<str>> {
+    let admitted = admit_browser_url(Arc::from(value))?;
+    if admitted.as_ref() == "about:blank" {
+        return Some(admitted);
+    }
+    let mut parsed = url::Url::parse(&admitted).ok()?;
+    parsed.set_query(None);
+    parsed.set_fragment(None);
+    admit_browser_url(Arc::from(parsed.as_str()))
+}
+
+impl StoredTool {
+    fn from_metadata((key, metadata): (&ToolTabKey, &ToolMetadata)) -> Option<Self> {
+        let metadata = metadata.clone().admitted()?;
+        let ToolKind::Browser { url, title } = &metadata.kind else {
+            return None;
+        };
+        let url = sanitize_persisted_browser_url(url)?;
+        Some(Self {
+            id: key.as_str().to_owned(),
+            owner_conversation_id: metadata.owning_conversation.id().to_owned(),
+            label: metadata.label.to_string(),
+            placement: metadata.placement.into(),
+            url: url.to_string(),
+            title: title.to_string(),
+        })
+    }
+
+    fn restore(self, namespace: &AgentNamespace) -> Option<(ToolTabKey, ToolMetadata)> {
+        let key = ToolTabKey::new(self.id)?;
+        if self.owner_conversation_id.is_empty() {
+            return None;
+        }
+        let url = sanitize_persisted_browser_url(&self.url)?;
+        let metadata = ToolMetadata {
+            owning_conversation: ConversationKey::new(
+                namespace.clone(),
+                self.owner_conversation_id,
+            ),
+            label: Arc::from(self.label),
+            placement: self.placement.restore(),
+            create_state: ToolCreateState::Creating,
+            kind: ToolKind::Browser {
+                url,
+                title: Arc::from(self.title),
+            },
+        }
+        .admitted()?;
+        Some((key, metadata))
+    }
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum StoredToolPlacement {
+    Main,
+    Inspector,
+}
+
+impl From<ToolPlacement> for StoredToolPlacement {
+    fn from(value: ToolPlacement) -> Self {
+        match value {
+            ToolPlacement::Main => Self::Main,
+            ToolPlacement::Inspector => Self::Inspector,
+        }
+    }
+}
+
+impl StoredToolPlacement {
+    fn restore(self) -> ToolPlacement {
+        match self {
+            Self::Main => ToolPlacement::Main,
+            Self::Inspector => ToolPlacement::Inspector,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StoredInspector {
+    #[serde(default = "default_inspector_open")]
+    open: bool,
+    #[serde(default = "default_inspector_width")]
+    width_px: f32,
+    #[serde(default)]
+    tool_order: Vec<String>,
+    #[serde(default)]
+    active_tool_id: Option<String>,
+}
+
+impl Default for StoredInspector {
+    fn default() -> Self {
+        Self {
+            open: true,
+            width_px: DEFAULT_INSPECTOR_WIDTH_PX,
+            tool_order: Vec::new(),
+            active_tool_id: None,
+        }
+    }
+}
+
+impl StoredInspector {
+    fn from_snapshot(snapshot: &WorkspaceSnapshot) -> Self {
+        Self {
+            open: snapshot.inspector.open,
+            width_px: snapshot.inspector.width_px,
+            tool_order: snapshot
+                .inspector
+                .tool_order
+                .iter()
+                .filter(|key| {
+                    matches!(
+                        snapshot.tools.get(*key).map(|tool| &tool.kind),
+                        Some(ToolKind::Browser { .. })
+                    )
+                })
+                .map(|key| key.as_str().to_owned())
+                .collect(),
+            active_tool_id: match &snapshot.inspector.selection {
+                InspectorSelection::LiveTool(key)
+                    if matches!(
+                        snapshot.tools.get(key).map(|tool| &tool.kind),
+                        Some(ToolKind::Browser { .. })
+                    ) =>
+                {
+                    Some(key.as_str().to_owned())
+                }
+                _ => None,
+            },
+        }
+    }
+
+    fn restore(self, tools: &BTreeMap<ToolTabKey, ToolMetadata>) -> InspectorSnapshot {
+        let mut tool_order: Vec<_> = self
+            .tool_order
+            .into_iter()
+            .take(TOOL_LIMIT)
+            .filter_map(ToolTabKey::new)
+            .filter(|key| {
+                tools
+                    .get(key)
+                    .is_some_and(|tool| tool.placement == ToolPlacement::Inspector)
+            })
+            .collect();
+        for (key, tool) in tools {
+            if tool.placement == ToolPlacement::Inspector && !tool_order.contains(key) {
+                tool_order.push(key.clone());
+            }
+        }
+        let selection = self
+            .active_tool_id
+            .and_then(ToolTabKey::new)
+            .filter(|key| tool_order.contains(key))
+            .map(InspectorSelection::LiveTool)
+            .unwrap_or(InspectorSelection::Files);
+        InspectorSnapshot {
+            open: self.open,
+            selection,
+            tool_order,
+            width_px: if self.width_px.is_finite() {
+                self.width_px
+            } else {
+                DEFAULT_INSPECTOR_WIDTH_PX
+            },
+        }
+    }
+}
+
+fn default_inspector_open() -> bool {
+    true
+}
+
+fn default_inspector_width() -> f32 {
+    DEFAULT_INSPECTOR_WIDTH_PX
 }
 
 #[derive(Serialize, Deserialize)]
