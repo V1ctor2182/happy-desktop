@@ -31,6 +31,8 @@ export interface BrowserFailure {
 }
 
 export interface BrowserContentProps {
+    /** Happy Agent whose network boundary owns this browser guest. */
+    readonly happyAgentId?: string;
     /** Happy Agent session whose network boundary owns this browser guest. */
     readonly sessionId?: string;
     /** Initial location for the Chromium guest. Further navigation uses the controller. */

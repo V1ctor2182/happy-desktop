@@ -44,6 +44,7 @@ import {
     type AppHappyAgentDaemonStore,
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
+    type AppPersonalRemoteMacStore,
 } from "../views/AppHappyAgentSettingsView";
 
 /**
@@ -68,6 +69,7 @@ export interface HappyAgentRouterContext {
     readonly debug?: AppHappyAgentDebugStore;
     readonly daemon?: AppHappyAgentDaemonStore;
     readonly profiler?: AppHappyAgentProfilerStore;
+    readonly personalRemoteMac?: AppPersonalRemoteMacStore;
     readonly happyAgents: AppHappyAgentDirectoryStore;
     /** This build's development identity; absent in the packaged product. */
     readonly buildIdentity?: AppBuildIdentity;
@@ -538,6 +540,7 @@ function HappyAgentSettingsRoute() {
             {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.debug ? { debug: context.debug } : {})}
             {...(context.profiler ? { profiler: context.profiler } : {})}
+            {...(context.personalRemoteMac ? { personalRemoteMac: context.personalRemoteMac } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             onCategorySelect={(section) =>
                 void navigate({ params: { section }, to: "/settings/$section" })
@@ -645,6 +648,17 @@ export function happyAgentRouterGroupForget(
     // notification above. One that is not — a window still starting up — has to
     // be told, the same way the router tells itself when it commits a location
     // with nothing listening.
+    if (changed && router.history.subscribers.size === 0)
+        void router.load({ action: { type: "REPLACE" } });
+}
+
+/** Removes an explicitly unmounted Happy Agent from history and falls back locally. */
+export function happyAgentRouterHappyAgentForget(
+    router: HappyAgentRouter,
+    happyAgentId: string,
+    fallbackHappyAgentId: string,
+): void {
+    const changed = router.history.happyAgentForget(happyAgentId, fallbackHappyAgentId);
     if (changed && router.history.subscribers.size === 0)
         void router.load({ action: { type: "REPLACE" } });
 }

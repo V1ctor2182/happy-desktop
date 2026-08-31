@@ -247,6 +247,7 @@ export interface AppHappyAgentUpdate {
 /** One Happy Agent this window can address, with its own catalog and surface stores. */
 export interface AppHappyAgentEntry {
     readonly id: string;
+    readonly kind?: "local" | "remote";
     readonly label: string;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly message?: string;
@@ -266,6 +267,8 @@ export interface AppHappyAgentEntry {
      * a host with no live stores supplies no `session`.
      */
     readonly projectAdd?: HappyAgentProjectAddSnapshot;
+    /** Whether this window can choose a native directory on this Happy Agent's Mac. */
+    readonly projectAddSupported?: boolean;
     /** The live stores for this Happy Agent, present once its connection is up. */
     readonly session?: AppHappyAgentSession;
 }
@@ -1344,7 +1347,9 @@ function happyAgentProjectsSection(
                 ...happyAgentSidebarItemAvailability(item, happyAgent),
             })),
         // Project creation belongs to the Happy Agent named by this section.
-        ...(happyAgent.status === "connected" && happyAgent.session
+        ...(happyAgent.status === "connected" &&
+        happyAgent.session &&
+        happyAgent.projectAddSupported !== false
             ? {
                   action: {
                       busy: happyAgent.projectAdd?.pending === true,
@@ -1366,7 +1371,10 @@ function happyAgentProjectsSection(
                   empty:
                       happyAgent.status === "connected"
                           ? {
-                                description: "Choose a repository folder on this Mac.",
+                                description:
+                                    happyAgent.projectAddSupported === false
+                                        ? "Add projects from Happy Desktop on this Mac."
+                                        : "Choose a repository folder on this Mac.",
                                 icon: "plus" as const,
                                 title: "No projects yet",
                             }
@@ -1739,7 +1747,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 const workspace = happyAgent.session?.workspace;
-                if (!workspace) return;
+                if (!workspace || happyAgent.projectAddSupported === false) return;
                 workspace.projectAdd();
             }}
             onItemMenuSelect={(item, actionId) => {
@@ -2023,6 +2031,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     chatId={props.chatId}
                     clock={active.session.clock}
                     groupId={props.groupId}
+                    happyAgentId={active.id}
                     key={active.id}
                     onChatSelect={(groupId, chatId, replace) =>
                         props.onChatSelect(active.id, groupId, chatId, replace)
@@ -2036,6 +2045,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     }
                     platform={props.platform}
                     projects={active.projects}
+                    projectAddSupported={active.projectAddSupported !== false}
                     happyAgentOnline={activeHappyAgentOnline}
                     titleShimmerEnabled={titleShimmerEnabled}
                     viewerId={viewerId}
@@ -2774,6 +2784,10 @@ interface HappyAgentWorkspaceSurfaceProps {
     happyAgentOnline: () => boolean;
     /** Joined conversation-list + active-conversation product store. */
     workspace: HappyAgentWorkspaceStore;
+    /** Stable owner used to route browser tunnels through the correct Mac. */
+    happyAgentId: string;
+    /** Whether this host can show a native directory picker for this workspace. */
+    projectAddSupported: boolean;
     /**
      * The Happy Agent's projects, for the surfaces that address a project the window is
      * not currently open on — the settings dialog reached from any row.
@@ -3317,6 +3331,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         browserContent={props.browserContent}
                         htmlPreview={props.htmlPreview}
                         mediaWindow={props.mediaWindow}
+                        happyAgentId={props.happyAgentId}
                         sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
@@ -3858,6 +3873,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     persistent={
                                         <HappyAgentToolBodies
                                             activeId={workspace.displayedMainViewId}
+                                            happyAgentId={props.happyAgentId}
                                             {...(props.browserContent
                                                 ? { browserContent: props.browserContent }
                                                 : {})}
@@ -3906,7 +3922,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         /* Keep project setup in the main empty pane: the sidebar
                            explains why it is empty without repeating this action. */
                         <EmptyState
-                            {...(availability.online
+                            {...(availability.online && props.projectAddSupported
                                 ? {
                                       action: {
                                           label: "Add project",
@@ -3915,7 +3931,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                       },
                                   }
                                 : {})}
-                            description="Pick one in the sidebar, or add a project."
+                            description={
+                                props.projectAddSupported
+                                    ? "Pick one in the sidebar, or add a project."
+                                    : "Pick a project in the sidebar. Add projects from Happy Desktop on this Mac."
+                            }
                             icon="files"
                             size="panel"
                             title="No project open"
@@ -5368,6 +5388,7 @@ function HappyAgentPanelBody(props: {
     /** Owning Happy Agent availability applied to every retained terminal tab. */
     happyAgentAvailability?: "reconnecting" | "unavailable";
     happyAgentAvailabilityReason?: string;
+    happyAgentId: string;
     scope: HappyAgentFileScope;
     sessionId?: string;
     selectedPath?: string;
@@ -5548,6 +5569,7 @@ function HappyAgentPanelBody(props: {
                 >
                     <HappyAgentToolBodies
                         activeId={props.panel.activeViewId}
+                        happyAgentId={props.happyAgentId}
                         {...(props.browserContent ? { browserContent: props.browserContent } : {})}
                         {...(props.sessionId ? { sessionId: props.sessionId } : {})}
                         store={props.store}
@@ -5716,6 +5738,7 @@ function HappyAgentToolBodies(props: {
     activeId: string | undefined;
     store: HappyAgentPanelStore;
     browserContent?: BrowserContentRenderer;
+    happyAgentId: string;
     /** Owning Happy Agent availability applied to retained terminal tabs. */
     happyAgentAvailability?: "reconnecting" | "unavailable";
     happyAgentAvailabilityReason?: string;
@@ -5745,6 +5768,7 @@ function HappyAgentToolBodies(props: {
                                 ? (browserProps) =>
                                       props.browserContent!({
                                           ...browserProps,
+                                          happyAgentId: props.happyAgentId,
                                           sessionId: props.sessionId,
                                       })
                                 : undefined

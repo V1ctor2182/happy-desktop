@@ -63,6 +63,8 @@ import {
     type HappyAgentEncryption,
     type HappyAgentEncryptionSecret,
     type HappyAgentProviderRow,
+    type HappyAgentRemoteMacMountInput,
+    type HappyAgentRemoteMacSnapshot,
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
@@ -268,6 +270,32 @@ export interface AppHappyAgentProfilerStore {
     subscribe(listener: () => void): () => void;
 }
 
+/** Framework-neutral adapter for the native personal-Tailnet capability. */
+export interface AppPersonalRemoteMacStore {
+    get(): HappyAgentRemoteMacSnapshot | undefined;
+    subscribe(listener: () => void): () => void;
+    /** Keeps interface-only state current while the settings surface is visible. */
+    settingsSubscribe(listener: () => void): () => void;
+    mountWrite(input: HappyAgentRemoteMacMountInput): Promise<void>;
+    mountRemove(): Promise<void>;
+    retry(): Promise<void>;
+    shareEnable(input: { readonly bindAddress: string }): Promise<void>;
+    shareDisable(): Promise<void>;
+    shareRotate(): Promise<void>;
+}
+
+const personalRemoteMacStoreNoop: AppPersonalRemoteMacStore = {
+    get: () => undefined,
+    subscribe: () => () => undefined,
+    settingsSubscribe: () => () => undefined,
+    mountWrite: () => Promise.resolve(),
+    mountRemove: () => Promise.resolve(),
+    retry: () => Promise.resolve(),
+    shareEnable: () => Promise.resolve(),
+    shareDisable: () => Promise.resolve(),
+    shareRotate: () => Promise.resolve(),
+};
+
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     debug: "Inspect live state, Happy and Happy Agent debugger endpoints, and renderer profiles",
     general: "How this window looks and what a new session starts with",
@@ -298,6 +326,8 @@ export interface AppHappyAgentSettingsViewProps {
     /** Every Happy Agent in this window, including the one whose catalog is read. */
     debug?: AppHappyAgentDebugStore;
     profiler?: AppHappyAgentProfilerStore;
+    /** Native personal-Tailnet controls, absent in browser-only hosts. */
+    personalRemoteMac?: AppPersonalRemoteMacStore;
     happyAgents: AppHappyAgentDirectoryStore;
     onClose(): void;
     onCategorySelect(id: string): void;
@@ -342,6 +372,25 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         props.happyAgents.get,
         props.happyAgents.get,
     );
+    const personalRemoteMacStore = props.personalRemoteMac ?? personalRemoteMacStoreNoop;
+    const personalRemoteMac = useSyncExternalStore(
+        personalRemoteMacStore.settingsSubscribe,
+        personalRemoteMacStore.get,
+        personalRemoteMacStore.get,
+    );
+    const mountedRemoteMac = personalRemoteMac?.mount
+        ? directory.happyAgents.find((happyAgent) => happyAgent.id === personalRemoteMac.mount?.id)
+        : undefined;
+    const personalRemoteMacView: HappyAgentRemoteMacSnapshot | undefined = personalRemoteMac?.mount
+        ? {
+              ...personalRemoteMac,
+              mount: {
+                  ...personalRemoteMac.mount,
+                  status: mountedRemoteMac?.status ?? "connecting",
+                  ...(mountedRemoteMac?.message ? { message: mountedRemoteMac.message } : {}),
+              },
+          }
+        : personalRemoteMac;
     const host = hostHappyAgent(directory);
     const hostAvailability = host?.session
         ? happyAgentAvailabilityProject(host.session.connection.get(), true, {
@@ -885,6 +934,20 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         label: happyAgentPermissionLabel(mode),
                         value: mode,
                     }))}
+                    {...(personalRemoteMacView
+                        ? {
+                              remoteMac: {
+                                  snapshot: personalRemoteMacView,
+                                  onMountRemove: () => personalRemoteMacStore.mountRemove(),
+                                  onMountWrite: (input) => personalRemoteMacStore.mountWrite(input),
+                                  onRetry: () => personalRemoteMacStore.retry(),
+                                  onShareDisable: () => personalRemoteMacStore.shareDisable(),
+                                  onShareEnable: (bindAddress) =>
+                                      personalRemoteMacStore.shareEnable({ bindAddress }),
+                                  onShareRotate: () => personalRemoteMacStore.shareRotate(),
+                              },
+                          }
+                        : {})}
                     scrollbarVisibility={appearance.scrollbarVisibility}
                     titleShimmerEnabled={titleShimmer.titleShimmerEnabled}
                     {...(unavailable === undefined ? {} : { unavailable })}

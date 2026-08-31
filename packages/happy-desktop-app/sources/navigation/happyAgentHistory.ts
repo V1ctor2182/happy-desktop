@@ -62,6 +62,8 @@ export interface HappyAgentRouterHistory extends RouterHistory {
      * can go without disturbing where they stand.
      */
     groupForget(happyAgentId: string, groupId: string): boolean;
+    /** Removes every remembered place owned by one unmounted Happy Agent. */
+    happyAgentForget(happyAgentId: string, fallbackHappyAgentId: string): boolean;
 }
 
 function locationOf(route: HappyAgentRoute, state: LocationState): HistoryLocation {
@@ -757,5 +759,10 @@ export function happyAgentHistoryCreate(
                 (route) => happyAgentRouteInGroup(route, happyAgentId, groupId),
                 HAPPY_AGENT_ROUTE_HOME,
             ),
+        happyAgentForget: (happyAgentId: string, fallbackHappyAgentId: string): boolean =>
+            forget((route) => "happyAgentId" in route && route.happyAgentId === happyAgentId, {
+                kind: "happyAgent",
+                happyAgentId: fallbackHappyAgentId,
+            }),
     });
 }

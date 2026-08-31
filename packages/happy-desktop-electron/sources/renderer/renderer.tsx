@@ -7,6 +7,7 @@ import {
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
     happyAgentRouterGroupForget,
+    happyAgentRouterHappyAgentForget,
     happyAgentRouterCreate,
     type AppHappyAgentDaemonInstall,
     type AppHappyAgentDaemonStore,
@@ -87,6 +88,10 @@ import { desktopHistoryPersistence } from "./desktopHistory";
 import { desktopDebugStoreCreate } from "./desktopDebugStore";
 import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
+import {
+    personalRemoteMacStoreCreate,
+    type PersonalRemoteMacStore,
+} from "./personalRemoteMacStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import {
@@ -236,6 +241,7 @@ function HappyAgentBoundary(props: {
     daemon?: AppHappyAgentDaemonStore;
     debug: AppHappyAgentDebugStore;
     profiler: AppHappyAgentProfilerStore;
+    personalRemoteMac?: PersonalRemoteMacStore;
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
@@ -264,6 +270,7 @@ function HappyAgentBoundary(props: {
                 ...(props.daemon ? { daemon: props.daemon } : {}),
                 debug: props.debug,
                 profiler: props.profiler,
+                ...(props.personalRemoteMac ? { personalRemoteMac: props.personalRemoteMac } : {}),
                 htmlPreview: props.htmlPreview,
                 mediaWindow: props.mediaWindow,
                 ...(update
@@ -416,6 +423,7 @@ interface DesktopRendererProps {
     daemon?: AppHappyAgentDaemonStore;
     debug: AppHappyAgentDebugStore;
     profiler: AppHappyAgentProfilerStore;
+    personalRemoteMac?: PersonalRemoteMacStore;
     onboarding: LocalOnboardingStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
@@ -828,6 +836,9 @@ function DesktopRuntimeContent(
                     {...(props.daemon ? { daemon: props.daemon } : {})}
                     debug={props.debug}
                     profiler={props.profiler}
+                    {...(props.personalRemoteMac
+                        ? { personalRemoteMac: props.personalRemoteMac }
+                        : {})}
                     browserContent={props.browserContent}
                     htmlPreview={props.htmlPreview}
                     mediaWindow={props.mediaWindow}
@@ -1097,19 +1108,33 @@ if (mediaPreviewBridge) {
         // told to resolve its address again whenever the set of connected Happy Agents
         // changes, so a machine that connects after the URL already named it opens
         // the addressed conversation without the reader navigating twice.
-        const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
-            conversationOpen: (happyAgentId, location) =>
-                happyAgentRouterConversationOpen(happyAgentRouter, happyAgentId, location),
-            groupOpen: (happyAgentId, groupId) =>
-                happyAgentRouterGroupOpen(happyAgentRouter, happyAgentId, groupId),
-            groupForget: (happyAgentId, groupId) =>
-                happyAgentRouterGroupForget(happyAgentRouter, happyAgentId, groupId),
-            modelPreferencePersistence: preferences.preferencePersistence,
-            // A shell is told which background it is drawing on when it starts and
-            // never hears about it again, so every terminal takes the appearance
-            // showing at the moment it is opened and keeps it.
-            terminalColorScheme: () => appearance.get().appearance,
-        });
+        const personalRemoteMac = browserLocal
+            ? undefined
+            : personalRemoteMacStoreCreate(desktopBridge);
+        const happyAgents = happyAgentDirectoryStoreCreate(
+            desktopBridge,
+            runtimeStore,
+            personalRemoteMac,
+            {
+                conversationOpen: (happyAgentId, location) =>
+                    happyAgentRouterConversationOpen(happyAgentRouter, happyAgentId, location),
+                groupOpen: (happyAgentId, groupId) =>
+                    happyAgentRouterGroupOpen(happyAgentRouter, happyAgentId, groupId),
+                groupForget: (happyAgentId, groupId) =>
+                    happyAgentRouterGroupForget(happyAgentRouter, happyAgentId, groupId),
+                happyAgentForget: (happyAgentId) =>
+                    happyAgentRouterHappyAgentForget(
+                        happyAgentRouter,
+                        happyAgentId,
+                        LOCAL_HAPPY_AGENT_ID,
+                    ),
+                modelPreferencePersistence: preferences.preferencePersistence,
+                // A shell is told which background it is drawing on when it starts and
+                // never hears about it again, so every terminal takes the appearance
+                // showing at the moment it is opened and keeps it.
+                terminalColorScheme: () => appearance.get().appearance,
+            },
+        );
         let materialized = "";
         appDisposers.push(
             happyAgents.subscribe(() => {
@@ -1144,6 +1169,7 @@ if (mediaPreviewBridge) {
                         {...(daemon ? { daemon } : {})}
                         debug={debug}
                         profiler={profiler}
+                        {...(personalRemoteMac ? { personalRemoteMac } : {})}
                         onboarding={onboardingStore}
                         browserContent={browserLocal ? undefined : desktopBrowserContentRender}
                         htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}

@@ -28,6 +28,7 @@ import { HappyAgentClient } from "@slopus/happy-agent-client";
 import type { LocalHappyAgentOnboardingState, LocalHappyAgentProfile } from "./localOnboarding";
 import {
     happyAgentDaemonConnectionUnavailable,
+    type HappyAgentDaemonClient,
     type HappyAgentDaemonInspectorResponse,
     type HappyAgentDaemonInspectorStopResponse,
 } from "./happyAgentDaemonClient";
@@ -39,6 +40,18 @@ export type HappyAgentHttpProxyStart = (
     connection: LocalHappyAgentConnection,
     onConnectionError: (error: unknown) => void,
 ) => Promise<HappyAgentHttpProxyHandle>;
+
+/** Main-only daemon surface shared with B's optional Tailnet listener. */
+export type DesktopLocalHappyAgentBacking = Pick<
+    HappyAgentDaemonClient,
+    | "attachTerminal"
+    | "getWorkspace"
+    | "health"
+    | "openWorkspaceHttpProxy"
+    | "rawRequest"
+    | "readWorkspaceFile"
+    | "writeWorkspaceFile"
+>;
 
 const idleUpdate: DesktopUpdateSnapshot = { status: "idle" };
 /**
@@ -79,6 +92,9 @@ export class DesktopRuntime implements AsyncDisposable {
     private closed = false;
     private closeTask?: Promise<void>;
     private readonly listeners = new Set<(snapshot: DesktopRuntimeSnapshot) => void>();
+    private readonly backingListeners = new Set<
+        (backing: DesktopLocalHappyAgentBacking | undefined) => void
+    >();
     private operation = Promise.resolve();
     private persistOnSuccess = false;
     private reconnectTask?: Promise<void>;
@@ -150,6 +166,17 @@ export class DesktopRuntime implements AsyncDisposable {
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
+    }
+
+    localBackingGet(): DesktopLocalHappyAgentBacking | undefined {
+        return this.happyAgentConnection?.client;
+    }
+
+    localBackingSubscribe(
+        listener: (backing: DesktopLocalHappyAgentBacking | undefined) => void,
+    ): () => void {
+        this.backingListeners.add(listener);
+        return () => this.backingListeners.delete(listener);
     }
 
     localInspectorStart(expectedConnectionId: number): Promise<HappyAgentDaemonInspectorResponse> {
@@ -355,6 +382,7 @@ export class DesktopRuntime implements AsyncDisposable {
             }
             this.happyAgentConnection = replacement;
             this.happyAgentClient = undefined;
+            this.backingPublish();
             failedConnection.close();
             const snapshot = this.snapshotValue;
             if (snapshot.phase === "ready") {
@@ -483,6 +511,7 @@ export class DesktopRuntime implements AsyncDisposable {
                 return;
             }
             this.happyAgentProxy = proxy;
+            this.backingPublish();
             const happyAgentVersion = connection.version;
             const happyAgentHttpUrl = proxy.url;
             if (this.persistOnSuccess) {
@@ -525,11 +554,18 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     private localDispose(): void {
+        const connection = this.happyAgentConnection;
         this.happyAgentClient = undefined;
         this.happyAgentProxy?.close();
         this.happyAgentProxy = undefined;
-        this.happyAgentConnection?.close();
         this.happyAgentConnection = undefined;
+        this.backingPublish();
+        connection?.close();
+    }
+
+    private backingPublish(): void {
+        const backing = this.localBackingGet();
+        for (const listener of this.backingListeners) listener(backing);
     }
 
     private publish(snapshot: DesktopRuntimeSnapshot): void {

@@ -569,6 +569,13 @@ export {
     type HappyAgentScrollbarVisibilityChoice,
 } from "./pages/settings/HappyAgentGeneralSettings";
 export {
+    HappyAgentRemoteMacSettings,
+    type HappyAgentRemoteMacConfirmation,
+    type HappyAgentRemoteMacMountInput,
+    type HappyAgentRemoteMacSettingsProps,
+    type HappyAgentRemoteMacSnapshot,
+} from "./pages/settings/HappyAgentRemoteMacSettings";
+export {
     HappySocialSetupModal,
     type HappySocialSetupModalProps,
 } from "./pages/settings/HappySocialSetupModal";

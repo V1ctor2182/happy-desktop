@@ -5,17 +5,22 @@
 
 import type { DesktopBrowserProxyTarget } from "../shared/desktopContract";
 
-/** The local session a browser tunnel is asked for. */
+/** The Happy Agent and session a browser tunnel is asked for. */
 export function desktopBrowserProxyTargetValidate(value: unknown): DesktopBrowserProxyTarget {
     if (typeof value !== "object" || value === null)
         throw new Error("The Happy Agent browser target is invalid.");
-    const target = value as { readonly sessionId?: unknown };
+    const target = value as { readonly happyAgentId?: unknown; readonly sessionId?: unknown };
+    const happyAgentId = boundedString(
+        target.happyAgentId,
+        "The Happy Agent browser owner identity",
+        256,
+    );
     const sessionId = boundedString(
         target.sessionId,
         "The Happy Agent browser session identity",
         256,
     );
-    return { sessionId };
+    return { happyAgentId, sessionId };
 }
 
 export function happyAgentTerminalInputValidate(value: unknown): string {

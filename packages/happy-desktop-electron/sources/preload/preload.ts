@@ -11,6 +11,7 @@ import {
     type DesktopDaemonSnapshot,
     type DesktopGuestKeyEvent,
     type DesktopMediaPreview,
+    type DesktopPersonalRemoteMacSnapshot,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
     type DesktopWindowState,
@@ -162,6 +163,24 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.profilerReactCommand, receive);
         return () => ipcRenderer.removeListener(desktopIpc.profilerReactCommand, receive);
     },
+    personalRemoteMacGet: () => ipcRenderer.invoke(desktopIpc.personalRemoteMacGet),
+    personalRemoteMacSubscribe(listener: (snapshot: DesktopPersonalRemoteMacSnapshot) => void) {
+        const receive = (
+            _event: Electron.IpcRendererEvent,
+            snapshot: DesktopPersonalRemoteMacSnapshot,
+        ) => listener(snapshot);
+        ipcRenderer.on(desktopIpc.personalRemoteMacChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.personalRemoteMacChanged, receive);
+    },
+    personalRemoteMacShareEnable: (request) =>
+        ipcRenderer.invoke(desktopIpc.personalRemoteMacShareEnable, request),
+    personalRemoteMacShareDisable: () =>
+        ipcRenderer.invoke(desktopIpc.personalRemoteMacShareDisable),
+    personalRemoteMacShareRotate: () => ipcRenderer.invoke(desktopIpc.personalRemoteMacShareRotate),
+    personalRemoteMacRetry: () => ipcRenderer.invoke(desktopIpc.personalRemoteMacRetry),
+    personalRemoteMacMountWrite: (request) =>
+        ipcRenderer.invoke(desktopIpc.personalRemoteMacMountWrite, request),
+    personalRemoteMacMountRemove: () => ipcRenderer.invoke(desktopIpc.personalRemoteMacMountRemove),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
     onboardingGet: () => ipcRenderer.invoke(desktopIpc.onboardingGet),
     onboardingSubscribe(listener: (snapshot: LocalOnboardingSnapshot) => void) {

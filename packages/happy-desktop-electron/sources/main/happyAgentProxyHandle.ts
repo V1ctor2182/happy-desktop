@@ -26,6 +26,8 @@ export interface HappyAgentProxyHandleOptions {
     readonly onConnectionError?: (error: unknown) => void;
     /** Publishes one workspace file as an isolated local preview site. */
     readonly htmlPreviewUrl?: (workspaceId: string, filePath: string) => string;
+    /** False when host workspaces and their native paths live on another Mac. */
+    readonly nativeHost?: boolean;
 }
 
 /**
@@ -74,10 +76,16 @@ export async function happyAgentProxyHandle(
             return true;
         }
         if (method === "GET" && path === "/open-in-targets") {
-            writeJson(response, 200, await openInTargetsRead());
+            writeJson(response, 200, options.nativeHost === false ? [] : await openInTargetsRead());
             return true;
         }
         if (method === "POST" && path === "/open-in") {
+            if (options.nativeHost === false) {
+                writeJson(response, 501, {
+                    error: "Files on a remote Mac cannot be opened by applications on this Mac.",
+                });
+                return true;
+            }
             const body = await bodyReadJson(request);
             const workspaceId = requiredString(body.workspaceId, "workspaceId");
             const target = requiredString(body.target, "target");
@@ -105,11 +113,14 @@ export async function happyAgentProxyHandle(
         if (method === "POST" && path === "/attachment-source-reachable") {
             const body = await bodyReadJson(request);
             writeJson(response, 200, {
-                reachable: await attachmentSourceReachable(
-                    client,
-                    requiredString(body.workspaceId, "workspaceId"),
-                    requiredString(body.sourcePath, "sourcePath"),
-                ),
+                reachable:
+                    options.nativeHost === false
+                        ? false
+                        : await attachmentSourceReachable(
+                              client,
+                              requiredString(body.workspaceId, "workspaceId"),
+                              requiredString(body.sourcePath, "sourcePath"),
+                          ),
             });
             return true;
         }

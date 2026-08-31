@@ -7,6 +7,10 @@ import { Select, type SelectOption } from "../../Select";
 import { Spinner } from "../../Spinner";
 import { Switch } from "../../Switch";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import {
+    HappyAgentRemoteMacSettings,
+    type HappyAgentRemoteMacSettingsProps,
+} from "./HappyAgentRemoteMacSettings";
 
 export type HappyAgentAppearanceChoice = "system" | "light" | "dark";
 export type HappyAgentScrollbarVisibilityChoice = "always" | "automatic";
@@ -32,6 +36,8 @@ export type HappyAgentGeneralSettingsProps = {
     experimentalFeaturesEnabled: boolean;
     /** Whether active session, project, and workspace titles shimmer. */
     titleShimmerEnabled: boolean;
+    /** Native personal-Tailnet controls; absent in hosts without this capability. */
+    remoteMac?: HappyAgentRemoteMacSettingsProps;
     /** The managed Happy Agent installation, absent outside the native desktop shell. */
     agent?: {
         availableVersion?: string;
@@ -351,6 +357,12 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                         label="Daemon"
                     />
                 </HappyAgentSettingsSection>
+            ) : null}
+            {props.remoteMac ? (
+                <HappyAgentRemoteMacSettings
+                    key={props.remoteMac.snapshot.mount?.id ?? "unmounted"}
+                    {...props.remoteMac}
+                />
             ) : null}
             <HappyAgentSettingsSection
                 description="Work that is still being built. It can change or disappear between releases."

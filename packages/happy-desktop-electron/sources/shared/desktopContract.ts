@@ -6,6 +6,7 @@ import type {
 } from "./desktopProfiler";
 
 export type DesktopMode = "local";
+export const desktopLocalHappyAgentId = "local";
 
 /** Appearance source the Electron shell applies to every local renderer and guest. */
 export type DesktopAppearanceMode = "dark" | "light" | "system";
@@ -53,6 +54,53 @@ export interface DesktopConfig {
     readonly scrollbarVisibility: DesktopScrollbarVisibility;
     readonly titleShimmerEnabled?: boolean;
     readonly version: 1;
+}
+
+/** One literal Tailscale IPv4 currently assigned to this Mac. */
+export interface DesktopTailnetAddress {
+    readonly address: string;
+    readonly interface: string;
+}
+
+/** B's listener as projected without its reusable credential or digest. */
+export interface DesktopPersonalRemoteMacShareSnapshot {
+    readonly bindAddress?: string;
+    readonly enabled: boolean;
+    readonly message?: string;
+    readonly port?: number;
+    readonly status: "disabled" | "starting" | "listening" | "retrying" | "error";
+}
+
+/** The one B mount A has configured; its credential remains main-process-only. */
+export interface DesktopPersonalRemoteMacMountSnapshot {
+    readonly address: string;
+    readonly credentialConfigured: true;
+    readonly generation: number;
+    readonly happyAgentHttpUrl: string;
+    readonly id: string;
+    readonly label: string;
+    readonly port: number;
+    readonly sourceAddress: string;
+}
+
+/** Machine-local direct-Tailscale feature state for this personal build. */
+export interface DesktopPersonalRemoteMacSnapshot {
+    readonly mount?: DesktopPersonalRemoteMacMountSnapshot;
+    readonly share: DesktopPersonalRemoteMacShareSnapshot;
+    readonly tailnetAddresses: readonly DesktopTailnetAddress[];
+}
+
+export interface DesktopPersonalRemoteMacShareEnableRequest {
+    readonly bindAddress: string;
+}
+
+export interface DesktopPersonalRemoteMacMountWriteRequest {
+    readonly address: string;
+    readonly label: string;
+    readonly port: number;
+    readonly sourceAddress: string;
+    /** Omit to retain the configured credential when the B endpoint is unchanged. */
+    readonly token?: string;
 }
 
 export type DesktopStartRequest = { mode: "local" };
@@ -528,8 +576,9 @@ export interface DesktopBrowserStatus {
     readonly statusText: string;
 }
 
-/** Which local session's network a browser guest browses through. */
+/** Which Happy Agent session's network a browser guest browses through. */
 export interface DesktopBrowserProxyTarget {
+    readonly happyAgentId: string;
     readonly sessionId: string;
 }
 
@@ -714,6 +763,20 @@ export interface HappyDesktopBridge {
     /** Private typed Wall transport used by the profile renderer bootstrap. */
     profilerReactMessage(message: DesktopReactDevtoolsMessage): void;
     profilerReactSubscribe(listener: (command: DesktopReactDevtoolsCommand) => void): () => void;
+    personalRemoteMacGet(): Promise<DesktopPersonalRemoteMacSnapshot>;
+    personalRemoteMacSubscribe(
+        listener: (snapshot: DesktopPersonalRemoteMacSnapshot) => void,
+    ): () => void;
+    /** Enables B's listener and copies the newly generated one-time token. */
+    personalRemoteMacShareEnable(
+        request: DesktopPersonalRemoteMacShareEnableRequest,
+    ): Promise<void>;
+    personalRemoteMacShareDisable(): Promise<void>;
+    /** Invalidates the old token and copies the replacement. */
+    personalRemoteMacShareRotate(): Promise<void>;
+    personalRemoteMacRetry(): Promise<void>;
+    personalRemoteMacMountWrite(request: DesktopPersonalRemoteMacMountWriteRequest): Promise<void>;
+    personalRemoteMacMountRemove(): Promise<void>;
     applicationMenuOpen(): Promise<void>;
     /** Where local first-run setup stands, without waiting for its next change. */
     onboardingGet(): Promise<LocalOnboardingSnapshot>;
@@ -812,6 +875,14 @@ export const desktopIpc = {
     profilerChanged: "happy:profiler:changed",
     profilerReactCommand: "happy:profiler:react-command",
     profilerReactMessage: "happy:profiler:react-message",
+    personalRemoteMacChanged: "happy:personal-remote-mac:changed",
+    personalRemoteMacGet: "happy:personal-remote-mac:get",
+    personalRemoteMacMountRemove: "happy:personal-remote-mac:mount-remove",
+    personalRemoteMacMountWrite: "happy:personal-remote-mac:mount-write",
+    personalRemoteMacRetry: "happy:personal-remote-mac:retry",
+    personalRemoteMacShareDisable: "happy:personal-remote-mac:share-disable",
+    personalRemoteMacShareEnable: "happy:personal-remote-mac:share-enable",
+    personalRemoteMacShareRotate: "happy:personal-remote-mac:share-rotate",
     applicationMenuOpen: "happy:application-menu:open",
     onboardingAssistantsContinue: "happy:onboarding:assistants-continue",
     onboardingChanged: "happy:onboarding:changed",

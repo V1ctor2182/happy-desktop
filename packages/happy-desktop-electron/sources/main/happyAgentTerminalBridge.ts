@@ -37,6 +37,8 @@ export interface HappyAgentTerminalBridgeOptions {
      * origin; anything else is refused.
      */
     readonly allowedOrigin?: string;
+    /** Main-process authentication for a non-browser bridge such as the Tailnet listener. */
+    readonly authorize?: (request: IncomingMessage) => boolean;
 }
 
 export interface HappyAgentTerminalBridge {
@@ -86,11 +88,13 @@ export function happyAgentTerminalBridgeCreate(
             if (
                 (options.expectedHost !== undefined &&
                     request.headers.host !== options.expectedHost()) ||
-                !originAllowed(
-                    request.headers.origin,
-                    options.allowedOrigin,
-                    options.capability !== undefined,
-                ) ||
+                (options.authorize !== undefined
+                    ? !options.authorize(request)
+                    : !originAllowed(
+                          request.headers.origin,
+                          options.allowedOrigin,
+                          options.capability !== undefined,
+                      )) ||
                 (options.capability !== undefined &&
                     !protocols.includes(
                         `${HAPPY_AGENT_TERMINAL_CAPABILITY_PROTOCOL_PREFIX}${options.capability}`,

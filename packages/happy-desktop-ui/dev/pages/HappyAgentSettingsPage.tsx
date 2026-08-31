@@ -11,6 +11,7 @@ import {
     HappyAgentProviderSettings,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
+    HappyAgentRemoteMacSettings,
     HappyAgentSecretSettings,
     HappyAgentSettingsShell,
     HappyAgentUsageSettings,
@@ -420,6 +421,7 @@ const secrets: readonly HappyAgentSecretRow[] = [
 ];
 
 const noop = () => undefined;
+const promiseNoop = () => Promise.resolve();
 
 /**
  * The Happy Social row is the specimen here, so every fixture keeps the join
@@ -515,8 +517,137 @@ export function HappyAgentSettingsBlueprintPage() {
                         onTitleShimmerChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
+                        remoteMac={{
+                            snapshot: {
+                                mount: {
+                                    address: "100.88.40.12",
+                                    credentialConfigured: true,
+                                    id: "remote-blueprint",
+                                    label: "Studio Mac",
+                                    port: 43127,
+                                    sourceAddress: "100.93.11.4",
+                                    status: "connected",
+                                },
+                                share: {
+                                    bindAddress: "100.93.11.4",
+                                    enabled: true,
+                                    port: 44831,
+                                    status: "listening",
+                                },
+                                tailnetAddresses: [{ address: "100.93.11.4", interface: "utun7" }],
+                            },
+                            onMountRemove: promiseNoop,
+                            onMountWrite: promiseNoop,
+                            onRetry: promiseNoop,
+                            onShareDisable: promiseNoop,
+                            onShareEnable: promiseNoop,
+                            onShareRotate: promiseNoop,
+                        }}
                         scrollbarVisibility="automatic"
                         titleShimmerEnabled={false}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Remote Mac resting state: sharing is off and no other Mac is mounted"
+                label="Happy Agent settings — Remote Mac disabled"
+                number="01r"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="general"
+                    categories={categories}
+                    description="How this window looks and what a new session starts with"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="General"
+                >
+                    <HappyAgentRemoteMacSettings
+                        snapshot={{
+                            share: { enabled: false, status: "disabled" },
+                            tailnetAddresses: [{ address: "100.93.11.4", interface: "utun7" }],
+                        }}
+                        onMountRemove={promiseNoop}
+                        onMountWrite={promiseNoop}
+                        onRetry={promiseNoop}
+                        onShareDisable={promiseNoop}
+                        onShareEnable={promiseNoop}
+                        onShareRotate={promiseNoop}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Remote Mac recovery state: the mount remains in place while both the listener and remote connection wait for Tailscale"
+                label="Happy Agent settings — Remote Mac unreachable"
+                number="01s"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="general"
+                    categories={categories}
+                    description="How this window looks and what a new session starts with"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="General"
+                >
+                    <HappyAgentRemoteMacSettings
+                        snapshot={{
+                            mount: {
+                                address: "100.88.40.12",
+                                credentialConfigured: true,
+                                id: "remote-unreachable-blueprint",
+                                label: "Studio Mac",
+                                message: "No route to the other Mac.",
+                                port: 43127,
+                                sourceAddress: "100.93.11.4",
+                                status: "disconnected",
+                            },
+                            share: {
+                                bindAddress: "100.93.11.4",
+                                enabled: true,
+                                message: "The Tailscale interface disappeared.",
+                                port: 44831,
+                                status: "retrying",
+                            },
+                            tailnetAddresses: [],
+                        }}
+                        onMountRemove={promiseNoop}
+                        onMountWrite={promiseNoop}
+                        onRetry={promiseNoop}
+                        onShareDisable={promiseNoop}
+                        onShareEnable={promiseNoop}
+                        onShareRotate={promiseNoop}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Remote Mac risky transition: rotation explains the immediate disconnect and one-time clipboard handoff before it proceeds"
+                label="Happy Agent settings — rotate Remote Mac token"
+                number="01t"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="general"
+                    categories={categories}
+                    description="How this window looks and what a new session starts with"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="General"
+                >
+                    <HappyAgentRemoteMacSettings
+                        initialConfirmation="share-rotate"
+                        snapshot={{
+                            share: {
+                                bindAddress: "100.93.11.4",
+                                enabled: true,
+                                port: 44831,
+                                status: "listening",
+                            },
+                            tailnetAddresses: [{ address: "100.93.11.4", interface: "utun7" }],
+                        }}
+                        onMountRemove={promiseNoop}
+                        onMountWrite={promiseNoop}
+                        onRetry={promiseNoop}
+                        onShareDisable={promiseNoop}
+                        onShareEnable={promiseNoop}
+                        onShareRotate={promiseNoop}
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
@@ -1242,6 +1373,34 @@ export function HappyAgentSettingsBlueprintPage() {
                         onTitleShimmerChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
+                        remoteMac={{
+                            snapshot: {
+                                mount: {
+                                    address: "100.88.40.12",
+                                    credentialConfigured: true,
+                                    id: "remote-offline-blueprint",
+                                    label: "Studio Mac",
+                                    message: "The remote Mac rejected the saved token.",
+                                    port: 43127,
+                                    sourceAddress: "100.93.11.4",
+                                    status: "error",
+                                },
+                                share: {
+                                    bindAddress: "100.93.11.4",
+                                    enabled: true,
+                                    message: "The Tailscale address is temporarily unavailable.",
+                                    port: 44831,
+                                    status: "error",
+                                },
+                                tailnetAddresses: [{ address: "100.93.11.4", interface: "utun7" }],
+                            },
+                            onMountRemove: promiseNoop,
+                            onMountWrite: promiseNoop,
+                            onRetry: promiseNoop,
+                            onShareDisable: promiseNoop,
+                            onShareEnable: promiseNoop,
+                            onShareRotate: promiseNoop,
+                        }}
                         scrollbarVisibility="automatic"
                         titleShimmerEnabled={false}
                         unavailable="Happy Agent is offline. Showing the last synced defaults."

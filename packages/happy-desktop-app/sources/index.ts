@@ -23,6 +23,7 @@ export {
     type AppHappyAgentProfilerCapabilities,
     type AppHappyAgentProfilerSnapshot,
     type AppHappyAgentProfilerStore,
+    type AppPersonalRemoteMacStore,
 } from "./views/AppHappyAgentSettingsView";
 export {
     happyAgentHistoryCreate,
@@ -35,6 +36,7 @@ export {
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
     happyAgentRouterGroupForget,
+    happyAgentRouterHappyAgentForget,
     happyAgentRouterCreate,
     type HappyAgentRouter,
     type HappyAgentRouterContext,

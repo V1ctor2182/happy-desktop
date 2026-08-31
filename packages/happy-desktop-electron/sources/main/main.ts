@@ -1,6 +1,7 @@
 import {
     app,
     BrowserWindow,
+    clipboard,
     dialog,
     ipcMain,
     Menu,
@@ -35,6 +36,7 @@ import {
 } from "./runtimeValidation";
 import {
     buildIdentityArgument,
+    desktopLocalHappyAgentId,
     desktopIpc,
     happyBrowserPartition,
     happyHtmlPreviewPartition,
@@ -79,6 +81,11 @@ import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
 import { cloudAuthProductionRedirectUri } from "../shared/cloudAuthConfig";
+import { PersonalRemoteMacManager } from "./personalRemoteMac/personalRemoteMacManager";
+import {
+    personalRemoteMacMountRequestValidate,
+    personalRemoteMacTailnetAddressRequireLocal,
+} from "./personalRemoteMac/personalRemoteMacSettings";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
     console.error("Happy Place desktop is available only on macOS, Linux, and Windows.");
@@ -263,12 +270,13 @@ let desktopDebugDaemonAttemptedConnectionId: number | undefined;
 let desktopProfilerController: DesktopProfilerController;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let onboarding: LocalOnboarding;
+let personalRemoteMac: PersonalRemoteMacManager;
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: HappyAgentBrowserProxyHandle | undefined;
 let htmlPreviewProxy: HtmlPreviewProxyHandle | undefined;
 let browserProxyConnectionId: number | undefined;
-/** Which local session the live tunnel was built for. */
+/** Which Happy Agent session the live tunnel was built for. */
 let browserProxyTarget: DesktopBrowserProxyTarget | undefined;
 let browserProxyOperation = Promise.resolve();
 // Automation needs a real laid-out window without taking focus from the work
@@ -335,6 +343,12 @@ function desktopDaemonSenderRequire(sender: WebContents): void {
     const presenting = windowLifecycle.get();
     if (!presenting || presenting.webContents !== sender)
         throw new Error("This window cannot control Happy Agent.");
+}
+
+function personalRemoteMacSenderRequire(sender: WebContents): void {
+    const presenting = windowLifecycle.get();
+    if (!presenting || presenting.isDestroyed() || presenting.webContents !== sender)
+        throw new Error("This window cannot configure a remote Mac.");
 }
 
 function desktopDebugSenderRequire(sender: WebContents): void {
@@ -498,36 +512,52 @@ function browserProxySerial<T>(work: () => Promise<T>): Promise<T> {
     return next;
 }
 
-/** Opens the daemon tunnel a browser tab's traffic goes through. */
-function browserProxyOpen(target: DesktopBrowserProxyTarget): Promise<Duplex> {
-    return runtime.openHttpProxy(target.sessionId);
+function browserProxyBacking(target: DesktopBrowserProxyTarget): {
+    readonly generation: number;
+    readonly open: () => Promise<Duplex>;
+} {
+    if (target.happyAgentId === desktopLocalHappyAgentId) {
+        const snapshot = runtime.get();
+        if (snapshot.phase !== "ready" || snapshot.mode !== "local")
+            throw new Error("The local Happy Agent daemon is unavailable.");
+        return {
+            generation: snapshot.connectionId,
+            open: () => runtime.openHttpProxy(target.sessionId),
+        };
+    }
+    const generation = personalRemoteMac.generation(target.happyAgentId);
+    if (generation === undefined) throw new Error("That remote Mac is not mounted.");
+    return {
+        generation,
+        open: () => personalRemoteMac.openHttpProxy(target.happyAgentId, target.sessionId),
+    };
 }
 
 function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
     return browserProxySerial(async () => {
-        const snapshot = runtime.get();
-        if (snapshot.phase !== "ready" || snapshot.mode !== "local")
-            throw new Error("The local Happy Agent daemon is unavailable.");
+        const backing = browserProxyBacking(target);
         if (
+            browserProxyTarget?.happyAgentId === target.happyAgentId &&
             browserProxyTarget?.sessionId === target.sessionId &&
-            browserProxyConnectionId === snapshot.connectionId
+            browserProxyConnectionId === backing.generation
         )
             return;
 
         await browserProxyFailClosed();
-        const connectionId = snapshot.connectionId;
+        const connectionId = backing.generation;
         const candidate = await happyAgentBrowserProxyCreate({
             sessionId: target.sessionId,
-            openHttpProxy: () => browserProxyOpen(target),
+            openHttpProxy: backing.open,
         });
-        const current = runtime.get();
-        if (
-            current.phase !== "ready" ||
-            current.mode !== "local" ||
-            current.connectionId !== connectionId
-        ) {
+        let current: ReturnType<typeof browserProxyBacking> | undefined;
+        try {
+            current = browserProxyBacking(target);
+        } catch {
+            current = undefined;
+        }
+        if (!current || current.generation !== connectionId) {
             candidate.close();
-            throw new Error("The local Happy Agent connection changed while opening the browser.");
+            throw new Error("The Happy Agent connection changed while opening the browser.");
         }
         try {
             const browserSession = browserSessionGet();
@@ -1032,6 +1062,7 @@ function mediaPreviewBases(): readonly (string | undefined)[] {
         snapshot.phase === "ready" && snapshot.activeTarget.authentication === "happyAgent"
             ? snapshot.activeTarget.happyAgentHttpUrl
             : undefined,
+        personalRemoteMac?.proxyUrl(),
     ];
 }
 
@@ -1382,6 +1413,36 @@ void app
                 ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
             },
         );
+        personalRemoteMac = await PersonalRemoteMacManager.create({
+            settingsPath: join(desktopRoot, "personal-remote-mac.json"),
+            localBackingGet: () => runtime.localBackingGet(),
+            localBackingSubscribe: (listener) => runtime.localBackingSubscribe(listener),
+            ...(rendererOrigin ? { rendererOrigin } : {}),
+            ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
+        });
+        personalRemoteMac.subscribe((snapshot) => {
+            const window = windowLifecycle.get();
+            if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+                window.webContents.send(desktopIpc.personalRemoteMacChanged, snapshot);
+            if (browserProxyTarget && browserProxyTarget.happyAgentId !== desktopLocalHappyAgentId)
+                void browserProxySerial(async () => {
+                    const target = browserProxyTarget;
+                    if (!target || target.happyAgentId === desktopLocalHappyAgentId) return;
+                    const generation = personalRemoteMac.generation(target.happyAgentId);
+                    if (generation === undefined) {
+                        await browserProxyFailClosed();
+                        return;
+                    }
+                    if (generation === browserProxyConnectionId) return;
+                    // The proxy's opener resolves the manager dynamically, so a
+                    // token/source update can keep its local endpoint. Closing
+                    // Chromium's pooled sockets makes the next request use the
+                    // replacement authenticated transport immediately.
+                    browserProxyConnectionId = generation;
+                    await browserSessionGet().closeAllConnections();
+                });
+            mediaPreviewRevalidate();
+        });
         const debugController = new DesktopDebugController({
             changed: desktopDebugPublish,
             daemon: () => {
@@ -1452,6 +1513,7 @@ void app
             desktopDebugRuntimeLog(snapshot);
             if (
                 browserProxyConnectionId !== undefined &&
+                browserProxyTarget?.happyAgentId === desktopLocalHappyAgentId &&
                 (snapshot.phase !== "ready" ||
                     snapshot.mode !== "local" ||
                     snapshot.connectionId !== browserProxyConnectionId)
@@ -1473,6 +1535,56 @@ void app
         });
         daemonController.runtimeSet(runtime.get());
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
+        ipcMain.handle(desktopIpc.personalRemoteMacGet, (event) => {
+            personalRemoteMacSenderRequire(event.sender);
+            return personalRemoteMac.get();
+        });
+        ipcMain.handle(desktopIpc.personalRemoteMacShareEnable, async (event, raw: unknown) => {
+            personalRemoteMacSenderRequire(event.sender);
+            if (!raw || typeof raw !== "object" || Array.isArray(raw))
+                throw new Error("The remote Mac sharing request is invalid.");
+            const token = await personalRemoteMac.shareEnable(
+                personalRemoteMacTailnetAddressRequireLocal(
+                    (raw as { readonly bindAddress?: unknown }).bindAddress,
+                ),
+            );
+            try {
+                clipboard.writeText(token);
+            } catch {
+                await personalRemoteMac.shareDisable().catch(() => undefined);
+                throw new Error(
+                    "The access token could not be copied, so Remote Mac sharing was disabled.",
+                );
+            }
+        });
+        ipcMain.handle(desktopIpc.personalRemoteMacShareDisable, (event) => {
+            personalRemoteMacSenderRequire(event.sender);
+            return personalRemoteMac.shareDisable();
+        });
+        ipcMain.handle(desktopIpc.personalRemoteMacShareRotate, async (event) => {
+            personalRemoteMacSenderRequire(event.sender);
+            const token = await personalRemoteMac.shareRotate();
+            try {
+                clipboard.writeText(token);
+            } catch {
+                await personalRemoteMac.shareDisable().catch(() => undefined);
+                throw new Error(
+                    "The replacement token could not be copied, so Remote Mac sharing was disabled.",
+                );
+            }
+        });
+        ipcMain.handle(desktopIpc.personalRemoteMacRetry, (event) => {
+            personalRemoteMacSenderRequire(event.sender);
+            return personalRemoteMac.retry();
+        });
+        ipcMain.handle(desktopIpc.personalRemoteMacMountWrite, (event, raw: unknown) => {
+            personalRemoteMacSenderRequire(event.sender);
+            return personalRemoteMac.mountWrite(personalRemoteMacMountRequestValidate(raw));
+        });
+        ipcMain.handle(desktopIpc.personalRemoteMacMountRemove, (event) => {
+            personalRemoteMacSenderRequire(event.sender);
+            return personalRemoteMac.mountRemove();
+        });
         ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
         ipcMain.handle(desktopIpc.desktopConfigWrite, (_event, config: unknown) =>
             desktopConfigStore.write(config),
@@ -1595,9 +1707,10 @@ void app
                 desktopReactDevtoolsMessageValidate(raw);
             if (message) desktopProfilerController.reactMessage(message);
         });
-        ipcMain.handle(desktopIpc.browserProxyApply, (_event, target: unknown) =>
-            browserProxyApply(desktopBrowserProxyTargetValidate(target)),
-        );
+        ipcMain.handle(desktopIpc.browserProxyApply, (event, target: unknown) => {
+            personalRemoteMacSenderRequire(event.sender);
+            return browserProxyApply(desktopBrowserProxyTargetValidate(target));
+        });
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
         });
@@ -1737,6 +1850,7 @@ app.on("before-quit", (event) => {
     if (quitting || !runtime) return;
     event.preventDefault();
     void Promise.all([
+        personalRemoteMac?.close(),
         runtime.close(),
         desktopWindowStateStore?.flush(),
         desktopProfilerController?.close(),

@@ -46,6 +46,8 @@ export interface HappyAgentHttpProxyOptions extends HappyAgentHttpProxyBacking {
      * site; without one this proxy reports that it cannot render a document.
      */
     readonly htmlPreview?: HtmlPreviewProxyHandle;
+    /** Whether workspace paths belong to this Electron host's own filesystem. */
+    readonly nativeHost?: boolean;
 }
 
 /** Projects Happy Agent health into the minimal liveness shape the renderer loader consumes. */
@@ -175,6 +177,7 @@ export function happyAgentHttpProxyCreate(
                 if (backing === requestBacking) options.onConnectionError?.(error);
             },
             ...(preview ? { htmlPreviewUrl: preview.workspace } : {}),
+            nativeHost: options.nativeHost !== false,
         }).then(
             (handled) => {
                 if (!handled && !response.headersSent) {

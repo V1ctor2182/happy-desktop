@@ -6,6 +6,7 @@ import type {
     HappyAgentDirectoryEntry,
     HappyAgentDirectoryStore,
 } from "./happyAgentDirectoryStore";
+import { LOCAL_HAPPY_AGENT_ID } from "./happyAgentDirectoryStore";
 import type { DesktopRuntimeStore } from "./runtimeStore";
 
 /**
@@ -68,8 +69,8 @@ function bootReady(
     if (!setupAnswered) return false;
     // Connected, so the workspace is what comes next: wait for it to be worth
     // looking at rather than mounting an app around an empty sidebar.
-    if (happyAgents.length === 0) return false;
-    return happyAgents.every(happyAgentSettled);
+    const local = happyAgents.find((happyAgent) => happyAgent.id === LOCAL_HAPPY_AGENT_ID);
+    return local !== undefined && happyAgentSettled(local);
 }
 
 /**
@@ -92,8 +93,9 @@ function bootSteps(
     setupAnswered: boolean,
 ): readonly SegmentedProgressSegment[] {
     const running = runtime?.phase === "ready";
-    const reached = running && happyAgents.some((happyAgent) => happyAgent.status === "connected");
-    const settled = reached && setupAnswered && happyAgents.every((one) => happyAgentSettled(one));
+    const local = happyAgents.find((happyAgent) => happyAgent.id === LOCAL_HAPPY_AGENT_ID);
+    const reached = running && local?.status === "connected";
+    const settled = reached && setupAnswered && local !== undefined && happyAgentSettled(local);
     return [
         { id: "agent", label: "Starting Happy Agent", state: running ? "done" : "running" },
         {

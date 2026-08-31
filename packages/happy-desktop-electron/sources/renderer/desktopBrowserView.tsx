@@ -149,7 +149,11 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     }
 
     componentDidUpdate(before: BrowserContentProps): void {
-        if (before.sessionId !== this.props.sessionId) this.proxyApply();
+        if (
+            before.happyAgentId !== this.props.happyAgentId ||
+            before.sessionId !== this.props.sessionId
+        )
+            this.proxyApply();
     }
 
     componentWillUnmount(): void {
@@ -194,16 +198,17 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     };
 
     private proxyApply(): void {
+        const happyAgentId = this.props.happyAgentId;
         const sessionId = this.props.sessionId;
         const desktop = window.happyDesktop;
         const generation = (this.proxyGeneration += 1);
         this.elementApply(undefined);
         if (this.state.ready) this.setState({ ready: false });
-        if (!sessionId || !desktop) {
+        if (!happyAgentId || !sessionId || !desktop) {
             this.props.browserFailed({ message: "The browser has no Happy Agent session." });
             return;
         }
-        void desktop.browserProxyApply({ sessionId }).then(
+        void desktop.browserProxyApply({ happyAgentId, sessionId }).then(
             () => {
                 if (generation === this.proxyGeneration) this.setState({ ready: true });
             },

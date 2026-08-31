@@ -173,6 +173,17 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         profilerReactMessage: (_message: DesktopReactDevtoolsMessage) => undefined,
         profilerReactSubscribe: (_listener: (command: DesktopReactDevtoolsCommand) => void) => () =>
             undefined,
+        personalRemoteMacGet: async () => ({
+            share: { enabled: false, status: "disabled" },
+            tailnetAddresses: [],
+        }),
+        personalRemoteMacSubscribe: () => () => undefined,
+        personalRemoteMacShareEnable: async () => undefined,
+        personalRemoteMacShareDisable: async () => undefined,
+        personalRemoteMacShareRotate: async () => undefined,
+        personalRemoteMacRetry: async () => undefined,
+        personalRemoteMacMountWrite: async () => undefined,
+        personalRemoteMacMountRemove: async () => undefined,
         applicationMenuOpen: async () => undefined,
         // Browser-local development runs against a machine that already has Happy Agent
         // and a daemon, and it has no native picker or PTY to run setup with, so
