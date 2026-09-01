@@ -8,7 +8,14 @@ import { Switch } from "../../Switch";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 /** Why a provider is or is not usable, straight from the daemon's catalog. */
-export type HappyAgentProviderStatus = "ready" | "not_authenticated" | "not_enabled" | "no_models";
+export type HappyAgentProviderStatus =
+    | "checking"
+    | "ready"
+    | "authentication_failed"
+    | "verification_unavailable"
+    | "not_authenticated"
+    | "not_enabled"
+    | "no_models";
 
 export interface HappyAgentProviderModelRow {
     /** Stable row key, `${providerId}:${modelId}`. */
@@ -51,14 +58,20 @@ export type HappyAgentProviderSettingsProps = {
 };
 
 const STATUS_LABELS: Record<HappyAgentProviderStatus, string> = {
+    checking: "Checking",
     ready: "Connected",
+    authentication_failed: "Authentication failed",
+    verification_unavailable: "Check unavailable",
     not_authenticated: "Not signed in",
     not_enabled: "Disabled",
     no_models: "No models",
 };
 
 const STATUS_VARIANTS: Record<HappyAgentProviderStatus, BadgeVariant> = {
+    checking: "info",
     ready: "success",
+    authentication_failed: "danger",
+    verification_unavailable: "warning",
     not_authenticated: "warning",
     not_enabled: "neutral",
     no_models: "neutral",
@@ -66,6 +79,11 @@ const STATUS_VARIANTS: Record<HappyAgentProviderStatus, BadgeVariant> = {
 
 /** What has to happen in Happy Agent itself before the provider's models become usable. */
 const STATUS_HINTS: Partial<Record<HappyAgentProviderStatus, string>> = {
+    checking: "Happy is making a bounded authenticated request to verify these credentials.",
+    authentication_failed:
+        "The provider could not authenticate with the saved credentials. Update them or sign in again; Happy will recheck automatically when possible and whenever this page is reopened.",
+    verification_unavailable:
+        "Happy could not complete the authentication check. It will try again automatically.",
     not_authenticated: "Sign this provider in from Happy Agent to use its models.",
     not_enabled: "Switched off on this machine, so no agent here may use it.",
 };
@@ -149,7 +167,9 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                 label={STATUS_LABELS[provider.status]}
                                 variant={STATUS_VARIANTS[provider.status]}
                             />
-                            {provider.saving ? <Spinner size={16} /> : null}
+                            {provider.saving || provider.status === "checking" ? (
+                                <Spinner size={16} />
+                            ) : null}
                             <Switch
                                 aria-label={`${provider.name} enabled`}
                                 checked={provider.enabled}

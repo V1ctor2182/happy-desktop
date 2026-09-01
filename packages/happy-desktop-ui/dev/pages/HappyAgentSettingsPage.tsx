@@ -370,7 +370,7 @@ const providers: readonly HappyAgentProviderRow[] = [
         ],
         name: "Claude",
         serviceTiers: [],
-        status: "ready",
+        status: "authentication_failed",
     },
     {
         enabled: true,
@@ -389,7 +389,7 @@ const providers: readonly HappyAgentProviderRow[] = [
         name: "Bedrock",
         saving: true,
         serviceTiers: [],
-        status: "not_authenticated",
+        status: "checking",
     },
     {
         enabled: false,
@@ -1262,7 +1262,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Providers category: connected, unauthenticated, disabled, and model-less providers together"
+                detail="Providers category: verified, rejected, checking, and disabled providers together"
                 label="Happy Agent settings — providers"
                 number="03"
             >

@@ -1403,7 +1403,15 @@ function providerRows(
         name: providerAccountName(provider.id),
         saving: provider.saving,
         serviceTiers: provider.serviceTiers.map((tier) => (tier === "fast" ? "Fast" : tier)),
-        status: provider.disabledReason ?? "ready",
+        status:
+            provider.disabledReason ??
+            (provider.authentication === "valid"
+                ? "ready"
+                : provider.authentication === "invalid"
+                  ? "authentication_failed"
+                  : provider.authentication === "unavailable"
+                    ? "verification_unavailable"
+                    : "checking"),
     }));
 }
 
