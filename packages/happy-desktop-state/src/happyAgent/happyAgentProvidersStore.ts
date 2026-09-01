@@ -5,6 +5,9 @@ import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 import type { HappyAgentModelCatalog, HappyAgentModelProvider } from "./happyAgentTypes.js";
 
+/** The latest live authentication check for one otherwise usable provider. */
+export type HappyAgentProviderAuthentication = "checking" | "valid" | "invalid" | "unavailable";
+
 /**
  * One provider as the Providers category reads it: what the daemon says it
  * offers, plus whether a change this window asked for has been answered yet.
@@ -12,6 +15,8 @@ import type { HappyAgentModelCatalog, HappyAgentModelProvider } from "./happyAge
 export interface HappyAgentProviderEntry extends HappyAgentModelProvider {
     /** This window has asked for a change the daemon has not confirmed yet. */
     readonly saving: boolean;
+    /** The daemon's latest bounded authenticated request, while this category is open. */
+    readonly authentication?: HappyAgentProviderAuthentication;
 }
 
 export interface HappyAgentProvidersSnapshot {
@@ -44,7 +49,7 @@ export interface HappyAgentProvidersStore {
 }
 
 export interface HappyAgentProvidersStoreDeps {
-    readonly client: Pick<HappyAgentClient, "getConfig" | "patchConfig">;
+    readonly client: Pick<HappyAgentClient, "getConfig" | "patchConfig" | "verifyProvider">;
     /**
      * Hands on the catalog the daemon has just confirmed. Enabling a provider
      * changes what every picker in the window may offer, so the one catalog
@@ -62,6 +67,15 @@ const EMPTY: HappyAgentProvidersSnapshot = { providers: [], loading: true };
  */
 const PROVIDERS_POLL_INTERVAL_MS = 4_000;
 
+/** Authentication-only checks are cheap, but still leave the machine for the provider. */
+const PROVIDER_AUTHENTICATION_POLL_INTERVAL_MS = 30_000;
+
+interface ProviderAuthenticationReading {
+    readonly status: Exclude<HappyAgentProviderAuthentication, "checking">;
+    /** False when this provider can authenticate only by running paid inference. */
+    readonly refreshable: boolean;
+}
+
 export function happyAgentProvidersStoreCreate(
     deps: HappyAgentProvidersStoreDeps,
 ): HappyAgentProvidersStore {
@@ -69,9 +83,13 @@ export function happyAgentProvidersStoreCreate(
     const listeners = new Set<() => void>();
     /** Providers whose requested change the daemon has not answered yet. */
     const saving = new Set<string>();
+    const authentication = new Map<string, ProviderAuthenticationReading>();
     let disposed = false;
     let controller: AbortController | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let currentCatalog: HappyAgentModelCatalog | undefined;
+    let authenticationController: AbortController | undefined;
+    let authenticationTimer: ReturnType<typeof setTimeout> | undefined;
 
     const timerCancel = (): void => {
         if (timer === undefined) return;
@@ -87,20 +105,138 @@ export function happyAgentProvidersStoreCreate(
         }, PROVIDERS_POLL_INTERVAL_MS);
     };
 
+    const authenticationTimerCancel = (): void => {
+        if (authenticationTimer === undefined) return;
+        clearTimeout(authenticationTimer);
+        authenticationTimer = undefined;
+    };
+
+    const providersProject = (source: HappyAgentModelCatalog): readonly HappyAgentProviderEntry[] =>
+        source.providers.map((provider) =>
+            providerEntry(
+                provider,
+                saving.has(provider.id),
+                authentication.get(provider.id)?.status,
+            ),
+        );
+
+    const providersPublish = (): void => {
+        if (currentCatalog === undefined) return;
+        const current = store.getState();
+        const providers = referencesPreserve(current.providers, providersProject(currentCatalog));
+        if (providers === current.providers) return;
+        store.setState({ providers }, false);
+    };
+
+    function authenticationSchedule(): void {
+        if (
+            disposed ||
+            listeners.size === 0 ||
+            authenticationController !== undefined ||
+            authenticationTimer !== undefined ||
+            currentCatalog === undefined ||
+            !currentCatalog.providers.some(
+                (provider) =>
+                    providerAuthenticationEligible(provider) &&
+                    authentication.get(provider.id)?.refreshable !== false,
+            )
+        )
+            return;
+        authenticationTimer = setTimeout(() => {
+            authenticationTimer = undefined;
+            authenticationStart("refreshable");
+        }, PROVIDER_AUTHENTICATION_POLL_INTERVAL_MS);
+    }
+
+    function authenticationStart(mode: "all" | "missing" | "refreshable"): void {
+        if (
+            disposed ||
+            listeners.size === 0 ||
+            authenticationController !== undefined ||
+            currentCatalog === undefined
+        )
+            return;
+        const targets = currentCatalog.providers.filter((provider) => {
+            if (!providerAuthenticationEligible(provider)) return false;
+            const reading = authentication.get(provider.id);
+            if (mode === "all") return true;
+            if (mode === "missing") return reading === undefined;
+            return reading?.refreshable !== false;
+        });
+        if (targets.length === 0) return;
+
+        authenticationTimerCancel();
+        if (mode === "all") for (const provider of targets) authentication.delete(provider.id);
+        providersPublish();
+        const active = new AbortController();
+        authenticationController = active;
+        void Promise.all(
+            targets.map(async (provider) => {
+                try {
+                    const result = await deps.client.verifyProvider(
+                        provider.id,
+                        { level: "authentication" },
+                        { signal: active.signal },
+                    );
+                    return {
+                        providerId: provider.id,
+                        reading: {
+                            refreshable: result.performedLevel !== "inference",
+                            status: result.status === "passed" ? "valid" : "invalid",
+                        } satisfies ProviderAuthenticationReading,
+                    };
+                } catch {
+                    return {
+                        providerId: provider.id,
+                        reading: {
+                            refreshable: true,
+                            status: "unavailable",
+                        } satisfies ProviderAuthenticationReading,
+                    };
+                }
+            }),
+        ).then((readings) => {
+            const catalog = currentCatalog;
+            if (
+                disposed ||
+                active.signal.aborted ||
+                authenticationController !== active ||
+                listeners.size === 0 ||
+                catalog === undefined
+            )
+                return;
+            authenticationController = undefined;
+            const eligible = new Set(
+                catalog.providers
+                    .filter(providerAuthenticationEligible)
+                    .map((provider) => provider.id),
+            );
+            for (const { providerId, reading } of readings)
+                if (eligible.has(providerId)) authentication.set(providerId, reading);
+            providersPublish();
+            authenticationSchedule();
+        });
+    }
+
     /**
      * Replaces the list with the one the daemon has just confirmed. Rows the
      * answer leaves unchanged keep their identity, so a poll every few seconds
      * does not replace every card in the category.
      */
     const settle = (catalog: HappyAgentModelCatalog): void => {
+        const nextProviderIds = new Set(catalog.providers.map((provider) => provider.id));
+        for (const providerId of authentication.keys())
+            if (!nextProviderIds.has(providerId)) authentication.delete(providerId);
+        for (const provider of catalog.providers)
+            if (!providerAuthenticationEligible(provider)) authentication.delete(provider.id);
+        // Authentication answers update these rows without pretending daemon configuration changed.
+        currentCatalog = catalog;
         const current = store.getState();
-        const providers = referencesPreserve(
-            current.providers,
-            catalog.providers.map((provider) => providerEntry(provider, saving.has(provider.id))),
-        );
+        const providers = referencesPreserve(current.providers, providersProject(catalog));
         const { error: _cleared, ...rest } = current;
         store.setState({ ...rest, providers, loading: false }, true);
         deps.catalogChanged?.(catalog);
+        authenticationStart("missing");
     };
 
     /** Re-marks the rows waiting on an answer without re-reading the daemon. */
@@ -154,7 +290,10 @@ export function happyAgentProvidersStoreCreate(
             if (disposed) return () => undefined;
             listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            if (listeners.size === 1) load();
+            if (listeners.size === 1) {
+                load();
+                authenticationStart("all");
+            }
             let released = false;
             return () => {
                 if (released) return;
@@ -165,6 +304,9 @@ export function happyAgentProvidersStoreCreate(
                 timerCancel();
                 controller?.abort();
                 controller = undefined;
+                authenticationTimerCancel();
+                authenticationController?.abort();
+                authenticationController = undefined;
             };
         },
         providerEnabledUpdate(providerId, enabled) {
@@ -200,6 +342,10 @@ export function happyAgentProvidersStoreCreate(
             timerCancel();
             controller?.abort();
             controller = undefined;
+            authenticationTimerCancel();
+            authenticationController?.abort();
+            authenticationController = undefined;
+            authentication.clear();
             saving.clear();
             listeners.clear();
         },
@@ -209,8 +355,19 @@ export function happyAgentProvidersStoreCreate(
 function providerEntry(
     provider: HappyAgentModelProvider,
     saving: boolean,
+    authentication: Exclude<HappyAgentProviderAuthentication, "checking"> | undefined,
 ): HappyAgentProviderEntry {
-    return { ...provider, saving };
+    return {
+        ...provider,
+        saving,
+        ...(providerAuthenticationEligible(provider)
+            ? { authentication: authentication ?? "checking" }
+            : {}),
+    };
+}
+
+function providerAuthenticationEligible(provider: HappyAgentModelProvider): boolean {
+    return provider.enabled && provider.disabledReason === undefined && provider.models.length > 0;
 }
 
 const INERT_SNAPSHOT: HappyAgentProvidersSnapshot = { providers: [], loading: false };
