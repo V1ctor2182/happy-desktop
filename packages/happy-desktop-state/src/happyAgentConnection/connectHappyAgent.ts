@@ -31,6 +31,7 @@ import { projectRegistrationError } from "./errors.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import {
+    agentGroupProjectionChanged,
     applyChanges,
     defaultMode,
     elementsReuse,
@@ -466,6 +467,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         current.version.localeCompare(updated.version) <= 0;
 
     const replaceAgent = (agent: Agent): void => {
+        const previous = agentOf(agent.id);
         groupsStore.setState((current) => ({
             workspaces: current.workspaces.map((workspace) =>
                 workspace.id === agent.workspaceId ||
@@ -504,7 +506,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             });
             publishSession(parent);
         }
-        publishGroups();
+        if (previous === undefined || agentGroupProjectionChanged(previous, agent)) publishGroups();
     };
 
     const adoptAgent = (agent: Agent): boolean => {
