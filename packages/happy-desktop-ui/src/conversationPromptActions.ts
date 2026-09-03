@@ -1,7 +1,7 @@
 import type { ConversationEntry } from "happy-desktop-state";
 
 /**
- * Whether a transcript entry can be copied back into this reader's composer.
+ * Whether a transcript entry can be edited inline and resent by this reader.
  *
  * Historical attachments are durable projections, while a composer attachment
  * owns a live browser File. Until that bridge exists, only a settled text-only

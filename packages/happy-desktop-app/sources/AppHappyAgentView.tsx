@@ -4814,12 +4814,16 @@ function HappyAgentConversationSurface(props: {
             onComposerValueChange={(value) =>
                 reactFrameInputUpdate(workspace, () => workspace.composerTextUpdate(value))
             }
-            {...(!props.readOnly
+            {...(!props.readOnly && props.unavailable === undefined
                 ? {
-                      onEditAndResend: (text: string) =>
-                          reactFrameInputUpdate(workspace, () =>
-                              workspace.composerTextUpdate(text),
-                          ),
+                      onEditAndResend: (text: string) => {
+                          if (!props.happyAgentOnline())
+                              return Promise.reject(new Error("Happy Agent is offline."));
+                          return workspace.messageSend(
+                              conversation.conversationId as HappyAgentSessionId,
+                              text,
+                          );
+                      },
                   }
                 : {})}
             onFileOpen={(path) => {
