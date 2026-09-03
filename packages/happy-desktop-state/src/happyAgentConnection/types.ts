@@ -87,7 +87,7 @@ export interface UserMessageElement extends BaseChatElement {
     messageId: string;
     identity: string | null;
     profile?: HappyAgentProfile;
-    delivery: "pending_steering" | "sent";
+    delivery: "pending_queue" | "pending_steering" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
     source?: "notification";
@@ -412,7 +412,7 @@ export interface SessionState {
     };
     models: readonly unknown[];
     pendingUserInputs: readonly UserInputRequest[];
-    pendingSteeringMessages: readonly {
+    pendingMessages: readonly {
         message: { id: string; blocks: readonly MessageBlock[] };
     }[];
     /** Complete ordered command catalog for this focused agent. */

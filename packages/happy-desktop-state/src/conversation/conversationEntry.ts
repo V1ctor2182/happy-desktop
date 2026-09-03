@@ -309,7 +309,7 @@ export interface ConversationMessageEntry {
     readonly kind: "message";
     readonly message: ConversationMessageProjection;
     readonly source: "server" | "local";
-    readonly delivery: "sending" | "pending_steering" | "sent" | "failed";
+    readonly delivery: "sending" | "pending_queue" | "pending_steering" | "sent" | "failed";
     readonly clientMutationId?: string;
     readonly error?: UserError;
     /**

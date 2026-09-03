@@ -625,11 +625,7 @@ export interface HappyAgentSession {
     readonly recap?: string;
     readonly draft?: string;
     readonly draftUpdatedAt?: number;
-    /**
-     * Steering messages queued to submit after the current tool call. Non-internal
-     * user turns the runner has accepted but not yet started; the composer previews
-     * them so a person sees what will be sent next (and can flush early with esc).
-     */
+    /** User turns accepted into the daemon-owned queue but not yet started. */
     readonly queuedMessages: readonly HappyAgentQueuedMessage[];
     readonly pendingUserInputs: readonly HappyAgentUserInputRequest[];
     readonly goal?: HappyAgentGoal;
