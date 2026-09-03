@@ -776,6 +776,27 @@
     background: var(--surface-pressed);
 }
 
+/* A runnable shell fence keeps the action fixed while its code scrolls beneath
+   it. The wrapper owns the block rhythm so the scroll area can stay flush. */
+.happy-message__command-block {
+    position: relative;
+    margin: 12px 0;
+    max-width: 100%;
+}
+
+.happy-message__code-block--command {
+    margin: 0;
+}
+
+.happy-message__command-run {
+    /* The action must stay pinned over a horizontally scrolling code viewport;
+       flex would move it with the code. */
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+}
+
 .happy-message__code-block-viewport {
     overflow-x: auto;
     overflow-y: hidden;
@@ -796,6 +817,11 @@
     font-size: 14px;
     line-height: 20px;
     white-space: pre;
+}
+
+/* The fixed Run button must never cover the command's first line. */
+.happy-message__body--markdown .happy-message__command-block pre code {
+    padding-right: 88px;
 }
 
 .happy-message__body--markdown blockquote {

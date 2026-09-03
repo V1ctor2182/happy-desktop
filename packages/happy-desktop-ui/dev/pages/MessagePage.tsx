@@ -403,6 +403,43 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
+                detail="Explicit shell fences offer one direct terminal action once generation settles; the same affordance stays visible and disabled while its Happy Agent is unavailable"
+                label="Message — runnable terminal commands"
+                number="09a"
+                stage="app"
+            >
+                {channelFrame(
+                    <>
+                        <Message
+                            agent
+                            author="Codex"
+                            body={
+                                "Run the focused checks:\n\n```bash\npnpm typecheck && pnpm build\n```"
+                            }
+                            generationStatus="complete"
+                            initials="CX"
+                            onCommandRun={() => undefined}
+                            time="10:59"
+                            tone="mint"
+                        />
+                        <Message
+                            agent
+                            author="Codex"
+                            body={
+                                "Then publish when the peer reconnects:\n\n```zsh\npnpm release\n```"
+                            }
+                            commandRunDisabledReason="Happy Agent is reconnecting"
+                            generationStatus="complete"
+                            grouped
+                            initials="CX"
+                            time="11:00"
+                            tone="mint"
+                        />
+                    </>,
+                )}
+            </Specimen>
+
+            <Specimen
                 detail="11/700 mono uppercase pill (inset bg, radius 999) between hairline segments"
                 label="DayDivider"
                 number="10"

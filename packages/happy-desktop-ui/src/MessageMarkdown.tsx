@@ -8,8 +8,9 @@ import {
     type ReactNode,
 } from "react";
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
+import { Button } from "./Button";
 import { filePreviewKind } from "./FilePreview";
-import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
+import { markdownFence, markdownFenceCommand, markdownFenceIsMermaid } from "./markdownFence";
 import { markdownDocumentLinkPath } from "./MarkdownDocument";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { MESSAGE_MARKDOWN_REMARK_PLUGINS } from "./messageMarkdownAst";
@@ -61,6 +62,10 @@ const MarkdownTrailingContext = createContext<{
 const MarkdownGenerationStatusContext = createContext<MessageGenerationStatus | undefined>(
     undefined,
 );
+const MarkdownCommandRunContext = createContext<{
+    disabledReason?: string;
+    onRun?: (command: string) => void;
+} | null>(null);
 type MarkdownImageProps = ComponentPropsWithoutRef<"img"> & ExtraProps;
 /**
  * A Markdown image is rendered as a safe labelled link, never an `<img>`: an
@@ -198,6 +203,7 @@ const MarkdownPre = ({
 }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => {
     const fence = markdownFence(node);
     const generationStatus = useContext(MarkdownGenerationStatusContext);
+    const commandRun = useContext(MarkdownCommandRunContext);
     if (markdownFenceIsMermaid(fence))
         return (
             <MermaidDiagram
@@ -206,16 +212,49 @@ const MarkdownPre = ({
                 variant="message"
             />
         );
-    return (
+    const command = generationStatus === "streaming" ? undefined : markdownFenceCommand(fence);
+    const code = (
         <ScrollArea
             axes="horizontal"
-            className="happy-message__code-block"
+            className={[
+                "happy-message__code-block",
+                command !== undefined && commandRun !== null
+                    ? "happy-message__code-block--command"
+                    : undefined,
+            ]
+                .filter(Boolean)
+                .join(" ")}
             data-happy-desktop-ui="message-code-block"
             placement="overlay"
             viewportClassName="happy-message__code-block-viewport"
         >
             <pre {...props}>{children}</pre>
         </ScrollArea>
+    );
+    if (command === undefined || commandRun === null) return code;
+    const disabled = commandRun.onRun === undefined || commandRun.disabledReason !== undefined;
+    const label = commandRun.disabledReason
+        ? `Run command unavailable: ${commandRun.disabledReason}`
+        : "Run command in terminal";
+    return (
+        <div className="happy-message__command-block" data-happy-desktop-ui="message-command-block">
+            {code}
+            <Button
+                aria-label={label}
+                className="happy-message__command-run"
+                disabled={disabled}
+                icon="play"
+                onClick={(event) => {
+                    event.stopPropagation();
+                    commandRun.onRun?.(command);
+                }}
+                size="small"
+                title={commandRun.disabledReason ?? "Run in terminal"}
+                variant="secondary"
+            >
+                Run
+            </Button>
+        </div>
     );
 };
 const MarkdownTable = ({
@@ -282,26 +321,32 @@ export function renderMessageMarkdown(
     trailing?: ReactNode,
     onFileOpen?: (path: string) => void,
     generationStatus?: MessageGenerationStatus,
+    commandRun?: {
+        disabledReason?: string;
+        onRun?: (command: string) => void;
+    },
 ): ReactNode {
     return (
         <MarkdownGenerationStatusContext.Provider value={generationStatus}>
-            <MarkdownTrailingContext.Provider
-                value={
-                    trailing === undefined
-                        ? null
-                        : { endOffset: text.trimEnd().length, node: trailing }
-                }
-            >
-                <MarkdownFileOpenContext.Provider value={onFileOpen}>
-                    <MemoMarkdown
-                        components={markdownComponents}
-                        remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
-                        skipHtml
-                    >
-                        {text}
-                    </MemoMarkdown>
-                </MarkdownFileOpenContext.Provider>
-            </MarkdownTrailingContext.Provider>
+            <MarkdownCommandRunContext.Provider value={commandRun ?? null}>
+                <MarkdownTrailingContext.Provider
+                    value={
+                        trailing === undefined
+                            ? null
+                            : { endOffset: text.trimEnd().length, node: trailing }
+                    }
+                >
+                    <MarkdownFileOpenContext.Provider value={onFileOpen}>
+                        <MemoMarkdown
+                            components={markdownComponents}
+                            remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
+                            skipHtml
+                        >
+                            {text}
+                        </MemoMarkdown>
+                    </MarkdownFileOpenContext.Provider>
+                </MarkdownTrailingContext.Provider>
+            </MarkdownCommandRunContext.Provider>
         </MarkdownGenerationStatusContext.Provider>
     );
 }
