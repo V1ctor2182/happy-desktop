@@ -387,6 +387,34 @@
     overflow-wrap: anywhere;
 }
 
+/* Long human prompts keep six lines in the transcript until the reader opens
+   them. The unconstrained inner content remains measurable by the row model's
+   disclosure owner; only this viewport clips the collapsed preview. */
+.happy-message__prompt-viewport {
+    min-width: 0;
+}
+
+.happy-message__prompt-viewport[data-collapsed] {
+    overflow: hidden;
+}
+
+.happy-message__prompt-content {
+    min-width: 0;
+}
+
+.happy-message__prompt-toggle.happy-button[data-variant="ghost"] {
+    color: inherit;
+}
+
+.happy-message[data-own] .happy-message__prompt-toggle.happy-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--user-message-text) 18%, transparent);
+    color: var(--user-message-text);
+}
+
+.happy-message[data-own] .happy-message__prompt-toggle.happy-button:focus-visible {
+    outline-color: var(--user-message-text);
+}
+
 .happy-message__mention {
     background: color-mix(in srgb, var(--radio-active) 14%, transparent);
     color: var(--radio-active);

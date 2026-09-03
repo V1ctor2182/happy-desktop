@@ -11,6 +11,14 @@ const column: Record<string, string> = {
     flexDirection: "column",
     gap: "14px",
 };
+const longPrompt =
+    "Please review the release path end to end.\n\n" +
+    "1. Confirm the migration is backward compatible.\n" +
+    "2. Run the focused typecheck and production build.\n" +
+    "3. Check authentication failures, reconnects, and retries.\n" +
+    "4. Verify the desktop keeps the active session and draft.\n" +
+    "5. Summarize any remaining risk before publishing.\n\n" +
+    "Keep the original behavior for existing sessions, and call out any decision that needs product input before changing it.";
 /* Screenshot-safe inline artwork so the blueprint never loads a network asset. */
 function demoImage(width: number, height: number, from: string, to: string): string {
     const svg =
@@ -437,6 +445,45 @@ export function MessagePage() {
                         />
                     </>,
                 )}
+            </Specimen>
+
+            <Specimen
+                detail="Long human prompts show a 144px preview with an accessible disclosure; short prompts retain their ordinary bubble geometry"
+                label="Message — collapsible long prompt"
+                number="09b"
+                stage="app"
+            >
+                <div style={column}>
+                    {channelFrame(
+                        <Message
+                            author="Steve"
+                            body="Please run the focused checks and summarize the result."
+                            bodyCollapsible
+                            own
+                            time="11:00"
+                        />,
+                    )}
+                    {channelFrame(
+                        <Message
+                            author="Steve"
+                            body={longPrompt}
+                            bodyCollapsible
+                            own
+                            time="11:01"
+                        />,
+                    )}
+                    {channelFrame(
+                        <Message
+                            author="Steve"
+                            body={longPrompt}
+                            bodyCollapsible
+                            defaultBodyExpanded
+                            own
+                            time="11:01"
+                        />,
+                    )}
+                    <DimensionRule label="collapsed: 144px content preview + 28px disclosure · expanded: complete Markdown" />
+                </div>
             </Specimen>
 
             <Specimen

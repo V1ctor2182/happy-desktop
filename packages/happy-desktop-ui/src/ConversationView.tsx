@@ -558,6 +558,10 @@ export function ConversationView(props: ConversationViewProps) {
                                                     ? entry.message.id
                                                     : entry.id
                                             }
+                                            onRowExpandedChange={(expanded) =>
+                                                rowExpandedChange(entry, expanded)
+                                            }
+                                            rowExpanded={rowExpanded(entry)}
                                             viewerId={props.viewerId}
                                         />
                                     ))}

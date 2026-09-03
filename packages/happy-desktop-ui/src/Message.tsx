@@ -3,6 +3,8 @@ import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import {
     Children,
     isValidElement,
+    useCallback,
+    useId,
     useLayoutEffect,
     useRef,
     useState,
@@ -17,11 +19,16 @@ import { AvatarBrutalist } from "./AvatarBrutalist";
 import { happyLogoBlackUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
+import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
-import { messageMediaSingleBox } from "./conversationRowHeight";
+import {
+    messageMediaSingleBox,
+    USER_PROMPT_COLLAPSED_CONTENT_HEIGHT,
+} from "./conversationRowHeight";
 import {
     MessageListDisclosureAnchorProvider,
     type MessageListDisclosureAnchor,
+    useMessageListDisclosureAnchor,
 } from "./messageListDisclosureAnchor";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
 import { ScrollArea } from "./Scrollbar";
@@ -148,6 +155,14 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     metaAccessory?: ReactNode;
     author: string;
     body: string | MessageSegment[];
+    /** Gives a long human-authored body an inline preview disclosure. */
+    bodyCollapsible?: boolean;
+    /** Controlled disclosure state when the owning list models row geometry. */
+    bodyExpanded?: boolean;
+    /** Initial disclosure state for a standalone Message specimen. */
+    defaultBodyExpanded?: boolean;
+    /** Reports a prompt-body disclosure change to its row-geometry owner. */
+    onBodyExpandedChange?: (expanded: boolean) => void;
     /** Attachment cards (runs, approvals, events) rendered below the body. */
     children?: ReactNode;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */
@@ -282,11 +297,14 @@ export function Message(props: MessageProps) {
         "author",
         "avatarSessionId",
         "body",
+        "bodyCollapsible",
+        "bodyExpanded",
         "children",
         "className",
         "compact",
         "contextNote",
         "deliveryState",
+        "defaultBodyExpanded",
         "emptyText",
         "generationStatus",
         "streamingCaret",
@@ -301,6 +319,7 @@ export function Message(props: MessageProps) {
         "initials",
         "metaAccessory",
         "onAuthorSelect",
+        "onBodyExpandedChange",
         "onReactionSelect",
         "own",
         "reactions",
@@ -311,6 +330,28 @@ export function Message(props: MessageProps) {
     const attachments = local.children;
     const body = useRef<HTMLDivElement>(null);
     const generationMarker = useRef<HTMLSpanElement>(null);
+    const disclosureAnchor = useMessageListDisclosureAnchor();
+    const bodyDisclosureId = useId();
+    const bodyContentObserver = useRef<ResizeObserver | undefined>(undefined);
+    const [bodyOverflowing, setBodyOverflowing] = useState(false);
+    const [uncontrolledBodyExpanded, setUncontrolledBodyExpanded] = useState(
+        local.defaultBodyExpanded ?? false,
+    );
+    const bodyExpanded = local.bodyExpanded ?? uncontrolledBodyExpanded;
+    const bodyContentRef = useCallback((element: HTMLDivElement | null) => {
+        bodyContentObserver.current?.disconnect();
+        bodyContentObserver.current = undefined;
+        if (!element) return;
+        const measure = () =>
+            setBodyOverflowing(
+                element.getBoundingClientRect().height > USER_PROMPT_COLLAPSED_CONTENT_HEIGHT + 0.5,
+            );
+        measure();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(measure);
+        observer.observe(element);
+        bodyContentObserver.current = observer;
+    }, []);
     const segments = (): MessageSegment[] =>
         typeof local.body === "string" ? [{ kind: "text", text: local.body }] : local.body;
     const isMarkdownBody = () => typeof local.body === "string";
@@ -440,6 +481,25 @@ export function Message(props: MessageProps) {
     const inlineIncomingHoverMeta = showIncomingIdentity()
         ? null
         : renderIncomingHoverMeta("inline");
+    const markdownBody =
+        typeof local.body === "string"
+            ? renderMessageMarkdown(
+                  local.body,
+                  inlineIncomingHoverMeta ?? undefined,
+                  local.onFileOpen,
+                  local.generationStatus,
+                  local.onCommandRun !== undefined || local.commandRunDisabledReason !== undefined
+                      ? {
+                            ...(local.onCommandRun === undefined
+                                ? {}
+                                : { onRun: local.onCommandRun }),
+                            ...(local.commandRunDisabledReason === undefined
+                                ? {}
+                                : { disabledReason: local.commandRunDisabledReason }),
+                        }
+                      : undefined,
+              )
+            : null;
     const bodyNode =
         !local.body &&
         local.emptyText === undefined &&
@@ -451,25 +511,48 @@ export function Message(props: MessageProps) {
                 ref={body}
             >
                 {ownAutomatedLine}
-                {typeof local.body === "string"
-                    ? renderMessageMarkdown(
-                          local.body,
-                          inlineIncomingHoverMeta ?? undefined,
-                          local.onFileOpen,
-                          local.generationStatus,
-                          local.onCommandRun !== undefined ||
-                              local.commandRunDisabledReason !== undefined
-                              ? {
-                                    ...(local.onCommandRun === undefined
-                                        ? {}
-                                        : { onRun: local.onCommandRun }),
-                                    ...(local.commandRunDisabledReason === undefined
-                                        ? {}
-                                        : { disabledReason: local.commandRunDisabledReason }),
-                                }
-                              : undefined,
-                      )
-                    : null}
+                {local.bodyCollapsible && markdownBody !== null ? (
+                    <>
+                        <div
+                            className="happy-message__prompt-viewport"
+                            data-collapsed={!bodyExpanded ? "" : undefined}
+                            id={bodyDisclosureId}
+                            style={
+                                bodyExpanded
+                                    ? undefined
+                                    : { maxHeight: USER_PROMPT_COLLAPSED_CONTENT_HEIGHT }
+                            }
+                        >
+                            <div
+                                className="happy-message__prompt-content happy-message__body--markdown"
+                                data-happy-desktop-ui="message-prompt-content"
+                                ref={bodyContentRef}
+                            >
+                                {markdownBody}
+                            </div>
+                        </div>
+                        {bodyOverflowing ? (
+                            <Button
+                                aria-controls={bodyDisclosureId}
+                                aria-expanded={bodyExpanded}
+                                className="happy-message__prompt-toggle"
+                                onClick={(event) => {
+                                    disclosureAnchor?.(event.currentTarget);
+                                    const expanded = !bodyExpanded;
+                                    if (local.bodyExpanded === undefined)
+                                        setUncontrolledBodyExpanded(expanded);
+                                    local.onBodyExpandedChange?.(expanded);
+                                }}
+                                size="small"
+                                variant="ghost"
+                            >
+                                {bodyExpanded ? "Show less" : "Show more"}
+                            </Button>
+                        ) : null}
+                    </>
+                ) : (
+                    markdownBody
+                )}
                 {/* An empty generated reply keeps a non-breaking-space line box
                     so generation-state changes cannot collapse the message row. */}
                 {!local.body && local.emptyText !== undefined ? (

@@ -406,6 +406,17 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(author?.sessionId === undefined ? {} : { avatarSessionId: author.sessionId })}
             {...(author?.imageUrl === undefined ? {} : { imageUrl: author.imageUrl })}
             body={message.text}
+            {...(author?.kind === "human"
+                ? {
+                      bodyCollapsible: true,
+                      ...(props.rowExpanded === undefined
+                          ? {}
+                          : { bodyExpanded: props.rowExpanded }),
+                      ...(props.onRowExpandedChange === undefined
+                          ? {}
+                          : { onBodyExpandedChange: props.onRowExpandedChange }),
+                  }
+                : {})}
             className={props.className}
             {...(props.contextNote === undefined ? {} : { contextNote: props.contextNote })}
             data-testid={props["data-testid"]}

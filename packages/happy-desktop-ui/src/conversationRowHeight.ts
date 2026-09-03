@@ -107,6 +107,10 @@ const MESSAGE_CHROME = {
     conversation: { agent: [57, 4], incoming: [77, 28], own: [52, 28] },
     chat: { agent: [41, 16], incoming: [77, 28], own: [52, 28] },
 } as const;
+/** Six plain-text body lines remain visible before a long human prompt is disclosed. */
+export const USER_PROMPT_COLLAPSED_CONTENT_HEIGHT = 144;
+/** The 8px body stack gap plus one shared small Button below the preview. */
+const USER_PROMPT_DISCLOSURE_HEIGHT = 36;
 /**
  * `.happy-conversation__resumed` raises an agent row's top padding to 8px when
  * its prose resumes after a tool run, replacing whichever padding grouping had
@@ -328,6 +332,8 @@ export function messageMediaHeight(
  */
 export function messageRowHeight(input: {
     readonly body: string;
+    readonly bodyCollapsible?: boolean;
+    readonly bodyExpanded?: boolean;
     readonly bodyVisible: boolean;
     readonly grouped: boolean;
     readonly mermaidEnabled?: boolean;
@@ -354,15 +360,19 @@ export function messageRowHeight(input: {
               uiTextNaturalWidth("\u00a0", 16, input.textCache) +
               asideTimeWidth(input.time, input.textCache)
             : 0;
+    const bodyHeight = markdownBodyHeight(
+        input.body,
+        measure,
+        input.textCache,
+        trailingExtraWidth,
+        input.mermaidEnabled,
+    );
     return (
         chrome +
-        markdownBodyHeight(
-            input.body,
-            measure,
-            input.textCache,
-            trailingExtraWidth,
-            input.mermaidEnabled,
-        )
+        (input.bodyCollapsible && bodyHeight > USER_PROMPT_COLLAPSED_CONTENT_HEIGHT
+            ? (input.bodyExpanded ? bodyHeight : USER_PROMPT_COLLAPSED_CONTENT_HEIGHT) +
+              USER_PROMPT_DISCLOSURE_HEIGHT
+            : bodyHeight)
     );
 }
 
@@ -585,6 +595,7 @@ export function conversationRowHeight(
         );
     const message = entry.message;
     const agent = message.sender?.kind === "agent";
+    const human = message.sender?.kind === "human";
     const own = message.sender !== undefined && message.sender.id === context.viewerId;
     const grouped = conversationMessageGrouped(entries, index);
     const treatment: MessageTreatment = agent ? "agent" : own ? "own" : "incoming";
@@ -614,6 +625,7 @@ export function conversationRowHeight(
         context.surface,
         treatment,
         grouped ? "grouped" : "leading",
+        human ? (context.expanded ? "body-expanded" : "body-collapsed") : "body-full",
         traceCollapsible ? "trace" : "plain",
         resumesAfterActivity ? "resumed" : "continuous",
         precedesActivity ? "continues" : closedByStatus ? "closing" : "open",
@@ -621,6 +633,8 @@ export function conversationRowHeight(
     return rowHeightCached(cache, entry, cacheKey, () => {
         let height = messageRowHeight({
             body: message.text,
+            bodyCollapsible: human,
+            bodyExpanded: context.expanded,
             bodyVisible: hasBody || message.generationStatus !== undefined || traceCollapsible,
             grouped,
             mermaidEnabled: message.generationStatus !== "streaming",
