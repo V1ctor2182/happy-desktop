@@ -23,7 +23,7 @@ function message(
     id: string,
     author: "agent" | "you",
     text: string,
-    delivery: "pending_queue" | "sent" = "sent",
+    delivery: "pending_queue" | "pending_steering" | "sent" = "sent",
 ): ConversationEntry {
     return {
         delivery,
@@ -65,18 +65,18 @@ const ENTRIES: readonly ConversationEntry[] = [
         "I found the stale-token branch and I’m tracing its reconnect behavior now.",
     ),
     message("03", "you", "Then update the provider status copy.", "pending_queue"),
-    message("04", "you", "After that, check the disconnected state too.", "pending_queue"),
+    message("04", "you", "Use this detail in the current run too.", "pending_steering"),
 ];
 
 export function QueuedPromptsPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Prompts submitted during an active run remain visibly ordered beneath the live activity line until the daemon accepts them."
-            title="Queued prompts"
+            summary="Queued and steering prompts remain visibly ordered beneath the live activity line with their exact pending state."
+            title="Pending prompts"
         >
             <Specimen
-                detail="two durable pending prompts wait beneath the current activity without reading as accepted history"
+                detail="one queued prompt and one steering prompt wait beneath current activity without reading as accepted history"
                 label="Active run"
                 number="01"
                 stage="surface"
@@ -108,7 +108,7 @@ export function QueuedPromptsPage() {
                         workingLabel="Inspecting provider state"
                     />
                 </div>
-                <DimensionRule label="720 × 420 · two ordered queued prompts" />
+                <DimensionRule label="720 × 420 · queued and steering prompts" />
             </Specimen>
         </ComponentPage>
     );

@@ -572,38 +572,45 @@ export function ConversationView(props: ConversationViewProps) {
                                     className="happy-conversation__queued"
                                     data-happy-desktop-ui="conversation-queued"
                                 >
-                                    {queued.map((entry) => (
-                                        <div
-                                            className="happy-conversation__queued-item"
-                                            key={
-                                                entry.kind === "message"
-                                                    ? entry.message.id
-                                                    : entry.id
-                                            }
-                                        >
-                                            <ConversationEntryView
-                                                entry={entry}
-                                                onRowExpandedChange={(expanded) =>
-                                                    rowExpandedChange(entry, expanded)
-                                                }
-                                                {...(editAndResend === undefined
-                                                    ? {}
-                                                    : { onEditAndResend: editAndResend })}
-                                                {...(editAndResendDisabledReason === undefined
-                                                    ? {}
-                                                    : { editAndResendDisabledReason })}
-                                                rowExpanded={rowExpanded(entry)}
-                                                viewerId={props.viewerId}
-                                            />
+                                    {queued.map((entry) => {
+                                        const state =
+                                            entry.kind === "message" &&
+                                            entry.delivery === "pending_steering"
+                                                ? "Steering"
+                                                : "Queued";
+                                        return (
                                             <div
-                                                aria-label="Queued prompt"
-                                                className="happy-conversation__queued-state"
-                                                data-happy-desktop-ui="conversation-queued-state"
+                                                className="happy-conversation__queued-item"
+                                                key={
+                                                    entry.kind === "message"
+                                                        ? entry.message.id
+                                                        : entry.id
+                                                }
                                             >
-                                                Queued
+                                                <ConversationEntryView
+                                                    entry={entry}
+                                                    onRowExpandedChange={(expanded) =>
+                                                        rowExpandedChange(entry, expanded)
+                                                    }
+                                                    {...(editAndResend === undefined
+                                                        ? {}
+                                                        : { onEditAndResend: editAndResend })}
+                                                    {...(editAndResendDisabledReason === undefined
+                                                        ? {}
+                                                        : { editAndResendDisabledReason })}
+                                                    rowExpanded={rowExpanded(entry)}
+                                                    viewerId={props.viewerId}
+                                                />
+                                                <div
+                                                    aria-label={`${state} prompt`}
+                                                    className="happy-conversation__queued-state"
+                                                    data-happy-desktop-ui="conversation-queued-state"
+                                                >
+                                                    {state}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             ) : null}
                         </>
