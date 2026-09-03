@@ -176,7 +176,7 @@
 }
 
 /*
- * Steering the reader has queued but the turn has not taken yet. It sits below
+ * Input the reader has queued but the turn has not taken yet. It sits below
  * the live status line rather than among the rows above it, because it is the
  * one thing in the transcript that has not happened: ordered as history it
  * would read as something the agent had already been told.
@@ -190,8 +190,24 @@
     flex: none;
     flex-direction: column;
     width: 100%;
+}
+
+.happy-conversation__queued-item > .happy-message {
     opacity: 0.62;
     transition: opacity 160ms ease;
+}
+
+.happy-conversation__queued-state {
+    width: 100%;
+    max-width: var(--happy-chat-measure);
+    height: 28px;
+    padding: 0 20px;
+    margin: -6px auto 0;
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 20px;
+    color: var(--text-secondary);
+    text-align: right;
 }
 
 .happy-conversation__panel,

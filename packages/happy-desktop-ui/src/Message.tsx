@@ -129,7 +129,12 @@ function MessageMediaItem(props: {
         <div {...shared}>{content}</div>
     );
 }
-export type MessageDeliveryState = "failed" | "pending_steering" | "sending" | "sent";
+export type MessageDeliveryState =
+    | "failed"
+    | "pending_queue"
+    | "pending_steering"
+    | "sending"
+    | "sent";
 export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Author is an agent → accent AGENT badge next to the name. */
     agent?: boolean;
@@ -674,6 +679,7 @@ export function Message(props: MessageProps) {
             data-happy-desktop-ui="message"
             aria-busy={
                 deliveryState() === "sending" ||
+                deliveryState() === "pending_queue" ||
                 deliveryState() === "pending_steering" ||
                 local.generationStatus === "streaming"
                     ? "true"

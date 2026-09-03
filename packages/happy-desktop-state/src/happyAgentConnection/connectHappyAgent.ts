@@ -2524,10 +2524,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 input.text.trim().length > 0
                     ? input.text
                     : richContent.map((block) => `[image:${block.mimeType}]`).join("");
-            // Always steer: a message sent mid-run interrupts the run rather
-            // than waiting behind it, and on an idle agent the daemon treats
-            // steer and queue identically.
-            const delivery = "steer" as const;
+            // Ordinary composer submissions belong to the durable queue. An idle
+            // agent consumes one immediately; an active agent finishes its current
+            // run before accepting the next prompt.
+            const delivery = "queue" as const;
             let confirmSend!: () => void;
             const confirmed = new Promise<void>((resolve) => {
                 confirmSend = resolve;

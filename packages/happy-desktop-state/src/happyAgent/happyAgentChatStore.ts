@@ -203,7 +203,7 @@ function transcriptPendingUserInputsProject(
 function transcriptQueuedMessagesProject(
     session: SessionState,
 ): readonly HappyAgentQueuedMessage[] {
-    return session.pendingSteeringMessages.map((pending) => ({
+    return session.pendingMessages.map((pending) => ({
         id: pending.message.id,
         text: pending.message.blocks
             .filter((block) => block.type === "text")
@@ -996,7 +996,6 @@ export function happyAgentChatStoreCreate(
         messageSend: (text, images) =>
             rejecting(async () => {
                 if ((await pendingQuestionAnswer(text)).textUsed) return;
-                const steered = runStatus === "running";
                 const mutationId = deps.connectActions.sendMessage(
                     sessionId,
                     images && images.length > 0
@@ -1015,7 +1014,7 @@ export function happyAgentChatStoreCreate(
                 );
                 if (images && images.length > 0) sentImagesRemember(mutationId, images);
                 connectMutationTrack(mutationId);
-                output({ type: "messageSent", sessionId, steered });
+                output({ type: "messageSent", sessionId, steered: false });
             }),
         slashCommandInvoke: (name, argumentsValue) =>
             rejecting(() => {

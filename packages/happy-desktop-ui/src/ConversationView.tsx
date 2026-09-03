@@ -235,32 +235,38 @@ function conversationEntryTraceOpen(
 }
 
 /**
- * Splits off the queued steering waiting at the end of the transcript.
+ * Splits off pending input waiting at the end of the transcript.
  *
- * Steering is the one thing in a conversation that has not happened yet: the
- * reader typed it while the agent was working and it will be handed over at the
- * next boundary. Ordered among the rows above the live status, it reads as
+ * Pending input is the one thing in a conversation that has not happened yet: the
+ * reader typed it while the agent was working and it will be handed over only
+ * after the work ahead of it. Ordered among the rows above the live status, it reads as
  * something already said and answers the wrong question — the reader looks at
  * their own words sitting above "Thinking" and cannot tell whether the turn has
  * seen them. Below that line it reads as what it is, next in the queue.
  *
- * Only a run of them at the very tail moves. Steering that was already applied
+ * Only a run of them at the very tail moves. Input that was already applied
  * is ordinary history and stays where it happened.
  */
-function conversationPendingSteering(entries: readonly ConversationEntry[]): {
+function conversationPendingMessages(entries: readonly ConversationEntry[]): {
     readonly transcript: readonly ConversationEntry[];
     readonly queued: readonly ConversationEntry[];
 } {
     let start = entries.length;
     while (start > 0) {
         const entry = entries[start - 1];
-        if (entry?.kind !== "message" || entry.delivery !== "pending_steering") break;
+        if (
+            entry?.kind !== "message" ||
+            (entry.delivery !== "pending_queue" && entry.delivery !== "pending_steering")
+        )
+            break;
         start -= 1;
     }
     return start === entries.length
         ? { transcript: entries, queued: [] }
         : { transcript: entries.slice(0, start), queued: entries.slice(start) };
 }
+
+const QUEUED_MESSAGE_STATE_HEIGHT = 28;
 
 function elapsedFormat(ms: number): string {
     const seconds = Math.floor(ms / 1000);
@@ -346,7 +352,7 @@ export function ConversationView(props: ConversationViewProps) {
     const cachedRowHeights = rowHeightCaches.get(conversationCacheKey);
     const rowHeightCache = cachedRowHeights ?? conversationRowHeightCacheCreate();
     if (cachedRowHeights === undefined) rowHeightCaches.set(conversationCacheKey, rowHeightCache);
-    const { transcript, queued } = conversationPendingSteering(props.entries);
+    const { transcript, queued } = conversationPendingMessages(props.entries);
     const editAndResendEnabled = props.onEditAndResend !== undefined;
     const editAndResendDisabledReason =
         composer.text.length > 0 || composer.attachments.length > 0
@@ -567,25 +573,36 @@ export function ConversationView(props: ConversationViewProps) {
                                     data-happy-desktop-ui="conversation-queued"
                                 >
                                     {queued.map((entry) => (
-                                        <ConversationEntryView
-                                            entry={entry}
+                                        <div
+                                            className="happy-conversation__queued-item"
                                             key={
                                                 entry.kind === "message"
                                                     ? entry.message.id
                                                     : entry.id
                                             }
-                                            onRowExpandedChange={(expanded) =>
-                                                rowExpandedChange(entry, expanded)
-                                            }
-                                            {...(editAndResend === undefined
-                                                ? {}
-                                                : { onEditAndResend: editAndResend })}
-                                            {...(editAndResendDisabledReason === undefined
-                                                ? {}
-                                                : { editAndResendDisabledReason })}
-                                            rowExpanded={rowExpanded(entry)}
-                                            viewerId={props.viewerId}
-                                        />
+                                        >
+                                            <ConversationEntryView
+                                                entry={entry}
+                                                onRowExpandedChange={(expanded) =>
+                                                    rowExpandedChange(entry, expanded)
+                                                }
+                                                {...(editAndResend === undefined
+                                                    ? {}
+                                                    : { onEditAndResend: editAndResend })}
+                                                {...(editAndResendDisabledReason === undefined
+                                                    ? {}
+                                                    : { editAndResendDisabledReason })}
+                                                rowExpanded={rowExpanded(entry)}
+                                                viewerId={props.viewerId}
+                                            />
+                                            <div
+                                                aria-label="Queued prompt"
+                                                className="happy-conversation__queued-state"
+                                                data-happy-desktop-ui="conversation-queued-state"
+                                            >
+                                                Queued
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             ) : null}
@@ -618,7 +635,8 @@ export function ConversationView(props: ConversationViewProps) {
                                     rowHeightCache,
                                 ) ?? 0),
                             0,
-                        )
+                        ) +
+                        queued.length * QUEUED_MESSAGE_STATE_HEIGHT
                     }
                     initialScrollPosition={props.scrollPosition}
                     // The conversation is this list's lifetime: switching to

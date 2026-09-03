@@ -155,16 +155,13 @@ export function projectSession(input: SessionProjectionInput): SessionState {
         modelCatalog: modelCatalog(config),
         models: modelDefinitionsProject(config),
         pendingUserInputs,
-        pendingSteeringMessages: input.messages
+        pendingMessages: input.messages
             .filter(
                 (
                     entry,
                 ): entry is TranscriptMessage & {
                     message: Extract<Message, { role: "user" }>;
-                } =>
-                    entry.message.role === "user" &&
-                    entry.message.status === "pending" &&
-                    entry.message.delivery === "steer",
+                } => entry.message.role === "user" && entry.message.status === "pending",
             )
             .map((entry) => ({
                 message: { id: entry.message.id, blocks: entry.message.content },
@@ -762,9 +759,11 @@ function messageElementsProject(
                 identity: null,
                 ...(senderAgent === undefined ? {} : { senderAgent }),
                 delivery:
-                    message.status === "pending" && message.delivery === "steer"
-                        ? "pending_steering"
-                        : "sent",
+                    message.status !== "pending"
+                        ? "sent"
+                        : message.delivery === "steer"
+                          ? "pending_steering"
+                          : "pending_queue",
                 text: messageText(message),
                 attachments: message.content
                     .filter(
