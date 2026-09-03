@@ -487,6 +487,38 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
+                detail="A settled text-only prompt reveals one compact edit action in the timestamp lane; an existing draft keeps it visible but safely disabled"
+                label="Message — edit and resend"
+                number="09c"
+                stage="app"
+            >
+                <div style={column}>
+                    {channelFrame(
+                        <Message
+                            actionsVisible
+                            author="Steve"
+                            body="Re-run the release checks against the production configuration."
+                            onEditAndResend={() => undefined}
+                            own
+                            time="11:02"
+                        />,
+                    )}
+                    {channelFrame(
+                        <Message
+                            actionsVisible
+                            author="Steve"
+                            body="Keep the migration backward compatible."
+                            editAndResendDisabledReason="Clear the current draft before editing a previous prompt"
+                            onEditAndResend={() => undefined}
+                            own
+                            time="11:03"
+                        />,
+                    )}
+                    <DimensionRule label="28px edit action overlays the timestamp lane · no transcript mutation" />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="11/700 mono uppercase pill (inset bg, radius 999) between hairline segments"
                 label="DayDivider"
                 number="10"

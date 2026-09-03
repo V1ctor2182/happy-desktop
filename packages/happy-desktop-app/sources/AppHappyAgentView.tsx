@@ -4814,6 +4814,14 @@ function HappyAgentConversationSurface(props: {
             onComposerValueChange={(value) =>
                 reactFrameInputUpdate(workspace, () => workspace.composerTextUpdate(value))
             }
+            {...(!props.readOnly
+                ? {
+                      onEditAndResend: (text: string) =>
+                          reactFrameInputUpdate(workspace, () =>
+                              workspace.composerTextUpdate(text),
+                          ),
+                  }
+                : {})}
             onFileOpen={(path) => {
                 if (props.happyAgentOnline()) props.onFileOpen(path);
             }}

@@ -21,6 +21,7 @@ import {
 } from "./ConversationRequestView";
 import { type HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
+import { conversationPromptCanEditAndResend } from "./conversationPromptActions";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 
 type ConversationLinkedAttachment = Extract<ConversationAttachment, { kind: "linked" }>;
@@ -69,6 +70,10 @@ export type ConversationEntryViewProps = {
     onCommandRun?: (command: string) => void;
     /** Why proposed commands cannot currently run, while leaving the affordance visible. */
     commandRunDisabledReason?: string;
+    /** Copies one representable historical prompt into the current composer. */
+    onEditAndResend?: (text: string) => void;
+    /** Why replacing the composer with a historical prompt is unavailable. */
+    editAndResendDisabledReason?: string;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -449,6 +454,16 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 : {})}
             {...(author?.kind === "agent" && props.commandRunDisabledReason !== undefined
                 ? { commandRunDisabledReason: props.commandRunDisabledReason }
+                : {})}
+            {...(conversationPromptCanEditAndResend(entry, props.viewerId) && props.onEditAndResend
+                ? {
+                      onEditAndResend: () => props.onEditAndResend?.(message.text),
+                      ...(props.editAndResendDisabledReason === undefined
+                          ? {}
+                          : {
+                                editAndResendDisabledReason: props.editAndResendDisabledReason,
+                            }),
+                  }
                 : {})}
             own={own}
             style={props.style}

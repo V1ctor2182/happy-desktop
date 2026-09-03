@@ -518,8 +518,18 @@
     flex: 1 1 auto;
 }
 
-.happy-message__aside-time {
+.happy-message__aside {
+    position: relative;
+    display: flex;
     flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 28px;
+    height: 28px;
+    margin-bottom: 8px;
+}
+
+.happy-message__aside-time {
     font-family: var(--happy-font-mono);
     font-size: 11px;
     font-weight: 500;
@@ -527,18 +537,36 @@
     color: var(--text-secondary);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    /* Sits a hair above the bubble's baseline padding; matches gutter-time. */
-    margin-bottom: 10px;
     opacity: 0;
     transition: opacity 100ms ease;
 }
 
-.happy-message[data-agent] .happy-message__incoming-line > .happy-message__aside-time {
+.happy-message[data-agent] .happy-message__incoming-line > .happy-message__aside {
     margin-bottom: 0;
 }
 
-.happy-message:hover .happy-message__aside-time,
-.happy-message:focus-within .happy-message__aside-time {
+.happy-message__edit-and-resend {
+    position: absolute;
+    top: 0;
+    right: 0;
+    opacity: 0;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease,
+        opacity 100ms ease;
+}
+
+.happy-message:hover .happy-message__aside:not([data-has-edit-action]) .happy-message__aside-time,
+.happy-message:focus-within
+    .happy-message__aside:not([data-has-edit-action])
+    .happy-message__aside-time,
+.happy-message[data-actions-visible]
+    .happy-message__aside:not([data-has-edit-action])
+    .happy-message__aside-time,
+.happy-message:hover .happy-message__edit-and-resend,
+.happy-message:focus-within .happy-message__edit-and-resend,
+.happy-message[data-actions-visible] .happy-message__edit-and-resend {
     opacity: 1;
 }
 
