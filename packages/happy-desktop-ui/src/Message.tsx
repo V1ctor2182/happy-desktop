@@ -195,6 +195,10 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * workspace behind it can honestly offer.
      */
     onFileOpen?: (path: string) => void;
+    /** Runs a shell-labelled fenced block in the owning workspace terminal. */
+    onCommandRun?: (command: string) => void;
+    /** Keeps runnable blocks visible but disabled while their workspace cannot execute. */
+    commandRunDisabledReason?: string;
     /** Makes the avatar and author name clickable to open the author's profile.
      *  Only the leading message of a group renders an avatar/name, so grouped
      *  follow-ups intentionally carry no profile affordance. */
@@ -292,6 +296,8 @@ export function Message(props: MessageProps) {
         "images",
         "onImageOpen",
         "onFileOpen",
+        "onCommandRun",
+        "commandRunDisabledReason",
         "initials",
         "metaAccessory",
         "onAuthorSelect",
@@ -451,6 +457,17 @@ export function Message(props: MessageProps) {
                           inlineIncomingHoverMeta ?? undefined,
                           local.onFileOpen,
                           local.generationStatus,
+                          local.onCommandRun !== undefined ||
+                              local.commandRunDisabledReason !== undefined
+                              ? {
+                                    ...(local.onCommandRun === undefined
+                                        ? {}
+                                        : { onRun: local.onCommandRun }),
+                                    ...(local.commandRunDisabledReason === undefined
+                                        ? {}
+                                        : { disabledReason: local.commandRunDisabledReason }),
+                                }
+                              : undefined,
                       )
                     : null}
                 {/* An empty generated reply keeps a non-breaking-space line box

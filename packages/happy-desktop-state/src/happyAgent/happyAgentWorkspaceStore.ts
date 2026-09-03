@@ -1385,7 +1385,7 @@ export function happyAgentWorkspaceStoreCreate(
         return draftUpdatedAt;
     };
     const panel: HappyAgentPanelStore = happyAgentPanelStoreCreate({
-        terminalOpen: (sessionId) => client.terminalOpen(sessionId),
+        terminalOpen: (sessionId, options) => client.terminalOpen(sessionId, options),
         memoryRead: (groupId) => client.memory.groupRead(groupId)?.panel,
         memoryWrite: (groupId, memory) => client.memory.groupPanelWrite(groupId, memory),
     });

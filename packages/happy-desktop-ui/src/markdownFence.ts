@@ -36,3 +36,22 @@ export function markdownFence(node: ExtraProps["node"]): MarkdownFence | undefin
 export function markdownFenceIsMermaid(fence: MarkdownFence | undefined): boolean {
     return fence?.label?.trim().toLowerCase() === "mermaid";
 }
+
+/**
+ * The exact command from a fence that explicitly identifies itself as a local
+ * shell. Unlabelled snippets and console transcripts stay read-only: a Run
+ * affordance must never guess that arbitrary code or copied output is safe to
+ * hand to a terminal.
+ */
+export function markdownFenceCommand(fence: MarkdownFence | undefined): string | undefined {
+    const label = fence?.label?.trim().toLowerCase();
+    if (
+        label !== "bash" &&
+        label !== "sh" &&
+        label !== "shell" &&
+        label !== "shellscript" &&
+        label !== "zsh"
+    )
+        return undefined;
+    return fence?.text;
+}

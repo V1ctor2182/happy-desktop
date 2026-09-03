@@ -1,5 +1,6 @@
 import type {
     HappyAgentTerminalHandle,
+    HappyAgentTerminalOpenOptions,
     HappyAgentTerminalStore,
 } from "./happyAgentTerminalStore.js";
 import type { HappyAgentGroupId, HappyAgentSessionId } from "./happyAgentTypes.js";
@@ -133,7 +134,8 @@ export interface HappyAgentPanelStore {
      * the open session, so there has to be one; the tab itself belongs to the
      * group and stays put as the reader moves between that group's sessions.
      */
-    terminalAdd(): void;
+    /** Starts an interactive shell, or runs one command when supplied. */
+    terminalAdd(command?: string): void;
     /** Adds a browser tab to the open group, optionally at one safe web URL, and selects it. */
     browserAdd(url?: string): void;
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
@@ -183,7 +185,10 @@ export interface HappyAgentPanelStore {
 
 export interface HappyAgentPanelDeps {
     /** Opens one terminal in a session; the panel owns the returned lease. */
-    readonly terminalOpen: (sessionId: HappyAgentSessionId) => HappyAgentTerminalHandle;
+    readonly terminalOpen: (
+        sessionId: HappyAgentSessionId,
+        options?: HappyAgentTerminalOpenOptions,
+    ) => HappyAgentTerminalHandle;
     /**
      * How one group's arrangement survives the window. Both are optional so the
      * same store works standalone in a blueprint and in tests, where nothing is
@@ -369,7 +374,11 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         });
     };
 
-    const terminalTabAdd = (group: HappyAgentGroupId, session: HappyAgentSessionId): void => {
+    const terminalTabAdd = (
+        group: HappyAgentGroupId,
+        session: HappyAgentSessionId,
+        command?: string,
+    ): void => {
         const id = `tab_${nextTabNumber}` as HappyAgentPanelTabId;
         // Terminals are numbered across the workspace rather than per group so a
         // label never silently means two different shells.
@@ -381,7 +390,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             label,
             groupId: group,
             placement: "panel",
-            terminal: deps.terminalOpen(session),
+            terminal: deps.terminalOpen(session, command === undefined ? undefined : { command }),
         });
         activeByGroup.set(group, id);
         activeViewId = id;
@@ -543,9 +552,9 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             remember();
             recompute();
         },
-        terminalAdd() {
+        terminalAdd(command) {
             if (disposed || !groupId || !conversationId || terminalRefusal !== undefined) return;
-            terminalTabAdd(groupId, conversationId);
+            terminalTabAdd(groupId, conversationId, command);
             open = true;
             remember();
             recompute();

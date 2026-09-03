@@ -194,6 +194,10 @@ export type ConversationViewProps = {
      * workspace behind it has nothing to open.
      */
     onFileOpen?: (path: string) => void;
+    /** Runs an agent-proposed shell block in this conversation's workspace. */
+    onCommandRun?: (command: string) => void;
+    /** Why proposed shell blocks cannot currently run. */
+    commandRunDisabledReason?: string;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -672,6 +676,14 @@ export function ConversationView(props: ConversationViewProps) {
                                 onDelegationSelect={props.onDelegationSelect}
                                 now={props.now}
                                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
+                                {...(props.onCommandRun
+                                    ? { onCommandRun: props.onCommandRun }
+                                    : {})}
+                                {...(props.commandRunDisabledReason === undefined
+                                    ? {}
+                                    : {
+                                          commandRunDisabledReason: props.commandRunDisabledReason,
+                                      })}
                                 onTraceToggle={props.onTraceToggle}
                                 /* Either kind of row can be the one a turn hung
                                    its control on: the answer when the turn is

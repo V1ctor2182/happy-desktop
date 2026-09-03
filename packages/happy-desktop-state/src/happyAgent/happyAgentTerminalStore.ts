@@ -69,6 +69,13 @@ export interface HappyAgentTerminalDeps {
     readonly driverCreate?: TerminalDriverCreate;
 }
 
+/** How a new terminal process starts. Omit `command` for an interactive shell. */
+export interface HappyAgentTerminalOpenOptions {
+    readonly command?: string;
+    readonly cols?: number;
+    readonly rows?: number;
+}
+
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
 
@@ -88,9 +95,10 @@ const DEFAULT_ROWS = 24;
 export function happyAgentTerminalOpen(
     deps: HappyAgentTerminalDeps,
     sessionId: HappyAgentSessionId,
-    cols = DEFAULT_COLS,
-    rows = DEFAULT_ROWS,
+    options: HappyAgentTerminalOpenOptions = {},
 ): HappyAgentTerminalHandle {
+    const cols = options.cols ?? DEFAULT_COLS;
+    const rows = options.rows ?? DEFAULT_ROWS;
     let disposed = false;
     let stopRequested = false;
     let terminalId: HappyAgentTerminalId | undefined;
@@ -175,6 +183,7 @@ export function happyAgentTerminalOpen(
                 cols,
                 rows,
                 colorScheme: deps.colorScheme,
+                ...(options.command === undefined ? {} : { command: options.command }),
             });
         })
         .then(

@@ -65,6 +65,10 @@ export type ConversationEntryViewProps = {
     now?: number;
     /** Opens a workspace file named by a tool call or linked from a message. */
     onFileOpen?: (path: string) => void;
+    /** Runs an agent-proposed shell block in the owning workspace terminal. */
+    onCommandRun?: (command: string) => void;
+    /** Why proposed commands cannot currently run, while leaving the affordance visible. */
+    commandRunDisabledReason?: string;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -429,6 +433,12 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     : undefined
             }
             {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
+            {...(author?.kind === "agent" && props.onCommandRun
+                ? { onCommandRun: props.onCommandRun }
+                : {})}
+            {...(author?.kind === "agent" && props.commandRunDisabledReason !== undefined
+                ? { commandRunDisabledReason: props.commandRunDisabledReason }
+                : {})}
             own={own}
             style={props.style}
             time={messageTime(message.createdAt)}

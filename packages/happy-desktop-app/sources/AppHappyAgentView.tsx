@@ -4669,6 +4669,16 @@ function HappyAgentConversationSurface(props: {
                 ) : undefined
             }
             composer={conversation.composer}
+            {...(props.unavailable === undefined && props.writeRefusal === undefined
+                ? {
+                      onCommandRun: (command: string) => {
+                          if (props.happyAgentOnline()) workspace.panel.terminalAdd(command);
+                      },
+                  }
+                : {
+                      commandRunDisabledReason:
+                          props.unavailable ?? props.writeRefusal ?? "Terminal unavailable",
+                  })}
             composerDisabled={props.readOnly}
             composerSubmitDisabled={sendRefusal !== undefined}
             composerFocusOnType={!props.readOnly && props.focusOnType}

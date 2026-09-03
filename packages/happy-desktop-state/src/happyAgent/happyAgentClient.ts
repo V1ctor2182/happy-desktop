@@ -9,6 +9,7 @@ import type { HappyAgentConnection } from "../happyAgentConnection/index.js";
 import {
     happyAgentTerminalOpen,
     type HappyAgentTerminalHandle,
+    type HappyAgentTerminalOpenOptions,
 } from "./happyAgentTerminalStore.js";
 import {
     happyAgentChatStoreCreate,
@@ -285,7 +286,10 @@ export interface HappyAgentWorkspaceClient {
      * same session are two separate shells, which is the whole point of being able
      * to open more than one. Disposing the handle stops the remote terminal.
      */
-    terminalOpen(sessionId: HappyAgentSessionId): HappyAgentTerminalHandle;
+    terminalOpen(
+        sessionId: HappyAgentSessionId,
+        options?: HappyAgentTerminalOpenOptions,
+    ): HappyAgentTerminalHandle;
     [Symbol.dispose](): void;
 }
 
@@ -707,7 +711,7 @@ export function happyAgentWorkspaceClientCreate(
             binding.restoring = true;
             chatActivate(binding);
         },
-        terminalOpen(sessionId) {
+        terminalOpen(sessionId, options) {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             return happyAgentTerminalOpen(
                 {
@@ -719,6 +723,7 @@ export function happyAgentWorkspaceClientCreate(
                         : {}),
                 },
                 sessionId,
+                options,
             );
         },
         [Symbol.dispose]() {
