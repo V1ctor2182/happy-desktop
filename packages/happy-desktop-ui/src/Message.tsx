@@ -32,6 +32,7 @@ import {
 } from "./messageListDisclosureAnchor";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
 import { ScrollArea } from "./Scrollbar";
+import { Tooltip } from "./Tooltip";
 export type MessageSegment =
     | {
           kind: "text";
@@ -163,6 +164,12 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     defaultBodyExpanded?: boolean;
     /** Reports a prompt-body disclosure change to its row-geometry owner. */
     onBodyExpandedChange?: (expanded: boolean) => void;
+    /** Copies this historical prompt into the active composer for a new send. */
+    onEditAndResend?: () => void;
+    /** Keeps the edit action present but unavailable without discarding why. */
+    editAndResendDisabledReason?: string;
+    /** Forces hover actions visible in a Blueprint or other presentation fixture. */
+    actionsVisible?: boolean;
     /** Attachment cards (runs, approvals, events) rendered below the body. */
     children?: ReactNode;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */
@@ -292,6 +299,7 @@ const GUTTER_MARK_PIXELS = 12;
 export function Message(props: MessageProps) {
     const [local, rest] = partitionComponentProps(props, [
         "agent",
+        "actionsVisible",
         "audienceLabel",
         "automated",
         "author",
@@ -305,6 +313,7 @@ export function Message(props: MessageProps) {
         "contextNote",
         "deliveryState",
         "defaultBodyExpanded",
+        "editAndResendDisabledReason",
         "emptyText",
         "generationStatus",
         "streamingCaret",
@@ -316,6 +325,7 @@ export function Message(props: MessageProps) {
         "onFileOpen",
         "onCommandRun",
         "commandRunDisabledReason",
+        "onEditAndResend",
         "initials",
         "metaAccessory",
         "onAuthorSelect",
@@ -651,6 +661,7 @@ export function Message(props: MessageProps) {
             {...rest}
             className={["happy-message", local.className].filter(Boolean).join(" ")}
             data-agent={local.agent ? "" : undefined}
+            data-actions-visible={local.actionsVisible ? "" : undefined}
             data-own={local.own ? "" : undefined}
             data-compact={grouped() ? "" : undefined}
             data-delivery-state={deliveryState()}
@@ -706,10 +717,37 @@ export function Message(props: MessageProps) {
                             </span>
                         ) : null}
                         <span
-                            className="happy-message__aside-time"
-                            data-happy-desktop-ui="message-aside-time"
+                            className="happy-message__aside"
+                            data-happy-desktop-ui="message-aside"
+                            data-has-edit-action={local.onEditAndResend ? "" : undefined}
                         >
-                            {local.gutterTime ?? local.time ?? ""}
+                            <span
+                                className="happy-message__aside-time"
+                                data-happy-desktop-ui="message-aside-time"
+                            >
+                                {local.gutterTime ?? local.time ?? ""}
+                            </span>
+                            {local.onEditAndResend ? (
+                                <Tooltip
+                                    className="happy-message__edit-and-resend"
+                                    label={local.editAndResendDisabledReason ?? "Edit and resend"}
+                                    placement="top"
+                                >
+                                    <Button
+                                        aria-label={
+                                            local.editAndResendDisabledReason === undefined
+                                                ? "Edit and resend this prompt"
+                                                : `Edit and resend unavailable: ${local.editAndResendDisabledReason}`
+                                        }
+                                        disabled={local.editAndResendDisabledReason !== undefined}
+                                        icon="edit"
+                                        iconOnly
+                                        onClick={() => local.onEditAndResend?.()}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                </Tooltip>
+                            ) : null}
                         </span>
                         {bodyNode}
                     </div>

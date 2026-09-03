@@ -8,6 +8,7 @@ import {
     conversationTurnStatusAfterActivity,
     conversationTurnStatusStartsGroup,
 } from "./conversationMessageGrouped";
+import { conversationPromptCanEditAndResend } from "./conversationPromptActions";
 import {
     asideTimeWidth,
     markdownBodyHeight,
@@ -54,6 +55,8 @@ export type ConversationRowContext = {
     readonly activityTreatment?: "detailed" | "focused";
     /** Explicit disclosure state supplied by the UI owner; never inferred from a row. */
     readonly expanded?: boolean;
+    /** Whether representable own prompts render the edit-and-resend action lane. */
+    readonly editAndResendEnabled?: boolean;
 };
 type CachedRowHeight = { readonly value: number | undefined };
 type Dictionary<T> = Record<string, T | undefined>;
@@ -138,6 +141,8 @@ const BUBBLE_CAP = 0.76;
 const BUBBLE_PADDING = 24;
 /** The transparent-until-hover time that shares an own message's bubble line. */
 const ASIDE_TIME_GAP = 8;
+/** Shared small icon-only Button occupying the same aside lane as the hover time. */
+const OWN_MESSAGE_ACTION_WIDTH = 28;
 /** Inline grouped-message metadata: NBSP plus `.happy-message__hover-meta` padding. */
 const GROUPED_TRAILING_META_PADDING = 8;
 /** `.happy-message__media` — top margin, inter-tile gap, and its own cap. */
@@ -274,11 +279,12 @@ export function messageBodyMeasure(
     treatment: MessageTreatment,
     time: string,
     cache?: MessageTextLayoutCache,
+    ownAction = false,
 ): number {
     if (treatment === "agent") return width - AGENT_INSET;
     if (treatment === "incoming") return (width - INCOMING_INSET) * BUBBLE_CAP - BUBBLE_PADDING;
     const column = width - OWN_INSET;
-    const aside = asideTimeWidth(time, cache);
+    const aside = Math.max(asideTimeWidth(time, cache), ownAction ? OWN_MESSAGE_ACTION_WIDTH : 0);
     return Math.min(column * BUBBLE_CAP, column - ASIDE_TIME_GAP - aside) - BUBBLE_PADDING;
 }
 /** Fixed collapsed height of an activity row, or `undefined` for a richer kind. */
@@ -338,6 +344,7 @@ export function messageRowHeight(input: {
     readonly grouped: boolean;
     readonly mermaidEnabled?: boolean;
     readonly metaAccessory: boolean;
+    readonly ownAction?: boolean;
     readonly surface: ConversationSurface;
     readonly textCache?: MessageTextLayoutCache;
     readonly time: string;
@@ -350,7 +357,13 @@ export function messageRowHeight(input: {
     const chrome =
         (input.grouped ? tight : leading) + (input.grouped && input.metaAccessory ? META_ROW : 0);
     if (!input.bodyVisible) return chrome;
-    const measure = messageBodyMeasure(input.width, input.treatment, input.time, input.textCache);
+    const measure = messageBodyMeasure(
+        input.width,
+        input.treatment,
+        input.time,
+        input.textCache,
+        input.ownAction,
+    );
     /* Grouped incoming/agent rows append their hover time to the final word in
        one non-wrapping inline run. Include that run in the text model: at a
        narrow width it can move the final word and timestamp onto the next line. */
@@ -597,6 +610,9 @@ export function conversationRowHeight(
     const agent = message.sender?.kind === "agent";
     const human = message.sender?.kind === "human";
     const own = message.sender !== undefined && message.sender.id === context.viewerId;
+    const ownAction =
+        context.editAndResendEnabled === true &&
+        conversationPromptCanEditAndResend(entry, context.viewerId);
     const grouped = conversationMessageGrouped(entries, index);
     const treatment: MessageTreatment = agent ? "agent" : own ? "own" : "incoming";
     const trace = message.agentTrace;
@@ -626,6 +642,7 @@ export function conversationRowHeight(
         treatment,
         grouped ? "grouped" : "leading",
         human ? (context.expanded ? "body-expanded" : "body-collapsed") : "body-full",
+        ownAction ? "edit-action" : "no-edit-action",
         traceCollapsible ? "trace" : "plain",
         resumesAfterActivity ? "resumed" : "continuous",
         precedesActivity ? "continues" : closedByStatus ? "closing" : "open",
@@ -639,6 +656,7 @@ export function conversationRowHeight(
             grouped,
             mermaidEnabled: message.generationStatus !== "streaming",
             metaAccessory: !own && traceCollapsible,
+            ownAction,
             surface: context.surface,
             textCache: cache?.text,
             time: messageTimeSample(message.createdAt),
