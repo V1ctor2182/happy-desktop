@@ -70,6 +70,12 @@ const PROVIDERS_POLL_INTERVAL_MS = 4_000;
 /** Authentication-only checks are cheap, but still leave the machine for the provider. */
 const PROVIDER_AUTHENTICATION_POLL_INTERVAL_MS = 30_000;
 
+/**
+ * The daemon bounds one verification at 30 seconds, but a daemon that is wedged or restarting
+ * never answers at all; without a client-side bound the row would read "Checking" forever.
+ */
+const PROVIDER_AUTHENTICATION_TIMEOUT_MS = 45_000;
+
 interface ProviderAuthenticationReading {
     readonly status: Exclude<HappyAgentProviderAuthentication, "checking">;
     /** False when this provider can authenticate only by running paid inference. */
@@ -176,7 +182,12 @@ export function happyAgentProvidersStoreCreate(
                     const result = await deps.client.verifyProvider(
                         provider.id,
                         { level: "authentication" },
-                        { signal: active.signal },
+                        {
+                            signal: AbortSignal.any([
+                                active.signal,
+                                AbortSignal.timeout(PROVIDER_AUTHENTICATION_TIMEOUT_MS),
+                            ]),
+                        },
                     );
                     return {
                         providerId: provider.id,
