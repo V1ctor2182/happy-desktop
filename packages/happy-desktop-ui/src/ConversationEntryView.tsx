@@ -70,9 +70,9 @@ export type ConversationEntryViewProps = {
     onCommandRun?: (command: string) => void;
     /** Why proposed commands cannot currently run, while leaving the affordance visible. */
     commandRunDisabledReason?: string;
-    /** Copies one representable historical prompt into the current composer. */
-    onEditAndResend?: (text: string) => void;
-    /** Why replacing the composer with a historical prompt is unavailable. */
+    /** Resends edited historical text as a new prompt without rewriting the entry. */
+    onEditAndResend?: (text: string) => void | Promise<void>;
+    /** Why inline editing and resending is unavailable. */
     editAndResendDisabledReason?: string;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
@@ -457,7 +457,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 : {})}
             {...(conversationPromptCanEditAndResend(entry, props.viewerId) && props.onEditAndResend
                 ? {
-                      onEditAndResend: () => props.onEditAndResend?.(message.text),
+                      onEditAndResend: (text) => props.onEditAndResend?.(text),
                       ...(props.editAndResendDisabledReason === undefined
                           ? {}
                           : {

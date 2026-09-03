@@ -338,25 +338,6 @@ export function FloatingConversationDockPage() {
                     <AttachmentDockSpecimen />
                 </Box>
             </Specimen>
-            <Specimen
-                detail="A historical text-only prompt copied into the ordinary draft: editable in place and sent as a new message"
-                label="Edit and resend draft"
-                number="06"
-                stage="surface"
-            >
-                <Box
-                    style={{
-                        background: "var(--surface)",
-                        display: "flex",
-                        flexDirection: "column",
-                        minHeight: "220px",
-                        justifyContent: "flex-end",
-                        width: "520px",
-                    }}
-                >
-                    {dock("Re-run the release checks against the production configuration.")}
-                </Box>
-            </Specimen>
         </ComponentPage>
     );
 }

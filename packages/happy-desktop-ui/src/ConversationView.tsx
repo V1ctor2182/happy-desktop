@@ -198,8 +198,8 @@ export type ConversationViewProps = {
     onCommandRun?: (command: string) => void;
     /** Why proposed shell blocks cannot currently run. */
     commandRunDisabledReason?: string;
-    /** Copies a representable historical prompt into this conversation's composer. */
-    onEditAndResend?: (text: string) => void;
+    /** Resends edited historical text as a new prompt without rewriting history. */
+    onEditAndResend?: (text: string) => void | Promise<void>;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -334,7 +334,6 @@ export function ConversationView(props: ConversationViewProps) {
     const conversationCacheKey =
         props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
     const [rowExpansion, setRowExpansion] = useState(() => new Map<string, boolean>());
-    const [composerFocusRequest, setComposerFocusRequest] = useState<number | undefined>();
     const rowExpansionKey = (entry: ConversationEntry) =>
         `${conversationCacheKey}:${entryKey(entry)}`;
     const rowExpanded = (entry: ConversationEntry) =>
@@ -354,16 +353,7 @@ export function ConversationView(props: ConversationViewProps) {
     if (cachedRowHeights === undefined) rowHeightCaches.set(conversationCacheKey, rowHeightCache);
     const { transcript, queued } = conversationPendingMessages(props.entries);
     const editAndResendEnabled = props.onEditAndResend !== undefined;
-    const editAndResendDisabledReason =
-        composer.text.length > 0 || composer.attachments.length > 0
-            ? "Clear the current draft before editing a previous prompt"
-            : undefined;
-    const editAndResend = editAndResendEnabled
-        ? (text: string) => {
-              props.onEditAndResend?.(text);
-              setComposerFocusRequest((current) => (current ?? 0) + 1);
-          }
-        : undefined;
+    const editAndResend = editAndResendEnabled ? props.onEditAndResend : undefined;
     const awaitingInput = transcript.some(
         (entry) =>
             entry.kind === "request" &&
@@ -595,9 +585,6 @@ export function ConversationView(props: ConversationViewProps) {
                                                     {...(editAndResend === undefined
                                                         ? {}
                                                         : { onEditAndResend: editAndResend })}
-                                                    {...(editAndResendDisabledReason === undefined
-                                                        ? {}
-                                                        : { editAndResendDisabledReason })}
                                                     rowExpanded={rowExpanded(entry)}
                                                     viewerId={props.viewerId}
                                                 />
@@ -717,9 +704,6 @@ export function ConversationView(props: ConversationViewProps) {
                                 {...(editAndResend === undefined
                                     ? {}
                                     : { onEditAndResend: editAndResend })}
-                                {...(editAndResendDisabledReason === undefined
-                                    ? {}
-                                    : { editAndResendDisabledReason })}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onRequestSelectionChange={props.onRequestSelectionChange}
                                 onRowExpandedChange={(expanded) =>
@@ -768,14 +752,9 @@ export function ConversationView(props: ConversationViewProps) {
                 submitDisabled={props.composerSubmitDisabled === true}
                 composerFooterControl={props.composerFooterControl}
                 composerFocusOnType={props.composerFocusOnType}
-                {...(composerFocusRequest === undefined && props.composerFocusKey === undefined
+                {...(props.composerFocusKey === undefined
                     ? {}
-                    : {
-                          composerFocusKey:
-                              composerFocusRequest === undefined
-                                  ? props.composerFocusKey
-                                  : `${props.composerFocusKey ?? "composer"}:edit-and-resend:${String(composerFocusRequest)}`,
-                      })}
+                    : { composerFocusKey: props.composerFocusKey })}
                 composerPlaceholder={props.composerPlaceholder}
                 onAbort={props.onAbort}
                 onCommandInvoke={props.onCommandInvoke}

@@ -491,6 +491,100 @@
     color: var(--user-message-text);
 }
 
+/* Editing replaces the immutable bubble with a temporary full-row form. The
+   textarea keeps enough height for a short multiline prompt while the footer
+   carries secondary explanation and the two explicit outcomes. */
+.happy-message__prompt-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy-message__prompt-editor-control {
+    display: flex;
+    width: 100%;
+    min-height: 88px;
+    padding: 12px 16px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+    transition:
+        border-color 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.happy-message__prompt-editor-control:focus-within {
+    border-color: var(--radio-active);
+    box-shadow: 0 0 0 1px var(--radio-active);
+}
+
+.happy-message__prompt-editor-input {
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 62px;
+    max-height: 214px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    resize: none;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 15px;
+    font-synthesis: none;
+    font-weight: 500;
+    line-height: 22px;
+}
+
+.happy-message__prompt-editor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy-message__prompt-editor-note {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy-radius-pill);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: help;
+}
+
+.happy-message__prompt-editor-note:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+.happy-message__prompt-editor-error {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--box-error-text);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+}
+
+.happy-message__prompt-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 /* Own bubble + its hover time sit on one right-justified line so the 11px mono
    time reveals immediately before the accent bubble, on its left. The line spans the
    full content width, so the body's 76% cap resolves against the column. */

@@ -21,6 +21,7 @@ import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
+import { Octicon } from "./vectorIcons/VectorIcon";
 import {
     messageMediaSingleBox,
     USER_PROMPT_COLLAPSED_CONTENT_HEIGHT,
@@ -169,10 +170,12 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     defaultBodyExpanded?: boolean;
     /** Reports a prompt-body disclosure change to its row-geometry owner. */
     onBodyExpandedChange?: (expanded: boolean) => void;
-    /** Copies this historical prompt into the active composer for a new send. */
-    onEditAndResend?: () => void;
+    /** Resends edited historical text as a new prompt without rewriting this message. */
+    onEditAndResend?: (text: string) => void | Promise<void>;
     /** Keeps the edit action present but unavailable without discarding why. */
     editAndResendDisabledReason?: string;
+    /** Opens the inline editor on first render for a Blueprint or presentation fixture. */
+    defaultEditAndResendOpen?: boolean;
     /** Forces hover actions visible in a Blueprint or other presentation fixture. */
     actionsVisible?: boolean;
     /** Attachment cards (runs, approvals, events) rendered below the body. */
@@ -301,6 +304,113 @@ function hasRenderableChild(value: ReactNode): boolean {
  */
 const GUTTER_MARK_PIXELS = 12;
 
+interface InlinePromptEditorProps {
+    readonly error?: string;
+    readonly originalValue: string;
+    readonly saveUnavailable?: boolean;
+    readonly saving?: boolean;
+    readonly value: string;
+    readonly onCancel: () => void;
+    readonly onSave: () => void;
+    readonly onValueChange: (value: string) => void;
+}
+
+/** Temporary, message-local editor for resending a historical prompt. */
+function InlinePromptEditor(props: InlinePromptEditorProps) {
+    const saveDisabled =
+        props.saving === true ||
+        props.saveUnavailable === true ||
+        props.value.trim().length === 0 ||
+        props.value === props.originalValue;
+    const save = () => {
+        if (!saveDisabled) props.onSave();
+    };
+    return (
+        <form
+            className="happy-message__prompt-editor"
+            data-happy-desktop-ui="message-prompt-editor"
+            onSubmit={(event) => {
+                event.preventDefault();
+                save();
+            }}
+        >
+            <div
+                className="happy-message__prompt-editor-control"
+                data-happy-desktop-ui="message-prompt-editor-control"
+            >
+                <textarea
+                    aria-label="Edit prompt"
+                    autoFocus
+                    className="happy-message__prompt-editor-input"
+                    data-happy-desktop-ui="message-prompt-editor-input"
+                    readOnly={props.saving}
+                    onChange={(event) => props.onValueChange(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                        if (event.key === "Escape" && !props.saving) {
+                            event.preventDefault();
+                            props.onCancel();
+                        } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                            event.preventDefault();
+                            save();
+                        }
+                    }}
+                    rows={3}
+                    value={props.value}
+                />
+            </div>
+            <div
+                className="happy-message__prompt-editor-footer"
+                data-happy-desktop-ui="message-prompt-editor-footer"
+            >
+                {props.error ? (
+                    <span
+                        className="happy-message__prompt-editor-error"
+                        data-happy-desktop-ui="message-prompt-editor-error"
+                        role="alert"
+                    >
+                        {props.error}
+                    </span>
+                ) : (
+                    <Tooltip
+                        label="Saving sends a new prompt and leaves this message unchanged."
+                        placement="top"
+                    >
+                        <button
+                            aria-label="About saving an edited prompt"
+                            className="happy-message__prompt-editor-note"
+                            data-happy-desktop-ui="message-prompt-editor-note"
+                            type="button"
+                        >
+                            <Octicon name="info" size={14} />
+                        </button>
+                    </Tooltip>
+                )}
+                <span
+                    className="happy-message__prompt-editor-actions"
+                    data-happy-desktop-ui="message-prompt-editor-actions"
+                >
+                    <Button
+                        disabled={props.saving}
+                        onClick={props.onCancel}
+                        size="small"
+                        variant="ghost"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        disabled={saveDisabled}
+                        loading={props.saving}
+                        size="small"
+                        type="submit"
+                    >
+                        Save
+                    </Button>
+                </span>
+            </div>
+        </form>
+    );
+}
+
 export function Message(props: MessageProps) {
     const [local, rest] = partitionComponentProps(props, [
         "agent",
@@ -318,6 +428,7 @@ export function Message(props: MessageProps) {
         "contextNote",
         "deliveryState",
         "defaultBodyExpanded",
+        "defaultEditAndResendOpen",
         "editAndResendDisabledReason",
         "emptyText",
         "generationStatus",
@@ -352,6 +463,13 @@ export function Message(props: MessageProps) {
     const [uncontrolledBodyExpanded, setUncontrolledBodyExpanded] = useState(
         local.defaultBodyExpanded ?? false,
     );
+    const editableBody = typeof local.body === "string" ? local.body : undefined;
+    const [editDraft, setEditDraft] = useState<string | undefined>(
+        local.defaultEditAndResendOpen ? editableBody : undefined,
+    );
+    const [editSaving, setEditSaving] = useState(false);
+    const [editError, setEditError] = useState<string | undefined>();
+    const canEditAndResend = local.onEditAndResend !== undefined && editableBody !== undefined;
     const bodyExpanded = local.bodyExpanded ?? uncontrolledBodyExpanded;
     const bodyContentRef = useCallback((element: HTMLDivElement | null) => {
         bodyContentObserver.current?.disconnect();
@@ -624,6 +742,48 @@ export function Message(props: MessageProps) {
                 {bodyNode}
             </div>
         ) : null;
+    const promptEditor =
+        editDraft === undefined || editableBody === undefined ? null : (
+            <InlinePromptEditor
+                error={editError}
+                onCancel={() => {
+                    setEditDraft(undefined);
+                    setEditError(undefined);
+                }}
+                onSave={() => {
+                    const editAndResend = local.onEditAndResend;
+                    if (!editAndResend) return;
+                    setEditSaving(true);
+                    setEditError(undefined);
+                    void Promise.resolve()
+                        .then(() => editAndResend(editDraft))
+                        .then(
+                            () => {
+                                setEditSaving(false);
+                                setEditDraft(undefined);
+                            },
+                            (caught: unknown) => {
+                                setEditSaving(false);
+                                setEditError(
+                                    caught instanceof Error && caught.message.trim().length > 0
+                                        ? caught.message
+                                        : typeof caught === "string" && caught.trim().length > 0
+                                          ? caught
+                                          : "Could not resend this prompt.",
+                                );
+                            },
+                        );
+                }}
+                onValueChange={(value) => {
+                    setEditDraft(value);
+                    setEditError(undefined);
+                }}
+                originalValue={editableBody}
+                saveUnavailable={!local.onEditAndResend}
+                saving={editSaving}
+                value={editDraft}
+            />
+        );
     const incomingMeta = showIncomingMeta() ? (
         <div className="happy-message__meta" data-happy-desktop-ui="message-meta">
             {!showIncomingIdentity() ? null : local.onAuthorSelect ? (
@@ -706,60 +866,68 @@ export function Message(props: MessageProps) {
                         {local.contextNote}
                     </span>
                 ) : null}
-                {ownBubbleLine ? (
-                    <div
-                        className="happy-message__bubble-line"
-                        data-happy-desktop-ui="message-bubble-line"
-                    >
-                        {/* A media-only automated message has no bubble to open, so
+                {promptEditor ??
+                    (ownBubbleLine ? (
+                        <div
+                            className="happy-message__bubble-line"
+                            data-happy-desktop-ui="message-bubble-line"
+                        >
+                            {/* A media-only automated message has no bubble to open, so
                             its marker rides the bubble line beside the hover time
                             instead. It stays visible either way. */}
-                        {local.automated && bodyNode === null ? (
-                            <span
-                                className="happy-message__automated happy-message__automated--own"
-                                data-happy-desktop-ui="message-automated"
-                            >
-                                <AutomatedTag />
-                            </span>
-                        ) : null}
-                        <span
-                            className="happy-message__aside"
-                            data-happy-desktop-ui="message-aside"
-                            data-has-edit-action={local.onEditAndResend ? "" : undefined}
-                        >
-                            <span
-                                className="happy-message__aside-time"
-                                data-happy-desktop-ui="message-aside-time"
-                            >
-                                {local.gutterTime ?? local.time ?? ""}
-                            </span>
-                            {local.onEditAndResend ? (
-                                <Tooltip
-                                    className="happy-message__edit-and-resend"
-                                    label={local.editAndResendDisabledReason ?? "Edit and resend"}
-                                    placement="top"
+                            {local.automated && bodyNode === null ? (
+                                <span
+                                    className="happy-message__automated happy-message__automated--own"
+                                    data-happy-desktop-ui="message-automated"
                                 >
-                                    <Button
-                                        aria-label={
-                                            local.editAndResendDisabledReason === undefined
-                                                ? "Edit and resend this prompt"
-                                                : `Edit and resend unavailable: ${local.editAndResendDisabledReason}`
-                                        }
-                                        disabled={local.editAndResendDisabledReason !== undefined}
-                                        icon="edit"
-                                        iconOnly
-                                        onClick={() => local.onEditAndResend?.()}
-                                        size="small"
-                                        variant="ghost"
-                                    />
-                                </Tooltip>
+                                    <AutomatedTag />
+                                </span>
                             ) : null}
-                        </span>
-                        {bodyNode}
-                    </div>
-                ) : (
-                    (groupedIncomingLine ?? bodyNode)
-                )}
+                            <span
+                                className="happy-message__aside"
+                                data-happy-desktop-ui="message-aside"
+                                data-has-edit-action={canEditAndResend ? "" : undefined}
+                            >
+                                <span
+                                    className="happy-message__aside-time"
+                                    data-happy-desktop-ui="message-aside-time"
+                                >
+                                    {local.gutterTime ?? local.time ?? ""}
+                                </span>
+                                {canEditAndResend ? (
+                                    <Tooltip
+                                        className="happy-message__edit-and-resend"
+                                        label={
+                                            local.editAndResendDisabledReason ?? "Edit and resend"
+                                        }
+                                        placement="top"
+                                    >
+                                        <Button
+                                            aria-label={
+                                                local.editAndResendDisabledReason === undefined
+                                                    ? "Edit and resend this prompt"
+                                                    : `Edit and resend unavailable: ${local.editAndResendDisabledReason}`
+                                            }
+                                            disabled={
+                                                local.editAndResendDisabledReason !== undefined
+                                            }
+                                            icon="edit"
+                                            iconOnly
+                                            onClick={() => {
+                                                setEditDraft(editableBody);
+                                                setEditError(undefined);
+                                            }}
+                                            size="small"
+                                            variant="ghost"
+                                        />
+                                    </Tooltip>
+                                ) : null}
+                            </span>
+                            {bodyNode}
+                        </div>
+                    ) : (
+                        (groupedIncomingLine ?? bodyNode)
+                    ))}
                 {local.images && local.images.length > 0 ? (
                     <div
                         className="happy-message__media"

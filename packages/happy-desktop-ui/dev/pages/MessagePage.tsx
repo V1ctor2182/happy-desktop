@@ -487,7 +487,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="A settled text-only prompt reveals one compact edit action in the timestamp lane; an existing draft keeps it visible but safely disabled"
+                detail="A settled text-only prompt reveals one compact edit action; selecting it replaces the bubble with a focused editor whose unchanged Save action remains disabled"
                 label="Message — edit and resend"
                 number="09c"
                 stage="app"
@@ -507,14 +507,24 @@ export function MessagePage() {
                         <Message
                             actionsVisible
                             author="Steve"
-                            body="Keep the migration backward compatible."
-                            editAndResendDisabledReason="Clear the current draft before editing a previous prompt"
+                            body="This prompt belongs to a read-only session."
+                            editAndResendDisabledReason="This session is read-only"
                             onEditAndResend={() => undefined}
                             own
                             time="11:03"
                         />,
                     )}
-                    <DimensionRule label="28px edit action overlays the timestamp lane · no transcript mutation" />
+                    {channelFrame(
+                        <Message
+                            author="Steve"
+                            body="how to setup automatic payment for my credit card"
+                            defaultEditAndResendOpen
+                            onEditAndResend={() => undefined}
+                            own
+                            time="11:04"
+                        />,
+                    )}
+                    <DimensionRule label="28px edit action · inline Cancel and Save · no transcript mutation" />
                 </div>
             </Specimen>
 
