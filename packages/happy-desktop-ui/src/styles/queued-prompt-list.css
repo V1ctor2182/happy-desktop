@@ -1,0 +1,68 @@
+/*
+ * QueuedPromptList — the prompts waiting behind the current run, docked
+ * directly above the composer card.
+ *
+ * One bordered stack, its rows 36px tall on the composer's own 16px radius,
+ * so it reads as part of the input rather than as transcript. The glyph says
+ * what kind of wait each row is in, the text keeps to one line with the full
+ * prompt in its title, and the actions sit at the far edge in the small
+ * control size so the row stays quiet next to the input beneath it.
+ */
+
+.happy-queued-prompts {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 100%;
+    overflow: hidden;
+    font-family: var(--happy-font-ui);
+    background: var(--input-background);
+    border: 1px solid var(--divider);
+    border-radius: 16px;
+}
+
+.happy-queued-prompts__row {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    height: 36px;
+    padding: 0 6px 0 14px;
+}
+
+.happy-queued-prompts__row + .happy-queued-prompts__row {
+    border-top: 1px solid var(--divider);
+}
+
+.happy-queued-prompts__glyph {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+.happy-queued-prompts__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-queued-prompts__actions {
+    display: flex;
+    flex: none;
+    gap: 2px;
+    align-items: center;
+}
+
+.happy-queued-prompts__state {
+    padding: 0 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: var(--text-secondary);
+}

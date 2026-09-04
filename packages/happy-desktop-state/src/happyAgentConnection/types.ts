@@ -2,8 +2,10 @@ import type {
     Agent,
     Bot,
     HappyAgentClient,
+    EventEnvelope,
     HappyAgentEvent,
     MessageBlock,
+    MessageDelivery,
     MessageMode,
     MutationId,
     Project,
@@ -413,7 +415,7 @@ export interface SessionState {
     models: readonly unknown[];
     pendingUserInputs: readonly UserInputRequest[];
     pendingMessages: readonly {
-        message: { id: string; blocks: readonly MessageBlock[] };
+        message: { id: string; blocks: readonly MessageBlock[]; delivery: MessageDelivery };
     }[];
     /** Complete ordered command catalog for this focused agent. */
     slashCommands: readonly SlashCommand[];
@@ -628,6 +630,8 @@ export type MutationAction =
     | "invoke_slash_command"
     | "stop_background_process"
     | "stop_run"
+    | "withdraw_message"
+    | "steer_message"
     | "switch_model"
     | "set_effort"
     | "set_service_tier"
@@ -691,6 +695,11 @@ export interface SendMessageInput {
         | { type: "text"; text: string }
         | { type: "image"; mediaType: string; data: string }
     )[];
+    /**
+     * Defaults to `"queue"`, which waits behind the current run. `"steer"`
+     * reaches the current run at its next inference boundary.
+     */
+    delivery?: MessageDelivery;
     text: string;
 }
 
@@ -790,6 +799,14 @@ export interface HappyAgentConnection {
     invokeSlashCommand(sessionId: string, name: string, argumentsValue?: string): MutationId;
     stopBackgroundProcess(sessionId: string, projectedProcessId: number): MutationId;
     stopRun(sessionId: string): MutationId;
+    /** Withdraws one pending queued or steering message before the agent takes it up. */
+    withdrawMessage(sessionId: string, messageId: string): MutationId;
+    /**
+     * Promotes one queued message to steering: withdraws it, then resends the
+     * same content and mode so it reaches the current run at its next
+     * inference boundary rather than after the run.
+     */
+    steerMessage(sessionId: string, messageId: string): MutationId;
     compactSession(sessionId: string): MutationId;
     setDraft(sessionId: string, update: string | DraftUpdate): MutationId;
     switchModel(sessionId: string, selection: string | ModelSelection): MutationId;
@@ -838,6 +855,23 @@ export type ServerCompatibility =
       };
 
 export type SessionEvent = HappyAgentEvent;
+
+/**
+ * `message.withdrawn` — a pending user message left the queue before the agent
+ * took it up. The daemon API documents the event; the pinned client predates
+ * it, so the connection carries the contract itself.
+ */
+export interface MessageWithdrawnPayload {
+    agentId: string;
+    messageId: string;
+    /** Echoed when the withdrawal request supplied one. */
+    mutationId?: string;
+}
+
+/** Every event the connection applies: the client's union plus the ones it predates. */
+export type HappyAgentConnectionEvent =
+    | HappyAgentEvent
+    | EventEnvelope<"message.withdrawn", MessageWithdrawnPayload>;
 export interface SessionStreamHello {
     connection: ConnectionState;
     session?: SessionState;

@@ -280,6 +280,11 @@ export {
     type ConversationDockProps,
     type FloatingConversationDockProps,
 } from "./ConversationDock";
+export {
+    QueuedPromptList,
+    type QueuedPrompt,
+    type QueuedPromptListProps,
+} from "./QueuedPromptList";
 export { ComposerPanel, type ComposerPanelProps } from "./ComposerPanel";
 export {
     HappyAgentUserInputPrompt,

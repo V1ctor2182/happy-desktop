@@ -175,41 +175,6 @@
     padding: 12px 16px 0;
 }
 
-/*
- * Input the reader has queued but the turn has not taken yet. It sits below
- * the live status line rather than among the rows above it, because it is the
- * one thing in the transcript that has not happened: ordered as history it
- * would read as something the agent had already been told.
- *
- * It is held back rather than greyed out — the words stay the reader's own, at
- * their own colour, just short of full presence — and it comes forward as it is
- * applied, at which point it becomes an ordinary row in the transcript above.
- */
-.happy-conversation__queued {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    width: 100%;
-}
-
-.happy-conversation__queued-item > .happy-message {
-    opacity: 0.62;
-    transition: opacity 160ms ease;
-}
-
-.happy-conversation__queued-state {
-    width: 100%;
-    max-width: var(--happy-chat-measure);
-    height: 28px;
-    padding: 0 20px;
-    margin: -6px auto 0;
-    font-family: var(--happy-font-ui);
-    font-size: 12px;
-    line-height: 20px;
-    color: var(--text-secondary);
-    text-align: right;
-}
-
 .happy-conversation__panel,
 .happy-conversation__empty {
     flex: 1 1 auto;

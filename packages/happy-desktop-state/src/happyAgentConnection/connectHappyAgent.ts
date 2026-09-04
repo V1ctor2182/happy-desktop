@@ -6,11 +6,11 @@ import {
     type AgentActivityResponse,
     type AgentContextUsage,
     type AgentDraftSnapshot,
+    type ApiErrorBody,
     type Bot,
     type BackgroundProcess,
     type DaemonConfig,
     type GitState,
-    type HappyAgentEvent,
     type Message,
     type MessageBlock,
     type MessageMode,
@@ -34,6 +34,7 @@ import {
     applyChanges,
     defaultMode,
     elementsReuse,
+    messageText,
     modeOf,
     projectElements,
     projectBots,
@@ -54,6 +55,7 @@ import type {
     MutationAction,
     MutationRejectedDelta,
     HappyAgentConnection,
+    HappyAgentConnectionEvent,
     HappyAgentGroupsSubscriptionOptions,
     HappyAgentSessionSubscriptionOptions,
     ServerCompatibility,
@@ -120,7 +122,7 @@ interface SessionEntry {
     loadingMore: boolean;
     loadMoreError?: string;
     hydrating: boolean;
-    bufferedEvents: HappyAgentEvent[];
+    bufferedEvents: HappyAgentConnectionEvent[];
     activityLoading: Promise<void> | undefined;
     activityRevision: number;
     /** A journal gap made this cached session incomplete; reconcile when it is next observed. */
@@ -144,7 +146,7 @@ interface GroupsSubscriber extends HappyAgentGroupsSubscriptionOptions {
 }
 
 interface RecentEvent {
-    event: HappyAgentEvent;
+    event: HappyAgentConnectionEvent;
     receivedAt: number;
 }
 
@@ -197,8 +199,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     let config: DaemonConfig | undefined;
     let cursor: string | undefined;
     let resyncTask: Promise<void> | undefined;
-    const resyncBufferedEvents: HappyAgentEvent[] = [];
-    const hydrationBroadcastEvents: HappyAgentEvent[] = [];
+    const resyncBufferedEvents: HappyAgentConnectionEvent[] = [];
+    const hydrationBroadcastEvents: HappyAgentConnectionEvent[] = [];
     const recentEvents: RecentEvent[] = [];
     let compatibility: ServerCompatibility = CHECKING_SERVER_COMPATIBILITY;
     let closed = false;
@@ -613,7 +615,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         for (const event of buffered) applyEvent(event);
     };
 
-    const rememberEvent = (event: HappyAgentEvent): void => {
+    const rememberEvent = (event: HappyAgentConnectionEvent): void => {
         const receivedAt = now();
         recentEvents.push({ event, receivedAt });
         const cutoff = receivedAt - RECENT_EVENT_RETENTION_MS;
@@ -625,9 +627,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const eventsForSessionAfter = (
         entry: SessionEntry,
         after: string,
-        buffered: readonly HappyAgentEvent[],
-    ): HappyAgentEvent[] => {
-        const events = new Map<string, HappyAgentEvent>();
+        buffered: readonly HappyAgentConnectionEvent[],
+    ): HappyAgentConnectionEvent[] => {
+        const events = new Map<string, HappyAgentConnectionEvent>();
         if (resyncTask === undefined) {
             for (const candidate of recentEvents) {
                 const event = candidate.event;
@@ -977,7 +979,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
 
-    const applyEvent = (event: HappyAgentEvent): void => {
+    const applyEvent = (event: HappyAgentConnectionEvent): void => {
         if (resyncTask !== undefined) {
             resyncBufferedEvents.push(event);
             return;
@@ -1012,7 +1014,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         for (const entry of sessions.values()) publishSession(entry);
     };
 
-    const applyEventNow = (event: HappyAgentEvent): void => {
+    const applyEventNow = (event: HappyAgentConnectionEvent): void => {
         const eventAgentId = agentIdOfEvent(event);
         const hydratingEntry = eventAgentId === undefined ? undefined : sessions.get(eventAgentId);
         if (hydratingEntry?.hydrating === true) {
@@ -1295,6 +1297,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 if (entry !== undefined) publishSession(entry);
                 return;
             }
+            case "message.withdrawn":
+                forgetPendingMessage(event.payload.agentId, event.payload.messageId);
+                return;
             case "question.created":
                 updateQuestion(event.payload.question.agentId, event.payload.question);
                 return;
@@ -1491,7 +1496,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
 
     const appendMessageDelta = (
-        payload: Extract<HappyAgentEvent, { type: "message.delta" }>["payload"],
+        payload: Extract<HappyAgentConnectionEvent, { type: "message.delta" }>["payload"],
     ): void => {
         const entry = sessions.get(payload.agentId);
         if (entry === undefined) return;
@@ -1606,7 +1611,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     const patchActivityProcess = (
         entry: SessionEntry,
-        payload: Extract<HappyAgentEvent, { type: "process.updated" }>["payload"],
+        payload: Extract<HappyAgentConnectionEvent, { type: "process.updated" }>["payload"],
     ): void => {
         const current = entry.activity?.processes.find(
             (process) => process.id === payload.processId,
@@ -1913,6 +1918,78 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
             }
         }
+    };
+
+    /*
+     * The pinned client predates `POST …/messages/:messageId/withdraw`, so the
+     * connection makes the request the client would make: the same endpoint
+     * resolution, bearer token, and error reading.
+     */
+    const withdrawUrl = (sessionId: string, messageId: string): string => {
+        const base = new URL(endpoint);
+        const inherited = new URLSearchParams(base.search);
+        base.search = "";
+        base.hash = "";
+        if (!base.pathname.endsWith("/")) base.pathname += "/";
+        const url = new URL(
+            `v0/agents/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/withdraw`,
+            base,
+        );
+        for (const [name, value] of inherited) url.searchParams.append(name, value);
+        return url.toString();
+    };
+
+    const apiErrorRead = async (response: Response): Promise<HappyAgentApiError> => {
+        let body: ApiErrorBody | null = null;
+        try {
+            body = (await response.json()) as ApiErrorBody;
+        } catch {
+            body = null;
+        }
+        return new HappyAgentApiError(
+            response.status,
+            typeof body?.error === "string"
+                ? body.error
+                : `The agent answered with status ${String(response.status)}.`,
+            typeof body?.code === "string" ? body.code : null,
+            body,
+        );
+    };
+
+    const withdrawRequest = async (
+        sessionId: string,
+        messageId: string,
+        mutationId: string,
+    ): Promise<{ messageId: string; cursor: string }> => {
+        const fetchImpl = options.fetch ?? globalThis.fetch;
+        const response = await fetchImpl(withdrawUrl(sessionId, messageId), {
+            method: "POST",
+            headers: {
+                accept: "application/json",
+                authorization: `Bearer ${options.token}`,
+                "content-type": "application/json; charset=utf-8",
+            },
+            body: JSON.stringify({ mutationId }),
+            signal: deadlineSignal(),
+        });
+        if (!response.ok) throw await apiErrorRead(response);
+        return (await response.json()) as { messageId: string; cursor: string };
+    };
+
+    /**
+     * A pending message left the queue before the run took it up. Only a
+     * message still waiting leaves here: one the run accepted meanwhile is
+     * history now and stays exactly where acceptance put it.
+     */
+    const forgetPendingMessage = (agentId: string, messageId: string): void => {
+        const entry = sessions.get(agentId);
+        const current = entry?.messages.get(messageId);
+        if (entry === undefined || current === undefined) return;
+        if (current.message.role !== "user" || current.message.status !== "pending") return;
+        entry.messages.delete(messageId);
+        entry.messageBlockOffsets.delete(messageId);
+        entry.corruptedMessageIds.delete(messageId);
+        publishSession(entry);
     };
 
     const mutation = <T>(
@@ -2526,8 +2603,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     : richContent.map((block) => `[image:${block.mimeType}]`).join("");
             // Ordinary composer submissions belong to the durable queue. An idle
             // agent consumes one immediately; an active agent finishes its current
-            // run before accepting the next prompt.
-            const delivery = "queue" as const;
+            // run before accepting the next prompt. A caller may instead ask for
+            // steering, which reaches the current run at its next boundary.
+            const delivery = input.delivery ?? "queue";
             let confirmSend!: () => void;
             const confirmed = new Promise<void>((resolve) => {
                 confirmSend = resolve;
@@ -2666,6 +2744,108 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 undefined,
                 sessionId,
                 `process:${process.id}`,
+            );
+        },
+        withdrawMessage(sessionId, messageId) {
+            const mutationId = nextId();
+            return mutation(
+                "withdraw_message",
+                mutationId,
+                () => withdrawRequest(sessionId, messageId, mutationId),
+                () => forgetPendingMessage(sessionId, messageId),
+                undefined,
+                sessionId,
+                `agent:${sessionId}`,
+            );
+        },
+        steerMessage(sessionId, messageId) {
+            const mutationId = nextId();
+            const waiting = sessions.get(sessionId)?.messages.get(messageId)?.message;
+            if (waiting?.role !== "user" || waiting.status !== "pending") {
+                reportMutationFailure(
+                    "steer_message",
+                    mutationId,
+                    new Error("The prompt is no longer waiting."),
+                    sessionId,
+                );
+                return mutationId;
+            }
+            // A withdrawn identity stays reserved, so the steering copy is a
+            // new message carrying the queued one's content and mode.
+            const steerId = nextId();
+            const richContent = waiting.content.filter((block) => block.type !== "text");
+            const text = messageText(waiting);
+            const requestText =
+                text.trim().length > 0
+                    ? text
+                    : richContent
+                          .map((block) =>
+                              block.type === "image" ? `[image:${block.mimeType}]` : "",
+                          )
+                          .join("");
+            return mutation(
+                "steer_message",
+                mutationId,
+                async () => {
+                    await withdrawRequest(sessionId, messageId, mutationId);
+                    forgetPendingMessage(sessionId, messageId);
+                    const entry = sessions.get(sessionId);
+                    if (entry !== undefined) {
+                        entry.messages.set(steerId, {
+                            message: {
+                                ...waiting,
+                                id: steerId,
+                                createdAt: now(),
+                                status: "pending",
+                                delivery: "steer",
+                                runId: null,
+                            },
+                            runId: null,
+                            pendingSend: true,
+                        });
+                        publishSession(entry);
+                    }
+                    let confirmSend!: () => void;
+                    const confirmed = new Promise<void>((resolve) => {
+                        confirmSend = resolve;
+                    });
+                    sendConfirmations.set(steerId, confirmSend);
+                    try {
+                        return await sendMessageWithRetry(
+                            sessionId,
+                            {
+                                id: steerId,
+                                text: requestText,
+                                ...(richContent.length === 0 ? {} : { content: richContent }),
+                                delivery: "steer",
+                                mode: waiting.mode,
+                            },
+                            confirmed,
+                        );
+                    } finally {
+                        sendConfirmations.delete(steerId);
+                    }
+                },
+                (response) => {
+                    if (response !== undefined) {
+                        updateMessage(sessionId, response.message, response.message.runId);
+                    }
+                },
+                () => {
+                    const current = sessions.get(sessionId);
+                    const message = current?.messages.get(steerId);
+                    if (current !== undefined && message?.pendingSend) {
+                        current.messages.delete(steerId);
+                        publishSession(current);
+                        return true;
+                    }
+                    // Either the withdrawal itself was refused — the queued
+                    // prompt is still on screen, untouched — or the event
+                    // stream already confirmed the steering copy.
+                    return message === undefined;
+                },
+                sessionId,
+                `agent:${sessionId}`,
             );
         },
         stopRun(sessionId) {
@@ -3307,7 +3487,7 @@ function activeGitWorkspaceIds(
     ];
 }
 
-function agentIdOfEvent(event: HappyAgentEvent): string | undefined {
+function agentIdOfEvent(event: HappyAgentConnectionEvent): string | undefined {
     switch (event.type) {
         case "agent.created":
             return event.payload.agent.id;
@@ -3322,6 +3502,7 @@ function agentIdOfEvent(event: HappyAgentEvent): string | undefined {
         case "message.updated":
         case "message.delta":
         case "message.deleted":
+        case "message.withdrawn":
             return event.payload.agentId;
         case "question.created":
             return event.payload.question.agentId;

@@ -1183,6 +1183,12 @@ export interface HappyAgentWorkspaceStore {
 
     // Conversation actions (forwarded to the currently open chat store).
     runAbort(): Promise<void>;
+    /** Withdraws one prompt waiting behind the open conversation's run. */
+    queuedMessageWithdraw(messageId: string): Promise<void>;
+    /** Promotes one waiting prompt to steer the open conversation's current run. */
+    queuedMessageSteer(messageId: string): Promise<void>;
+    /** Withdraws one waiting prompt and puts its text back into the composer. */
+    queuedMessageEdit(messageId: string): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
     /**
      * Records the options ticked into the open conversation's pending question
@@ -5037,6 +5043,32 @@ export function happyAgentWorkspaceStoreCreate(
         // able to end it; refusing here would leave them watching something they
         // can neither write to nor stop.
         runAbort: () => withChat((store) => store.runAbort()),
+        // Changing the queue is a write into the checkout's session, guarded
+        // like the send that put the prompt there.
+        queuedMessageWithdraw: (messageId) =>
+            writeGuard(openGroupConversationRefusal(), () =>
+                withChat((store) => store.queuedMessageWithdraw(messageId)),
+            ),
+        queuedMessageSteer: (messageId) =>
+            writeGuard(openGroupConversationRefusal(), () =>
+                withChat((store) => store.queuedMessageSteer(messageId)),
+            ),
+        queuedMessageEdit: (messageId) =>
+            writeGuard(openGroupConversationRefusal(), () =>
+                withChat(async (store) => {
+                    const text = store
+                        .get()
+                        .queuedMessages.find((message) => message.id === messageId)?.text;
+                    await store.queuedMessageWithdraw(messageId);
+                    const draft = composer?.getState();
+                    if (text === undefined || draft === undefined) return;
+                    // A draft already being written keeps its place; the
+                    // withdrawn words join it below rather than replacing it.
+                    draft.textUpdate(
+                        draft.text.trim().length === 0 ? text : `${draft.text}\n\n${text}`,
+                    );
+                }),
+            ),
         // Ticking an option is not yet an answer, so it is not a write into the
         // checkout and is not guarded like one: nothing leaves this machine until
         // the reader submits.

@@ -259,6 +259,8 @@ export interface HappyAgentQueuedMessage {
     readonly id: string;
     /** Flattened text of the queued user turn, shown as a preview in the composer. */
     readonly text: string;
+    /** `queue` waits behind the run; `steer` enters it at the next inference boundary. */
+    readonly delivery: "queue" | "steer";
 }
 
 export interface HappyAgentFileSearchResult {
