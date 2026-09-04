@@ -228,7 +228,7 @@ export type ConversationViewProps = {
     onQueuedPromptEdit?: (promptId: string) => void;
     /** Withdraws one queued prompt. Absent leaves the queue read-only. */
     onQueuedPromptRemove?: (promptId: string) => void;
-    /** Promotes one queued prompt to steer the current run. */
+    /** Sends one queued prompt into the current run. */
     onQueuedPromptSteer?: (promptId: string) => void;
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */

@@ -84,7 +84,7 @@ export function QueuedPromptsPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Prompts sent during a run wait in a list docked above the composer, each still the reader's to steer into the run, take back, or edit."
+            summary="Prompts sent during a run wait in a list docked above the composer, each still the reader's to send into the current run, take back, or edit."
             title="Queued prompts"
         >
             <Specimen
@@ -126,7 +126,7 @@ export function QueuedPromptsPage() {
                 <DimensionRule label="720 × 480 · queue docked above the composer" />
             </Specimen>
             <Specimen
-                detail="the list alone: a waiting row offers Steer, a steering row states it, a long prompt keeps to one line"
+                detail="the list alone: a waiting row offers Send now, an in-flight row states it, a long prompt keeps to one line"
                 label="Rows"
                 number="02"
                 stage="surface"
@@ -150,7 +150,7 @@ export function QueuedPromptsPage() {
                 <div style={{ width: "560px" }}>
                     <QueuedPromptList items={PROMPTS.slice(0, 2)} />
                 </div>
-                <DimensionRule label="560 wide · no Steer or remove controls" />
+                <DimensionRule label="560 wide · no Send now or remove controls" />
             </Specimen>
         </ComponentPage>
     );
