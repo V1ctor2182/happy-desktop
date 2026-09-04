@@ -348,6 +348,19 @@ export function ConversationView(props: ConversationViewProps) {
             return next;
         });
     };
+    const [rowEditErrors, setRowEditErrors] = useState(() => new Map<string, string | undefined>());
+    const rowEditing = (entry: ConversationEntry) => rowEditErrors.has(rowExpansionKey(entry));
+    const rowEditError = (entry: ConversationEntry) => rowEditErrors.get(rowExpansionKey(entry));
+    const rowEditOpenChange = (entry: ConversationEntry, open: boolean, error?: string) => {
+        const key = rowExpansionKey(entry);
+        setRowEditErrors((current) => {
+            if (current.has(key) === open && (!open || current.get(key) === error)) return current;
+            const next = new Map(current);
+            if (open) next.set(key, error);
+            else next.delete(key);
+            return next;
+        });
+    };
     const cachedRowHeights = rowHeightCaches.get(conversationCacheKey);
     const rowHeightCache = cachedRowHeights ?? conversationRowHeightCacheCreate();
     if (cachedRowHeights === undefined) rowHeightCaches.set(conversationCacheKey, rowHeightCache);
@@ -533,6 +546,7 @@ export function ConversationView(props: ConversationViewProps) {
                         props.activityControl !== undefined,
                         editAndResendEnabled,
                         rowExpansion,
+                        rowEditErrors,
                     ]}
                     estimateRowSize={(index, width) =>
                         conversationRowHeight(
@@ -541,6 +555,14 @@ export function ConversationView(props: ConversationViewProps) {
                             {
                                 activityTreatment: props.activityTreatment,
                                 editAndResendEnabled,
+                                editAndResendOpen:
+                                    transcript[index] === undefined
+                                        ? false
+                                        : rowEditing(transcript[index]),
+                                editAndResendError:
+                                    transcript[index] === undefined
+                                        ? undefined
+                                        : rowEditError(transcript[index]),
                                 expanded:
                                     transcript[index] === undefined
                                         ? false
@@ -618,6 +640,14 @@ export function ConversationView(props: ConversationViewProps) {
                                     {
                                         activityTreatment: props.activityTreatment,
                                         editAndResendEnabled,
+                                        editAndResendOpen:
+                                            queued[index] === undefined
+                                                ? false
+                                                : rowEditing(queued[index]),
+                                        editAndResendError:
+                                            queued[index] === undefined
+                                                ? undefined
+                                                : rowEditError(queued[index]),
                                         expanded:
                                             queued[index] === undefined
                                                 ? false
@@ -701,9 +731,17 @@ export function ConversationView(props: ConversationViewProps) {
                                 }
                                 onImageOpen={props.onImageOpen}
                                 onAttachmentOpen={props.onAttachmentOpen}
-                                {...(editAndResend === undefined
+                                {...(editAndResend === undefined && !rowEditing(entry)
                                     ? {}
-                                    : { onEditAndResend: editAndResend })}
+                                    : {
+                                          ...(editAndResend === undefined
+                                              ? {}
+                                              : { onEditAndResend: editAndResend }),
+                                          onEditAndResendOpenChange: (
+                                              open: boolean,
+                                              error?: string,
+                                          ) => rowEditOpenChange(entry, open, error),
+                                      })}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onRequestSelectionChange={props.onRequestSelectionChange}
                                 onRowExpandedChange={(expanded) =>

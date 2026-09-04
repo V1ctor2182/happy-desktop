@@ -172,6 +172,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     onBodyExpandedChange?: (expanded: boolean) => void;
     /** Resends edited historical text as a new prompt without rewriting this message. */
     onEditAndResend?: (text: string) => void | Promise<void>;
+    /** Reports editor occupancy and any error that changes its virtualized row height. */
+    onEditAndResendOpenChange?: (open: boolean, error?: string) => void;
     /** Keeps the edit action present but unavailable without discarding why. */
     editAndResendDisabledReason?: string;
     /** Opens the inline editor on first render for a Blueprint or presentation fixture. */
@@ -315,6 +317,12 @@ interface InlinePromptEditorProps {
     readonly onValueChange: (value: string) => void;
 }
 
+function editAndResendErrorMessage(caught: unknown): string {
+    if (caught instanceof Error && caught.message.trim().length > 0) return caught.message;
+    if (typeof caught === "string" && caught.trim().length > 0) return caught;
+    return "Could not resend this prompt.";
+}
+
 /** Temporary, message-local editor for resending a historical prompt. */
 function InlinePromptEditor(props: InlinePromptEditorProps) {
     const saveDisabled =
@@ -442,6 +450,7 @@ export function Message(props: MessageProps) {
         "onCommandRun",
         "commandRunDisabledReason",
         "onEditAndResend",
+        "onEditAndResendOpenChange",
         "initials",
         "metaAccessory",
         "onAuthorSelect",
@@ -749,34 +758,34 @@ export function Message(props: MessageProps) {
                 onCancel={() => {
                     setEditDraft(undefined);
                     setEditError(undefined);
+                    local.onEditAndResendOpenChange?.(false);
                 }}
                 onSave={() => {
                     const editAndResend = local.onEditAndResend;
                     if (!editAndResend) return;
                     setEditSaving(true);
                     setEditError(undefined);
+                    if (editError !== undefined) local.onEditAndResendOpenChange?.(true);
                     void Promise.resolve()
                         .then(() => editAndResend(editDraft))
                         .then(
                             () => {
                                 setEditSaving(false);
                                 setEditDraft(undefined);
+                                local.onEditAndResendOpenChange?.(false);
                             },
                             (caught: unknown) => {
+                                const error = editAndResendErrorMessage(caught);
                                 setEditSaving(false);
-                                setEditError(
-                                    caught instanceof Error && caught.message.trim().length > 0
-                                        ? caught.message
-                                        : typeof caught === "string" && caught.trim().length > 0
-                                          ? caught
-                                          : "Could not resend this prompt.",
-                                );
+                                setEditError(error);
+                                local.onEditAndResendOpenChange?.(true, error);
                             },
                         );
                 }}
                 onValueChange={(value) => {
                     setEditDraft(value);
                     setEditError(undefined);
+                    if (editError !== undefined) local.onEditAndResendOpenChange?.(true);
                 }}
                 originalValue={editableBody}
                 saveUnavailable={!local.onEditAndResend}
@@ -913,9 +922,11 @@ export function Message(props: MessageProps) {
                                             }
                                             icon="edit"
                                             iconOnly
-                                            onClick={() => {
+                                            onClick={(event) => {
+                                                disclosureAnchor?.(event.currentTarget);
                                                 setEditDraft(editableBody);
                                                 setEditError(undefined);
+                                                local.onEditAndResendOpenChange?.(true);
                                             }}
                                             size="small"
                                             variant="ghost"

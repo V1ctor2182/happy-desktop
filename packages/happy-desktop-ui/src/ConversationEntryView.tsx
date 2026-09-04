@@ -72,6 +72,8 @@ export type ConversationEntryViewProps = {
     commandRunDisabledReason?: string;
     /** Resends edited historical text as a new prompt without rewriting the entry. */
     onEditAndResend?: (text: string) => void | Promise<void>;
+    /** Reports editor occupancy and any error that changes this virtual row's height. */
+    onEditAndResendOpenChange?: (open: boolean, error?: string) => void;
     /** Why inline editing and resending is unavailable. */
     editAndResendDisabledReason?: string;
     /** Disables request controls while a prior submission is in flight. */
@@ -455,9 +457,14 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(author?.kind === "agent" && props.commandRunDisabledReason !== undefined
                 ? { commandRunDisabledReason: props.commandRunDisabledReason }
                 : {})}
-            {...(conversationPromptCanEditAndResend(entry, props.viewerId) && props.onEditAndResend
+            {...(conversationPromptCanEditAndResend(entry, props.viewerId)
                 ? {
-                      onEditAndResend: (text) => props.onEditAndResend?.(text),
+                      ...(props.onEditAndResend === undefined
+                          ? {}
+                          : { onEditAndResend: (text: string) => props.onEditAndResend?.(text) }),
+                      ...(props.onEditAndResendOpenChange === undefined
+                          ? {}
+                          : { onEditAndResendOpenChange: props.onEditAndResendOpenChange }),
                       ...(props.editAndResendDisabledReason === undefined
                           ? {}
                           : {
