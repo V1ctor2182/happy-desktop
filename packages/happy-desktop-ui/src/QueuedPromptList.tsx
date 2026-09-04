@@ -27,7 +27,7 @@ export type QueuedPromptListProps = {
     onEdit?: (promptId: string) => void;
     /** Withdraws the prompt for good. */
     onRemove?: (promptId: string) => void;
-    /** Promotes a waiting prompt to steering: withdraw it, resend it to the current run. */
+    /** Sends a waiting prompt into the current run instead of leaving it queued. */
     onSteer?: (promptId: string) => void;
     style?: CSSProperties;
 };
@@ -96,18 +96,18 @@ export function QueuedPromptList(props: QueuedPromptListProps) {
                                     className="happy-queued-prompts__state"
                                     data-happy-desktop-ui="queued-prompt-state"
                                 >
-                                    Steering
+                                    Sending now
                                 </span>
                             ) : props.onSteer ? (
                                 <Button
-                                    aria-label="Steer the current run with this prompt"
+                                    aria-label="Send this prompt into the current run"
                                     disabled={props.disabled}
                                     icon="arrow-right"
                                     onClick={() => props.onSteer?.(item.id)}
                                     size="small"
                                     variant="ghost"
                                 >
-                                    Steer
+                                    Send now
                                 </Button>
                             ) : null}
                             {props.onRemove ? (

@@ -532,7 +532,7 @@ export interface HappyAgentChatStore {
     runAbort(): Promise<void>;
     /** Withdraws one prompt still waiting behind the run. */
     queuedMessageWithdraw(messageId: string): Promise<void>;
-    /** Promotes one waiting prompt to steer the current run. */
+    /** Sends one waiting prompt into the current run. */
     queuedMessageSteer(messageId: string): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
     requestSelectionUpdate(
