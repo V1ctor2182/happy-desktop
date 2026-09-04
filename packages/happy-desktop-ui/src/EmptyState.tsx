@@ -17,6 +17,14 @@ export type EmptyStateProps = {
     title: string;
     description?: string;
     action?: EmptyStateAction;
+    /**
+     * A second, quieter control beside `action`, for the other thing a reader
+     * might do in an empty place: leaving it rather than starting in it. It is
+     * drawn as a ghost button so the first action stays the one the eye lands
+     * on, and it is only ever offered next to one — a state with a single thing
+     * to do states that thing as `action`.
+     */
+    secondaryAction?: EmptyStateAction;
     size?: EmptyStateSize;
     /**
      * Replaces the icon medallion with a large animated scene: its own
@@ -54,7 +62,8 @@ const sceneSize: Record<EmptyStateSize, 96 | 128> = { panel: 128, inline: 96 };
 const actionSize: Record<EmptyStateSize, "small" | "medium"> = { panel: "medium", inline: "small" };
 /**
  * C-024 EmptyState — centered icon medallion (or animated scene) + title +
- * optional description + optional action. Replaces the app's raw
+ * optional description + optional action, with an optional quieter second
+ * action beside it. Replaces the app's raw
  * `.feature-empty` markup. Props-only, desktop-only; the `panel` size fills and
  * vertically centers inside its host region, `inline` is a compact
  * content-sized block.
@@ -68,6 +77,7 @@ export function EmptyState(props: EmptyStateProps) {
         "data-testid",
         "description",
         "icon",
+        "secondaryAction",
         "size",
         "style",
         "title",
@@ -129,6 +139,16 @@ export function EmptyState(props: EmptyStateProps) {
                           >
                               {action.label}
                           </Button>
+                          {local.secondaryAction ? (
+                              <Button
+                                  icon={local.secondaryAction.icon}
+                                  onClick={local.secondaryAction.onClick}
+                                  size={actionSize[size()]}
+                                  variant="ghost"
+                              >
+                                  {local.secondaryAction.label}
+                              </Button>
+                          ) : null}
                       </span>
                   ))(local.action)
                 : null}

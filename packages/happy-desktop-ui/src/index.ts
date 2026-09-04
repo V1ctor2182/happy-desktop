@@ -269,6 +269,7 @@ export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSor
 export {
     ConversationStatus,
     ConversationView,
+    type ConversationEmptyState,
     type ConversationViewProps,
 } from "./ConversationView";
 export {

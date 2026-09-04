@@ -107,6 +107,7 @@ import {
     ComposerFooterBar,
     ComposerModelControl,
     ConversationView,
+    type ConversationEmptyState,
     DeferredPane,
     EmptyState,
     FileBrowser,
@@ -508,6 +509,15 @@ interface OpenGroup {
     readonly id: HappyAgentGroupId;
     readonly name: string;
     /**
+     * What kind of place this is. A worktree is a branch of its own inside a
+     * project, a project is a checkout Happy Agent adopted, and a bot is the one
+     * folder the daemon keeps for it. An empty one of each introduces itself
+     * differently, and only a worktree can be let go of from there.
+     */
+    readonly kind: "bot" | "project" | "worktree";
+    /** The project a worktree belongs to, by name, so it can say whose it is. */
+    readonly projectName?: string;
+    /**
      * The catch-all project for sessions started outside any repository. It is
      * addressed as a place rather than as a path, so the surface names it by its
      * house glyph and never spells its `~` out.
@@ -524,6 +534,13 @@ interface OpenGroup {
     readonly lifecycle?: HappyAgentGroupLifecycle;
     /** The checkout's path, so a notice about it can name the directory. */
     readonly path: string;
+    /**
+     * The checkout's uncommitted work as the host counts it: files touched, and
+     * lines gained and lost against HEAD. Absent until Git state has been read.
+     */
+    readonly changedFiles?: number;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 const PANEL_TOGGLE_HINT = {
@@ -1111,6 +1128,7 @@ function openGroupFind(
         return {
             id: bot.workspaceId,
             name: bot.name,
+            kind: "bot",
             home: false,
             conversations: [bot.conversation],
             changes: [],
@@ -1125,27 +1143,119 @@ function openGroupFind(
             return {
                 id: project.id,
                 name: project.name,
+                kind: "project",
                 home: project.kind === "home",
                 conversations: project.conversations,
                 changes: project.changes ?? [],
                 create: { cwd: project.path },
                 lifecycle: project.lifecycle,
                 path: project.displayPath,
+                ...openGroupChangeCounts(project),
             };
         for (const worktree of project.worktrees)
             if (worktree.id === groupId)
                 return {
                     id: worktree.id,
                     name: worktree.name,
+                    kind: "worktree",
+                    projectName: project.name,
                     home: false,
                     conversations: worktree.conversations,
                     changes: worktree.changes ?? [],
                     create: { cwd: worktree.path, worktreeId: worktree.id },
                     lifecycle: worktree.lifecycle,
                     path: worktree.displayPath,
+                    ...openGroupChangeCounts(worktree),
                 };
     }
     return undefined;
+}
+
+/** The uncommitted-work counts a group reports, only once the host has read them. */
+function openGroupChangeCounts(group: {
+    readonly changedFiles?: number;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
+}): Pick<OpenGroup, "changedFiles" | "addedLines" | "deletedLines"> {
+    return {
+        ...(group.changedFiles === undefined ? {} : { changedFiles: group.changedFiles }),
+        ...(group.addedLines === undefined ? {} : { addedLines: group.addedLines }),
+        ...(group.deletedLines === undefined ? {} : { deletedLines: group.deletedLines }),
+    };
+}
+
+/**
+ * The checkout's uncommitted work in a sentence, or nothing while the host has
+ * not counted it yet. Zero is worth saying: "no uncommitted changes" is exactly
+ * what a reader deciding whether a workspace can go wants to know.
+ */
+function openGroupChangesSentence(group: OpenGroup): string | undefined {
+    if (group.changedFiles === undefined) return undefined;
+    if (group.changedFiles === 0) return "It has no uncommitted changes.";
+    const files = `${group.changedFiles} changed ${group.changedFiles === 1 ? "file" : "files"}`;
+    const lines = [
+        ...(group.addedLines ? [`+${group.addedLines}`] : []),
+        ...(group.deletedLines ? [`−${group.deletedLines}`] : []),
+    ];
+    return `It has ${files}${lines.length === 0 ? "" : ` (${lines.join(" ")})`} not yet committed.`;
+}
+
+/**
+ * What an empty group says about itself, in place of the transcript's own
+ * "nothing here yet". A reader who clicks a workspace row and lands on a blank
+ * conversation has been told nothing: not that the row is a checkout of its
+ * own, not where it is, not whether work sits in it uncommitted, and not what
+ * to do about it. This says each of those from what the list already knows,
+ * and offers the two things the place itself offers — starting in it and, for
+ * a worktree, letting it go. Each control is offered only when its caller has
+ * something to do with it, so an unavailable act is absent rather than dead.
+ */
+function openGroupEmptyState(
+    group: OpenGroup,
+    actions: { readonly onCreate?: () => void; readonly onArchive?: () => void },
+): ConversationEmptyState {
+    const changes = openGroupChangesSentence(group);
+    const sentences =
+        group.kind === "worktree"
+            ? [
+                  `${group.name} is a workspace of ${group.projectName ?? "this project"}: its own branch, checked out at ${group.path}.`,
+                  changes,
+                  "Send a message below to start working here.",
+              ]
+            : group.kind === "bot"
+              ? [
+                    `${group.name} keeps its files in ${group.path}.`,
+                    "Send a message below to start talking to it.",
+                ]
+              : group.home
+                ? [
+                      "Sessions started outside any repository live here.",
+                      "Send a message below to start one.",
+                  ]
+                : [
+                      `${group.name} is checked out at ${group.path}.`,
+                      changes,
+                      "Send a message below to start working here.",
+                  ];
+    return {
+        title:
+            group.kind === "worktree"
+                ? "No sessions in this workspace yet"
+                : "No sessions here yet",
+        description: sentences.filter((sentence) => sentence !== undefined).join(" "),
+        ...(actions.onCreate
+            ? { action: { icon: "plus" as const, label: "New session", onClick: actions.onCreate } }
+            : {}),
+        ...(actions.onArchive
+            ? {
+                  secondaryAction: {
+                      icon: "archive" as const,
+                      label: "Archive workspace",
+                      onClick: actions.onArchive,
+                  },
+              }
+            : {}),
+    };
 }
 
 /**
@@ -3263,6 +3373,24 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 {...(workspace.groupSessionDraft
                     ? { draftMenus: workspace.groupSessionDraft.menus }
                     : {})}
+                // The blank body introduces the place instead of the chat: what
+                // this checkout is, where it is, what sits in it uncommitted.
+                // Starting here is the strip's own + and is withheld with it;
+                // archiving is the sidebar's control for a worktree, behind the
+                // same confirmation, and a project keeps its settings for that.
+                empty={openGroupEmptyState(openGroup, {
+                    ...(sessionCreateAvailable
+                        ? { onCreate: () => groupConversationCreate(openGroup) }
+                        : {}),
+                    ...(openGroup.kind === "worktree" && connectionRefusal === undefined
+                        ? {
+                              onArchive: () => {
+                                  if (happyAgentOnline())
+                                      props.workspace.groupArchiveOpen(openGroup.id);
+                              },
+                          }
+                        : {}),
+                })}
                 focusOnType
                 groupId={openGroup.id}
                 groupName={openGroup.name}
@@ -4312,6 +4440,8 @@ function HappyAgentGroupComposer(props: {
      * what keeps the composer from waiting on it.
      */
     draftMenus?: HappyAgentMenusSnapshot;
+    /** What the blank body says about the group, and what it offers there. */
+    empty: ConversationEmptyState;
     focusOnType: boolean;
     /** The group being written into. Arriving at another one takes the caret. */
     groupId: string;
@@ -4335,6 +4465,7 @@ function HappyAgentGroupComposer(props: {
             {...(props.focusOnType ? { composerFocusKey: props.groupId } : {})}
             composerPlaceholder={composerPlaceholder(props.groupName)}
             composerSubmitDisabled={props.unavailable !== undefined}
+            empty={props.empty}
             entries={NO_ENTRIES}
             // The first message is what creates the session, so its model,
             // effort, and access mode have to be choosable before it is sent
