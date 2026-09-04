@@ -57,6 +57,10 @@ export type ConversationRowContext = {
     readonly expanded?: boolean;
     /** Whether representable own prompts render the edit-and-resend action lane. */
     readonly editAndResendEnabled?: boolean;
+    /** Whether this row currently renders the inline prompt editor. */
+    readonly editAndResendOpen?: boolean;
+    /** Failed resend text rendered in the open editor footer. */
+    readonly editAndResendError?: string;
 };
 type CachedRowHeight = { readonly value: number | undefined };
 type Dictionary<T> = Record<string, T | undefined>;
@@ -110,6 +114,18 @@ const MESSAGE_CHROME = {
     conversation: { agent: [57, 4], incoming: [77, 28], own: [52, 28] },
     chat: { agent: [41, 16], incoming: [77, 28], own: [52, 28] },
 } as const;
+/** Fixed editor chrome before its error-or-actions footer. */
+const PROMPT_EDITOR_CONTROL_HEIGHT = 92;
+const PROMPT_EDITOR_CONTROL_GAP = 8;
+const PROMPT_EDITOR_FOOTER_MIN_HEIGHT = 28;
+const PROMPT_EDITOR_FOOTER_GAP = 8;
+const PROMPT_EDITOR_ACTION_GAP = 4;
+/** Ten px padding and one px border on both sides of each shared small Button. */
+const PROMPT_EDITOR_BUTTON_HORIZONTAL_CHROME = 22;
+/** `.happy-button` applies 0.01em at 12px to the ten Cancel/Save glyphs. */
+const PROMPT_EDITOR_ACTION_LABEL_SPACING = 1.2;
+/** Vertical padding replaced with the full-width editor when its bubble closes. */
+const MESSAGE_BUBBLE_VERTICAL_PADDING = 20;
 /** Six plain-text body lines remain visible before a long human prompt is disclosed. */
 export const USER_PROMPT_COLLAPSED_CONTENT_HEIGHT = 144;
 /** The 8px body stack gap plus one shared small Button below the preview. */
@@ -286,6 +302,32 @@ export function messageBodyMeasure(
     const column = width - OWN_INSET;
     const aside = Math.max(asideTimeWidth(time, cache), ownAction ? OWN_MESSAGE_ACTION_WIDTH : 0);
     return Math.min(column * BUBBLE_CAP, column - ASIDE_TIME_GAP - aside) - BUBBLE_PADDING;
+}
+/** Full-width editor content, including a wrapped failed-save footer when present. */
+function promptEditorContentHeight(
+    error: string | undefined,
+    width: number,
+    cache?: MessageTextLayoutCache,
+): number {
+    let footerHeight = PROMPT_EDITOR_FOOTER_MIN_HEIGHT;
+    if (error !== undefined) {
+        const actionWidth = Math.ceil(
+            uiTextNaturalWidth("Cancel", 12, cache, 700) +
+                uiTextNaturalWidth("Save", 12, cache, 700) +
+                PROMPT_EDITOR_BUTTON_HORIZONTAL_CHROME * 2 +
+                PROMPT_EDITOR_ACTION_GAP +
+                PROMPT_EDITOR_ACTION_LABEL_SPACING,
+        );
+        const errorMeasure = Math.max(
+            1,
+            width - OWN_INSET - PROMPT_EDITOR_FOOTER_GAP - actionWidth,
+        );
+        footerHeight = Math.max(
+            footerHeight,
+            uiTextHeight(error, 12, 16, errorMeasure, cache, 500),
+        );
+    }
+    return PROMPT_EDITOR_CONTROL_HEIGHT + PROMPT_EDITOR_CONTROL_GAP + footerHeight;
 }
 /** Fixed collapsed height of an activity row, or `undefined` for a richer kind. */
 export function conversationActivityHeight(kind: string): number | undefined {
@@ -610,9 +652,12 @@ export function conversationRowHeight(
     const agent = message.sender?.kind === "agent";
     const human = message.sender?.kind === "human";
     const own = message.sender !== undefined && message.sender.id === context.viewerId;
-    const ownAction =
-        context.editAndResendEnabled === true &&
-        conversationPromptCanEditAndResend(entry, context.viewerId);
+    const editablePrompt = conversationPromptCanEditAndResend(entry, context.viewerId);
+    const ownAction = context.editAndResendEnabled === true && editablePrompt;
+    const editAndResendOpen = editablePrompt && context.editAndResendOpen === true;
+    const editAndResendContentHeight = editAndResendOpen
+        ? promptEditorContentHeight(context.editAndResendError, width, cache?.text)
+        : undefined;
     const grouped = conversationMessageGrouped(entries, index);
     const treatment: MessageTreatment = agent ? "agent" : own ? "own" : "incoming";
     const trace = message.agentTrace;
@@ -643,26 +688,36 @@ export function conversationRowHeight(
         grouped ? "grouped" : "leading",
         human ? (context.expanded ? "body-expanded" : "body-collapsed") : "body-full",
         ownAction ? "edit-action" : "no-edit-action",
+        editAndResendContentHeight === undefined
+            ? "editor-closed"
+            : `editor-open-${String(editAndResendContentHeight)}`,
         traceCollapsible ? "trace" : "plain",
         resumesAfterActivity ? "resumed" : "continuous",
         precedesActivity ? "continues" : closedByStatus ? "closing" : "open",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
-        let height = messageRowHeight({
-            body: message.text,
-            bodyCollapsible: human,
-            bodyExpanded: context.expanded,
-            bodyVisible: hasBody || message.generationStatus !== undefined || traceCollapsible,
-            grouped,
-            mermaidEnabled: message.generationStatus !== "streaming",
-            metaAccessory: !own && traceCollapsible,
-            ownAction,
-            surface: context.surface,
-            textCache: cache?.text,
-            time: messageTimeSample(message.createdAt),
-            treatment,
-            width,
-        });
+        const [leadingChrome, tightChrome] = MESSAGE_CHROME[context.surface][treatment];
+        let height =
+            editAndResendContentHeight !== undefined
+                ? (grouped ? tightChrome : leadingChrome) -
+                  MESSAGE_BUBBLE_VERTICAL_PADDING +
+                  editAndResendContentHeight
+                : messageRowHeight({
+                      body: message.text,
+                      bodyCollapsible: human,
+                      bodyExpanded: context.expanded,
+                      bodyVisible:
+                          hasBody || message.generationStatus !== undefined || traceCollapsible,
+                      grouped,
+                      mermaidEnabled: message.generationStatus !== "streaming",
+                      metaAccessory: !own && traceCollapsible,
+                      ownAction,
+                      surface: context.surface,
+                      textCache: cache?.text,
+                      time: messageTimeSample(message.createdAt),
+                      treatment,
+                      width,
+                  });
         if (resumesAfterActivity)
             height +=
                 RESUMED_PADDING_TOP -

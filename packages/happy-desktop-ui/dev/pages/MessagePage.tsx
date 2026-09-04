@@ -1,4 +1,6 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { type ComposerSnapshot, type ConversationEntry } from "happy-desktop-state";
+import { ConversationView } from "../../src/ConversationView";
 import { DiffSnippet } from "../../src/DiffSnippet";
 import { FileAttachment } from "../../src/FileAttachment";
 import { DayDivider, Message, MessageList, SteeringNotice, SystemNotice } from "../../src/Message";
@@ -19,6 +21,99 @@ const longPrompt =
     "4. Verify the desktop keeps the active session and draft.\n" +
     "5. Summarize any remaining risk before publishing.\n\n" +
     "Keep the original behavior for existing sessions, and call out any decision that needs product input before changing it.";
+const editComposer: ComposerSnapshot = {
+    agentUserIds: [],
+    attachments: [],
+    capabilities: { commands: [], mentions: false, shellMode: false },
+    focused: false,
+    mentionCandidates: [],
+    revision: 0,
+    scopeId: "message-edit-and-resend",
+    submission: { status: "idle" },
+    text: "",
+};
+function editConversationMessage(
+    id: string,
+    author: "agent" | "owner",
+    text: string,
+): ConversationEntry {
+    return {
+        delivery: "sent",
+        kind: "message",
+        message: {
+            attachments: [],
+            changePts: id,
+            chatId: "message-edit-and-resend",
+            createdAt: "2026-09-02T11:04:00.000Z",
+            id,
+            reactions: [],
+            sender:
+                author === "owner"
+                    ? {
+                          displayName: "Steve",
+                          id: "blueprint:owner",
+                          kind: "human",
+                          username: "steve",
+                      }
+                    : {
+                          agentRole: "default",
+                          displayName: "Happy",
+                          id: "blueprint:agent",
+                          kind: "agent",
+                          username: "happy",
+                      },
+            sequence: id,
+            text,
+        },
+        source: "server",
+    };
+}
+const editConversationEntries: readonly ConversationEntry[] = [
+    editConversationMessage(
+        "edit-01",
+        "owner",
+        "how to setup automatic payment for my credit card",
+    ),
+    editConversationMessage(
+        "edit-02",
+        "agent",
+        "I can walk through the bank and card settings with you.",
+    ),
+];
+
+/** Product-shaped virtual transcript for checking editor row geometry and actions. */
+function VirtualPromptEditorStage() {
+    const [resentPrompt, setResentPrompt] = useState("");
+    return (
+        <div style={column}>
+            <div
+                style={{
+                    border: "1px solid var(--divider)",
+                    borderRadius: "10px",
+                    display: "flex",
+                    height: "360px",
+                    overflow: "hidden",
+                    width: "680px",
+                }}
+            >
+                <ConversationView
+                    composer={editComposer}
+                    composerPlaceholder="Message Happy…"
+                    conversationId="message-edit-and-resend"
+                    entries={editConversationEntries}
+                    onComposerSend={() => undefined}
+                    onComposerValueChange={() => undefined}
+                    onEditAndResend={setResentPrompt}
+                    style={{ flex: "1 1 auto", minWidth: 0 }}
+                    viewerId="blueprint:owner"
+                />
+            </div>
+            <output data-happy-desktop-blueprint="edit-and-resend-result">
+                {resentPrompt ? `Resent: ${resentPrompt}` : "No edited prompt resent"}
+            </output>
+        </div>
+    );
+}
 /* Screenshot-safe inline artwork so the blueprint never loads a network asset. */
 function demoImage(width: number, height: number, from: string, to: string): string {
     const svg =
@@ -526,6 +621,15 @@ export function MessagePage() {
                     )}
                     <DimensionRule label="28px edit action · inline Cancel and Save · no transcript mutation" />
                 </div>
+            </Specimen>
+
+            <Specimen
+                detail="The product's virtual transcript reserves the full inline editor before paint, keeping the following agent row below both actions"
+                label="Message — edit and resend in virtual transcript"
+                number="09d"
+                stage="app"
+            >
+                <VirtualPromptEditorStage />
             </Specimen>
 
             <Specimen
