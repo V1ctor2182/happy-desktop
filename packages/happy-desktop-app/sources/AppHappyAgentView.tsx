@@ -4927,6 +4927,24 @@ function HappyAgentConversationSurface(props: {
                       }
                     : undefined
             }
+            {...(!props.readOnly &&
+            props.writeRefusal === undefined &&
+            props.unavailable === undefined
+                ? {
+                      onQueuedPromptEdit: (promptId: string) => {
+                          if (props.happyAgentOnline())
+                              swallow(workspace.queuedMessageEdit(promptId));
+                      },
+                      onQueuedPromptRemove: (promptId: string) => {
+                          if (props.happyAgentOnline())
+                              swallow(workspace.queuedMessageWithdraw(promptId));
+                      },
+                      onQueuedPromptSteer: (promptId: string) => {
+                          if (props.happyAgentOnline())
+                              swallow(workspace.queuedMessageSteer(promptId));
+                      },
+                  }
+                : {})}
             onCommandInvoke={
                 props.unavailable === undefined
                     ? (commandId) => {

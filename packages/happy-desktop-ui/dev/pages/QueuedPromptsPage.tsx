@@ -1,5 +1,6 @@
 import { type ComposerSnapshot, type ConversationEntry } from "happy-desktop-state";
 import { ConversationView } from "../../src/ConversationView";
+import { QueuedPromptList, type QueuedPrompt } from "../../src/QueuedPromptList";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and page header share this value. */
@@ -66,17 +67,28 @@ const ENTRIES: readonly ConversationEntry[] = [
     ),
     message("03", "you", "Then update the provider status copy.", "pending_queue"),
     message("04", "you", "Use this detail in the current run too.", "pending_steering"),
+    message("05", "you", "Finally, write the release note.", "pending_queue"),
+];
+
+const PROMPTS: readonly QueuedPrompt[] = [
+    { id: "q1", text: "Then update the provider status copy.", delivery: "queue" },
+    { id: "q2", text: "Use this detail in the current run too.", delivery: "steer" },
+    {
+        id: "q3",
+        text: "Finally, write the release note, mention the refresh fix, the provider status copy, and the new queue controls, and keep it under a hundred words.",
+        delivery: "queue",
+    },
 ];
 
 export function QueuedPromptsPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Queued and steering prompts remain visibly ordered beneath the live activity line with their exact pending state."
-            title="Pending prompts"
+            summary="Prompts sent during a run wait in a list docked above the composer, each still the reader's to steer into the run, take back, or edit."
+            title="Queued prompts"
         >
             <Specimen
-                detail="one queued prompt and one steering prompt wait beneath current activity without reading as accepted history"
+                detail="two queued prompts and one steering prompt wait above the composer while the transcript keeps only what has happened"
                 label="Active run"
                 number="01"
                 stage="surface"
@@ -86,7 +98,7 @@ export function QueuedPromptsPage() {
                         border: "1px solid var(--divider)",
                         borderRadius: "8px",
                         display: "flex",
-                        height: "420px",
+                        height: "480px",
                         overflow: "hidden",
                         width: "720px",
                     }}
@@ -101,6 +113,9 @@ export function QueuedPromptsPage() {
                         motion="calm-typed"
                         onComposerSend={noop}
                         onComposerValueChange={noop}
+                        onQueuedPromptEdit={noop}
+                        onQueuedPromptRemove={noop}
+                        onQueuedPromptSteer={noop}
                         running
                         style={{ flex: "1 1 auto", minWidth: 0 }}
                         viewerId="happy-agent:owner"
@@ -108,7 +123,34 @@ export function QueuedPromptsPage() {
                         workingLabel="Inspecting provider state"
                     />
                 </div>
-                <DimensionRule label="720 × 420 · queued and steering prompts" />
+                <DimensionRule label="720 × 480 · queue docked above the composer" />
+            </Specimen>
+            <Specimen
+                detail="the list alone: a waiting row offers Steer, a steering row states it, a long prompt keeps to one line"
+                label="Rows"
+                number="02"
+                stage="surface"
+            >
+                <div style={{ width: "560px" }}>
+                    <QueuedPromptList
+                        items={PROMPTS}
+                        onEdit={noop}
+                        onRemove={noop}
+                        onSteer={noop}
+                    />
+                </div>
+                <DimensionRule label="560 wide · 36px rows · 16px radius" />
+            </Specimen>
+            <Specimen
+                detail="without an owner willing to change the queue, the rows only report it"
+                label="Read only"
+                number="03"
+                stage="surface"
+            >
+                <div style={{ width: "560px" }}>
+                    <QueuedPromptList items={PROMPTS.slice(0, 2)} />
+                </div>
+                <DimensionRule label="560 wide · no Steer or remove controls" />
             </Specimen>
         </ComponentPage>
     );

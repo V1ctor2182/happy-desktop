@@ -21,6 +21,11 @@ export type ConversationDockProps = {
     composerControls?: ReactNode;
     /** Agent-authored contribution bar immediately above the composer card. */
     composerAboveControl?: ReactNode;
+    /**
+     * The prompts waiting behind the current run, docked above the composer
+     * they were typed into; see `QueuedPromptList`.
+     */
+    queue?: ReactNode;
     /** Accessory rendered below the composer card. */
     composerFooterControl?: ReactNode;
     composerPlaceholder?: string;
@@ -212,6 +217,7 @@ export function ConversationDock(props: ConversationDockProps) {
                 </Banner>
             ) : null}
             <div className="happy-conversation__dock-inner">
+                {props.queue}
                 {props.composerAboveControl}
                 <Composer
                     attachmentMultiple

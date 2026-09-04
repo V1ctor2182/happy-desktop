@@ -164,7 +164,11 @@ export function projectSession(input: SessionProjectionInput): SessionState {
                 } => entry.message.role === "user" && entry.message.status === "pending",
             )
             .map((entry) => ({
-                message: { id: entry.message.id, blocks: entry.message.content },
+                message: {
+                    id: entry.message.id,
+                    blocks: entry.message.content,
+                    delivery: entry.message.delivery,
+                },
             })),
         slashCommands: input.slashCommands,
         tasks: [],
@@ -711,7 +715,7 @@ function projectMessage(
 }
 
 /** Everything a message says as one block of text, in the order it says it. */
-function messageText(message: Message): string {
+export function messageText(message: Message): string {
     return message.content
         .filter((block): block is Extract<MessageBlock, { type: "text" }> => block.type === "text")
         .map((block) => block.text)

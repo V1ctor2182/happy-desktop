@@ -27,6 +27,8 @@ import type { AgentTurnTraceSummary } from "../types.js";
  *
  * Locally created entries that the incoming list does not yet contain are kept
  * (a send in flight is still on screen), and the result is ordered by sequence.
+ * An entry the producer itself reported and has since dropped — a queued prompt
+ * withdrawn before the run took it up — leaves with it.
  *
  * The two lists usually agree for most of their length, because the producer
  * hands back the very objects it produced before for every turn it did not
@@ -68,7 +70,12 @@ export function entriesMerge<Entry extends ConversationEntry>(
     }
     for (let index = settled; index < current.length; index += 1) {
         const entry = current[index]!;
-        if (!consumed.has(entry) && entry.kind === "message" && entry.delivery !== "sent")
+        if (
+            !consumed.has(entry) &&
+            entry.kind === "message" &&
+            entry.source === "local" &&
+            entry.delivery !== "sent"
+        )
             next.push(entry);
     }
     // The producer emits rows in order and a retained local send belongs last,

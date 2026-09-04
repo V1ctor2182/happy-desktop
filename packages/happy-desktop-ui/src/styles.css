@@ -37,6 +37,7 @@
 @import "./styles/composer-attachment-previews.css";
 @import "./styles/composer-model-control.css";
 @import "./styles/composer-dock.css";
+@import "./styles/queued-prompt-list.css";
 @import "./styles/composer-panel.css";
 @import "./styles/text-field.css";
 @import "./styles/select.css";

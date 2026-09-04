@@ -209,6 +209,7 @@ function transcriptQueuedMessagesProject(
             .filter((block) => block.type === "text")
             .map((block) => block.text)
             .join("\n"),
+        delivery: pending.message.delivery,
     }));
 }
 
@@ -529,6 +530,10 @@ export interface HappyAgentChatStore {
     slashCommandInvoke(name: string, argumentsValue?: string): Promise<void>;
     draftSet(draft: string, updatedAt: number, origin: string): Promise<void>;
     runAbort(): Promise<void>;
+    /** Withdraws one prompt still waiting behind the run. */
+    queuedMessageWithdraw(messageId: string): Promise<void>;
+    /** Promotes one waiting prompt to steer the current run. */
+    queuedMessageSteer(messageId: string): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
     requestSelectionUpdate(
         requestId: string,
@@ -566,9 +571,11 @@ export interface HappyAgentChatDeps {
         | "setEffort"
         | "setPermissionMode"
         | "setServiceTier"
+        | "steerMessage"
         | "stopBackgroundProcess"
         | "stopRun"
         | "switchModel"
+        | "withdrawMessage"
     >;
     readonly connectMutationSubscribe: (
         listener: (rejection: MutationRejectedDelta) => void,
@@ -1032,6 +1039,14 @@ export function happyAgentChatStoreCreate(
             rejecting(() => {
                 connectMutationTrack(deps.connectActions.stopRun(sessionId));
                 output({ type: "runAborted", sessionId });
+            }),
+        queuedMessageWithdraw: (messageId) =>
+            rejecting(() => {
+                connectMutationTrack(deps.connectActions.withdrawMessage(sessionId, messageId));
+            }),
+        queuedMessageSteer: (messageId) =>
+            rejecting(() => {
+                connectMutationTrack(deps.connectActions.steerMessage(sessionId, messageId));
             }),
         answerInput: answerInputRun,
         requestSelectionUpdate(requestId, answers) {
