@@ -58,6 +58,33 @@ export function EmptyStatePage() {
                         <DimensionRule label="medallion 48 · title only" />
                     </div>
                 </Specimen>
+
+                <Specimen
+                    detail="panel · animated scene · secondary action + ghost second action, 8px apart"
+                    label="Panel — two actions"
+                    number="E-05"
+                    stage="app"
+                >
+                    <div style={panelStage}>
+                        <div style={{ width: "440px", height: "400px" }}>
+                            <EmptyState
+                                action={{ icon: "plus", label: "New session", onClick: noop }}
+                                animation="robot"
+                                animationPlay="on-demand"
+                                description="Hosted release signing is a workspace of nomi: its own branch, checked out at ~/Happy/Workspaces/nomi/hosted-release-signing. It has no uncommitted changes. Send a message below to start working here."
+                                icon="chat"
+                                secondaryAction={{
+                                    icon: "archive",
+                                    label: "Archive workspace",
+                                    onClick: noop,
+                                }}
+                                size="panel"
+                                title="No sessions in this workspace yet"
+                            />
+                        </div>
+                        <DimensionRule label="440 × 400 host · scene 128 · two 36px actions with 8px gap" />
+                    </div>
+                </Specimen>
             </div>
 
             <div className="specimen-grid">

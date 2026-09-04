@@ -184,6 +184,9 @@
     display: flex;
     flex: none;
     justify-content: center;
+    /* A second control sits 8px from the first, the toolbar's own spacing; a
+       lone control sees no gap at all, so the single-action rhythm is untouched. */
+    column-gap: 8px;
     margin: 20px 0 0;
 }
 

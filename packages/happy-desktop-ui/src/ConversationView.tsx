@@ -34,7 +34,7 @@ import {
     conversationRowHeightCacheCreate,
     type ConversationRowHeightCache,
 } from "./conversationRowHeight";
-import { EmptyState } from "./EmptyState";
+import { EmptyState, type EmptyStateProps } from "./EmptyState";
 import { Message, MessageList, type MessageListScrollPosition } from "./Message";
 import {
     messageTextLayoutFontGenerationGet,
@@ -44,6 +44,18 @@ import type { HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { ScrollArea } from "./Scrollbar";
 import { Spinner } from "./Spinner";
 import { WindowOverlay } from "./WindowOverlay";
+
+/**
+ * The words and controls of a conversation body with nothing in it yet. Each
+ * field replaces the default's; one left out keeps it, so an owner with only a
+ * sentence to add is not made to restate the rest.
+ */
+export type ConversationEmptyState = Partial<
+    Pick<
+        EmptyStateProps,
+        "action" | "animation" | "description" | "icon" | "secondaryAction" | "title"
+    >
+>;
 
 export type ConversationViewProps = {
     /**
@@ -151,6 +163,13 @@ export type ConversationViewProps = {
      * behaves exactly as it otherwise would, empty or full.
      */
     notice?: ReactNode;
+    /**
+     * What the body says while the transcript has nothing in it. Absent leaves
+     * the default: an agent waiting to be told what to do. An owner whose empty
+     * conversation is a place rather than a chat — a workspace nothing has run
+     * in yet — says what that place is here, with whatever the place offers.
+     */
+    empty?: ConversationEmptyState;
     /** Replaces the conversation body while an owner-selected panel is open. */
     panel?: ReactNode;
     /** Shows or hides the intermediate entries of a finished turn. */
@@ -526,12 +545,14 @@ export function ConversationView(props: ConversationViewProps) {
                 >
                     <EmptyState
                         // A conversation with nothing in it is an agent waiting
-                        // to be told what to do, so that is what it looks like.
+                        // to be told what to do, so that is what it looks like
+                        // — unless the owner has said what this empty place is.
                         animation="robot"
                         description="Send a message to start working in this conversation."
                         icon="chat"
                         size="panel"
                         title="Nothing here yet"
+                        {...(props.empty ?? {})}
                     />
                     {activityFallback}
                 </ScrollArea>
